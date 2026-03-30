@@ -13,6 +13,10 @@ from .admin_channels import router as admin_channels_router
 from .admin_email_templates import router as admin_email_templates_router
 from .admin_landings import router as admin_landings_router
 from .admin_menu_layout import router as admin_menu_layout_router
+from .admin_news import router as admin_news_router
+from .admin_news_categories import router as admin_news_categories_router
+from .admin_news_media import router as admin_news_media_router
+from .admin_news_tags import router as admin_news_tags_router
 from .admin_partners import router as admin_partners_router
 from .admin_payment_methods import router as admin_payment_methods_router
 from .admin_payments import router as admin_payments_router
@@ -42,6 +46,7 @@ from .gift import router as gift_router
 from .info import router as info_router
 from .landing import router as landing_router
 from .media import router as media_router
+from .news import router as news_router
 from .notifications import router as notifications_router
 from .oauth import router as oauth_router
 from .partner_application import router as partner_application_router
@@ -50,6 +55,7 @@ from .promo import router as promo_router
 from .promocode import router as promocode_router
 from .referral import router as referral_router
 from .subscription import router as subscription_router
+from .subscription_modules.multi_tariff import router as multi_tariff_subscription_router
 from .ticket_notifications import (
     admin_router as admin_ticket_notifications_router,
     router as ticket_notifications_router,
@@ -61,7 +67,7 @@ from .withdrawal import router as withdrawal_router
 
 
 # Main cabinet router
-router = APIRouter(prefix='/cabinet', tags=['Cabinet'])
+router = APIRouter(prefix='/cabinet', tags=['Cabinet'], redirect_slashes=False)
 
 # Include all sub-routers
 router.include_router(auth_router)
@@ -69,6 +75,7 @@ router.include_router(oauth_router)
 router.include_router(account_linking_router)
 router.include_router(merge_router)
 router.include_router(subscription_router)
+router.include_router(multi_tariff_subscription_router)
 router.include_router(balance_router)
 router.include_router(referral_router)
 router.include_router(partner_application_router)
@@ -85,6 +92,7 @@ router.include_router(info_router)
 router.include_router(branding_router)
 router.include_router(landing_router)
 router.include_router(media_router)
+router.include_router(news_router)
 
 # Wheel routes
 router.include_router(wheel_router)
@@ -126,6 +134,12 @@ router.include_router(admin_apps_router)
 router.include_router(admin_roles_router)
 router.include_router(admin_policies_router)
 router.include_router(admin_audit_log_router)
+# Categories/tags/media routers MUST be before the main news router
+# to avoid /admin/news/{article_id} catching /admin/news/categories etc.
+router.include_router(admin_news_categories_router)
+router.include_router(admin_news_tags_router)
+router.include_router(admin_news_media_router)
+router.include_router(admin_news_router)
 
 # WebSocket route
 router.include_router(websocket_router)

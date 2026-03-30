@@ -42,9 +42,13 @@ async def start_simple_subscription_purchase(
         await callback.answer('❌ Простая покупка подписки временно недоступна', show_alert=True)
         return
 
+    if settings.is_multi_tariff_enabled():
+        await callback.answer('Используйте выбор тарифа для управления подписками', show_alert=True)
+        return
+
     # Проверка ограничения на покупку/продление подписки
     if getattr(db_user, 'restriction_subscription', False):
-        reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
+        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
@@ -945,6 +949,7 @@ async def handle_simple_subscription_payment_method(
                         'user_telegram_id': str(db_user.telegram_id),
                         'user_username': db_user.username or '',
                         'order_id': str(order.id),
+                        'subscription_id': str(order.id),
                         'subscription_period': str(subscription_params['period_days']),
                         'payment_purpose': 'simple_subscription_purchase',
                     },
@@ -961,6 +966,7 @@ async def handle_simple_subscription_payment_method(
                         'user_telegram_id': str(db_user.telegram_id),
                         'user_username': db_user.username or '',
                         'order_id': str(order.id),
+                        'subscription_id': str(order.id),
                         'subscription_period': str(subscription_params['period_days']),
                         'payment_purpose': 'simple_subscription_purchase',
                     },
