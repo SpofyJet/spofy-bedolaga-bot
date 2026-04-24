@@ -148,6 +148,9 @@ class Settings(BaseSettings):
     DEFAULT_TRAFFIC_RESET_STRATEGY: str = 'MONTH'
     RESET_TRAFFIC_ON_PAYMENT: bool = False
     RESET_TRAFFIC_ON_TARIFF_SWITCH: bool = True
+    RESET_DEVICES_ON_RENEWAL: bool = False
+    TARIFF_SWITCH_UPGRADE_ENABLED: bool = True
+    TARIFF_SWITCH_DOWNGRADE_ENABLED: bool = True
     MAX_DEVICES_LIMIT: int = 20
 
     TRIAL_WARNING_HOURS: int = 2
@@ -564,6 +567,21 @@ class Settings(BaseSettings):
     KASSA_AI_SBERPAY_ENABLED: bool = False  # SberPay — payment_system_id=43
     KASSA_AI_SBERPAY_DISPLAY_NAME: str = 'SberPay (KassaAI)'
 
+    # ── Yandex Metrika offline conversions (server → mc.yandex.ru/collect) ──
+    YANDEX_OFFLINE_CONV_ENABLED: bool = False
+    YANDEX_OFFLINE_CONV_COUNTER_ID: str = ''
+    YANDEX_OFFLINE_CONV_MEASUREMENT_SECRET: str = ''
+    YANDEX_OFFLINE_CONV_START_PREFIX: str = 'utm_ya_'
+    YANDEX_OFFLINE_CONV_DL: str = ''
+    YANDEX_OFFLINE_CONV_DT: str = ''
+    YANDEX_OFFLINE_CONV_CURRENCY: str = 'RUB'
+
+    # ── S2S Postback (server-to-server affiliate notifications) ──
+    S2S_POSTBACK_ENABLED: bool = False
+    S2S_POSTBACK_REGISTRATION_URL: str = ''
+    S2S_POSTBACK_TRIAL_URL: str = ''
+    S2S_POSTBACK_PURCHASE_URL: str = ''
+
     # RioPay (api.riopay.online) v2.0.1
     RIOPAY_ENABLED: bool = False
     RIOPAY_API_TOKEN: str | None = None  # x-api-token header
@@ -610,6 +628,36 @@ class Settings(BaseSettings):
     ROLLYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     ROLLYPAY_WEBHOOK_PATH: str = '/rollypay-webhook'
     ROLLYPAY_RETURN_URL: str | None = None
+
+    # Overpay (pay.overpay.io)
+    OVERPAY_ENABLED: bool = False
+    OVERPAY_API_URL: str = 'https://api.overpay.io'
+    OVERPAY_USERNAME: str | None = None
+    OVERPAY_PASSWORD: str | None = None
+    OVERPAY_PROJECT_ID: str | None = None
+    OVERPAY_P12_PATH: str | None = None
+    OVERPAY_P12_PASSPHRASE: str | None = None
+    OVERPAY_DISPLAY_NAME: str = 'Overpay'
+    OVERPAY_CURRENCY: str = 'RUB'
+    OVERPAY_MIN_AMOUNT_KOPEKS: int = 10000
+    OVERPAY_MAX_AMOUNT_KOPEKS: int = 10000000
+    OVERPAY_WEBHOOK_PATH: str = '/overpay-webhook'
+    OVERPAY_RETURN_URL: str | None = None
+    OVERPAY_LIFETIME_MINUTES: int = 1440
+    OVERPAY_PAYMENT_METHODS: str = 'card,fps'
+
+    # AuraPay (aurapay.tech)
+    AURAPAY_ENABLED: bool = False
+    AURAPAY_API_KEY: str | None = None  # X-ApiKey header
+    AURAPAY_SHOP_ID: str | None = None  # X-ShopId header (UUID)
+    AURAPAY_SECRET_KEY: str | None = None  # Secret key #2 for webhook HMAC
+    AURAPAY_DISPLAY_NAME: str = 'AuraPay'
+    AURAPAY_CURRENCY: str = 'RUB'
+    AURAPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    AURAPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    AURAPAY_WEBHOOK_PATH: str = '/aurapay-webhook'
+    AURAPAY_RETURN_URL: str | None = None
+    AURAPAY_PAYMENT_LIFETIME_MINUTES: int = 60
 
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
     # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
@@ -755,6 +803,7 @@ class Settings(BaseSettings):
     WEBHOOK_URL: str | None = None
     WEBHOOK_PATH: str = '/webhook'
     WEBHOOK_SECRET_TOKEN: str | None = None
+    WEBHOOK_IP: str | None = None  # IP адрес для setWebhook, чтобы Telegram не резолвил домен
     WEBHOOK_DROP_PENDING_UPDATES: bool = True
     WEBHOOK_MAX_QUEUE_SIZE: int = 1024
     WEBHOOK_WORKERS: int = 4
@@ -1218,7 +1267,13 @@ class Settings(BaseSettings):
         if not sanitized_username:
             sanitized_username = _sanitize(f'user_{identifier}')
 
-        return sanitized_username[:36].strip('_-') or 'user'
+        result = sanitized_username[:36].strip('_-') or 'user'
+
+        # RemnaWave требует username минимум 3 символа
+        if len(result) < 3:
+            result = f'{result}_{identifier}'[:36].strip('_-')
+
+        return result or 'user'
 
     @staticmethod
     def parse_daily_time_list(raw_value: str | None) -> list[time]:
@@ -2015,6 +2070,36 @@ class Settings(BaseSettings):
 
     def get_rollypay_display_name_html(self) -> str:
         return html.escape(self.get_rollypay_display_name())
+
+    def is_overpay_enabled(self) -> bool:
+        return (
+            self.OVERPAY_ENABLED
+            and self.OVERPAY_USERNAME is not None
+            and self.OVERPAY_PASSWORD is not None
+            and self.OVERPAY_PROJECT_ID is not None
+        )
+
+    def get_overpay_display_name(self) -> str:
+        name = (self.OVERPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'Overpay'
+
+    def get_overpay_display_name_html(self) -> str:
+        return html.escape(self.get_overpay_display_name())
+
+    def is_aurapay_enabled(self) -> bool:
+        return (
+            self.AURAPAY_ENABLED
+            and self.AURAPAY_API_KEY is not None
+            and self.AURAPAY_SHOP_ID is not None
+            and self.AURAPAY_SECRET_KEY is not None
+        )
+
+    def get_aurapay_display_name(self) -> str:
+        name = (self.AURAPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'AuraPay'
+
+    def get_aurapay_display_name_html(self) -> str:
+        return html.escape(self.get_aurapay_display_name())
 
     def is_kassa_ai_sbp_enabled(self) -> bool:
         return self.KASSA_AI_SBP_ENABLED and self.is_kassa_ai_enabled()
