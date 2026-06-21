@@ -358,6 +358,7 @@ class MonitoringService:
                 await self._check_trial_expiring_soon(db)
                 await self._check_trial_channel_subscriptions(db)
                 await self._check_expired_subscription_followups(db)
+                await self._run_activation_funnel(db)
                 await self._check_traffic_warnings(db)
                 await self._check_low_balance_alerts(db)
                 await self._retry_stuck_guest_purchases(db)
@@ -775,6 +776,15 @@ class MonitoringService:
 
         except Exception as e:
             logger.error('Ошибка проверки истекающих подписок', error=e)
+
+    async def _run_activation_funnel(self, db: AsyncSession):
+        try:
+            from app.services.activation_funnel_service import ActivationFunnelService
+
+            funnel = ActivationFunnelService(bot=self.bot, send_func=self._send_message_with_logo)
+            await funnel.process(db)
+        except Exception as error:
+            logger.error('Ошибка activation funnel', error=error, exc_info=True)
 
     async def _check_trial_expiring_soon(self, db: AsyncSession):
         try:

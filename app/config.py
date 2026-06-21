@@ -184,6 +184,21 @@ class Settings(BaseSettings):
     WEBHOOK_NOTIFY_TORRENT_DETECTED: bool = True
 
     TRIAL_DURATION_DAYS: int = 3
+    # Activation funnel (automatic nudges for silent users)
+    FUNNEL_NUDGES_ENABLED: bool = True
+    FUNNEL_NUDGE1_HOURS: int = 2
+    FUNNEL_NUDGE2_HOURS: int = 24
+    FUNNEL_IDLE_TRIAL_HOURS: int = 3
+    FUNNEL_NUDGE1_WINDOW_HOURS: int = 48
+    FUNNEL_NUDGE2_WINDOW_HOURS: int = 168
+    FUNNEL_BATCH_LIMIT: int = 50
+    FUNNEL_TRIAL_EXP1_HOURS: int = 2
+    FUNNEL_TRIAL_EXP2_HOURS: int = 48
+    FUNNEL_TRIAL_EXP1_PERCENT: int = 15
+    FUNNEL_TRIAL_EXP2_PERCENT: int = 25
+    FUNNEL_TRIAL_EXP_VALID_HOURS: int = 24
+    FUNNEL_TRIAL_EXP_WINDOW_HOURS: int = 168
+
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
     TRIAL_DEVICE_LIMIT: int = 2
     TRIAL_ADD_REMAINING_DAYS_TO_PAID: bool = False

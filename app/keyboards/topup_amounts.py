@@ -51,6 +51,8 @@ def format_quick_amount(amount_kopeks: int) -> str:
 
 
 async def _load_quick_amounts(db: AsyncSession, method: str, min_amount_kopeks: int | None = None) -> list[int]:
+    # Spofy: быстрые суммы отключены — ручной ввод суммы как было раньше
+    return []
     method_id = resolve_config_method_id(method)
     config = await get_config_by_method_id(db, method_id)
     if not config:

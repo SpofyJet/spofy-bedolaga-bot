@@ -682,6 +682,9 @@ def get_main_menu_keyboard(
             else texts.MENU_SUBSCRIPTION
         )
         paired_buttons.append(InlineKeyboardButton(text=sub_btn_text, callback_data='menu_subscription'))
+        # Для пробной подписки — добавляем кнопку покупки рядом
+        if subscription and getattr(subscription, 'is_trial', False):
+            paired_buttons.append(InlineKeyboardButton(text=texts.t('MENU_BUY_SUBSCRIPTION', '💎 Купить Подписку'), callback_data='menu_buy'))
 
         # Добавляем кнопку докупки трафика для лимитированных подписок
         # В режиме тарифов проверяем tariff_id (детальная проверка в хендлере)
@@ -702,14 +705,7 @@ def get_main_menu_keyboard(
                 )
             )
 
-    keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data='menu_balance')])
-
-    show_trial = (
-        not has_had_paid_subscription
-        and not has_active_subscription
-        and settings.TRIAL_DURATION_DAYS > 0
-        and settings.TRIAL_DISABLED_FOR != 'all'
-    )
+    show_trial = not has_had_paid_subscription and not has_active_subscription
 
     show_buy = not has_active_subscription or not subscription_is_active
     current_subscription = subscription
@@ -734,7 +730,12 @@ def get_main_menu_keyboard(
         subscription_buttons.append(InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy'))
 
     if subscription_buttons:
-        paired_buttons.extend(subscription_buttons)
+        # Каждая кнопка подписки — в отдельной строке, ВЫШЕ баланса (главный CTA для новых)
+        for sub_btn in subscription_buttons:
+            keyboard.append([sub_btn])
+
+    keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data='menu_balance')])
+
     if simple_purchase_button:
         paired_buttons.append(simple_purchase_button)
 
@@ -752,46 +753,37 @@ def get_main_menu_keyboard(
             if isinstance(button, InlineKeyboardButton):
                 paired_buttons.append(button)
 
-    # Добавляем кнопки промокода и рефералов, учитывая настройки
-    paired_buttons.append(InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode'))
+    # Теперь добавляем все оставшиеся парные кнопки
+    for i in range(0, len(paired_buttons), 2):
+        row = paired_buttons[i : i + 2]
+        keyboard.append(row)
 
-    # Добавляем кнопку рефералов, только если программа включена
+    # Рефералы — отдельной строкой (как было)
     if settings.is_referral_program_enabled():
-        paired_buttons.append(InlineKeyboardButton(text=texts.MENU_REFERRALS, callback_data='menu_referrals'))
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t('MENU_REFERRALS', 'Пригласить друзей 👥'),
+                callback_data='menu_referrals'
+            )
+        ])
 
-    # Добавляем кнопку конкурсов
+    # Конкурсы — отдельной строкой
     if settings.CONTESTS_ENABLED and settings.CONTESTS_BUTTON_VISIBLE:
-        paired_buttons.append(
+        keyboard.append([
             InlineKeyboardButton(text=texts.t('CONTESTS_BUTTON', '🎲 Конкурсы'), callback_data='contests_menu')
-        )
+        ])
 
-    try:
-        from app.services.support_settings_service import SupportSettingsService
-
-        support_enabled = SupportSettingsService.is_support_menu_enabled()
-    except Exception:
-        support_enabled = settings.SUPPORT_MENU_ENABLED
-
-    if support_enabled:
-        paired_buttons.append(InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support'))
-
-    # Добавляем кнопку активации
-    if settings.ACTIVATE_BUTTON_VISIBLE:
-        paired_buttons.append(InlineKeyboardButton(text=settings.ACTIVATE_BUTTON_TEXT, callback_data='activate_button'))
-
-    paired_buttons.append(
+    # Инфо
+    keyboard.append([
         InlineKeyboardButton(
             text=texts.t('MENU_INFO', 'ℹ️ Инфо'),
             callback_data='menu_info',
         )
-    )
+    ])
 
-    if settings.is_language_selection_enabled():
-        paired_buttons.append(InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data='menu_language'))
-
-    for i in range(0, len(paired_buttons), 2):
-        row = paired_buttons[i : i + 2]
-        keyboard.append(row)
+    # Активация (если включена)
+    if settings.ACTIVATE_BUTTON_VISIBLE:
+        keyboard.append([InlineKeyboardButton(text=settings.ACTIVATE_BUTTON_TEXT, callback_data='activate_button')])
 
     if settings.DEBUG:
         logger.debug('DEBUG KEYBOARD: админ кнопка', is_admin=is_admin)
@@ -804,7 +796,7 @@ def get_main_menu_keyboard(
         logger.debug('DEBUG KEYBOARD: Админ кнопка НЕ добавлена')
     # Moderator access (limited support panel)
     if (not is_admin) and is_moderator:
-        keyboard.append([InlineKeyboardButton(text='🧑‍⚖️ Модерация', callback_data='moderator_panel')])
+        keyboard.append([InlineKeyboardButton(text=texts.t('MODERATION_BUTTON', '🧑‍⚖️ Модерация'), callback_data='moderator_panel')])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -902,6 +894,17 @@ def get_info_menu_keyboard(
                 )
             ]
         )
+
+    # Spofy: Поддержка и Язык внутри Инфо (как было до обновления)
+    try:
+        from app.services.support_settings_service import SupportSettingsService
+        _support_on = SupportSettingsService.is_support_menu_enabled()
+    except Exception:
+        _support_on = settings.SUPPORT_MENU_ENABLED
+    if _support_on:
+        buttons.append([InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support')])
+    if settings.is_language_selection_enabled():
+        buttons.append([InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data='menu_language')])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
 
@@ -1364,6 +1367,18 @@ def get_trial_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     )
 
 
+def _spofy_days_word(n: int) -> str:
+    n = abs(int(n))
+    if 11 <= (n % 100) <= 14:
+        return 'дней'
+    last = n % 10
+    if last == 1:
+        return 'день'
+    if 2 <= last <= 4:
+        return 'дня'
+    return 'дней'
+
+
 def get_subscription_period_keyboard(
     language: str = DEFAULT_LANGUAGE, user: User | None = None
 ) -> InlineKeyboardMarkup:
@@ -1391,17 +1406,23 @@ def get_subscription_period_keyboard(
         # Calculate personalized price with user's discounts
         price_info = calculate_user_price(user, base_price, days, 'period')
 
-        # Format period description
-        period_display = format_period_description(days, language)
+        # Spofy: период в днях + длинное тире + цена за месяц (как было до обновления)
+        _days_label = f'{days} {_spofy_days_word(days)}'
+        if price_info.final_price == 0:
+            button_text = f'📅 {_days_label}'
+        elif getattr(price_info, 'has_discount', False):
+            button_text = (
+                f'📅 {_days_label} — '
+                f'{texts.format_price(price_info.base_price)} ➜ '
+                f'{texts.format_price(price_info.final_price)} '
+                f'(-{price_info.discount_percent}%)'
+            )
+        else:
+            button_text = f'📅 {_days_label} — {texts.format_price(price_info.final_price)}'
 
-        # Format button text with discount display
-        button_text = format_price_button(
-            period_label=period_display,
-            price_info=price_info,
-            format_price_func=texts.format_price,
-            emphasize=False,
-            add_exclamation=False,
-        )
+        if days >= 60 and price_info.final_price > 0:
+            _per_month = int(round(price_info.final_price * 30 / days))
+            button_text = f'{button_text} · {texts.format_price(_per_month)}/мес'
 
         keyboard.append([InlineKeyboardButton(text=button_text, callback_data=f'period_{days}')])
 
@@ -1578,6 +1599,7 @@ def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
             InlineKeyboardButton(text=texts.BALANCE_HISTORY, callback_data='balance_history'),
             InlineKeyboardButton(text=texts.BALANCE_TOP_UP, callback_data='balance_topup'),
         ],
+        [InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode')],
     ]
     if settings.YOOKASSA_RECURRENT_ENABLED:
         keyboard.append(

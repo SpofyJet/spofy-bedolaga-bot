@@ -235,6 +235,14 @@ async def handle_manage_country(callback: types.CallbackQuery, db_user: User, db
 
 
 async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    if not await _should_show_countries_management(db_user):
+        texts = get_texts(db_user.language)
+        await state.clear()
+        await callback.answer(
+            texts.t('COUNTRY_MANAGEMENT_UNAVAILABLE', 'ℹ️ Управление серверами недоступно'),
+            show_alert=True,
+        )
+        return
     logger.info('🔧 Применение изменений стран')
 
     data = await state.get_data()
@@ -771,6 +779,10 @@ async def handle_add_country_to_subscription(
 
 
 async def _should_show_countries_management(user: User | None = None) -> bool:
+    # Фича управления странами/сквадами отключена намертво: разграничение серверов
+    # идёт по тарифу (allowed_squads), а не по выбору пользователя. Иначе юзер может
+    # бесплатно добавить себе платный сквад (Anti-Zaglush).
+    return False
     try:
         promo_group_id = user.promo_group_id if user else None
 
