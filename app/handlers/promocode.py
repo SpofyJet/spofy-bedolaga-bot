@@ -108,7 +108,8 @@ async def _restore_previous_state(state: FSMContext) -> None:
 
 @error_handler
 async def process_promocode(message: types.Message, db_user: User, state: FSMContext, db: AsyncSession):
-    texts = get_texts(db_user.language)
+    _lang = db_user.language  # Spofy: capture early (avoid MissingGreenlet on expired obj)
+    texts = get_texts(_lang)
 
     code = message.text.strip()
 
@@ -118,7 +119,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
                 'PROMOCODE_EMPTY_INPUT',
                 '❌ Введите корректный промокод',
             ),
-            reply_markup=get_back_keyboard(db_user.language),
+            reply_markup=get_back_keyboard(_lang),
         )
         return
 
@@ -126,7 +127,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
 
     # Валидация формата
     if not validate_promo_format(code):
-        await message.answer(texts.PROMOCODE_INVALID, reply_markup=get_back_keyboard(db_user.language))
+        await message.answer(texts.PROMOCODE_INVALID, reply_markup=get_back_keyboard(_lang))
         return
 
     # Rate-limit на перебор
@@ -137,7 +138,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
                 'PROMO_RATE_LIMITED',
                 '⏳ Слишком много попыток. Попробуйте через {cooldown} сек.',
             ).format(cooldown=cooldown),
-            reply_markup=get_back_keyboard(db_user.language),
+            reply_markup=get_back_keyboard(_lang),
         )
         await _restore_previous_state(state)
         return
@@ -149,7 +150,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
                 'PROMO_DAILY_LIMIT',
                 '❌ Достигнут лимит активаций промокодов на сегодня. Попробуйте завтра.',
             ),
-            reply_markup=get_back_keyboard(db_user.language),
+            reply_markup=get_back_keyboard(_lang),
         )
         await _restore_previous_state(state)
         return
@@ -160,7 +161,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
         promo_limiter.record_activation(message.from_user.id)
         await message.answer(
             texts.PROMOCODE_SUCCESS.format(description=result['description']),
-            reply_markup=get_back_keyboard(db_user.language),
+            reply_markup=get_back_keyboard(_lang),
         )
         await _restore_previous_state(state)
     elif result.get('error') == 'select_subscription':
@@ -230,7 +231,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
         }
 
         error_text = error_messages.get(result['error'], texts.PROMOCODE_INVALID)
-        await message.answer(error_text, reply_markup=get_back_keyboard(db_user.language))
+        await message.answer(error_text, reply_markup=get_back_keyboard(_lang))
         await _restore_previous_state(state)
 
 

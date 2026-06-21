@@ -128,7 +128,12 @@ async def _send_error_message(args, kwargs, original_error, func_name: str = 'un
         if not event:
             return
 
-        texts = get_texts(db_user.language if db_user else 'ru')
+        # Spofy: defensive read — db_user may be detached/expired here
+        try:
+            _lang = db_user.language if db_user else 'ru'
+        except Exception:
+            _lang = 'ru'
+        texts = get_texts(_lang)
 
         if isinstance(event, types.Message):
             await event.answer(texts.ERROR)
