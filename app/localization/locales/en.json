@@ -900,7 +900,7 @@
   "AUTOPAY_STATUS_CARD_ACTIVE": "✅ Enabled — automatic card charge scheduled",
   "AUTOPAY_STATUS_NO_CARD": "✅ Enabled — subscription will renew automatically",
   "AUTOPAY_STATUS_OFF": "❌ Disabled — don't forget to renew manually!",
-  "AUTOPAY_ACTION_CHECK_BALANCE": "💰 Make sure you have enough balance: {balance}",
+  "AUTOPAY_ACTION_CHECK_BALANCE": "💰 Your current balance: {balance}",
   "AUTOPAY_ACTION_ENABLE": "💡 Enable autopay or renew your subscription manually",
   "AUTOPAY_ACTION_RENEW": "💡 Renew your subscription manually",
   "AUTOPAY_SUCCESS": "\n✅ <b>Autopay completed</b>\n\nYour subscription was automatically renewed for {days} days.\nCharged from balance: {amount}\n",

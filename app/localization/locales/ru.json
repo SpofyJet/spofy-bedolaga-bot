@@ -920,7 +920,7 @@
   "AUTOPAY_STATUS_CARD_ACTIVE": "✅ Включен — будет автоматическое списание с карты",
   "AUTOPAY_STATUS_NO_CARD": "✅ Включен — подписка продлится автоматически",
   "AUTOPAY_STATUS_OFF": "❌ Отключен — не забудьте продлить вручную!",
-  "AUTOPAY_ACTION_CHECK_BALANCE": "💰 Убедитесь, что на балансе достаточно средств: {balance}",
+  "AUTOPAY_ACTION_CHECK_BALANCE": "💰 Ваш текущий баланс: {balance}",
   "AUTOPAY_ACTION_ENABLE": "💡 Включите автоплатеж или продлите подписку вручную",
   "AUTOPAY_ACTION_RENEW": "💡 Продлите подписку вручную",
   "AUTOPAY_SUCCESS": "\n✅ <b>Автоплатеж выполнен</b>\n\nВаша подписка автоматически продлена на {days} дней.\nСписано с баланса: {amount}\n",
