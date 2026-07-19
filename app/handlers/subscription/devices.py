@@ -811,13 +811,6 @@ async def handle_device_management(
     if subscription is None:
         return
 
-    if not subscription or subscription.is_trial:
-        await callback.answer(
-            texts.t('PAID_FEATURE_ONLY', '⚠️ Эта функция доступна только для платных подписок'),
-            show_alert=True,
-        )
-        return
-
     remnawave_uuid = _get_remnawave_uuid(subscription, db_user)
     if not remnawave_uuid:
         await callback.answer(
