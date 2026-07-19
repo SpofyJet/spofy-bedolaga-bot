@@ -240,7 +240,10 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
     await edit_or_answer_photo(
         callback,
         referral_text,
-        get_referral_keyboard(db_user.language),
+        get_referral_keyboard(
+            db_user.language,
+            share_url=_build_referral_share_url(bot_referral_link, texts),
+        ),
     )
     await callback.answer()
 
@@ -495,6 +498,17 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
     await callback.answer()
 
 
+def _build_referral_share_url(bot_referral_link: str, texts) -> str:
+    """URL вида t.me/share/url — открывает нативный диалог пересылки в чаты."""
+    from urllib.parse import quote
+
+    share_text = texts.t(
+        'REFERRAL_SHARE_TEXT',
+        '🎁 Бесплатный VPN — быстрые серверы по всему миру, надёжная защита трафика, работает на всех устройствах. Попробуй бесплатно 👇',
+    )
+    return f'https://t.me/share/url?url={quote(bot_referral_link, safe="")}&text={quote(share_text, safe="")}'
+
+
 async def create_invite_message(callback: types.CallbackQuery, db_user: User):
     texts = get_texts(db_user.language)
 
@@ -542,6 +556,12 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User):
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('REFERRAL_SHARE_BUTTON', '📤 Переслать приглашение'),
+                    url=_build_referral_share_url(bot_referral_link, texts),
+                )
+            ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_referrals')],
         ]
     )

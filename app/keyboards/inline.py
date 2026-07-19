@@ -2330,10 +2330,20 @@ def get_autopay_notification_keyboard(subscription_id: int, language: str = DEFA
     )
 
 
-def get_referral_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+def get_referral_keyboard(language: str = DEFAULT_LANGUAGE, share_url: str | None = None) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
-    keyboard = [
+    keyboard = []
+    if share_url:
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('REFERRAL_SHARE_BUTTON', '📤 Переслать приглашение'),
+                    url=share_url,
+                )
+            ]
+        )
+    keyboard += [
         [
             InlineKeyboardButton(
                 text=texts.t('CREATE_INVITE_BUTTON', '📝 Создать приглашение'), callback_data='referral_create_invite'

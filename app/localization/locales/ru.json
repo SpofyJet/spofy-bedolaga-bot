@@ -1367,7 +1367,7 @@
   "REFERRAL_INVITE_FOOTER": "📢 Приглашайте друзей и зарабатывайте!",
   "REFERRAL_INVITE_LINK_PROMPT": "👇 Переходи по ссылке:",
   "REFERRAL_INVITE_MESSAGE": "\n🎯 <b>Приглашение в VPN сервис</b>\n\nПривет! Приглашаю тебя в отличный VPN сервис!\n\n🎁 По моей ссылке ты получишь бонус: {bonus}\n\n🔗 Переходи: {link}\n🎫 Или используй промокод: {code}\n\n💪 Быстро, надежно, недорого!\n",
-  "REFERRAL_INVITE_TEXT": "🎉 Тебе прислали приглашение в VPN{bonus_block}\n\n⚡️ Мгновенное подключение\n🌍 Серверы по всему миру\n🔒 Никаких логов и утечек\n📱 Работает на всех устройствах\n\n👇 Просто жми на ссылку (Вторая ссылка, если Telegram не работает):\n{link}{cabinet_block}",
+  "REFERRAL_INVITE_TEXT": "🎁 VPN бесплатно на пробный период — без карты!{bonus_block}\n\n🚀 Быстрые серверы по всему миру\n🔒 Надёжная защита трафика\n📱 Работает на всех устройствах\n\n👇 Подключайся по ссылке:\n{link}{cabinet_block}",
   "REFERRAL_INVITE_TITLE": "🎉 Присоединяйся к VPN сервису!",
   "REFERRAL_LINK_CAPTION": "🔗 Ваша реферальная ссылка:\n{link}",
   "REFERRAL_LINK_TITLE": "🔗 <b>Ваша реферальная ссылка:</b>",
@@ -1395,7 +1395,7 @@
   "REFERRAL_REWARD_COMMISSION_LIMITED": "• Комиссия с первых {max_payments} пополнений реферала: <b>{percent}%</b>",
   "REFERRAL_REWARD_INVITER": "• Вы получаете при первом пополнении реферала: <b>{bonus}</b>",
   "REFERRAL_REWARD_NEW_USER": "• Новый пользователь получает: <b>{bonus}</b> при первом пополнении от <b>{minimum}</b>",
-  "REFERRAL_SHARE_BUTTON": "📤 Поделиться",
+  "REFERRAL_SHARE_BUTTON": "📤 Переслать приглашение",
   "REFERRAL_STATS_ACTIVE": "• Активных рефералов: <b>{count}</b>",
   "REFERRAL_STATS_CONVERSION": "• Конверсия: <b>{rate}%</b>",
   "REFERRAL_STATS_FIRST_TOPUPS": "• Сделали первое пополнение: <b>{count}</b>",
@@ -2138,5 +2138,6 @@
   "PAYMENT_XROCKET": "🚀 Криптовалюта (xRocket)",
   "FUNNEL_ABANDONED_TOPUP": "💳 <b>Пополнение не завершено</b>\n\nВы создали заявку на пополнение на <b>{amount}₽</b>, но оплата так и не прошла.\n\nЕсли что-то пошло не так — попробуйте другой способ: СБП, карта или криптовалюта. Оплата занимает меньше минуты.",
   "FUNNEL_ABANDONED_TOPUP_PAY": "💳 Оплатить {amount}₽",
-  "FUNNEL_ABANDONED_TOPUP_OTHER": "🔄 Другой способ оплаты"
+  "FUNNEL_ABANDONED_TOPUP_OTHER": "🔄 Другой способ оплаты",
+  "REFERRAL_SHARE_TEXT": "🎁 Бесплатный VPN — быстрые серверы по всему миру, надёжная защита трафика, работает на всех устройствах. Попробуй бесплатно 👇"
 }

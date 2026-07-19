@@ -1346,7 +1346,7 @@
   "REFERRAL_INVITE_FOOTER": "📢 Invite friends and earn!",
   "REFERRAL_INVITE_LINK_PROMPT": "👇 Follow the link:",
   "REFERRAL_INVITE_MESSAGE": "\n🎯 <b>Invitation to the VPN service</b>\n\nHi! I invite you to an excellent VPN service!\n\n🎁 Use my link to get a bonus: {bonus}\n\n🔗 Join: {link}\n🎫 Or use promo code: {code}\n\n💪 Fast, reliable, affordable!\n",
-  "REFERRAL_INVITE_TEXT": "🎉 You've been invited to a VPN{bonus_block}\n\n⚡️ Instant connection\n🌍 Servers worldwide\n🔒 No logs, no leaks\n📱 Works on all devices\n\n👇 Just tap the link (use the second one if Telegram doesn't work):\n{link}{cabinet_block}",
+  "REFERRAL_INVITE_TEXT": "🎁 Free VPN trial — no card needed!{bonus_block}\n\n🚀 Fast servers worldwide\n🔒 Reliable traffic protection\n📱 Works on all devices\n\n👇 Join via the link:\n{link}{cabinet_block}",
   "REFERRAL_INVITE_TITLE": "🎉 Join the VPN service!",
   "REFERRAL_LINK_CAPTION": "🔗 Your referral link:\n{link}",
   "REFERRAL_LINK_TITLE": "🔗 <b>Your referral link:</b>",
@@ -1374,7 +1374,7 @@
   "REFERRAL_REWARD_COMMISSION_LIMITED": "• Commission from the first {max_payments} referral top-ups: <b>{percent}%</b>",
   "REFERRAL_REWARD_INVITER": "• You receive on the referral's first top-up: <b>{bonus}</b>",
   "REFERRAL_REWARD_NEW_USER": "• New user receives: <b>{bonus}</b> on the first top-up from <b>{minimum}</b>",
-  "REFERRAL_SHARE_BUTTON": "📤 Share",
+  "REFERRAL_SHARE_BUTTON": "📤 Forward invite",
   "REFERRAL_STATS_ACTIVE": "• Active referrals: <b>{count}</b>",
   "REFERRAL_STATS_CONVERSION": "• Conversion: <b>{rate}%</b>",
   "REFERRAL_STATS_FIRST_TOPUPS": "• Made first top-up: <b>{count}</b>",
@@ -2139,5 +2139,6 @@
   "FUNNEL_ABANDONED_TOPUP": "💳 <b>Top-up not completed</b>\n\nYou created a top-up request for <b>{amount}₽</b>, but the payment did not go through.\n\nIf something went wrong, try another method: SBP, card or crypto. It takes less than a minute.",
   "FUNNEL_ABANDONED_TOPUP_PAY": "💳 Pay {amount}₽",
   "FUNNEL_ABANDONED_TOPUP_OTHER": "🔄 Another payment method",
-  "PAYMENT_PLATEGA_M13": "🪙 Crypto"
+  "PAYMENT_PLATEGA_M13": "🪙 Crypto",
+  "REFERRAL_SHARE_TEXT": "🎁 Free VPN — fast servers worldwide, reliable traffic protection, works on all devices. Try it free 👇"
 }
