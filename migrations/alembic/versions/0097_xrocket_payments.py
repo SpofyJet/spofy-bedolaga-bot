@@ -13,8 +13,8 @@ from alembic import op
 from app.database.models import AwareDateTime
 
 
-revision: str = '0095'
-down_revision: Union[str, None] = '0094'
+revision: str = '0097'
+down_revision: Union[str, None] = '0096'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
