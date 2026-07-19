@@ -1200,7 +1200,20 @@ def get_subscription_keyboard(
 
         if is_trial:
             keyboard.append(
-                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='subscription_upgrade')]
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('TRIAL_GO_PAID_BUTTON', '⭐️ Перейти на платный тариф'),
+                        callback_data='subscription_upgrade',
+                    )
+                ]
+            )
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('MANAGE_DEVICES_BUTTON', '🔧 Управление устройствами'),
+                        callback_data='subscription_manage_devices',
+                    )
+                ]
             )
         else:
             # Проверяем, является ли тариф суточным

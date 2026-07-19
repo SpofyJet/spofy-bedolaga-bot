@@ -506,11 +506,6 @@ def get_payment_methods_text(language: str) -> str:
         + '\n\n'
     )
 
-    text += texts.t(
-        'PAYMENT_METHODS_FOOTER',
-        'Выберите способ пополнения:',
-    )
-
     return text
 
 
