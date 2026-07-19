@@ -47,7 +47,7 @@ async def start_xrocket_payment(callback: types.CallbackQuery, db_user: User, st
     assets_text = ', '.join(available_assets)
 
     message_text = (
-        f'🚀 <b>Пополнение через xRocket</b>\n\n'
+        f'🚀 <b>Криптовалюта (xRocket)</b>\n\n'
         f'Введите сумму для пополнения от 100 до 100,000 ₽:\n\n'
         f'💰 Доступные активы: {assets_text}\n'
         f'⚡ Мгновенное зачисление на баланс\n'
@@ -140,7 +140,7 @@ async def process_xrocket_payment_amount(
             rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')])
 
             await message.answer(
-                f'🚀 <b>Пополнение через xRocket</b>\n\n'
+                f'🚀 <b>Криптовалюта (xRocket)</b>\n\n'
                 f'💰 Сумма к зачислению: {amount_rubles:.0f} ₽\n\n'
                 f'Выберите криптовалюту для оплаты:',
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=rows),
@@ -236,7 +236,7 @@ async def _create_xrocket_invoice(
         rate = payment_result.get('rate') or 0
 
         await message.answer(
-            f'🚀 <b>Оплата через xRocket</b>\n\n'
+            f'🚀 <b>Криптовалюта (xRocket)</b>\n\n'
             f'💰 Сумма к зачислению: {amount_rubles:.0f} ₽\n'
             f'🪙 К оплате: {payment_result["amount"]} {payment_result["asset"]}\n'
             f'💱 Курс: 1 {payment_result["asset"]} = {rate:.2f} ₽\n'

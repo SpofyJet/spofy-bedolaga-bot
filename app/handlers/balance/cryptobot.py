@@ -57,7 +57,7 @@ async def start_cryptobot_payment(callback: types.CallbackQuery, db_user: User, 
     assets_text = ', '.join(available_assets)
 
     message_text = (
-        f'🪙 <b>Пополнение криптовалютой</b>\n\n'
+        f'🦋 <b>Криптовалюта (CryptoBot)</b>\n\n'
         f'Введите сумму для пополнения от 100 до 100,000 ₽:\n\n'
         f'💰 Доступные активы: {assets_text}\n'
         f'⚡ Мгновенное зачисление на баланс\n'
@@ -202,7 +202,7 @@ async def process_cryptobot_payment_amount(
                 logger.warning('Не удалось удалить сообщение с запросом суммы CryptoBot', delete_error=delete_error)
 
         invoice_message = await message.answer(
-            f'🪙 <b>Оплата криптовалютой</b>\n\n'
+            f'🦋 <b>Криптовалюта (CryptoBot)</b>\n\n'
             f'💰 Сумма к зачислению: {amount_rubles:.0f} ₽\n'
             f'💵 К оплате: {amount_usd:.2f} USD\n'
             f'🪙 Актив: {payment_result["asset"]}\n'

@@ -61,7 +61,7 @@ async def start_heleket_payment(
         markup_text = None
 
     message_lines = [
-        '🪙 <b>Пополнение через Heleket</b>',
+        '🪙 <b>Криптовалюта (Heleket)</b>',
         '\n',
         'Введите сумму пополнения от 100 до 100,000 ₽:',
         '',
@@ -160,7 +160,7 @@ async def process_heleket_payment_amount(
     discount_percent = result.get('discount_percent')
 
     details = [
-        '🪙 <b>Оплата через Heleket</b>',
+        '🪙 <b>Криптовалюта (Heleket)</b>',
         '',
         f'💰 Сумма к зачислению: {amount_rubles:.0f} ₽',
     ]

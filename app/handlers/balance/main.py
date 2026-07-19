@@ -491,7 +491,7 @@ async def request_support_topup(callback: types.CallbackQuery, db_user: User):
 
     user_id_display = db_user.telegram_id or db_user.email or f'#{db_user.id}'
     support_text = f"""
-🛠️ <b>Пополнение через поддержку</b>
+💬 <b>Другие способы оплаты</b>
 
 Для пополнения баланса обратитесь в техподдержку:
 {settings.get_support_contact_display_html()}
