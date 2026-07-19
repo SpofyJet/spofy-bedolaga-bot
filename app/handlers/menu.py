@@ -1460,11 +1460,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
             user_name=html.escape(user.full_name or ''),
             subscription_status=_get_subscription_status(user, texts, is_daily_tariff),
         )
-
-        if tariff_info_block:
-            action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-            if action_prompt_text in base_text:
-                base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
+        # Название тарифа в главном меню не дублируем — оно есть на экране подписки
 
     action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
 
