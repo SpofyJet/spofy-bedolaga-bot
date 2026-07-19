@@ -203,6 +203,30 @@ async def get_payment_methods(
                 )
             options = formatted_options or None
 
+        # Platega: разворачиваем активные методы в отдельные карточки (как в боте)
+        if method_id == 'platega' and settings.PLATEGA_INLINE_METHODS:
+            from app.localization.texts import get_texts as _get_texts
+
+            _texts = _get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+            for _code in settings.get_platega_active_methods():
+                methods.append(
+                    PaymentMethodResponse(
+                        id=f'platega_m{_code}',
+                        name=_texts.t(
+                            f'PAYMENT_PLATEGA_M{_code}',
+                            settings.get_platega_method_display_title(_code),
+                        ),
+                        description=method_data.get('description'),
+                        min_amount_kopeks=method_data['min_amount_kopeks'],
+                        max_amount_kopeks=method_data['max_amount_kopeks'],
+                        is_available=True,
+                        options=None,
+                        quick_amounts=method_data.get('quick_amounts') or [],
+                        open_url_direct=bool(method_data.get('open_url_direct', False)),
+                    )
+                )
+            continue
+
         methods.append(
             PaymentMethodResponse(
                 id=method_id,
@@ -327,6 +351,11 @@ async def create_topup(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Invalid or unavailable payment method',
         )
+
+    # Platega: отдельные карточки методов (platega_m{code}) -> platega + payment_option
+    if isinstance(request.payment_method, str) and request.payment_method.startswith('platega_m'):
+        request.payment_option = request.payment_method[len('platega_m'):]
+        request.payment_method = 'platega'
 
     # Validate amount
     if request.amount_kopeks < method.min_amount_kopeks:
