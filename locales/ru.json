@@ -1993,5 +1993,8 @@
   "PAYMENT_PLATEGA_M2": "💳 Карта / СБП",
   "PAYMENT_PLATEGA_M11": "💳 Карты (RUB)",
   "PAYMENT_PLATEGA_M12": "🌍 Международные карты",
-  "PAYMENT_XROCKET": "🚀 Криптовалюта (xRocket)"
+  "PAYMENT_XROCKET": "🚀 Криптовалюта (xRocket)",
+  "FUNNEL_ABANDONED_TOPUP": "💳 <b>Пополнение не завершено</b>\n\nВы создали заявку на пополнение на <b>{amount}₽</b>, но оплата так и не прошла.\n\nЕсли что-то пошло не так — попробуйте другой способ: СБП, карта или криптовалюта. Оплата занимает меньше минуты.",
+  "FUNNEL_ABANDONED_TOPUP_PAY": "💳 Оплатить {amount}₽",
+  "FUNNEL_ABANDONED_TOPUP_OTHER": "🔄 Другой способ оплаты"
 }

@@ -1993,5 +1993,8 @@
   "PAYMENT_PLATEGA_M2": "💳 Card / SBP",
   "PAYMENT_PLATEGA_M11": "💳 Cards (RUB)",
   "PAYMENT_PLATEGA_M12": "🌍 International cards",
-  "PAYMENT_XROCKET": "🚀 Crypto (xRocket)"
+  "PAYMENT_XROCKET": "🚀 Crypto (xRocket)",
+  "FUNNEL_ABANDONED_TOPUP": "💳 <b>Top-up not completed</b>\n\nYou created a top-up request for <b>{amount}₽</b>, but the payment did not go through.\n\nIf something went wrong, try another method: SBP, card or crypto. It takes less than a minute.",
+  "FUNNEL_ABANDONED_TOPUP_PAY": "💳 Pay {amount}₽",
+  "FUNNEL_ABANDONED_TOPUP_OTHER": "🔄 Another payment method"
 }
