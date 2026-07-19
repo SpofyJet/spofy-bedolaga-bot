@@ -451,6 +451,10 @@ async def create_topup(
 
             allowed_assets = settings.get_xrocket_assets()
             asset = (request.payment_option or settings.XROCKET_DEFAULT_ASSET).strip().upper()
+            if asset == 'TON':
+                asset = 'TONCOIN'  # алиас: у xRocket тикер TONCOIN
+            if asset not in allowed_assets and allowed_assets:
+                asset = allowed_assets[0]  # мягкий откат на первый доступный актив вместо 400
             if asset not in allowed_assets:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
