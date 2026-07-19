@@ -59,6 +59,12 @@ TRIAL_EXP2_PERCENT = int(getattr(settings, 'FUNNEL_TRIAL_EXP2_PERCENT', 25))
 TRIAL_EXP_VALID_HOURS = int(getattr(settings, 'FUNNEL_TRIAL_EXP_VALID_HOURS', 24))
 TRIAL_EXP_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_TRIAL_EXP_WINDOW_HOURS', 168))
 
+EVENT_TRIAL_ENDING = 'funnel_trial_ending_1d'
+EVENT_TRIAL_IDLE_2 = 'funnel_trial_idle_2'
+TRIAL_ENDING_LEAD_HOURS = int(getattr(settings, 'FUNNEL_TRIAL_ENDING_LEAD_HOURS', 24))
+TRIAL_ENDING_MIN_HOURS = int(getattr(settings, 'FUNNEL_TRIAL_ENDING_MIN_HOURS', 3))
+IDLE_TRIAL2_HOURS = int(getattr(settings, 'FUNNEL_IDLE_TRIAL2_HOURS', 24))
+
 
 def _funnel_enabled() -> bool:
     return bool(getattr(settings, 'FUNNEL_NUDGES_ENABLED', True))
@@ -123,6 +129,8 @@ class ActivationFunnelService:
             await self._nudge_no_trial(db, EVENT_NO_TRIAL_1, NUDGE1_HOURS, NUDGE1_WINDOW_HOURS, wave=1)
             await self._nudge_no_trial(db, EVENT_NO_TRIAL_2, NUDGE2_HOURS, NUDGE2_WINDOW_HOURS, wave=2)
             await self._nudge_idle_trial(db)
+            await self._nudge_idle_trial_2(db)
+            await self._nudge_trial_ending(db)
             await self._nudge_expired_trial(db, EVENT_TRIAL_EXP_1, TRIAL_EXP1_HOURS, TRIAL_EXP1_PERCENT, wave=1)
             await self._nudge_expired_trial(db, EVENT_TRIAL_EXP_2, TRIAL_EXP2_HOURS, TRIAL_EXP2_PERCENT, wave=2)
         except Exception as error:  # noqa: BLE001 — funnel must never break the cycle
@@ -352,3 +360,118 @@ class ActivationFunnelService:
 
         if subscriptions:
             logger.info('🪝 Funnel: отправлены офферы по истёкшему триалу', wave=wave, percent=percent, count=len(subscriptions))
+
+
+    # --- Spofy: last-day in-trial nudge (24h before trial end) ------------
+
+    async def _nudge_trial_ending(self, db: AsyncSession) -> None:
+        now = datetime.now(UTC)
+        soon = now + timedelta(hours=TRIAL_ENDING_LEAD_HOURS)
+        floor = now + timedelta(hours=TRIAL_ENDING_MIN_HOURS)
+        result = await db.execute(
+            select(Subscription)
+            .join(Subscription.user)
+            .options(selectinload(Subscription.user))
+            .where(
+                and_(
+                    Subscription.is_trial == True,  # noqa: E712
+                    Subscription.status == SubscriptionStatus.ACTIVE.value,
+                    Subscription.end_date <= soon,
+                    Subscription.end_date > floor,
+                    User.status == UserStatus.ACTIVE.value,
+                    User.telegram_id.isnot(None),
+                    User.has_had_paid_subscription == False,  # noqa: E712
+                    ~_event_sent_clause(EVENT_TRIAL_ENDING),
+                )
+            )
+            .limit(BATCH_LIMIT)
+        )
+        subscriptions = result.scalars().all()
+
+        for subscription in subscriptions:
+            user = subscription.user
+            if not user:
+                continue
+            texts = get_texts(user.language)
+            text = texts.get(
+                'TRIAL_ENDING_1D',
+                (
+                    '⏳ <b>Последний день пробного периода</b>\n\n'
+                    'Завтра доступ отключится — Instagram, YouTube и Spotify снова '
+                    'заблокируются, а трафик станет виден провайдеру.\n\n'
+                    '💎 Оформите подписку сейчас, пока пробный активен: соединение не '
+                    'прервётся, настройки сохранятся.\n\n'
+                    '⚡ Это займёт 1 минуту.'
+                ),
+            )
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                ]
+            )
+            try:
+                sent = await self._send(user.telegram_id, text, reply_markup=keyboard, user=user)
+                if sent is not None:
+                    await _record_event(db, user.id, EVENT_TRIAL_ENDING, subscription.id)
+            except Exception as error:  # noqa: BLE001
+                logger.debug('Funnel trial-ending nudge не доставлен', user_id=user.id, error=str(error))
+                await _record_event(db, user.id, EVENT_TRIAL_ENDING, subscription.id)
+
+        if subscriptions:
+            logger.info('🪝 Funnel: nudge за 24ч до конца триала', count=len(subscriptions))
+
+    # --- Spofy: second idle-trial nudge (day 2, still no traffic) ---------
+
+    async def _nudge_idle_trial_2(self, db: AsyncSession) -> None:
+        now = datetime.now(UTC)
+        activated_before = now - timedelta(hours=IDLE_TRIAL2_HOURS)
+        result = await db.execute(
+            select(Subscription)
+            .join(Subscription.user)
+            .options(selectinload(Subscription.user))
+            .where(
+                and_(
+                    Subscription.is_trial == True,  # noqa: E712
+                    Subscription.status == SubscriptionStatus.ACTIVE.value,
+                    func.coalesce(Subscription.traffic_used_gb, 0.0) == 0.0,
+                    Subscription.created_at <= activated_before,
+                    Subscription.end_date > now,
+                    User.status == UserStatus.ACTIVE.value,
+                    User.telegram_id.isnot(None),
+                    ~_event_sent_clause(EVENT_TRIAL_IDLE_2),
+                    _event_sent_clause(EVENT_TRIAL_IDLE),
+                )
+            )
+            .limit(BATCH_LIMIT)
+        )
+        subscriptions = result.scalars().all()
+
+        for subscription in subscriptions:
+            user = subscription.user
+            if not user:
+                continue
+            texts = get_texts(user.language)
+            text = texts.get(
+                'TRIAL_INACTIVE_24H',
+                (
+                    '⏳ <b>Прошли сутки с начала теста</b>\n\n'
+                    'Мы не видим трафика по вашей подписке. Загляните в инструкцию '
+                    'или напишите в поддержку — поможем подключиться!'
+                ),
+            )
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), callback_data='subscription_connect')],
+                    [InlineKeyboardButton(text=texts.t('MENU_SUPPORT', '🆘 Поддержка'), callback_data='menu_support')],
+                ]
+            )
+            try:
+                sent = await self._send(user.telegram_id, text, reply_markup=keyboard, user=user)
+                if sent is not None:
+                    await _record_event(db, user.id, EVENT_TRIAL_IDLE_2, subscription.id)
+            except Exception as error:  # noqa: BLE001
+                logger.debug('Funnel idle-trial-2 nudge не доставлен', user_id=user.id, error=str(error))
+                await _record_event(db, user.id, EVENT_TRIAL_IDLE_2, subscription.id)
+
+        if subscriptions:
+            logger.info('🪝 Funnel: nudge по неподключённому триалу (день 2)', count=len(subscriptions))

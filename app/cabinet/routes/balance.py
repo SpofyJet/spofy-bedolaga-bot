@@ -442,6 +442,44 @@ async def create_topup(
                     detail='Failed to create CryptoBot invoice',
                 )
 
+        elif request.payment_method == 'xrocket':
+            if not settings.is_xrocket_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='xRocket payment method is unavailable',
+                )
+
+            allowed_assets = settings.get_xrocket_assets()
+            asset = (request.payment_option or settings.XROCKET_DEFAULT_ASSET).strip().upper()
+            if asset not in allowed_assets:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f'Unsupported xRocket asset. Allowed: {", ".join(allowed_assets)}',
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_xrocket_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                asset=asset,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                payload=f'cabinet_topup_{user.id}_{request.amount_kopeks}',
+            )
+            if result and result.get('pay_url'):
+                payment_url = result.get('pay_url')
+                payment_id = result.get('invoice_id') or str(result.get('local_payment_id', 'pending'))
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=(
+                        'Failed to create xRocket invoice. '
+                        'The amount may be below the minimum for the selected asset.'
+                    ),
+                )
+
         elif request.payment_method == 'telegram_stars':
             # Telegram Stars payments require bot interaction
             bot_username = settings.get_bot_username() or 'bot'

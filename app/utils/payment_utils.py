@@ -100,6 +100,17 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             }
         )
 
+    if settings.is_xrocket_enabled():
+        methods.append(
+            {
+                'id': 'xrocket',
+                'name': 'Криптовалюта',
+                'icon': '🚀',
+                'description': 'через xRocket',
+                'callback': 'topup_xrocket',
+            }
+        )
+
     if settings.is_heleket_enabled():
         methods.append(
             {
@@ -508,6 +519,8 @@ def is_payment_method_available(method_id: str) -> bool:
         return settings.is_pal24_enabled()
     if method_id == 'cryptobot':
         return settings.is_cryptobot_enabled()
+    if method_id == 'xrocket':
+        return settings.is_xrocket_enabled()
     if method_id == 'heleket':
         return settings.is_heleket_enabled()
     if method_id == 'platega':
@@ -579,6 +592,7 @@ def get_payment_method_status() -> dict[str, bool]:
         'wata': settings.is_wata_enabled(),
         'pal24': settings.is_pal24_enabled(),
         'cryptobot': settings.is_cryptobot_enabled(),
+        'xrocket': settings.is_xrocket_enabled(),
         'heleket': settings.is_heleket_enabled(),
         'platega': settings.is_platega_enabled() and bool(settings.get_platega_active_methods()),
         'cloudpayments': settings.is_cloudpayments_enabled(),
@@ -624,6 +638,8 @@ def get_enabled_payment_methods_count() -> int:
     if settings.is_pal24_enabled():
         count += 1
     if settings.is_cryptobot_enabled():
+        count += 1
+    if settings.is_xrocket_enabled():
         count += 1
     if settings.is_heleket_enabled():
         count += 1

@@ -110,6 +110,13 @@ async def route_payment_by_method(
             await process_cryptobot_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
+    if payment_method == 'xrocket':
+        from .xrocket import process_xrocket_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_xrocket_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
     if payment_method == 'heleket':
         from .heleket import process_heleket_payment_amount
 
@@ -749,9 +756,21 @@ def register_balance_handlers(dp: Dispatcher):
 
     dp.callback_query.register(start_cryptobot_payment, F.data == 'topup_cryptobot')
 
+    from .xrocket import start_xrocket_payment
+
+    dp.callback_query.register(start_xrocket_payment, F.data == 'topup_xrocket')
+
     from .cryptobot import check_cryptobot_payment_status
 
     dp.callback_query.register(check_cryptobot_payment_status, F.data.startswith('check_cryptobot_'))
+
+    from .xrocket import check_xrocket_payment_status
+
+    dp.callback_query.register(check_xrocket_payment_status, F.data.startswith('check_xrocket_'))
+
+    from .xrocket import select_xrocket_asset
+
+    dp.callback_query.register(select_xrocket_asset, F.data.startswith('xrocket_asset_'))
 
     from .heleket import check_heleket_payment_status, start_heleket_payment
 

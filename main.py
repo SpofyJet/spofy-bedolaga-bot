@@ -487,6 +487,8 @@ async def main():
                     verification_providers.append('Heleket')
                 elif method == PaymentMethod.CRYPTOBOT and settings.is_cryptobot_enabled():
                     verification_providers.append('CryptoBot')
+                elif method == PaymentMethod.XROCKET and settings.is_xrocket_enabled():
+                    verification_providers.append('xRocket')
 
             if verification_providers:
                 hours = int(PENDING_MAX_AGE.total_seconds() // 3600)
@@ -541,6 +543,7 @@ async def main():
             [
                 settings.TRIBUTE_ENABLED,
                 settings.is_cryptobot_enabled(),
+                settings.is_xrocket_enabled(),
                 settings.is_mulenpay_enabled(),
                 settings.is_yookassa_enabled(),
                 settings.is_pal24_enabled(),
@@ -711,6 +714,8 @@ async def main():
             webhook_lines.append(f'{settings.get_mulenpay_display_name()}: {_fmt(settings.MULENPAY_WEBHOOK_PATH)}')
         if settings.is_cryptobot_enabled():
             webhook_lines.append(f'CryptoBot: {_fmt(settings.CRYPTOBOT_WEBHOOK_PATH)}')
+        if settings.is_xrocket_enabled():
+            webhook_lines.append(f'xRocket: {_fmt(settings.XROCKET_WEBHOOK_PATH)}')
         if settings.is_yookassa_enabled():
             webhook_lines.append(f'YooKassa: {_fmt(settings.YOOKASSA_WEBHOOK_PATH)}')
         if settings.is_pal24_enabled():

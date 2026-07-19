@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.external.cryptobot import CryptoBotService
+from app.external.xrocket import XRocketService
 from app.external.heleket import HeleketService
 from app.external.telegram_stars import TelegramStarsService
 from app.services.cloudpayments_service import CloudPaymentsService
@@ -20,6 +21,7 @@ from app.services.nalogo_service import NaloGoService
 from app.services.pal24_service import Pal24Service
 from app.services.payment import (
     CryptoBotPaymentMixin,
+    XRocketPaymentMixin,
     HeleketPaymentMixin,
     MulenPayPaymentMixin,
     Pal24PaymentMixin,
@@ -259,6 +261,26 @@ async def update_cryptobot_payment_status(*args, **kwargs):
 async def link_cryptobot_payment_to_transaction(*args, **kwargs):
     crypto_crud = import_module('app.database.crud.cryptobot')
     return await crypto_crud.link_cryptobot_payment_to_transaction(*args, **kwargs)
+
+
+async def create_xrocket_payment(*args, **kwargs):
+    xr_crud = import_module('app.database.crud.xrocket')
+    return await xr_crud.create_xrocket_payment(*args, **kwargs)
+
+
+async def get_xrocket_payment_by_invoice_id(*args, **kwargs):
+    xr_crud = import_module('app.database.crud.xrocket')
+    return await xr_crud.get_xrocket_payment_by_invoice_id(*args, **kwargs)
+
+
+async def update_xrocket_payment_status(*args, **kwargs):
+    xr_crud = import_module('app.database.crud.xrocket')
+    return await xr_crud.update_xrocket_payment_status(*args, **kwargs)
+
+
+async def link_xrocket_payment_to_transaction(*args, **kwargs):
+    xr_crud = import_module('app.database.crud.xrocket')
+    return await xr_crud.link_xrocket_payment_to_transaction(*args, **kwargs)
 
 
 async def create_heleket_payment(*args, **kwargs):
@@ -697,6 +719,7 @@ class PaymentService(
     YooKassaPaymentMixin,
     TributePaymentMixin,
     CryptoBotPaymentMixin,
+    XRocketPaymentMixin,
     HeleketPaymentMixin,
     MulenPayPaymentMixin,
     Pal24PaymentMixin,
@@ -726,6 +749,7 @@ class PaymentService(
         self.yookassa_service = YooKassaService() if settings.is_yookassa_enabled() else None
         self.stars_service = TelegramStarsService(bot) if bot else None
         self.cryptobot_service = CryptoBotService() if settings.is_cryptobot_enabled() else None
+        self.xrocket_service = XRocketService() if settings.is_xrocket_enabled() else None
         self.heleket_service = HeleketService() if settings.is_heleket_enabled() else None
         self.mulenpay_service = MulenPayService() if settings.is_mulenpay_enabled() else None
         self.pal24_service = Pal24Service() if settings.is_pal24_enabled() else None
@@ -740,6 +764,7 @@ class PaymentService(
             yookassa_service=bool(self.yookassa_service),
             stars_service=bool(self.stars_service),
             cryptobot_service=bool(self.cryptobot_service),
+            xrocket_service=bool(self.xrocket_service),
             heleket_service=bool(self.heleket_service),
             mulenpay_name=mulenpay_name,
             mulenpay_service=bool(self.mulenpay_service),

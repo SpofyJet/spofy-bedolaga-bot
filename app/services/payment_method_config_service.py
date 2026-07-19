@@ -66,6 +66,13 @@ def _get_method_defaults() -> dict:
             'default_max': 10000000,
             'available_sub_options': None,
         },
+        'xrocket': {
+            'default_display_name': settings.get_xrocket_display_name(),
+            'is_configured': settings.is_xrocket_enabled(),
+            'default_min': 1000,
+            'default_max': 10000000,
+            'available_sub_options': _get_xrocket_sub_options(),
+        },
         'heleket': {
             'default_display_name': settings.get_heleket_display_name(),
             'is_configured': settings.is_heleket_enabled(),
@@ -266,6 +273,17 @@ def _get_method_defaults() -> dict:
     }
 
 
+def _get_xrocket_sub_options() -> list[dict] | None:
+    """Активы xRocket как под-опции (выбор криптовалюты в кабинете)."""
+    try:
+        assets = settings.get_xrocket_assets()
+        if not assets or len(assets) < 2:
+            return None
+        return [{'id': a, 'name': a} for a in assets]
+    except Exception:
+        return None
+
+
 def _get_platega_sub_options() -> list[dict] | None:
     """Get available Platega sub-options from config."""
     try:
@@ -302,6 +320,7 @@ DEFAULT_METHOD_ORDER = [
     'telegram_stars',
     'tribute',
     'cryptobot',
+    'xrocket',
     'heleket',
     'yookassa',
     'mulenpay',

@@ -360,6 +360,78 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    if settings.is_xrocket_enabled():
+
+        @router.options(settings.XROCKET_WEBHOOK_PATH)
+        async def xrocket_options() -> Response:
+            return _create_cors_response()
+
+        @router.post(settings.XROCKET_WEBHOOK_PATH)
+        async def xrocket_webhook(request: Request) -> JSONResponse:
+            raw_body = await request.body()
+            if not raw_body:
+                return JSONResponse(
+                    {'status': 'error', 'reason': 'empty_body'}, status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            payload_text = raw_body.decode('utf-8')
+            try:
+                payload = json.loads(payload_text)
+            except json.JSONDecodeError:
+                return JSONResponse(
+                    {'status': 'error', 'reason': 'invalid_json'},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            signature = request.headers.get('rocket-pay-signature')
+            secret = settings.XROCKET_API_TOKEN
+            if not secret:
+                logger.error('xRocket webhook received but API token is not configured, rejecting')
+                return JSONResponse(
+                    {'status': 'error', 'reason': 'service_not_configured'},
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+            if not signature:
+                return JSONResponse(
+                    {'status': 'error', 'reason': 'missing_signature'},
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            from app.external.xrocket import XRocketService
+
+            if not XRocketService().verify_webhook_signature(payload_text, signature):
+                return JSONResponse(
+                    {'status': 'error', 'reason': 'invalid_signature'},
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_xrocket_webhook',
+                )
+                if success:
+                    return JSONResponse({'status': 'ok'})
+
+                logger.error(
+                    'xRocket webhook processing failed',
+                    invoice_id=(payload.get('data') or {}).get('id'),
+                )
+                return JSONResponse(
+                    {'status': 'error', 'reason': 'processing_failed'},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            except Exception as e:
+                logger.exception('xRocket webhook processing error', e=e)
+                return JSONResponse(
+                    {'status': 'error', 'reason': 'processing_failed'},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+        routes_registered = True
+
     if settings.is_yookassa_enabled():
 
         @router.options(settings.YOOKASSA_WEBHOOK_PATH)
@@ -1703,6 +1775,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'tribute_enabled': settings.TRIBUTE_ENABLED,
                     'mulenpay_enabled': settings.is_mulenpay_enabled(),
                     'cryptobot_enabled': settings.is_cryptobot_enabled(),
+                    'xrocket_enabled': settings.is_xrocket_enabled(),
                     'yookassa_enabled': settings.is_yookassa_enabled(),
                     'wata_enabled': settings.is_wata_enabled(),
                     'heleket_enabled': settings.is_heleket_enabled(),

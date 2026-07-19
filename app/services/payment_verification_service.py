@@ -22,6 +22,7 @@ from app.database.models import (
     AuraPayPayment,
     CloudPaymentsPayment,
     CryptoBotPayment,
+    XRocketPayment,
     DonutPayment,
     EtoplatezhiPayment,
     FreekassaPayment,
@@ -179,6 +180,8 @@ def _method_is_enabled(method: PaymentMethod) -> bool:
         return settings.is_platega_enabled()
     if method == PaymentMethod.CRYPTOBOT:
         return settings.is_cryptobot_enabled()
+    if method == PaymentMethod.XROCKET:
+        return settings.is_xrocket_enabled()
     if method == PaymentMethod.HELEKET:
         return settings.is_heleket_enabled()
     if method == PaymentMethod.CLOUDPAYMENTS:
@@ -423,6 +426,11 @@ def _is_cryptobot_pending(payment: CryptoBotPayment) -> bool:
     return status == 'active'
 
 
+def _is_xrocket_pending(payment: XRocketPayment) -> bool:
+    status = (payment.status or '').lower()
+    return status == 'active'
+
+
 def _is_cloudpayments_pending(payment: CloudPaymentsPayment) -> bool:
     if payment.is_paid:
         return False
@@ -521,6 +529,21 @@ def _parse_cryptobot_amount_kopeks(payment: CryptoBotPayment) -> int:
         try:
             return int(match.group(1))
         except ValueError:
+            return 0
+    return 0
+
+
+def _parse_xrocket_amount_kopeks(payment: XRocketPayment) -> int:
+    # Сумма зафиксирована при создании инвойса — крипту обратно не пересчитываем.
+    stored = int(getattr(payment, 'amount_kopeks', 0) or 0)
+    if stored > 0:
+        return stored
+    payload = payment.payload or ''
+    match = re.search(r'_(\d+)$', payload)
+    if match:
+        try:
+            return int(match.group(1))
+        except (TypeError, ValueError):
             return 0
     return 0
 
@@ -745,6 +768,33 @@ async def _fetch_cryptobot_payments(db: AsyncSession, cutoff: datetime) -> list[
         amount_kopeks = _parse_cryptobot_amount_kopeks(payment)
         record = _build_record(
             PaymentMethod.CRYPTOBOT,
+            payment,
+            identifier=payment.invoice_id,
+            amount_kopeks=amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
+async def _fetch_xrocket_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
+    stmt = (
+        select(XRocketPayment)
+        .options(selectinload(XRocketPayment.user))
+        .where(XRocketPayment.created_at >= cutoff)
+        .order_by(desc(XRocketPayment.created_at))
+    )
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        status = (payment.status or '').lower()
+        if not _is_xrocket_pending(payment) and status != 'paid':
+            continue
+        amount_kopeks = _parse_xrocket_amount_kopeks(payment)
+        record = _build_record(
+            PaymentMethod.XROCKET,
             payment,
             identifier=payment.invoice_id,
             amount_kopeks=amount_kopeks,
@@ -1135,6 +1185,7 @@ async def list_recent_pending_payments(
         await _fetch_platega_payments(db, cutoff),
         await _fetch_heleket_payments(db, cutoff),
         await _fetch_cryptobot_payments(db, cutoff),
+        await _fetch_xrocket_payments(db, cutoff),
         await _fetch_cloudpayments_payments(db, cutoff),
         await _fetch_freekassa_payments(db, cutoff),
         await _fetch_kassa_ai_payments(db, cutoff),
@@ -1265,6 +1316,21 @@ async def get_payment_record(
             return None
         await db.refresh(payment, attribute_names=['user'])
         amount_kopeks = _parse_cryptobot_amount_kopeks(payment)
+        return _build_record(
+            method,
+            payment,
+            identifier=payment.invoice_id,
+            amount_kopeks=amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+        )
+
+    if method == PaymentMethod.XROCKET:
+        payment = await db.get(XRocketPayment, local_payment_id)
+        if not payment:
+            return None
+        await db.refresh(payment, attribute_names=['user'])
+        amount_kopeks = _parse_xrocket_amount_kopeks(payment)
         return _build_record(
             method,
             payment,
@@ -1514,6 +1580,9 @@ async def run_manual_check(
             payment = result.get('payment') if result else None
         elif method == PaymentMethod.CRYPTOBOT:
             result = await payment_service.get_cryptobot_payment_status(db, local_payment_id)
+            payment = result.get('payment') if result else None
+        elif method == PaymentMethod.XROCKET:
+            result = await payment_service.get_xrocket_payment_status(db, local_payment_id)
             payment = result.get('payment') if result else None
         elif method == PaymentMethod.CLOUDPAYMENTS:
             result = await payment_service.get_cloudpayments_payment_status(db, local_payment_id)

@@ -1907,21 +1907,17 @@ class MonitoringService:
 
     async def _send_trial_ending_notification(self, user: User, subscription: Subscription) -> bool:
         try:
-            get_texts(user.language)
+            texts = get_texts(user.language)
 
-            tariff_label = ''
-            if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
-                tariff_label = f' «{subscription.tariff.name}»'
-            message = f"""
-🎁 <b>Тестовая подписка{tariff_label} скоро закончится!</b>
-
-Ваша тестовая подписка истекает через 2 часа.
-
-💎 <b>Не хотите остаться без VPN?</b>
-Переходите на полную подписку!
-
-⚡️ Успейте оформить до окончания тестового периода!
-"""
+            # Spofy: use the strong localized TRIAL_ENDING_SOON copy (was hardcoded)
+            message = texts.get(
+                'TRIAL_ENDING_SOON',
+                (
+                    '🎁 <b>Пробный период заканчивается через 2 часа</b>\n\n'
+                    'VPN отключится автоматически — Instagram и YouTube снова заблокируются.\n\n'
+                    '💎 Оформите подписку сейчас: соединение не прервётся, настройки сохранятся.'
+                ),
+            )
 
             from aiogram.types import InlineKeyboardMarkup
 

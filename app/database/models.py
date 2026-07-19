@@ -152,6 +152,7 @@ class PaymentMethod(Enum):
     TRIBUTE = 'tribute'
     YOOKASSA = 'yookassa'
     CRYPTOBOT = 'cryptobot'
+    XROCKET = 'xrocket'
     HELEKET = 'heleket'
     MULENPAY = 'mulenpay'
     PAL24 = 'pal24'
@@ -333,6 +334,59 @@ class CryptoBotPayment(Base):
 
     def __repr__(self):
         return f'<CryptoBotPayment(id={self.id}, invoice_id={self.invoice_id}, amount={self.amount} {self.asset}, status={self.status})>'
+
+
+class XRocketPayment(Base):
+    __tablename__ = 'xrocket_payments'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
+
+    invoice_id = Column(String(255), unique=True, nullable=False, index=True)
+    amount = Column(String(50), nullable=False)
+    asset = Column(String(20), nullable=False)
+
+    # Сумма в копейках, зафиксированная при создании инвойса.
+    # Начисляем именно её — не пересчитываем крипту обратно в рубли на вебхуке.
+    amount_kopeks = Column(Integer, nullable=False, default=0)
+    fiat_rate = Column(String(50), nullable=True)
+
+    status = Column(String(50), nullable=False)
+    description = Column(Text, nullable=True)
+    payload = Column(Text, nullable=True)
+
+    pay_url = Column(Text, nullable=True)
+
+    paid_at = Column(AwareDateTime(), nullable=True)
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
+
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+    user = relationship('User', backref='xrocket_payments')
+    transaction = relationship('Transaction', backref='xrocket_payment')
+
+    @property
+    def amount_float(self) -> float:
+        try:
+            return float(self.amount)
+        except (ValueError, TypeError):
+            return 0.0
+
+    @property
+    def is_paid(self) -> bool:
+        return self.status == 'paid'
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == 'active'
+
+    @property
+    def is_expired(self) -> bool:
+        return self.status == 'expired'
+
+    def __repr__(self):
+        return f'<XRocketPayment(id={self.id}, invoice_id={self.invoice_id}, amount={self.amount} {self.asset}, status={self.status})>'
 
 
 class AppleTransaction(Base):

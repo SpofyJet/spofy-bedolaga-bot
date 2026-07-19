@@ -198,6 +198,9 @@ class Settings(BaseSettings):
     FUNNEL_TRIAL_EXP2_PERCENT: int = 25
     FUNNEL_TRIAL_EXP_VALID_HOURS: int = 24
     FUNNEL_TRIAL_EXP_WINDOW_HOURS: int = 168
+    FUNNEL_TRIAL_ENDING_LEAD_HOURS: int = 24
+    FUNNEL_TRIAL_ENDING_MIN_HOURS: int = 3
+    FUNNEL_IDLE_TRIAL2_HOURS: int = 24
 
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
     TRIAL_DEVICE_LIMIT: int = 2
@@ -542,6 +545,15 @@ class Settings(BaseSettings):
     CRYPTOBOT_DEFAULT_ASSET: str = 'USDT'
     CRYPTOBOT_ASSETS: str = 'USDT,TON,BTC,ETH'
     CRYPTOBOT_INVOICE_EXPIRES_HOURS: int = 24
+
+    XROCKET_ENABLED: bool = False
+    XROCKET_DISPLAY_NAME: str = 'xRocket'
+    XROCKET_API_TOKEN: str | None = None
+    XROCKET_BASE_URL: str = 'https://pay.xrocket.tg'
+    XROCKET_WEBHOOK_PATH: str = '/xrocket-webhook'
+    XROCKET_DEFAULT_ASSET: str = 'USDT'
+    XROCKET_ASSETS: str = 'USDT,TONCOIN,BTC,ETH'
+    XROCKET_INVOICE_EXPIRES_HOURS: int = 24
 
     HELEKET_ENABLED: bool = False
     HELEKET_DISPLAY_NAME: str = 'Heleket Crypto'
@@ -2194,6 +2206,13 @@ class Settings(BaseSettings):
         name = (self.CRYPTOBOT_DISPLAY_NAME or '').strip()
         return name or 'CryptoBot'
 
+    def is_xrocket_enabled(self) -> bool:
+        return self.XROCKET_ENABLED and self.XROCKET_API_TOKEN is not None
+
+    def get_xrocket_display_name(self) -> str:
+        name = (self.XROCKET_DISPLAY_NAME or '').strip()
+        return name or 'xRocket'
+
     def is_heleket_enabled(self) -> bool:
         return self.HELEKET_ENABLED and self.HELEKET_MERCHANT_ID is not None and self.HELEKET_API_KEY is not None
 
@@ -2784,6 +2803,31 @@ class Settings(BaseSettings):
 
     def get_cryptobot_invoice_expires_seconds(self) -> int:
         return self.CRYPTOBOT_INVOICE_EXPIRES_HOURS * 3600
+
+    def get_xrocket_base_url(self) -> str:
+        return self.XROCKET_BASE_URL
+
+    def get_xrocket_assets(self) -> list[str]:
+        # ВНИМАНИЕ: у xRocket тикер тонкоина — TONCOIN, не TON (TON API отвергнет).
+        raw = (self.XROCKET_ASSETS or '').strip()
+        default = (self.XROCKET_DEFAULT_ASSET or 'USDT').strip().upper()
+        if not raw:
+            return [default]
+        assets = []
+        for a in raw.split(','):
+            a = a.strip().upper()
+            if not a:
+                continue
+            if a == 'TON':  # частая ошибка при копировании из CRYPTOBOT_ASSETS
+                a = 'TONCOIN'
+            if a not in assets:
+                assets.append(a)
+        if default not in assets:
+            assets.insert(0, default)
+        return assets or [default]
+
+    def get_xrocket_invoice_expires_seconds(self) -> int:
+        return min(self.XROCKET_INVOICE_EXPIRES_HOURS * 3600, 86400)
 
     def get_heleket_markup_percent(self) -> float:
         try:

@@ -497,6 +497,24 @@ class AdminNotificationService:
                 amount_kopeks if amount_kopeks is not None else (abs(transaction.amount_kopeks) if transaction else 0)
             )
 
+            # Spofy: self-heal trial-conversion detection (most call sites hardcode False).
+            # First purchase + prior trial activation == conversion. Never downgrade True.
+            if not was_trial_conversion:
+                try:
+                    from sqlalchemy import func as _f, select as _s
+                    from app.database.models import SubscriptionEvent as _SE
+                    _prior_purchases = await db.scalar(
+                        _s(_f.count(_SE.id)).where(_SE.user_id == user.id, _SE.event_type == 'purchase')
+                    )
+                    if not _prior_purchases:
+                        _had_trial = await db.scalar(
+                            _s(_f.count(_SE.id)).where(_SE.user_id == user.id, _SE.event_type == 'activation')
+                        )
+                        if _had_trial:
+                            was_trial_conversion = True
+                except Exception:
+                    logger.warning('Spofy: trial-conversion self-detect failed', exc_info=True)
+
             await self._record_subscription_event(
                 db,
                 event_type='purchase',
@@ -514,6 +532,41 @@ class AdminNotificationService:
                     else 'Баланс',
                 },
             )
+
+            # Spofy: persist the conversion row once per user (idempotent).
+            if was_trial_conversion:
+                try:
+                    from app.database.crud.subscription_conversion import (
+                        create_subscription_conversion,
+                        get_conversion_by_user_id,
+                    )
+                    if await get_conversion_by_user_id(db, user.id) is None:
+                        _trial_days = 0
+                        try:
+                            from sqlalchemy import func as _f2, select as _s2
+                            from app.database.models import SubscriptionEvent as _SE2
+                            _a0 = await db.scalar(
+                                _s2(_f2.min(_SE2.occurred_at)).where(
+                                    _SE2.user_id == user.id, _SE2.event_type == 'activation'
+                                )
+                            )
+                            if _a0:
+                                _trial_days = max(0, (datetime.now(UTC) - _a0).days)
+                        except Exception:
+                            pass
+                        await create_subscription_conversion(
+                            db=db,
+                            user_id=user.id,
+                            trial_duration_days=_trial_days,
+                            payment_method=(
+                                self._get_payment_method_display(transaction.payment_method)
+                                if transaction else 'balance'
+                            ),
+                            first_payment_amount_kopeks=total_amount,
+                            first_paid_period_days=period_days,
+                        )
+                except Exception:
+                    logger.error('Spofy: failed to persist subscription conversion', exc_info=True)
 
             if not self._is_enabled():
                 return False
