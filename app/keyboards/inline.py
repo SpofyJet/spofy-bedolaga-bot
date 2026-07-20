@@ -1241,14 +1241,38 @@ def get_subscription_keyboard(
                     [InlineKeyboardButton(text=pause_text, callback_data='toggle_daily_subscription_pause')]
                 )
             else:
-                # Для обычного тарифа: [Продлить] [Автоплатеж]
+                # «Продлить подписку» — главная CTA экрана, отдельным рядом на всю ширину
                 keyboard.append(
                     [
-                        InlineKeyboardButton(text=texts.MENU_EXTEND_SUBSCRIPTION, callback_data='subscription_extend'),
+                        InlineKeyboardButton(
+                            text=texts.MENU_EXTEND_SUBSCRIPTION, callback_data='subscription_extend'
+                        )
+                    ]
+                )
+                keyboard.append(
+                    [
                         InlineKeyboardButton(
                             text=texts.t('AUTOPAY_BUTTON', '💳 Автоплатеж'),
                             callback_data='subscription_autopay',
-                        ),
+                        )
+                    ]
+                )
+
+            # Кнопка докупки трафика для платных подписок
+            # В режиме тарифов проверяем can_topup_traffic() у тарифа, в классическом - глобальные настройки
+            show_traffic_topup = False
+            if subscription and (subscription.traffic_limit_gb or 0) > 0:
+                if settings.is_tariffs_mode() and tariff:
+                    show_traffic_topup = tariff.can_topup_traffic()
+                elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
+                    show_traffic_topup = True
+
+            if show_traffic_topup:
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('BUY_TRAFFIC_BUTTON', '📈 Докупить трафик'), callback_data='buy_traffic'
+                        )
                     ]
                 )
 
@@ -1285,23 +1309,6 @@ def get_subscription_keyboard(
                     )
             keyboard.append(settings_row)
 
-            # Кнопка докупки трафика для платных подписок
-            # В режиме тарифов проверяем can_topup_traffic() у тарифа, в классическом - глобальные настройки
-            show_traffic_topup = False
-            if subscription and (subscription.traffic_limit_gb or 0) > 0:
-                if settings.is_tariffs_mode() and tariff:
-                    show_traffic_topup = tariff.can_topup_traffic()
-                elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
-                    show_traffic_topup = True
-
-            if show_traffic_topup:
-                keyboard.append(
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('BUY_TRAFFIC_BUTTON', '📈 Докупить трафик'), callback_data='buy_traffic'
-                        )
-                    ]
-                )
 
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
 
