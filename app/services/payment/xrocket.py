@@ -648,6 +648,25 @@ class XRocketPaymentMixin:
         return True
 
     async def _deliver_xrocket_admin_topup_notification(self, context: _XRocketAdminNotificationContext) -> None:
+        """Обертка с одним повтором: транзиентные сбои (сеть Telegram/БД) не должны терять уведомление."""
+        import asyncio as _asyncio
+
+        for attempt in (1, 2):
+            try:
+                await self._deliver_xrocket_admin_topup_notification_once(context)
+                return
+            except Exception as error:
+                if attempt == 1:
+                    logger.warning(
+                        'Админ-уведомление xRocket не доставлено, повтор через 5 сек', error=str(error)
+                    )
+                    await _asyncio.sleep(5)
+                else:
+                    logger.error(
+                        'Админ-уведомление xRocket не доставлено после повтора', error=str(error), exc_info=True
+                    )
+
+    async def _deliver_xrocket_admin_topup_notification_once(self, context: _XRocketAdminNotificationContext) -> None:
         bot_instance = getattr(self, 'bot', None)
         if not bot_instance:
             return
@@ -693,6 +712,7 @@ class XRocketPaymentMixin:
                 )
             except Exception as error:
                 logger.error('Ошибка отправки админ-уведомления о пополнении xRocket', error=error, exc_info=True)
+                raise
 
     async def _deliver_xrocket_user_topup_notification(self, payload: _XRocketUserNotificationPayload) -> None:
         bot_instance = getattr(self, 'bot', None)
