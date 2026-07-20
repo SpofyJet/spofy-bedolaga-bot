@@ -1194,7 +1194,8 @@ class MonitoringService:
                 select(Subscription)
                 .join(User, Subscription.user_id == User.id)
                 .options(
-                    selectinload(Subscription.user),
+                    selectinload(Subscription.user).selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
+                    selectinload(Subscription.user).selectinload(User.promo_group),
                     selectinload(Subscription.tariff),
                 )
                 .where(
