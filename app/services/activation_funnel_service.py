@@ -69,6 +69,7 @@ EVENT_ABANDONED_TOPUP = 'funnel_abandoned_topup'
 ABANDONED_TOPUP_MIN_AGE_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_MIN_AGE_HOURS', 4))
 ABANDONED_TOPUP_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_WINDOW_HOURS', 48))
 ABANDONED_TOPUP_RESEND_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_RESEND_HOURS', 24))
+NUDGE_GLOBAL_COOLDOWN_HOURS = int(getattr(settings, 'FUNNEL_GLOBAL_COOLDOWN_HOURS', 20))
 
 
 def _funnel_enabled() -> bool:
@@ -96,6 +97,21 @@ async def _record_event(db: AsyncSession, user_id: int, event_type: str, subscri
         )
     )
     await db.commit()
+
+
+async def _already_nudged_recently(db: AsyncSession, user_id: int) -> bool:
+    """Глобальный анти-спам: любое касание воронки за последние N часов -> пропуск."""
+    since = datetime.now(UTC) - timedelta(hours=NUDGE_GLOBAL_COOLDOWN_HOURS)
+    result = await db.execute(
+        select(
+            exists().where(
+                SubscriptionEvent.user_id == user_id,
+                SubscriptionEvent.event_type.like('funnel_%'),
+                SubscriptionEvent.created_at > since,
+            )
+        )
+    )
+    return bool(result.scalar())
 
 
 async def _resolve_trial_days(db: AsyncSession) -> int:
@@ -173,6 +189,8 @@ class ActivationFunnelService:
         users = result.scalars().all()
 
         for user in users:
+            if await _already_nudged_recently(db, user.id):
+                continue
             texts = get_texts(user.language)
             if wave == 1:
                 text = texts.get(
@@ -244,6 +262,8 @@ class ActivationFunnelService:
             user = subscription.user
             if not user:
                 continue
+            if await _already_nudged_recently(db, user.id):
+                continue
             texts = get_texts(user.language)
             text = texts.get(
                 'FUNNEL_TRIAL_IDLE',
@@ -313,6 +333,8 @@ class ActivationFunnelService:
         for subscription in subscriptions:
             user = subscription.user
             if not user:
+                continue
+            if await _already_nudged_recently(db, user.id):
                 continue
             texts = get_texts(user.language)
 
@@ -434,6 +456,8 @@ class ActivationFunnelService:
 
         sent_count = 0
         for user, amount_kopeks, method_label, pay_url, created_at in by_user.values():
+            if await _already_nudged_recently(db, user.id):
+                continue
             if getattr(user, 'restriction_topup', False):
                 continue
             paid_later = await db.execute(
@@ -522,6 +546,8 @@ class ActivationFunnelService:
             user = subscription.user
             if not user:
                 continue
+            if await _already_nudged_recently(db, user.id):
+                continue
             texts = get_texts(user.language)
             text = texts.get(
                 'TRIAL_ENDING_1D',
@@ -579,6 +605,8 @@ class ActivationFunnelService:
         for subscription in subscriptions:
             user = subscription.user
             if not user:
+                continue
+            if await _already_nudged_recently(db, user.id):
                 continue
             texts = get_texts(user.language)
             text = texts.get(
