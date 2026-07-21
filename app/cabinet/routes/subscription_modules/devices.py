@@ -153,7 +153,10 @@ async def purchase_devices_legacy(
     if end_date.tzinfo is None:
         end_date = end_date.replace(tzinfo=UTC)
     days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
-    base_total_price = int(device_price * chargeable_devices * days_left / 30)
+    if tariff and getattr(tariff, 'device_price_flat', False):
+        base_total_price = device_price * chargeable_devices
+    else:
+        base_total_price = int(device_price * chargeable_devices * days_left / 30)
     if chargeable_devices > 0:
         base_total_price = max(100, base_total_price)  # Минимум 1 рубль
 
@@ -436,7 +439,10 @@ async def purchase_devices(
 
         # Calculate base price before discount
         base_price_per_month = device_price * chargeable_devices
-        base_price_prorated = int(base_price_per_month * effective_days / total_days)
+        if tariff and getattr(tariff, 'device_price_flat', False):
+            base_price_prorated = base_price_per_month
+        else:
+            base_price_prorated = int(base_price_per_month * effective_days / total_days)
         if chargeable_devices > 0:
             base_price_prorated = max(100, base_price_prorated)  # Minimum 1 ruble
 
@@ -729,7 +735,10 @@ async def save_devices_cart(
         else:
             chargeable_devices = request.devices
 
-    base_total_price = int(device_price * chargeable_devices * effective_days / total_days)
+    if tariff and getattr(tariff, 'device_price_flat', False):
+        base_total_price = device_price * chargeable_devices
+    else:
+        base_total_price = int(device_price * chargeable_devices * effective_days / total_days)
     if chargeable_devices > 0:
         base_total_price = max(100, base_total_price)  # Minimum 1 ruble
 
@@ -847,7 +856,10 @@ async def get_device_price(
             chargeable_devices = devices
 
     # Calculate base price before discount (total first, then floor)
-    base_total_price = int(device_price * chargeable_devices * effective_days / total_days)
+    if tariff and getattr(tariff, 'device_price_flat', False):
+        base_total_price = device_price * chargeable_devices
+    else:
+        base_total_price = int(device_price * chargeable_devices * effective_days / total_days)
     if chargeable_devices > 0:
         base_total_price = max(100, base_total_price)
 

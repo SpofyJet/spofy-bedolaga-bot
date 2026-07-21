@@ -2769,6 +2769,10 @@ def get_change_devices_keyboard(
         price_multiplier = 1
         period_text = ''
 
+    # «Вечный» тариф: фикс. цена за устройство — без прорейта по остатку дней
+    if tariff and getattr(tariff, 'device_price_flat', False):
+        price_multiplier = 1
+
     # Используем цену из тарифа если есть, иначе глобальную настройку
     tariff_device_price = getattr(tariff, 'device_price_kopeks', None) if tariff else None
     if tariff and tariff_device_price:

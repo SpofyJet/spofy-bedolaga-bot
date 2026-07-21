@@ -2140,5 +2140,7 @@
   "FUNNEL_ABANDONED_TOPUP_PAY": "💳 Pay {amount}₽",
   "FUNNEL_ABANDONED_TOPUP_OTHER": "🔄 Another payment method",
   "PAYMENT_PLATEGA_M13": "🪙 Crypto",
-  "REFERRAL_SHARE_TEXT": "🎁 Free VPN for 2 days — no card needed!\n\n🚀 Fast servers worldwide\n🔒 Reliable traffic protection\n📱 Works on all devices"
+  "REFERRAL_SHARE_TEXT": "🎁 Free VPN for 2 days — no card needed!\n\n🚀 Fast servers worldwide\n🔒 Reliable traffic protection\n📱 Works on all devices",
+  "CHANGE_DEVICES_PROMPT_TARIFF_FLAT": "📱 <b>Change device count</b>\n\nCurrent limit: {current_devices} devices\nPrice per extra device: {price} (one-time)\nSelect new device count:\n\n💡 <b>Note:</b>\n• Increase — one-time charge\n• Decrease — no refund",
+  "TARIFF_SWITCH_FULL_PRICE_DAYS_NOTE": "📅 Full tariff price — <b>{days} days</b> will be added on top of your remaining days."
 }

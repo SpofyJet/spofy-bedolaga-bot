@@ -2299,6 +2299,9 @@ def _calc_extra_devices_cost(tariff: Tariff, subscription_device_limit: int, per
     device_price = getattr(tariff, 'device_price_kopeks', None) or 0
     if device_price <= 0:
         return 0
+    if getattr(tariff, 'device_price_flat', False):
+        # Фикс. цена за устройство — разово за период, без × месяцев
+        return additional * device_price
     months = max(1, round(period_days / 30))
     return additional * device_price * months
 
@@ -4552,6 +4555,16 @@ async def preview_instant_switch(
         await callback.answer()
         return
 
+    # «Вечный» тариф: переход по полной цене периода — показываем начисляемые дни
+    full_price_note = ''
+    if getattr(new_tariff, 'switch_full_price', False):
+        _fp_periods = new_tariff.get_available_periods() or []
+        if _fp_periods:
+            full_price_note = '\n\n' + texts.t(
+                'TARIFF_SWITCH_FULL_PRICE_DAYS_NOTE',
+                '📅 Полная стоимость тарифа — будет начислено <b>{days} дн.</b> поверх остатка.',
+            ).format(days=_fp_periods[0])
+
     if is_upgrade:
         # Upgrade - нужна доплата
         if user_balance >= upgrade_cost:
@@ -4580,7 +4593,7 @@ async def preview_instant_switch(
                     cost=format_price_kopeks(upgrade_cost),
                     balance=format_price_kopeks(user_balance),
                     after=format_price_kopeks(user_balance - upgrade_cost),
-                ),
+                ) + full_price_note,
                 reply_markup=get_instant_switch_confirm_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
             )
@@ -4599,7 +4612,7 @@ async def preview_instant_switch(
                     cost=format_price_kopeks(upgrade_cost),
                     balance=format_price_kopeks(user_balance),
                     missing=format_price_kopeks(missing),
-                ),
+                ) + full_price_note,
                 reply_markup=get_instant_switch_insufficient_balance_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
             )
@@ -4767,6 +4780,13 @@ async def confirm_instant_switch(
             max_device_limit=getattr(new_tariff, 'max_device_limit', None),
         )
         subscription.connected_squads = squads
+
+        # «Вечный» тариф (switch_full_price): переход оплачен по полной цене
+        # минимального периода — начисляем его поверх оставшихся дней.
+        if getattr(new_tariff, 'switch_full_price', False) and switch_result.new_period_days:
+            _now_sw = datetime.now(UTC)
+            _base_sw = subscription.end_date if subscription.end_date and subscription.end_date > _now_sw else _now_sw
+            subscription.end_date = _base_sw + timedelta(days=switch_result.new_period_days)
 
         # Сбрасываем докупленный трафик при смене тарифа
         from sqlalchemy import delete as sql_delete

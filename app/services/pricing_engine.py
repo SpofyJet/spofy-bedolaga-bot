@@ -257,6 +257,27 @@ class PricingEngine:
                 new_period_days=1,
             )
 
+        # --- «Вечный» тариф (switch_full_price) ---
+        # Переход НА такой тариф: всегда полная стоимость минимального периода
+        # (прорейт по дневной ставке дал бы копейки из-за длинного периода, напр. 2222 дня).
+        if getattr(new_tariff, 'switch_full_price', False):
+            return self._calculate_switch_from_daily(new_tariff, remaining_days, user=user)
+
+        # Возврат С такого тарифа на тариф ниже уровнем (tier_level) — бесплатно,
+        # даже если дневная ставка нового тарифа выше текущей.
+        if getattr(current_tariff, 'switch_full_price', False):
+            cur_tier = getattr(current_tariff, 'tier_level', 1) or 1
+            new_tier = getattr(new_tariff, 'tier_level', 1) or 1
+            if new_tier < cur_tier:
+                return TariffSwitchResult(
+                    upgrade_cost=0,
+                    is_upgrade=False,
+                    raw_cost=0,
+                    group_discount_pct=0,
+                    offer_discount_pct=0,
+                    new_period_days=0,
+                )
+
         # --- Periodic → Periodic ---
 
         # Early return: нечего считать при нулевом остатке
@@ -587,7 +608,10 @@ class PricingEngine:
         )
         tariff_device_limit = tariff.device_limit or 0
         extra_devices = max(0, (device_limit or 0) - tariff_device_limit)
-        if is_daily and period_days <= 1:
+        if getattr(tariff, 'device_price_flat', False):
+            # Фикс. цена за устройство — разово, без умножения на месяцы периода
+            devices_price = extra_devices * device_price_per_unit
+        elif is_daily and period_days <= 1:
             devices_price = extra_devices * device_price_per_unit
         else:
             devices_price = extra_devices * device_price_per_unit * months

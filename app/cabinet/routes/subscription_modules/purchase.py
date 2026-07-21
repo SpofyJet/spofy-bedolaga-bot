@@ -166,7 +166,11 @@ async def _build_tariff_response(
             base_tariff_price = int(price_kopeks)
 
             # Стоимость доп. устройств за этот период
-            extra_devices_cost = extra_devices_count * extra_device_price_per_month * months
+            if getattr(tariff, 'device_price_flat', False):
+                # Фикс. цена за устройство — разово за период
+                extra_devices_cost = extra_devices_count * extra_device_price_per_month
+            else:
+                extra_devices_cost = extra_devices_count * extra_device_price_per_month * months
 
             # Apply per-category promo group discounts
             original_price = base_tariff_price + extra_devices_cost

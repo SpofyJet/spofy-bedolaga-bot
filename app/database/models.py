@@ -1804,6 +1804,12 @@ class Tariff(Base):
     )  # Цена за доп. устройство (None = нельзя докупить)
     max_device_limit = Column(Integer, nullable=True, default=None)  # Макс. устройств (None = без ограничений)
 
+    # «Вечный» тариф (напр. 2222 дня): переход НА него — по полной цене минимального
+    # периода (прорейт дал бы копейки); возврат на тарифы ниже tier_level — бесплатно.
+    switch_full_price = Column(Boolean, default=False, server_default='false', nullable=False)
+    # Фиксированная цена за доп. устройство (разово, без помесячного прорейта по дням).
+    device_price_flat = Column(Boolean, default=False, server_default='false', nullable=False)
+
     # Сквады (серверы) доступные в тарифе
     allowed_squads = Column(JSON, default=list)  # список UUID сквадов
 

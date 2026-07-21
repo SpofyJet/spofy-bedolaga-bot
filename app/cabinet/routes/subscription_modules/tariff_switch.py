@@ -483,6 +483,14 @@ async def switch_tariff(
     elif switching_from_daily:
         subscription.end_date = datetime.now(UTC) + timedelta(days=new_period_days)
         subscription.is_daily_paused = False
+    elif getattr(new_tariff, 'switch_full_price', False) and new_period_days:
+        # «Вечный» тариф: переход оплачен по полной цене периода — начисляем его поверх остатка
+        _base_sw = (
+            subscription.end_date
+            if subscription.end_date and subscription.end_date > datetime.now(UTC)
+            else datetime.now(UTC)
+        )
+        subscription.end_date = _base_sw + timedelta(days=new_period_days)
 
     subscription.updated_at = datetime.now(UTC)
     await db.commit()
