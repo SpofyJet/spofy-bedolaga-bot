@@ -1264,13 +1264,28 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
         user.last_activity = datetime.now(UTC)
 
-        if profile_updated:
-            user.updated_at = datetime.now(UTC)
-            await db.commit()
-            await db.refresh(user)
-            logger.info('💾 Профиль пользователя обновлен', telegram_id=user.telegram_id)
-        else:
-            await db.commit()
+        # Некритичное обновление профиля/last_activity — устойчиво к блокировкам:
+        # пока платёжный флоу держит FOR UPDATE на строке пользователя (медленный ответ
+        # панели/Telegram), /start не должен падать по TimeoutError — пропускаем запись.
+        try:
+            if profile_updated:
+                user.updated_at = datetime.now(UTC)
+                await db.commit()
+                await db.refresh(user)
+                logger.info('💾 Профиль пользователя обновлен', telegram_id=user.telegram_id)
+            else:
+                await db.commit()
+        except Exception as commit_error:
+            await db.rollback()
+            try:
+                await db.refresh(user)
+            except Exception:
+                pass
+            logger.warning(
+                '⚠️ Пропущено сохранение профиля в /start (строка пользователя заблокирована)',
+                telegram_id=user.telegram_id,
+                error=str(commit_error),
+            )
 
         texts = get_texts(user.language)
 

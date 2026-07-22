@@ -2494,6 +2494,11 @@ async def try_auto_extend_expired_after_topup(
             exc_info=True,
         )
 
+    # Фиксируем продление ДО обращения к панели: HTTP к RemnaWave может занимать
+    # десятки секунд, и всё это время транзакция не должна держать незафиксированные
+    # изменения/локи (инцидент 2026-07-22: таймауты конкурентных запросов пользователя).
+    await db.commit()
+
     # Update RemnaWave
     try:
         await subscription_service.update_remnawave_user(
