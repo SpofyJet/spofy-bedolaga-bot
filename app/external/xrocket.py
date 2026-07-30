@@ -1,5 +1,7 @@
 import hashlib
 import hmac
+import json
+import os
 from typing import Any
 
 import aiohttp
@@ -120,20 +122,108 @@ class XRocketService:
         return result is not None
 
     async def get_fiat_rate(self, crypto: str, fiat: str = 'RUB') -> float | None:
-        """Курс 1 {crypto} = N {fiat} через публичный Trade API xRocket."""
+        """Курс 1 {crypto} = N {fiat}.
+
+        Цепочка источников (Trade API xRocket с июля 2026 отдаёт 404):
+        1) публичный Trade API xRocket — на случай, если эндпоинт оживёт;
+        2) CryptoBot getExchangeRates — токен уже настроен в боте;
+        3) статический резерв из env XROCKET_FALLBACK_USDT_RUB (только USDT/RUB).
+
+        Сбои отдельных источников — warning (без репорта в админку); error —
+        только когда недоступны ВСЕ источники (платёж будет отменён).
+        """
+        rate = await self._get_rate_xrocket_trade(crypto, fiat)
+        if rate:
+            return rate
+
+        rate = await self._get_rate_cryptobot(crypto, fiat)
+        if rate:
+            return rate
+
+        if crypto.upper() == 'USDT' and fiat.upper() == 'RUB':
+            fallback = (os.environ.get('XROCKET_FALLBACK_USDT_RUB') or '').strip()
+            if fallback:
+                try:
+                    value = float(fallback.replace(',', '.'))
+                    if value > 0:
+                        logger.warning(
+                            'xRocket: используется статический курс из XROCKET_FALLBACK_USDT_RUB',
+                            rate=value,
+                        )
+                        return value
+                except ValueError:
+                    logger.warning('xRocket: некорректный XROCKET_FALLBACK_USDT_RUB', value=fallback)
+
+        logger.error(
+            'xRocket: курс недоступен из всех источников — платёж будет отменён',
+            crypto=crypto,
+            fiat=fiat,
+        )
+        return None
+
+    async def _get_rate_xrocket_trade(self, crypto: str, fiat: str) -> float | None:
+        """Публичный Trade API xRocket (без авторизации). Content-type-safe."""
         url = f'{self.TRADE_URL}/rates/fiat/{crypto.upper()}/{fiat.upper()}'
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
-                    data = await response.json()
+                    raw = await response.text()
+                    try:
+                        data = json.loads(raw)
+                    except (json.JSONDecodeError, ValueError):
+                        logger.warning(
+                            'xRocket Trade API: не-JSON ответ (эндпоинт недоступен?)',
+                            status=response.status,
+                            body=raw[:200],
+                        )
+                        return None
                     if response.status == 200 and data.get('success'):
                         rate = data.get('data', {}).get('rate')
                         if rate and float(rate) > 0:
                             return float(rate)
-                    logger.error('xRocket: не удалось получить курс', crypto=crypto, fiat=fiat, data=data)
+                    logger.warning(
+                        'xRocket Trade API: курс не получен',
+                        status=response.status,
+                        crypto=crypto,
+                        fiat=fiat,
+                    )
                     return None
         except Exception as e:
-            logger.error('Ошибка запроса курса xRocket', crypto=crypto, fiat=fiat, error=e)
+            logger.warning('xRocket Trade API: ошибка запроса курса', crypto=crypto, fiat=fiat, error=str(e))
+            return None
+
+    async def _get_rate_cryptobot(self, crypto: str, fiat: str) -> float | None:
+        """Резервный курс через CryptoBot getExchangeRates (токен уже есть в настройках)."""
+        try:
+            from app.external.cryptobot import CryptoBotService
+
+            service = CryptoBotService()
+            if not getattr(service, 'api_token', None):
+                logger.warning('xRocket: CryptoBot токен не настроен — резервный курс недоступен')
+                return None
+            rates = await service.get_exchange_rates()
+            if not rates:
+                logger.warning('xRocket: CryptoBot getExchangeRates не вернул данные')
+                return None
+            for item in rates:
+                if (
+                    str(item.get('source', '')).upper() == crypto.upper()
+                    and str(item.get('target', '')).upper() == fiat.upper()
+                    and item.get('is_valid', True)
+                ):
+                    rate = float(item.get('rate') or 0)
+                    if rate > 0:
+                        logger.info(
+                            'xRocket: курс получен через CryptoBot-резерв',
+                            crypto=crypto,
+                            fiat=fiat,
+                            rate=rate,
+                        )
+                        return rate
+            logger.warning('xRocket: в CryptoBot нет нужной пары', crypto=crypto, fiat=fiat)
+            return None
+        except Exception as e:
+            logger.warning('xRocket: ошибка CryptoBot-резерва курса', crypto=crypto, fiat=fiat, error=str(e))
             return None
 
     async def get_available_currencies(self) -> dict[str, dict] | None:
