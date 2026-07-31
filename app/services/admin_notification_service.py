@@ -221,21 +221,23 @@ class AdminNotificationService:
                 extra=extra or None,
             )
         except Exception:
-            logger.error(
-                'Не удалось сохранить событие подписки для пользователя',
-                event_type=event_type,
-                getattr=getattr(user, 'id', 'unknown'),
-                exc_info=True,
-            )
-
+            # PendingRollbackError fix: rollback ДО любого доступа к ORM-атрибутам —
+            # после упавшего flush сессия сломана, и чтение user.id бросает
+            # PendingRollbackError, из-за чего уведомление вообще не отправлялось.
             try:
                 await db.rollback()
             except Exception:
-                logger.error(
-                    'Не удалось выполнить rollback после ошибки события подписки пользователя',
-                    getattr=getattr(user, 'id', 'unknown'),
-                    exc_info=True,
-                )
+                pass
+            try:
+                _uid = user.id
+            except Exception:
+                _uid = 'unknown'
+            logger.error(
+                'Не удалось сохранить событие подписки для пользователя',
+                event_type=event_type,
+                user_id=_uid,
+                exc_info=True,
+            )
 
     def _format_promo_group_discounts(self, promo_group: PromoGroup) -> list[str]:
         discount_lines: list[str] = []
@@ -897,9 +899,18 @@ class AdminNotificationService:
                     },
                 )
             except Exception:
+                # PendingRollbackError fix: rollback ДО любого доступа к ORM-атрибутам
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
+                try:
+                    _uid = user.id
+                except Exception:
+                    _uid = 'unknown'
                 logger.error(
                     'Не удалось сохранить событие пополнения баланса пользователя',
-                    getattr=getattr(user, 'id', 'unknown'),
+                    user_id=_uid,
                     exc_info=True,
                 )
 
@@ -1094,9 +1105,18 @@ class AdminNotificationService:
                 },
             )
         except Exception:
+            # PendingRollbackError fix: rollback ДО любого доступа к ORM-атрибутам
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+            try:
+                _uid = user.id
+            except Exception:
+                _uid = 'unknown'
             logger.error(
                 'Не удалось сохранить событие активации промокода пользователя',
-                getattr=getattr(user, 'id', 'unknown'),
+                user_id=_uid,
                 exc_info=True,
             )
 
@@ -1220,9 +1240,18 @@ class AdminNotificationService:
                     },
                 )
             except Exception:
+                # PendingRollbackError fix: rollback ДО любого доступа к ORM-атрибутам
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
+                try:
+                    _uid = user.id
+                except Exception:
+                    _uid = 'unknown'
                 logger.error(
                     'Не удалось сохранить событие перехода по кампании для пользователя',
-                    getattr=getattr(user, 'id', 'unknown'),
+                    user_id=_uid,
                     exc_info=True,
                 )
 
@@ -1404,9 +1433,18 @@ class AdminNotificationService:
                 },
             )
         except Exception:
+            # PendingRollbackError fix: rollback ДО любого доступа к ORM-атрибутам
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+            try:
+                _uid = user.id
+            except Exception:
+                _uid = 'unknown'
             logger.error(
                 'Не удалось сохранить событие смены промогруппы пользователя',
-                getattr=getattr(user, 'id', 'unknown'),
+                user_id=_uid,
                 exc_info=True,
             )
 
