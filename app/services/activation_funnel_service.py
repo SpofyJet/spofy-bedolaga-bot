@@ -19,7 +19,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from sqlalchemy import and_, exists, func, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
 
@@ -66,8 +66,9 @@ TRIAL_ENDING_MIN_HOURS = int(getattr(settings, 'FUNNEL_TRIAL_ENDING_MIN_HOURS', 
 IDLE_TRIAL2_HOURS = int(getattr(settings, 'FUNNEL_IDLE_TRIAL2_HOURS', 24))
 
 EVENT_ACTIVE_TRIAL = 'funnel_active_trial'
+EVENT_TRIAL_FIRST_CONNECTED = 'trial_first_connected'
 ACTIVE_TRIAL_NUDGE_HOURS = int(getattr(settings, 'FUNNEL_ACTIVE_TRIAL_HOURS', 12))
-ACTIVE_TRIAL_NUDGE_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_ACTIVE_TRIAL_WINDOW_HOURS', 48))
+ACTIVE_TRIAL_NUDGE_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_ACTIVE_TRIAL_WINDOW_HOURS', 30))
 
 EVENT_ABANDONED_TOPUP = 'funnel_abandoned_topup'
 ABANDONED_TOPUP_MIN_AGE_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_MIN_AGE_HOURS', 4))
@@ -653,7 +654,10 @@ class ActivationFunnelService:
                 and_(
                     Subscription.is_trial == True,  # noqa: E712
                     Subscription.status == SubscriptionStatus.ACTIVE.value,
-                    Subscription.traffic_used_gb > 0.0,
+                    or_(
+                        Subscription.traffic_used_gb > 0.0,
+                        _event_sent_clause(EVENT_TRIAL_FIRST_CONNECTED),
+                    ),
                     Subscription.created_at <= activated_before,
                     Subscription.created_at >= activated_after,
                     Subscription.end_date > now,
@@ -674,16 +678,18 @@ class ActivationFunnelService:
             if await _already_nudged_recently(db, user.id):
                 continue
             texts = get_texts(user.language)
-            days_left = max(1, (subscription.end_date - now).days)
+            traffic_used = subscription.traffic_used_gb or 0.0
+            if traffic_used > 0.0:
+                traffic_line = f'VPN работает, потрачено <b>{traffic_used} ГБ</b>. '
+            else:
+                traffic_line = ''
             text = texts.get(
                 'FUNNEL_ACTIVE_TRIAL_NUDGE',
                 (
-                    '👋 <b>Вы активно пользуетесь VPN</b>\n\n'
-                    'За время пробного периода потрачено <b>{traffic_used} ГБ</b> — отличный знак.\n\n'
-                    '⏳ Через {days_left} дн. тест закончится и доступ отключится. '
-                    'Оформите подписку сейчас — соединение не прервётся, настройки сохранятся.'
+                    '{traffic_line}'
+                    'Триал скоро закончится. Оформите подписку, чтобы не потерять доступ.'
                 ),
-            ).format(traffic_used=subscription.traffic_used_gb, days_left=days_left)
+            ).format(traffic_line=traffic_line)
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],

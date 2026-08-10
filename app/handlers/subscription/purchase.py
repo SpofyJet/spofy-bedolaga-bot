@@ -1158,12 +1158,11 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
             trial_success_text += '\n\n' + texts.t(
                 'TRIAL_WELCOME_TIP',
                 (
-                    '🚀 <b>Следующий шаг — подключение</b>\n\n'
-                    'Нажмите «Подключиться» ниже, чтобы открыть ссылку подписки. '
-                    'Пользуйтесь полной скоростью все {days} дней.\n\n'
-                    'Если что-то не получится — поддержка поможет за минуту.'
+                    'VPN активирован. Нажмите «Подключиться», чтобы открыть ссылку. '
+                    'Пользуйтесь всё время триала. '
+                    'Если что-то не так — пишите в поддержку.'
                 ),
-            ).format(days=settings.TRIAL_DURATION_DAYS)
+            )
 
             connect_mode = settings.CONNECT_BUTTON_MODE
 
@@ -3484,12 +3483,11 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
             trial_success_text += '\n\n' + texts.t(
                 'TRIAL_WELCOME_TIP',
                 (
-                    '🚀 <b>Следующий шаг — подключение</b>\n\n'
-                    'Нажмите «Подключиться» ниже, чтобы открыть ссылку подписки. '
-                    'Пользуйтесь полной скоростью все {days} дней.\n\n'
-                    'Если что-то не получится — поддержка поможет за минуту.'
+                    'VPN активирован. Нажмите «Подключиться», чтобы открыть ссылку. '
+                    'Пользуйтесь всё время триала. '
+                    'Если что-то не так — пишите в поддержку.'
                 ),
-            ).format(days=settings.TRIAL_DURATION_DAYS)
+            )
 
             connect_mode = settings.CONNECT_BUTTON_MODE
             connect_keyboard = _build_trial_success_keyboard(texts, subscription_link, connect_mode)

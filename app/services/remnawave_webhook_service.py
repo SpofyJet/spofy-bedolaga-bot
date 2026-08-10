@@ -38,6 +38,7 @@ from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.grace_access_runtime import get_open_grace_subscription_ids, grace_access_runtime
 from app.services.grace_access_service import GraceReason
+from app.services.activation_funnel_service import EVENT_TRIAL_FIRST_CONNECTED, _record_event
 from app.services.notification_delivery_service import NotificationType, notification_delivery_service
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
@@ -1699,6 +1700,16 @@ class RemnaWaveWebhookService:
         )
 
         if is_trial_user:
+            try:
+                await _record_event(
+                    db,
+                    user.id,
+                    EVENT_TRIAL_FIRST_CONNECTED,
+                    subscription.id if subscription else None,
+                )
+            except Exception as error:
+                logger.warning('Failed to record trial first_connected event', user_id=user.id, error=str(error))
+
             if not settings.WEBHOOK_NOTIFY_USER_ENABLED:
                 logger.debug('Webhook user notifications disabled globally, skipping first_connected', user_id=user.id)
                 return
@@ -1710,10 +1721,8 @@ class RemnaWaveWebhookService:
             message = texts.get(
                 'TRIAL_FIRST_CONNECTED_TIP',
                 (
-                    '🎉 <b>VPN работает — вы в открытом интернете!</b>\n\n'
-                    'Instagram, YouTube, Spotify — всё доступно, трафик зашифрован. '
-                    'Пробный период активен.\n\n'
-                    '💎 Оформите подписку до конца теста, чтобы доступ не прервался и настройки сохранились.'
+                    'VPN работает, доступ открыт. Пробный период идёт. '
+                    'Оформите подписку до конца теста, чтобы не отключиться.'
                 ),
             )
             keyboard = InlineKeyboardMarkup(
