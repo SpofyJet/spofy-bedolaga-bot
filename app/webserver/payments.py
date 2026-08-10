@@ -26,6 +26,31 @@ from app.services.tribute_service import TributeService
 logger = structlog.get_logger(__name__)
 
 
+async def drain_webhook_bg_tasks(timeout: float = 30.0) -> None:
+    """Дождаться фоновых обработчиков вебхуков перед остановкой процесса.
+
+    Вебхук отвечает 200 сразу после проверки подписи, то есть провайдер уже
+    считает коллбек доставленным и повторять его не будет. Уйти в shutdown с
+    незавершёнными задачами значит потерять зачисление: деньги у провайдера
+    прошли, у нас — нет, и никто об этом не узнает.
+
+    Ждём с потолком, чтобы застрявшая задача не держала выкат бесконечно;
+    что не успело — пишем ошибкой, по ней платёж можно найти руками.
+    """
+    pending = [task for task in _webhook_bg_tasks if not task.done()]
+    if not pending:
+        return
+
+    logger.info('Дожидаемся фоновой обработки вебхуков перед остановкой', count=len(pending))
+    _, still_pending = await asyncio.wait(pending, timeout=timeout)
+    if still_pending:
+        logger.error(
+            'Фоновая обработка вебхуков не завершилась за отведённое время — '
+            'зачисление могло не примениться, проверьте платежи вручную',
+            count=len(still_pending),
+        )
+
+
 def _create_cors_response() -> Response:
     return Response(
         status_code=status.HTTP_200_OK,
