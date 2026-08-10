@@ -1691,6 +1691,51 @@ class RemnaWaveWebhookService:
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         logger.info('Webhook: user first VPN connection', user_id=user.id)
+
+        is_trial_user = (
+            subscription is not None
+            and getattr(subscription, 'is_trial', False)
+            and not getattr(user, 'has_had_paid_subscription', False)
+        )
+
+        if is_trial_user:
+            if not settings.WEBHOOK_NOTIFY_USER_ENABLED:
+                logger.debug('Webhook user notifications disabled globally, skipping first_connected', user_id=user.id)
+                return
+            if not getattr(settings, 'WEBHOOK_NOTIFY_FIRST_CONNECTED', True):
+                logger.debug('Webhook first_connected notifications disabled, skipping', user_id=user.id)
+                return
+
+            texts = get_texts(user.language)
+            message = texts.get(
+                'TRIAL_FIRST_CONNECTED_TIP',
+                (
+                    '🎉 <b>VPN работает — вы в открытом интернете!</b>\n\n'
+                    'Instagram, YouTube, Spotify — всё доступно, трафик зашифрован. '
+                    'Пробный период активен.\n\n'
+                    '💎 Оформите подписку до конца теста, чтобы доступ не прервался и настройки сохранились.'
+                ),
+            )
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [build_miniapp_or_callback_button(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                    [build_miniapp_or_callback_button(text=texts.MY_SUBSCRIPTION_BUTTON, callback_data='menu_subscription')],
+                    [InlineKeyboardButton(text=texts.get('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'), callback_data='webhook:close')],
+                ]
+            )
+            try:
+                await notification_delivery_service.send_notification(
+                    user=user,
+                    notification_type=NotificationType.WEBHOOK_SUB_FIRST_CONNECTED,
+                    context={'text_key': 'TRIAL_FIRST_CONNECTED_TIP'},
+                    bot=self.bot,
+                    telegram_message=message,
+                    telegram_markup=keyboard,
+                )
+            except Exception:
+                logger.exception('Notification delivery failed for first_connected trial user', user_id=user.id)
+            return
+
         await self._notify_user(
             user,
             'WEBHOOK_SUB_FIRST_CONNECTED',

@@ -1155,6 +1155,16 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
 
             trial_success_text += payment_note
 
+            trial_success_text += '\n\n' + texts.t(
+                'TRIAL_WELCOME_TIP',
+                (
+                    '🚀 <b>Следующий шаг — подключение</b>\n\n'
+                    'Нажмите «Подключиться» ниже, чтобы открыть ссылку подписки. '
+                    'Пользуйтесь полной скоростью все {days} дней.\n\n'
+                    'Если что-то не получится — поддержка поможет за минуту.'
+                ),
+            ).format(days=settings.TRIAL_DURATION_DAYS)
+
             connect_mode = settings.CONNECT_BUTTON_MODE
 
             if connect_mode == 'miniapp_subscription':
@@ -2943,7 +2953,7 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
 
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
-    if not subscription or subscription.is_trial:
+    if not subscription:
         await callback.answer(
             texts.t(
                 'SUBSCRIPTION_SETTINGS_PAID_ONLY',
@@ -3470,6 +3480,16 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                 )
 
             trial_success_text += payment_note
+
+            trial_success_text += '\n\n' + texts.t(
+                'TRIAL_WELCOME_TIP',
+                (
+                    '🚀 <b>Следующий шаг — подключение</b>\n\n'
+                    'Нажмите «Подключиться» ниже, чтобы открыть ссылку подписки. '
+                    'Пользуйтесь полной скоростью все {days} дней.\n\n'
+                    'Если что-то не получится — поддержка поможет за минуту.'
+                ),
+            ).format(days=settings.TRIAL_DURATION_DAYS)
 
             connect_mode = settings.CONNECT_BUTTON_MODE
             connect_keyboard = _build_trial_success_keyboard(texts, subscription_link, connect_mode)

@@ -55,20 +55,6 @@ def format_quick_amount(amount_kopeks: int) -> str:
 async def _load_quick_amounts(db: AsyncSession, method: str, min_amount_kopeks: int | None = None) -> list[int]:
     # Spofy: быстрые суммы отключены — ручной ввод суммы как было раньше
     return []
-    method_id = resolve_config_method_id(method)
-    config = await get_config_by_method_id(db, method_id)
-    if not config:
-        return []
-    method_def = _get_method_defaults().get(method_id, {})
-    min_amount = (
-        config.min_amount_kopeks if config.min_amount_kopeks is not None else method_def.get('default_min', 1000)
-    )
-    if min_amount_kopeks is not None:
-        min_amount = max(min_amount, min_amount_kopeks)
-    max_amount = (
-        config.max_amount_kopeks if config.max_amount_kopeks is not None else method_def.get('default_max', 10000000)
-    )
-    return get_effective_quick_amounts(config.quick_amounts, min_amount, max_amount)
 
 
 async def get_topup_amount_keyboard(

@@ -271,10 +271,14 @@ def get_tariff_periods_keyboard(
         else:
             price_text = format_price_kopeks(price)
 
-        # Spofy: цена за месяц для длинных периодов (компактно)
+        # Spofy: компактная экономия для длинных периодов
         if period >= 60 and price > 0:
-            _per_month = int(round(price * 30 / period))
-            price_text = f'{price_text} · {format_price_kopeks(_per_month)}/мес'
+            _base_30 = prices.get('30')
+            if _base_30 and _base_30 > 0:
+                _per_month = int(round(price * 30 / period))
+                _saving = 100 - (_per_month * 100 // _base_30)
+                if _saving >= 5:
+                    price_text = f'{price_text} (−{_saving}%)'
         button_text = f'{format_period(period)} — {price_text}'
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_period:{tariff.id}:{period}')])
 
@@ -308,10 +312,14 @@ def get_tariff_periods_keyboard_with_traffic(
         else:
             price_text = format_price_kopeks(price)
 
-        # Spofy: цена за месяц для длинных периодов (компактно)
+        # Spofy: компактная экономия для длинных периодов
         if period >= 60 and price > 0:
-            _per_month = int(round(price * 30 / period))
-            price_text = f'{price_text} · {format_price_kopeks(_per_month)}/мес'
+            _base_30 = prices.get('30')
+            if _base_30 and _base_30 > 0:
+                _per_month = int(round(price * 30 / period))
+                _saving = 100 - (_per_month * 100 // _base_30)
+                if _saving >= 5:
+                    price_text = f'{price_text} (−{_saving}%)'
         button_text = f'{format_period(period)} — {price_text}'
         # Используем другой callback для перехода к настройке трафика
         buttons.append(
@@ -2458,10 +2466,14 @@ def get_tariff_extend_keyboard(
         else:
             price_text = format_price_kopeks(price)
 
-        # Spofy: цена за месяц для длинных периодов (компактно)
+        # Spofy: компактная экономия для длинных периодов
         if period >= 60 and price > 0:
-            _per_month = int(round(price * 30 / period))
-            price_text = f'{price_text} · {format_price_kopeks(_per_month)}/мес'
+            _base_30 = prices.get('30')
+            if _base_30 and _base_30 > 0:
+                _per_month = int(round(price * 30 / period))
+                _saving = 100 - (_per_month * 100 // _base_30)
+                if _saving >= 5:
+                    price_text = f'{price_text} (−{_saving}%)'
         button_text = f'{format_period(period)} — {price_text}'
         # subscription_id ОБЯЗАН быть первым сегментом: иначе резолвер по callback
         # принял бы хвостовой {period} за subscription_id (см. issue #3012 —
@@ -3191,10 +3203,14 @@ def get_tariff_switch_periods_keyboard(
         else:
             price_text = format_price_kopeks(price)
 
-        # Spofy: цена за месяц для длинных периодов (компактно)
+        # Spofy: компактная экономия для длинных периодов
         if period >= 60 and price > 0:
-            _per_month = int(round(price * 30 / period))
-            price_text = f'{price_text} · {format_price_kopeks(_per_month)}/мес'
+            _base_30 = prices.get('30')
+            if _base_30 and _base_30 > 0:
+                _per_month = int(round(price * 30 / period))
+                _saving = 100 - (_per_month * 100 // _base_30)
+                if _saving >= 5:
+                    price_text = f'{price_text} (−{_saving}%)'
         button_text = f'{format_period(period)} — {price_text}'
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_sw_period:{tariff.id}:{period}')])
 

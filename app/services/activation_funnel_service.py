@@ -65,6 +65,10 @@ TRIAL_ENDING_LEAD_HOURS = int(getattr(settings, 'FUNNEL_TRIAL_ENDING_LEAD_HOURS'
 TRIAL_ENDING_MIN_HOURS = int(getattr(settings, 'FUNNEL_TRIAL_ENDING_MIN_HOURS', 3))
 IDLE_TRIAL2_HOURS = int(getattr(settings, 'FUNNEL_IDLE_TRIAL2_HOURS', 24))
 
+EVENT_ACTIVE_TRIAL = 'funnel_active_trial'
+ACTIVE_TRIAL_NUDGE_HOURS = int(getattr(settings, 'FUNNEL_ACTIVE_TRIAL_HOURS', 12))
+ACTIVE_TRIAL_NUDGE_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_ACTIVE_TRIAL_WINDOW_HOURS', 48))
+
 EVENT_ABANDONED_TOPUP = 'funnel_abandoned_topup'
 ABANDONED_TOPUP_MIN_AGE_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_MIN_AGE_HOURS', 4))
 ABANDONED_TOPUP_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_WINDOW_HOURS', 48))
@@ -151,6 +155,7 @@ class ActivationFunnelService:
             await self._nudge_no_trial(db, EVENT_NO_TRIAL_2, NUDGE2_HOURS, NUDGE2_WINDOW_HOURS, wave=2)
             await self._nudge_idle_trial(db)
             await self._nudge_idle_trial_2(db)
+            await self._nudge_active_trial(db)
             await self._nudge_trial_ending(db)
             await self._nudge_abandoned_topup(db)
             await self._nudge_expired_trial(db, EVENT_TRIAL_EXP_1, TRIAL_EXP1_HOURS, TRIAL_EXP1_PERCENT, wave=1)
@@ -633,3 +638,65 @@ class ActivationFunnelService:
 
         if subscriptions:
             logger.info('🪝 Funnel: nudge по неподключённому триалу (день 2)', count=len(subscriptions))
+
+    async def _nudge_active_trial(self, db: AsyncSession) -> None:
+        """Триал активен, трафик есть, прошло N часов -> мягкий пуш к подписке без скидок."""
+        now = datetime.now(UTC)
+        activated_before = now - timedelta(hours=ACTIVE_TRIAL_NUDGE_HOURS)
+        activated_after = now - timedelta(hours=ACTIVE_TRIAL_NUDGE_WINDOW_HOURS)
+
+        result = await db.execute(
+            select(Subscription)
+            .join(Subscription.user)
+            .options(selectinload(Subscription.user))
+            .where(
+                and_(
+                    Subscription.is_trial == True,  # noqa: E712
+                    Subscription.status == SubscriptionStatus.ACTIVE.value,
+                    Subscription.traffic_used_gb > 0.0,
+                    Subscription.created_at <= activated_before,
+                    Subscription.created_at >= activated_after,
+                    Subscription.end_date > now,
+                    User.status == UserStatus.ACTIVE.value,
+                    User.telegram_id.isnot(None),
+                    User.has_had_paid_subscription == False,  # noqa: E712
+                    ~_event_sent_clause(EVENT_ACTIVE_TRIAL),
+                )
+            )
+            .limit(BATCH_LIMIT)
+        )
+        subscriptions = result.scalars().all()
+
+        for subscription in subscriptions:
+            user = subscription.user
+            if not user:
+                continue
+            if await _already_nudged_recently(db, user.id):
+                continue
+            texts = get_texts(user.language)
+            days_left = max(1, (subscription.end_date - now).days)
+            text = texts.get(
+                'FUNNEL_ACTIVE_TRIAL_NUDGE',
+                (
+                    '👋 <b>Вы активно пользуетесь VPN</b>\n\n'
+                    'За время пробного периода потрачено <b>{traffic_used} ГБ</b> — отличный знак.\n\n'
+                    '⏳ Через {days_left} дн. тест закончится и доступ отключится. '
+                    'Оформите подписку сейчас — соединение не прервётся, настройки сохранятся.'
+                ),
+            ).format(traffic_used=subscription.traffic_used_gb, days_left=days_left)
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                    [InlineKeyboardButton(text=texts.t('MENU_SUPPORT', '🆘 Поддержка'), callback_data='menu_support')],
+                ]
+            )
+            try:
+                sent = await self._send(user.telegram_id, text, reply_markup=keyboard, user=user)
+                if sent is not None:
+                    await _record_event(db, user.id, EVENT_ACTIVE_TRIAL, subscription.id)
+            except Exception as error:  # noqa: BLE001
+                logger.debug('Funnel active-trial nudge не доставлен', user_id=user.id, error=str(error))
+                await _record_event(db, user.id, EVENT_ACTIVE_TRIAL, subscription.id)
+
+        if subscriptions:
+            logger.info('🪝 Funnel: отправлены nudge активным триал-пользователям', count=len(subscriptions))
