@@ -1,3 +1,4 @@
+# trial_message_cleaned_v2: duplicated welcome-tip blocks removed (20260810-170510)
 import html
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -1154,16 +1155,6 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 )
 
             trial_success_text += payment_note
-
-            trial_success_text += '\n\n' + texts.t(
-                'TRIAL_WELCOME_TIP',
-                (
-                    'VPN активирован. Нажмите «Подключиться», чтобы открыть ссылку. '
-                    'Пользуйтесь всё время триала. '
-                    'Если что-то не так — пишите в поддержку.'
-                ),
-            )
-
             connect_mode = settings.CONNECT_BUTTON_MODE
 
             if connect_mode == 'miniapp_subscription':
@@ -3479,16 +3470,6 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                 )
 
             trial_success_text += payment_note
-
-            trial_success_text += '\n\n' + texts.t(
-                'TRIAL_WELCOME_TIP',
-                (
-                    'VPN активирован. Нажмите «Подключиться», чтобы открыть ссылку. '
-                    'Пользуйтесь всё время триала. '
-                    'Если что-то не так — пишите в поддержку.'
-                ),
-            )
-
             connect_mode = settings.CONNECT_BUTTON_MODE
             connect_keyboard = _build_trial_success_keyboard(texts, subscription_link, connect_mode)
 
