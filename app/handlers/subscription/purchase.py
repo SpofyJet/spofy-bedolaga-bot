@@ -623,7 +623,14 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
     # subscription. In multi-tariff mode a user can have multiple subscriptions, but
     # trial eligibility is still "has any subscription" so this check is correct.
     if db_user.is_trial_already_used():
-        await callback.message.edit_text(texts.TRIAL_ALREADY_USED, reply_markup=get_back_keyboard(db_user.language))
+        # smart-trial-button: вместо тупика сразу ведём на покупку
+        trial_used_keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+            ]
+        )
+        await callback.message.edit_text(texts.TRIAL_ALREADY_USED, reply_markup=trial_used_keyboard)
         await callback.answer()
         return
 
@@ -817,7 +824,14 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
     # Multi-tariff note: db_user.subscription returns the first active/most recent
     # subscription. Trial eligibility is "has any subscription" so this check is correct.
     if db_user.is_trial_already_used():
-        await callback.message.edit_text(texts.TRIAL_ALREADY_USED, reply_markup=get_back_keyboard(db_user.language))
+        # smart-trial-button: вместо тупика сразу ведём на покупку
+        trial_used_keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+            ]
+        )
+        await callback.message.edit_text(texts.TRIAL_ALREADY_USED, reply_markup=trial_used_keyboard)
         await callback.answer()
         return
 
@@ -3237,7 +3251,14 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
     # Multi-tariff note: trial eligibility is "has any subscription", so checking
     # db_user.subscription (first active/most recent) is correct in all modes.
     if db_user.is_trial_already_used():
-        await callback.message.edit_text(texts.TRIAL_ALREADY_USED, reply_markup=get_back_keyboard(db_user.language))
+        # smart-trial-button: вместо тупика сразу ведём на покупку
+        trial_used_keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+            ]
+        )
+        await callback.message.edit_text(texts.TRIAL_ALREADY_USED, reply_markup=trial_used_keyboard)
         await callback.answer()
         return
 
@@ -3640,7 +3661,14 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
     # Multi-tariff note: trial eligibility is "has any subscription", so checking
     # db_user.subscription (first active/most recent) is correct in all modes.
     if db_user.is_trial_already_used():
-        await callback.message.edit_text(texts.TRIAL_ALREADY_USED, reply_markup=get_back_keyboard(db_user.language))
+        # smart-trial-button: вместо тупика сразу ведём на покупку
+        trial_used_keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+            ]
+        )
+        await callback.message.edit_text(texts.TRIAL_ALREADY_USED, reply_markup=trial_used_keyboard)
         await callback.answer()
         return
 

@@ -2175,5 +2175,7 @@
   "LAVA_RECURRING_NOTIFY_CANCELLED": "ℹ️ Автопродление Lava отменено.",
   "LAVA_RECURRING_NOTIFY_CONFIRMED": "✅ Подписка продлена автосписанием Lava.",
   "LAVA_RECURRING_NOTIFY_FAILED": "⚠️ Не удалось списать оплату по автопродлению Lava.",
-  "LAVA_RECURRING_PAY_BUTTON": "💳 Оплатить"
+  "LAVA_RECURRING_PAY_BUTTON": "💳 Оплатить",
+  "FUNNEL_ACTIVE_TRIAL_NUDGE": "{traffic_line}Триал активен ещё {days_left} дн. Оформите подписку заранее, чтобы не потерять доступ.",
+  "PAYMENT_PLATEGA_M13": "🪙 Крипта"
 }

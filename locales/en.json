@@ -2002,5 +2002,5 @@
   "CHANGE_DEVICES_PROMPT_TARIFF_FLAT": "📱 <b>Change device count</b>\n\nCurrent limit: {current_devices} devices\nPrice per extra device: {price} (one-time)\nSelect new device count:\n\n💡 <b>Note:</b>\n• Increase — one-time charge\n• Decrease — no refund",
   "TARIFF_SWITCH_FULL_PRICE_DAYS_NOTE": "📅 Full tariff price — <b>{days} days</b> will be added on top of your remaining days.",
   "TRIAL_FIRST_CONNECTED_TIP": "✅ First connection detected — VPN is working. If anything goes wrong, contact support.",
-  "FUNNEL_ACTIVE_TRIAL_NUDGE": "{traffic_line}Your trial is ending soon. Get a subscription to keep your access."
+  "FUNNEL_ACTIVE_TRIAL_NUDGE": "{traffic_line}Your trial is active for {days_left} more days. Get a subscription in advance to keep your access."
 }

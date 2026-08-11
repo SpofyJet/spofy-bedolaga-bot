@@ -40,6 +40,7 @@ async def get_main_menu_keyboard_async(
     is_moderator: bool = False,
     custom_buttons: list[InlineKeyboardButton] | None = None,
     user=None,  # Добавляем параметр пользователя для получения данных
+    trial_already_used: bool | None = None,  # smart-trial-button
 ) -> InlineKeyboardMarkup:
     """
     Асинхронная версия get_main_menu_keyboard с поддержкой конструктора меню.
@@ -140,10 +141,19 @@ async def get_main_menu_keyboard_async(
         return await MenuLayoutService.build_keyboard(db, context)
 
     # Fallback на синхронную версию
+    # smart-trial-button: вычисляем точный гейт из объекта пользователя
+    if trial_already_used is None and user is not None:
+        try:
+            trial_already_used = user.is_trial_already_used()
+        except Exception:
+            trial_already_used = None
+    if trial_already_used is None:
+        trial_already_used = has_had_paid_subscription
     return get_main_menu_keyboard(
         language=language,
         is_admin=is_admin,
         has_had_paid_subscription=has_had_paid_subscription,
+        trial_already_used=trial_already_used,
         has_active_subscription=has_active_subscription,
         subscription_is_active=subscription_is_active,
         balance_kopeks=balance_kopeks,
@@ -581,6 +591,7 @@ def get_main_menu_keyboard(
     *,
     is_moderator: bool = False,
     custom_buttons: list[InlineKeyboardButton] | None = None,
+    trial_already_used: bool | None = None,  # smart-trial-button
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
@@ -705,7 +716,10 @@ def get_main_menu_keyboard(
                 )
             )
 
-    show_trial = not has_had_paid_subscription and not has_active_subscription
+    # smart-trial-button: скрываем триал, если он уже использован (не только оплачен)
+    if trial_already_used is None:
+        trial_already_used = has_had_paid_subscription
+    show_trial = not trial_already_used and not has_active_subscription
 
     show_buy = not has_active_subscription or not subscription_is_active
     current_subscription = subscription

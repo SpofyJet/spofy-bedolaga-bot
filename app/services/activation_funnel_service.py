@@ -67,8 +67,15 @@ IDLE_TRIAL2_HOURS = int(getattr(settings, 'FUNNEL_IDLE_TRIAL2_HOURS', 24))
 
 EVENT_ACTIVE_TRIAL = 'funnel_active_trial'
 EVENT_TRIAL_FIRST_CONNECTED = 'trial_first_connected'
-ACTIVE_TRIAL_NUDGE_HOURS = int(getattr(settings, 'FUNNEL_ACTIVE_TRIAL_HOURS', 12))
-ACTIVE_TRIAL_NUDGE_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_ACTIVE_TRIAL_WINDOW_HOURS', 30))
+# trial-nudge-fix: дефолт — 60% длительности триала (не раньше 12ч);
+# окно выборки всегда шире порога, иначе cohort пустой и nudge молча умирает
+_ACTIVE_TRIAL_HOURS_DEFAULT = max(12, round(int(getattr(settings, 'TRIAL_DURATION_DAYS', 3)) * 24 * 0.6))
+ACTIVE_TRIAL_NUDGE_HOURS = int(getattr(settings, 'FUNNEL_ACTIVE_TRIAL_HOURS', _ACTIVE_TRIAL_HOURS_DEFAULT))
+ACTIVE_TRIAL_NUDGE_WINDOW_HOURS = int(
+    getattr(settings, 'FUNNEL_ACTIVE_TRIAL_WINDOW_HOURS', ACTIVE_TRIAL_NUDGE_HOURS + 24)
+)
+if ACTIVE_TRIAL_NUDGE_WINDOW_HOURS <= ACTIVE_TRIAL_NUDGE_HOURS:
+    ACTIVE_TRIAL_NUDGE_WINDOW_HOURS = ACTIVE_TRIAL_NUDGE_HOURS + 24
 
 EVENT_ABANDONED_TOPUP = 'funnel_abandoned_topup'
 ABANDONED_TOPUP_MIN_AGE_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_MIN_AGE_HOURS', 4))
@@ -680,16 +687,19 @@ class ActivationFunnelService:
             texts = get_texts(user.language)
             traffic_used = subscription.traffic_used_gb or 0.0
             if traffic_used > 0.0:
-                traffic_line = f'VPN работает, потрачено <b>{traffic_used} ГБ</b>. '
+                # trial-nudge-fix: округление до 0.1 ГБ (был сырой float в тексте)
+                traffic_line = f'VPN работает, потрачено <b>{traffic_used:.1f} ГБ</b>. '
             else:
                 traffic_line = ''
+            # trial-nudge-fix: честный остаток дней вместо «скоро закончится»
+            days_left = max(0, (subscription.end_date - now).days) if subscription.end_date else 0
             text = texts.get(
                 'FUNNEL_ACTIVE_TRIAL_NUDGE',
                 (
                     '{traffic_line}'
-                    'Триал скоро закончится. Оформите подписку, чтобы не потерять доступ.'
+                    'Триал активен ещё {days_left} дн. Оформите подписку заранее, чтобы не потерять доступ.'
                 ),
-            ).format(traffic_line=traffic_line)
+            ).format(traffic_line=traffic_line, days_left=days_left)
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],

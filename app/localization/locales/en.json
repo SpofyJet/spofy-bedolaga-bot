@@ -2178,5 +2178,5 @@
   "LAVA_RECURRING_NOTIFY_FAILED": "⚠️ Lava auto-renewal payment failed.",
   "LAVA_RECURRING_PAY_BUTTON": "💳 Pay",
   "TRIAL_FIRST_CONNECTED_TIP": "✅ First connection detected — VPN is working. If anything goes wrong, contact support.",
-  "FUNNEL_ACTIVE_TRIAL_NUDGE": "{traffic_line}Your trial is ending soon. Get a subscription to keep your access."
+  "FUNNEL_ACTIVE_TRIAL_NUDGE": "{traffic_line}Your trial is active for {days_left} more days. Get a subscription in advance to keep your access."
 }
