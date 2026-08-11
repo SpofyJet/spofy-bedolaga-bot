@@ -867,7 +867,11 @@ async def handle_device_management(
                 if total_devices == 0:
                     await callback.message.edit_text(
                         texts.t('DEVICE_NONE_CONNECTED', 'ℹ️ У вас нет подключенных устройств'),
-                        reply_markup=get_back_keyboard(db_user.language),
+                        # trial-nav-fix: возврат туда, откуда пришёл пользователь
+                        reply_markup=get_back_keyboard(
+                            db_user.language,
+                            callback_data=_devices_back_callback(db_user, sub_id),
+                        ),
                     )
                     await callback.answer()
                     return
@@ -911,6 +915,23 @@ async def _enrich_devices_with_aliases(devices_list: list[dict], user_id: int) -
         logger.warning('Failed to load device aliases', user_id=user_id, error=str(exc)[:200])
         aliases = {}
     return attach_aliases_to_devices(devices_list, aliases)
+
+
+def _devices_back_callback(db_user: User, sub_id: int | None = None) -> str:
+    """trial-nav-fix: куда ведёт «Назад» из управления устройствами.
+
+    Мульти-тариф → карточка подписки (sm:{id}). Триал → «Моя подписка»
+    (настройки доступны только платным). Платные → настройки.
+    """
+    if settings.is_multi_tariff_enabled() and sub_id:
+        return f'sm:{sub_id}'
+    try:
+        sub = db_user.subscription
+    except Exception:
+        sub = None
+    if getattr(sub, 'is_trial', False):
+        return 'menu_subscription'
+    return 'subscription_settings'
 
 
 async def show_devices_page(
@@ -973,7 +994,7 @@ async def show_devices_page(
             pagination.items,
             pagination,
             db_user.language,
-            back_callback=f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings',
+            back_callback=_devices_back_callback(db_user, sub_id),  # trial-nav-fix
         ),
     )
 

@@ -2957,7 +2957,7 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
 
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
-    if not subscription:
+    if not subscription or subscription.is_trial:  # trial-nav-fix: гейт возвращён
         await callback.answer(
             texts.t(
                 'SUBSCRIPTION_SETTINGS_PAID_ONLY',
