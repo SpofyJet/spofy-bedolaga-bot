@@ -67,9 +67,17 @@ IDLE_TRIAL2_HOURS = int(getattr(settings, 'FUNNEL_IDLE_TRIAL2_HOURS', 24))
 
 EVENT_ACTIVE_TRIAL = 'funnel_active_trial'
 EVENT_TRIAL_FIRST_CONNECTED = 'trial_first_connected'
-# trial-nudge-fix: дефолт — 60% длительности триала (не раньше 12ч);
-# окно выборки всегда шире порога, иначе cohort пустой и nudge молча умирает
-_ACTIVE_TRIAL_HOURS_DEFAULT = max(12, round(int(getattr(settings, 'TRIAL_DURATION_DAYS', 3)) * 24 * 0.6))
+# trial-nudge-fix-v2: nudge ставим не позднее (триал - lead ending-1d - кулдаун),
+# иначе он глушит напоминание «триал заканчивается» через глобальный 20ч кулдаун.
+# Для коротких триалов (<=2д) места нет → nudge отключается (0): работает ending-1d.
+# Окно выборки всегда шире порога, иначе cohort пустой и nudge молча умирает.
+_TRIAL_HOURS_TOTAL = int(getattr(settings, 'TRIAL_DURATION_DAYS', 3)) * 24
+_FUNNEL_COOLDOWN_H = int(getattr(settings, 'FUNNEL_GLOBAL_COOLDOWN_HOURS', 20))
+_ENDING_LEAD_H = int(getattr(settings, 'FUNNEL_TRIAL_ENDING_LEAD_HOURS', 24))
+_LATEST_OK_HOURS = _TRIAL_HOURS_TOTAL - _ENDING_LEAD_H - _FUNNEL_COOLDOWN_H
+_ACTIVE_TRIAL_HOURS_DEFAULT = (
+    min(round(_TRIAL_HOURS_TOTAL * 0.6), _LATEST_OK_HOURS) if _LATEST_OK_HOURS >= 12 else 0
+)
 ACTIVE_TRIAL_NUDGE_HOURS = int(getattr(settings, 'FUNNEL_ACTIVE_TRIAL_HOURS', _ACTIVE_TRIAL_HOURS_DEFAULT))
 ACTIVE_TRIAL_NUDGE_WINDOW_HOURS = int(
     getattr(settings, 'FUNNEL_ACTIVE_TRIAL_WINDOW_HOURS', ACTIVE_TRIAL_NUDGE_HOURS + 24)
@@ -649,6 +657,10 @@ class ActivationFunnelService:
 
     async def _nudge_active_trial(self, db: AsyncSession) -> None:
         """Триал активен, трафик есть, прошло N часов -> мягкий пуш к подписке без скидок."""
+        if ACTIVE_TRIAL_NUDGE_HOURS <= 0:
+            # trial-nudge-fix-v2: короткий триал — mid-trial nudge выключен,
+            # его работу делает напоминание «триал заканчивается» (T-24ч)
+            return
         now = datetime.now(UTC)
         activated_before = now - timedelta(hours=ACTIVE_TRIAL_NUDGE_HOURS)
         activated_after = now - timedelta(hours=ACTIVE_TRIAL_NUDGE_WINDOW_HOURS)
