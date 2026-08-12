@@ -29,8 +29,8 @@ from alembic import op
 
 
 # Стиль как у соседних ревизий: alembic читает эти имена по соглашению.
-revision = '0104'
-down_revision = '0103'
+revision = '0106'
+down_revision = '0105'
 branch_labels = None
 depends_on = None
 
