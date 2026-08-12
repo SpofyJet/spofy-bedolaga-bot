@@ -1121,7 +1121,7 @@
   "MENU_FAQ": "❓ FAQ",
   "MENU_INFO": "ℹ️ Инфо",
   "MENU_INFO_HEADER": "ℹ️ <b>Инфо</b>",
-  "MENU_INFO_PROMPT": "Выберите раздел:",
+  "MENU_INFO_PROMPT": "• <a href=\"https://telegra.ph/Polzovatelskoe-soglashenie-01-30-11\">Пользовательское соглашение</a>\n• <a href=\"https://telegra.ph/Politika-konfidencialnosti-01-30-12\">Политика конфиденциальности</a>\n\nВыберите раздел:",
   "MENU_LANGUAGE": "🌐 Язык",
   "MENU_PRIVACY_POLICY": "🛡️ Политика конф.",
   "MENU_PROFILE": "👤 Личный кабинет",

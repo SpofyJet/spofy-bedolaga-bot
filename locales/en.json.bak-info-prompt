@@ -1100,7 +1100,7 @@
   "MENU_FAQ": "❓ FAQ",
   "MENU_INFO": "ℹ️ Info",
   "MENU_INFO_HEADER": "ℹ️ <b>Info</b>",
-  "MENU_INFO_PROMPT": "Choose a section:",
+  "MENU_INFO_PROMPT": "• <a href=\"https://telegra.ph/Polzovatelskoe-soglashenie-01-30-11\">Terms of Service</a>\n• <a href=\"https://telegra.ph/Politika-konfidencialnosti-01-30-12\">Privacy Policy</a>\n\nChoose a section:",
   "MENU_LANGUAGE": "🌐 Language",
   "MENU_PRIVACY_POLICY": "🛡️ Privacy policy",
   "MENU_PROFILE": "👤 Personal account",
