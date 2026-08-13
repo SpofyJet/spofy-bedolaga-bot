@@ -1,0 +1,63 @@
+name: ci-lite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.10.8"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Sync deps (frozen lock)
+        run: uv sync --frozen
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+
+      - name: "Alembic: ровно один head"
+        run: |
+          uv run python - <<'PY'
+          import configparser, pathlib, sys
+          cands = [p for p in pathlib.Path('.').glob('**/alembic.ini') if '.venv' not in p.parts]
+          ini = cands[0] if cands else None
+          if ini is None:
+              print('alembic.ini не найден — пропуск'); sys.exit(0)
+          cp = configparser.ConfigParser()
+          cp.read(ini)
+          loc = cp.get('alembic', 'script_location', fallback=None)
+          if not loc:
+              print('script_location не найден — пропуск'); sys.exit(0)
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+          cfg = Config()
+          cfg.set_main_option('script_location', str(ini.parent / loc))
+          heads = ScriptDirectory.from_config(cfg).get_heads()
+          print('heads:', heads)
+          assert len(heads) == 1, f'ALEMBIC MULTIPLE HEADS: {heads}'
+          print('OK: single alembic head')
+          PY
+
+      - name: pip-audit (PYSEC по uv.lock)
+        run: |
+          uv export --frozen --no-dev --format requirements-txt -o /tmp/req.txt
+          uv run --with pip-audit pip-audit -r /tmp/req.txt --progress-spinner off
+
+      - name: pytest (fast, soft gate)
+        continue-on-error: true
+        run: uv run pytest -q -x
