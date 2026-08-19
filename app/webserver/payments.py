@@ -208,16 +208,32 @@ async def _parse_pal24_payload(request: Request) -> dict[str, str]:
 
 
 def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRouter | None:
+    """Роутер вебхуков платёжных провайдеров.
+
+    Маршруты монтируются по ``is_X_configured()`` — по наличию учётных данных,
+    а НЕ по флагу включения. Флаг переключают из админки в рантайме
+    (``setattr(settings, ...)``), меню оплаты его перечитывает на каждой
+    отрисовке, а маршруты FastAPI фиксируются один раз на старте процесса.
+    Из-за этого провайдер, выключенный в момент перезапуска, после включения
+    появлялся в меню и принимал оплату, но его вебхук отвечал 404: платёж
+    проходил, зачисления не было и в логах бота не было ничего — запрос до
+    него не доходил.
+
+    Учётные данные при этом никуда не деваются, пока оператор щёлкает
+    тумблером, так что маршрут остаётся живым. Побочно чинится и обратное:
+    коллбек по платежу, начатому до выключения провайдера, теперь доезжает,
+    а не теряется вместе с деньгами.
+    """
     router = APIRouter()
     routes_registered = False
 
-    if settings.is_apple_iap_enabled():
+    if settings.is_apple_iap_configured():
         from app.webserver.apple_iap import create_apple_iap_router
 
         router.include_router(create_apple_iap_router(bot))
         routes_registered = True
 
-    if settings.TRIBUTE_ENABLED:
+    if settings.is_tribute_configured():
         tribute_service = TributeService(bot)
         tribute_api = TributeAPI()
 
@@ -283,7 +299,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
-    if settings.is_mulenpay_enabled():
+    if settings.is_mulenpay_configured():
 
         @router.options(settings.MULENPAY_WEBHOOK_PATH)
         async def mulenpay_options() -> Response:
@@ -334,7 +350,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
-    if settings.is_cryptobot_enabled():
+    if settings.is_cryptobot_configured():
 
         @router.options(settings.CRYPTOBOT_WEBHOOK_PATH)
         async def cryptobot_options() -> Response:
@@ -478,7 +494,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
-    if settings.is_yookassa_enabled():
+    if settings.is_yookassa_configured():
 
         @router.options(settings.YOOKASSA_WEBHOOK_PATH)
         async def yookassa_options() -> Response:
@@ -588,7 +604,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
-    if settings.is_wata_enabled():
+    if settings.is_wata_configured():
         wata_handler = WataWebhookHandler(payment_service)
 
         @router.options(settings.WATA_WEBHOOK_PATH)
@@ -659,7 +675,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
-    if settings.is_heleket_enabled():
+    if settings.is_heleket_configured():
         heleket_handler = HeleketWebhookHandler(payment_service)
 
         @router.options(settings.HELEKET_WEBHOOK_PATH)
@@ -723,7 +739,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
-    if settings.is_pal24_enabled():
+    if settings.is_pal24_configured():
         pal24_service = Pal24Service()
 
         @router.options(settings.PAL24_WEBHOOK_PATH)
@@ -794,7 +810,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
-    if settings.is_platega_enabled():
+    if settings.is_platega_configured():
 
         @router.get(settings.PLATEGA_WEBHOOK_PATH)
         async def platega_health() -> JSONResponse:
@@ -885,7 +901,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
-    if settings.is_cloudpayments_enabled():
+    if settings.is_cloudpayments_configured():
         from app.services.cloudpayments_service import CloudPaymentsService
 
         cloudpayments_service = CloudPaymentsService()
@@ -1098,7 +1114,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
-    if settings.is_freekassa_enabled():
+    if settings.is_freekassa_configured():
 
         @router.options(settings.FREEKASSA_WEBHOOK_PATH)
         async def freekassa_options() -> Response:
@@ -1190,7 +1206,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
         routes_registered = True
 
     # KassaAI webhook
-    if settings.is_kassa_ai_enabled():
+    if settings.is_kassa_ai_configured():
 
         @router.get(settings.KASSA_AI_WEBHOOK_PATH)
         async def kassa_ai_health() -> JSONResponse:
@@ -1265,7 +1281,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
         routes_registered = True
 
     # RioPay webhook
-    if settings.is_riopay_enabled():
+    if settings.is_riopay_configured():
 
         @router.get(settings.RIOPAY_WEBHOOK_PATH)
         async def riopay_health() -> JSONResponse:
@@ -1338,7 +1354,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
         routes_registered = True
 
     # SeverPay webhook
-    if settings.is_severpay_enabled():
+    if settings.is_severpay_configured():
 
         @router.get(settings.SEVERPAY_WEBHOOK_PATH)
         async def severpay_health() -> JSONResponse:
@@ -1384,7 +1400,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
         routes_registered = True
 
     # PayPear webhook
-    if settings.is_paypear_enabled():
+    if settings.is_paypear_configured():
 
         @router.get(settings.PAYPEAR_WEBHOOK_PATH)
         async def paypear_health() -> JSONResponse:
@@ -1434,7 +1450,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
         routes_registered = True
 
     # RollyPay webhook
-    if settings.is_rollypay_enabled():
+    if settings.is_rollypay_configured():
 
         @router.get(settings.ROLLYPAY_WEBHOOK_PATH)
         async def rollypay_health() -> JSONResponse:
@@ -1484,7 +1500,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
         routes_registered = True
 
     # Overpay webhook
-    if settings.is_overpay_enabled():
+    if settings.is_overpay_configured():
 
         @router.get(settings.OVERPAY_WEBHOOK_PATH)
         async def overpay_health() -> JSONResponse:
@@ -1559,7 +1575,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
         routes_registered = True
 
     # AuraPay webhook
-    if settings.is_aurapay_enabled():
+    if settings.is_aurapay_configured():
 
         @router.get(settings.AURAPAY_WEBHOOK_PATH)
         async def aurapay_health() -> JSONResponse:
@@ -1608,7 +1624,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
         routes_registered = True
 
     # Etoplatezhi webhook
-    if settings.is_etoplatezhi_enabled():
+    if settings.is_etoplatezhi_configured():
 
         @router.get(settings.ETOPLATEZHI_WEBHOOK_PATH)
         async def etoplatezhi_health() -> JSONResponse:
@@ -1655,7 +1671,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
         routes_registered = True
 
     # Antilopay webhook
-    if settings.is_antilopay_enabled():
+    if settings.is_antilopay_configured():
 
         @router.get(settings.ANTILOPAY_WEBHOOK_PATH)
         async def antilopay_health() -> JSONResponse:
@@ -1703,7 +1719,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
         routes_registered = True
 
     # Jupiter webhook (FPGate P2P v2.1)
-    if settings.is_jupiter_enabled():
+    if settings.is_jupiter_configured():
 
         @router.get(settings.JUPITER_WEBHOOK_PATH)
         async def jupiter_health() -> JSONResponse:
@@ -1749,7 +1765,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
         routes_registered = True
 
     # Lava webhook (Lava Business)
-    if settings.is_lava_enabled():
+    if settings.is_lava_configured():
 
         @router.get(settings.LAVA_WEBHOOK_PATH)
         async def lava_health() -> JSONResponse:
@@ -1809,7 +1825,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
         routes_registered = True
 
     # cisPay webhook (api.cispay.app)
-    if settings.is_cispay_enabled():
+    if settings.is_cispay_configured():
 
         @router.get(settings.CISPAY_WEBHOOK_PATH)
         async def cispay_health() -> JSONResponse:
@@ -1864,7 +1880,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
         routes_registered = True
 
     # Donut webhook (Donut P2P)
-    if settings.is_donut_enabled():
+    if settings.is_donut_configured():
 
         @router.get(settings.DONUT_WEBHOOK_PATH)
         async def donut_health() -> JSONResponse:

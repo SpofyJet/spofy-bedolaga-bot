@@ -2412,6 +2412,10 @@ class Settings(BaseSettings):
 
         return value
 
+    def is_yookassa_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.YOOKASSA_SHOP_ID is not None and self.YOOKASSA_SECRET_KEY is not None
+
     def is_yookassa_enabled(self) -> bool:
         return self.YOOKASSA_ENABLED and self.YOOKASSA_SHOP_ID is not None and self.YOOKASSA_SECRET_KEY is not None
 
@@ -2432,6 +2436,10 @@ class Settings(BaseSettings):
             return f'{self.WEBHOOK_URL}/payment-success'
         return 'https://t.me/'
 
+    def is_cryptobot_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.CRYPTOBOT_API_TOKEN is not None
+
     def is_cryptobot_enabled(self) -> bool:
         return self.CRYPTOBOT_ENABLED and self.CRYPTOBOT_API_TOKEN is not None
 
@@ -2446,12 +2454,28 @@ class Settings(BaseSettings):
         name = (self.XROCKET_DISPLAY_NAME or '').strip()
         return name or 'xRocket'
 
+    def is_heleket_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.HELEKET_MERCHANT_ID is not None and self.HELEKET_API_KEY is not None
+
     def is_heleket_enabled(self) -> bool:
         return self.HELEKET_ENABLED and self.HELEKET_MERCHANT_ID is not None and self.HELEKET_API_KEY is not None
 
     def get_heleket_display_name(self) -> str:
         name = (self.HELEKET_DISPLAY_NAME or '').strip()
         return name or 'Heleket Crypto'
+
+    def is_mulenpay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return (
+            self.MULENPAY_API_KEY is not None
+            and self.MULENPAY_SECRET_KEY is not None
+            and self.MULENPAY_SHOP_ID is not None
+        )
+
+    def is_tribute_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return bool(self.TRIBUTE_API_KEY)
 
     def is_mulenpay_enabled(self) -> bool:
         return (
@@ -2484,12 +2508,20 @@ class Settings(BaseSettings):
             return f'{parsed.scheme}://{parsed.netloc}'
         return None
 
+    def is_pal24_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.PAL24_API_TOKEN is not None and self.PAL24_SHOP_ID is not None
+
     def is_pal24_enabled(self) -> bool:
         return self.PAL24_ENABLED and self.PAL24_API_TOKEN is not None and self.PAL24_SHOP_ID is not None
 
     def get_pal24_display_name(self) -> str:
         name = (self.PAL24_DISPLAY_NAME or '').strip()
         return name or 'PAL24'
+
+    def is_platega_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.PLATEGA_MERCHANT_ID is not None and self.PLATEGA_SECRET is not None
 
     def is_platega_enabled(self) -> bool:
         return self.PLATEGA_ENABLED and self.PLATEGA_MERCHANT_ID is not None and self.PLATEGA_SECRET is not None
@@ -2566,12 +2598,20 @@ class Settings(BaseSettings):
             return f'Platega {method_code}'
         return info.get('title') or info.get('name') or f'Platega {method_code}'
 
+    def is_wata_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.WATA_ACCESS_TOKEN is not None
+
     def is_wata_enabled(self) -> bool:
         return self.WATA_ENABLED and self.WATA_ACCESS_TOKEN is not None
 
     def get_wata_display_name(self) -> str:
         name = (self.WATA_DISPLAY_NAME or '').strip()
         return name or 'Wata'
+
+    def is_cloudpayments_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.CLOUDPAYMENTS_PUBLIC_ID is not None and self.CLOUDPAYMENTS_API_SECRET is not None
 
     def is_cloudpayments_enabled(self) -> bool:
         return (
@@ -2583,6 +2623,15 @@ class Settings(BaseSettings):
     def get_cloudpayments_display_name(self) -> str:
         name = (self.CLOUDPAYMENTS_DISPLAY_NAME or '').strip()
         return name or 'CloudPayments'
+
+    def is_freekassa_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return (
+            self.FREEKASSA_SHOP_ID is not None
+            and self.FREEKASSA_API_KEY is not None
+            and self.FREEKASSA_SECRET_WORD_1 is not None
+            and self.FREEKASSA_SECRET_WORD_2 is not None
+        )
 
     def is_freekassa_enabled(self) -> bool:
         return (
@@ -2620,6 +2669,14 @@ class Settings(BaseSettings):
     def get_freekassa_card_display_name_html(self) -> str:
         return html.escape(self.get_freekassa_card_display_name())
 
+    def is_kassa_ai_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return (
+            self.KASSA_AI_SHOP_ID is not None
+            and self.KASSA_AI_API_KEY is not None
+            and self.KASSA_AI_SECRET_WORD_2 is not None
+        )
+
     def is_kassa_ai_enabled(self) -> bool:
         return (
             self.KASSA_AI_ENABLED
@@ -2635,6 +2692,10 @@ class Settings(BaseSettings):
     def get_kassa_ai_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_display_name())
 
+    def is_riopay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.RIOPAY_API_TOKEN is not None
+
     def is_riopay_enabled(self) -> bool:
         return self.RIOPAY_ENABLED and self.RIOPAY_API_TOKEN is not None
 
@@ -2645,6 +2706,10 @@ class Settings(BaseSettings):
     def get_riopay_display_name_html(self) -> str:
         return html.escape(self.get_riopay_display_name())
 
+    def is_severpay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.SEVERPAY_MID is not None and self.SEVERPAY_TOKEN is not None
+
     def is_severpay_enabled(self) -> bool:
         return self.SEVERPAY_ENABLED and self.SEVERPAY_MID is not None and self.SEVERPAY_TOKEN is not None
 
@@ -2654,6 +2719,19 @@ class Settings(BaseSettings):
 
     def get_severpay_display_name_html(self) -> str:
         return html.escape(self.get_severpay_display_name())
+
+    def is_apple_iap_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        environment = self.get_apple_iap_environment()
+        return (
+            bool((self.APPLE_IAP_KEY_ID or '').strip())
+            and bool((self.APPLE_IAP_ISSUER_ID or '').strip())
+            and bool((self.APPLE_IAP_BUNDLE_ID or '').strip())
+            and environment in {'Sandbox', 'Production'}
+            and (environment != 'Production' or self.APPLE_IAP_APP_APPLE_ID is not None)
+            and bool(self.get_apple_iap_root_cert_paths())
+            and bool(self.get_apple_iap_private_key())
+        )
 
     def is_apple_iap_enabled(self) -> bool:
         environment = self.get_apple_iap_environment()
@@ -2716,6 +2794,10 @@ class Settings(BaseSettings):
                 return None
         return None
 
+    def is_paypear_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.PAYPEAR_SHOP_ID is not None and self.PAYPEAR_SECRET_KEY is not None
+
     def is_paypear_enabled(self) -> bool:
         return self.PAYPEAR_ENABLED and self.PAYPEAR_SHOP_ID is not None and self.PAYPEAR_SECRET_KEY is not None
 
@@ -2726,6 +2808,10 @@ class Settings(BaseSettings):
     def get_paypear_display_name_html(self) -> str:
         return html.escape(self.get_paypear_display_name())
 
+    def is_rollypay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.ROLLYPAY_API_KEY is not None and self.ROLLYPAY_SIGNING_SECRET is not None
+
     def is_rollypay_enabled(self) -> bool:
         return self.ROLLYPAY_ENABLED and self.ROLLYPAY_API_KEY is not None and self.ROLLYPAY_SIGNING_SECRET is not None
 
@@ -2735,6 +2821,14 @@ class Settings(BaseSettings):
 
     def get_rollypay_display_name_html(self) -> str:
         return html.escape(self.get_rollypay_display_name())
+
+    def is_overpay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return (
+            self.OVERPAY_USERNAME is not None
+            and self.OVERPAY_PASSWORD is not None
+            and self.OVERPAY_PROJECT_ID is not None
+        )
 
     def is_overpay_enabled(self) -> bool:
         return (
@@ -2764,6 +2858,14 @@ class Settings(BaseSettings):
 
     def is_overpay_sbp_direct_qr_enabled(self) -> bool:
         return self.OVERPAY_SBP_DIRECT_QR and bool((self.OVERPAY_SERVER_IP or '').strip())
+
+    def is_aurapay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return (
+            self.AURAPAY_API_KEY is not None
+            and self.AURAPAY_SHOP_ID is not None
+            and self.AURAPAY_SECRET_KEY is not None
+        )
 
     def is_aurapay_enabled(self) -> bool:
         return (
@@ -2799,6 +2901,15 @@ class Settings(BaseSettings):
 
     def get_aurapay_card_display_name_html(self) -> str:
         return html.escape(self.get_aurapay_card_display_name())
+
+    def is_antilopay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return (
+            self.ANTILOPAY_SECRET_ID is not None
+            and self.ANTILOPAY_PRIVATE_KEY is not None
+            and self.ANTILOPAY_PUBLIC_KEY is not None
+            and self.ANTILOPAY_PROJECT_ID is not None
+        )
 
     def is_antilopay_enabled(self) -> bool:
         return (
@@ -2846,6 +2957,10 @@ class Settings(BaseSettings):
     def get_antilopay_sberpay_display_name_html(self) -> str:
         return html.escape(self.get_antilopay_sberpay_display_name())
 
+    def is_jupiter_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.JUPITER_TOKEN is not None and self.JUPITER_SECRET is not None
+
     def is_jupiter_enabled(self) -> bool:
         return self.JUPITER_ENABLED and self.JUPITER_TOKEN is not None and self.JUPITER_SECRET is not None
 
@@ -2865,6 +2980,10 @@ class Settings(BaseSettings):
 
     def get_jupiter_sbp_display_name_html(self) -> str:
         return html.escape(self.get_jupiter_sbp_display_name())
+
+    def is_cispay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return bool(self.CISPAY_SHOP_ID and self.CISPAY_API_KEY)
 
     def is_cispay_enabled(self) -> bool:
         # Пустая строка так же непригодна, как None: с пустым ключом HMAC вебхука
@@ -2897,6 +3016,10 @@ class Settings(BaseSettings):
 
     def get_cispay_sbp_display_name_html(self) -> str:
         return html.escape(self.get_cispay_sbp_display_name())
+
+    def is_donut_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.DONUT_TOKEN is not None and self.DONUT_SECRET is not None
 
     def is_donut_enabled(self) -> bool:
         return self.DONUT_ENABLED and self.DONUT_TOKEN is not None and self.DONUT_SECRET is not None
@@ -2938,6 +3061,12 @@ class Settings(BaseSettings):
     def get_donut_sbp_qr_display_name_html(self) -> str:
         return html.escape(self.get_donut_sbp_qr_display_name())
 
+    def is_lava_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return (
+            self.LAVA_SHOP_ID is not None and self.LAVA_SECRET_KEY is not None and self.LAVA_WEBHOOK_SECRET is not None
+        )
+
     def is_lava_enabled(self) -> bool:
         return (
             self.LAVA_ENABLED
@@ -2975,6 +3104,10 @@ class Settings(BaseSettings):
 
     def is_lava_recurrent_enabled(self) -> bool:
         return self.LAVA_RECURRENT_ENABLED and self.is_lava_enabled()
+
+    def is_etoplatezhi_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.ETOPLATEZHI_PROJECT_ID is not None and self.ETOPLATEZHI_SECRET_KEY is not None
 
     def is_etoplatezhi_enabled(self) -> bool:
         return (
