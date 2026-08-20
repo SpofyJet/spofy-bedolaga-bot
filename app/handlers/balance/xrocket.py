@@ -48,7 +48,7 @@ async def start_xrocket_payment(callback: types.CallbackQuery, db_user: User, st
 
     message_text = (
         f'🚀 <b>Криптовалюта (xRocket)</b>\n\n'
-        f'Введите сумму для пополнения от 100 до 100,000 ₽:\n\n'
+        f'Выберите сумму или введите свою от 100 до 100,000 ₽:\n\n'
         f'💰 Доступные активы: {assets_text}\n'
         f'⚡ Мгновенное зачисление на баланс\n'
         f'🔒 Безопасная оплата через xRocket\n\n'
