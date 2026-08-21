@@ -831,13 +831,6 @@ async def handle_device_management(
     if subscription is None:
         return
 
-    if not subscription or subscription.is_trial:
-        await callback.answer(
-            texts.t('PAID_FEATURE_ONLY', '⚠️ Эта функция доступна только для платных подписок'),
-            show_alert=True,
-        )
-        return
-
     panel_user_id = _get_panel_user_id(subscription, db_user)
     if not panel_user_id:
         await callback.answer(
