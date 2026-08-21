@@ -224,18 +224,33 @@ async def handle_change_devices(
     if tariff:
         price_per_device = tariff_device_price
         price_text = texts.format_price(price_per_device)
-        prompt_text = texts.t(
-            'CHANGE_DEVICES_PROMPT_TARIFF',
-            (
-                '📱 <b>Изменение количества устройств</b>\n\n'
-                'Текущий лимит: {current_devices} устройств\n'
-                'Цена за доп. устройство: {price}/мес\n'
-                'Выберите новое количество устройств:\n\n'
-                '💡 <b>Важно:</b>\n'
-                '• При увеличении - доплата пропорционально оставшемуся времени\n'
-                '• При уменьшении - возврат средств не производится'
-            ),
-        ).format(current_devices=current_devices, price=price_text)
+        if getattr(tariff, 'device_price_flat', False):
+            # «Вечный» тариф: цена разовая, без помесячного прорейта
+            prompt_text = texts.t(
+                'CHANGE_DEVICES_PROMPT_TARIFF_FLAT',
+                (
+                    '📱 <b>Изменение количества устройств</b>\n\n'
+                    'Текущий лимит: {current_devices} устройств\n'
+                    'Цена за доп. устройство: {price} (единоразово)\n'
+                    'Выберите новое количество устройств:\n\n'
+                    '💡 <b>Важно:</b>\n'
+                    '• При увеличении - единоразовая доплата\n'
+                    '• При уменьшении - возврат средств не производится'
+                ),
+            ).format(current_devices=current_devices, price=price_text)
+        else:
+            prompt_text = texts.t(
+                'CHANGE_DEVICES_PROMPT_TARIFF',
+                (
+                    '📱 <b>Изменение количества устройств</b>\n\n'
+                    'Текущий лимит: {current_devices} устройств\n'
+                    'Цена за доп. устройство: {price}/мес\n'
+                    'Выберите новое количество устройств:\n\n'
+                    '💡 <b>Важно:</b>\n'
+                    '• При увеличении - доплата пропорционально оставшемуся времени\n'
+                    '• При уменьшении - возврат средств не производится'
+                ),
+            ).format(current_devices=current_devices, price=price_text)
     else:
         prompt_text = texts.t(
             'CHANGE_DEVICES_PROMPT',
@@ -379,8 +394,14 @@ async def confirm_change_devices(
             devices_price_per_month,
             devices_discount_percent,
         )
-        price, charged_days = calculate_prorated_price(discounted_per_month, subscription.end_date)
-        total_discount = int(discount_per_month * charged_days / 30)
+        if tariff and getattr(tariff, 'device_price_flat', False):
+            # Фикс. цена за устройство — без прорейта по остатку дней
+            price = discounted_per_month
+            charged_days = days_left
+            total_discount = discount_per_month
+        else:
+            price, charged_days = calculate_prorated_price(discounted_per_month, subscription.end_date)
+            total_discount = int(discount_per_month * charged_days / 30)
         period_label = f'{charged_days} дн.' if charged_days > 1 else '1 день'
 
         if price > 0 and db_user.balance_kopeks < price:
@@ -604,7 +625,10 @@ async def execute_change_devices(
             devices_discount_percent,
         )
         # Прорейт по остатку подписки (как трафик/серверы), без потолка.
-        price, _ = calculate_prorated_price(discounted_per_month, subscription.end_date)
+        if tariff and getattr(tariff, 'device_price_flat', False):
+            price = discounted_per_month  # фикс. цена, без прорейта
+        else:
+            price, _ = calculate_prorated_price(discounted_per_month, subscription.end_date)
     else:
         price = 0
 
@@ -1559,8 +1583,14 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
             devices_discount_percent,
         )
         # Прорейт по остатку подписки (как трафик/серверы), без потолка.
-        price, charged_days = calculate_prorated_price(discounted_per_month, subscription.end_date)
-        total_discount = int(discount_per_month * charged_days / 30)
+        if tariff and getattr(tariff, 'device_price_flat', False):
+            # Фикс. цена за устройство — без прорейта по остатку дней
+            price = discounted_per_month
+            charged_days = days_left
+            total_discount = discount_per_month
+        else:
+            price, charged_days = calculate_prorated_price(discounted_per_month, subscription.end_date)
+            total_discount = int(discount_per_month * charged_days / 30)
         period_label = f'{charged_days} дн.' if charged_days > 1 else '1 день'
     else:
         # Для обычных тарифов - по дням (как в кабинете)
@@ -1578,8 +1608,14 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
             devices_discount_percent,
         )
         # Прорейт по остатку подписки (как трафик/серверы), без потолка.
-        price, charged_days = calculate_prorated_price(discounted_per_month, subscription.end_date)
-        total_discount = int(discount_per_month * charged_days / 30)
+        if tariff and getattr(tariff, 'device_price_flat', False):
+            # Фикс. цена за устройство — без прорейта по остатку дней
+            price = discounted_per_month
+            charged_days = days_left
+            total_discount = discount_per_month
+        else:
+            price, charged_days = calculate_prorated_price(discounted_per_month, subscription.end_date)
+            total_discount = int(discount_per_month * charged_days / 30)
         period_label = f'{charged_days} дн.' if charged_days > 1 else '1 день'
 
     logger.info(
