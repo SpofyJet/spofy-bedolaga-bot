@@ -504,6 +504,23 @@ class PlategaPaymentMixin:
                 )
                 return
 
+            # Рекуррент оформлен на другой тариф, чем текущий у подписки:
+            # успешное списание переключает подписку на тариф записи (сумма
+            # списания уже посчитана по нему). Синк панели ниже прочитает
+            # уже новый тариф.
+            if record.tariff_id and subscription.tariff_id != record.tariff_id:
+                from app.database.crud.tariff import get_tariff_by_id as _get_tariff_for_switch
+
+                new_tariff = await _get_tariff_for_switch(db, record.tariff_id)
+                if new_tariff is not None:
+                    logger.info(
+                        'СБП-автопродление: переключаю подписку на тариф рекуррента',
+                        subscription_id=subscription.id,
+                        old_tariff_id=subscription.tariff_id,
+                        new_tariff_id=record.tariff_id,
+                    )
+                    subscription.tariff = new_tariff
+
             subscription.extend_subscription(record.charge_days)
 
             # Списание по локально ОТМЕНЁННОЙ записи = удалённая отмена не
@@ -1159,8 +1176,11 @@ async def purchase_tariff_with_sbp_recurring(
         subscription = await get_subscription_by_user_and_tariff(db, user.id, tariff.id, include_inactive=True)
     else:
         subscription = await get_subscription_by_user_id(db, user.id)
-        if subscription is not None and subscription.tariff_id != tariff.id:
-            raise ValueError('СБП-оформление недоступно при подписке другого тарифа — оплатите с баланса')
+        # Подписка ДРУГОГО тарифа — не отказ: рекуррент привязывается к ней,
+        # а переключение на выбранный тариф происходит при первом успешном
+        # списании (process_platega_subscription_callback переключает
+        # subscription.tariff на tariff записи). До первого чарджа юзер
+        # остаётся на старом тарифе; отмена привязки ничего не меняет.
 
     if subscription is not None:
         if getattr(subscription, 'is_trial', False):
