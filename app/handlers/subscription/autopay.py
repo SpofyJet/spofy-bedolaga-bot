@@ -393,6 +393,52 @@ async def handle_sbp_recurring_menu(
         '⚡ <b>Автопродление через СБП</b>\n\n📊 <b>Статус:</b> {status}',
     ).format(status=status_text)
 
+    if record is None:
+        # Не предлагаем «Подключить», если каденс тарифа невыразим в Platega
+        # (например «вечный» тариф на 2222 дня) или у тарифа нет цены за него:
+        # клик по «Подключить» всё равно завершался бы ошибкой — честнее сразу
+        # показать недоступность и оставить только «Назад».
+        try:
+            await db.refresh(subscription, ['tariff'])
+        except Exception:
+            # refresh может упасть на detached/уже загруженном объекте — тогда
+            # читаем то, что есть (паритет с enable-хендлером).
+            pass
+        _menu_tariff = getattr(subscription, 'tariff', None)
+        try:
+            from app.services.monitoring_service import resolve_autopay_period_candidate
+            from app.services.platega_recurrent import resolve_platega_cadence
+
+            _menu_period = (
+                resolve_autopay_period_candidate(getattr(subscription, 'autopay_period_days', None), _menu_tariff)
+                or resolve_autopay_period_candidate(getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0), _menu_tariff)
+                or (_menu_tariff.get_shortest_period() if _menu_tariff else None)
+                or 30
+            )
+            _menu_cadence = resolve_platega_cadence(_menu_period, bool(getattr(_menu_tariff, 'is_daily', False)))
+            _menu_available = (
+                _menu_tariff is not None
+                and _menu_cadence is not None
+                and bool(_menu_tariff.get_purchasable_price_for_period(_menu_cadence[2]))
+            )
+        except Exception:
+            # Проверка не должна ломать меню: при любой ошибке оставляем
+            # кнопку — enable-хендлер покажет осмысленную причину (ValueError).
+            _menu_available = True
+        if not _menu_available:
+            text += '\n\n' + texts.t(
+                'SBP_RECURRING_MENU_UNAVAILABLE',
+                '⚠️ Для вашего тарифа автопродление через СБП недоступно.',
+            )
+            keyboard = types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_autopay')],
+                ]
+            )
+            await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+            await callback.answer()
+            return
+
     if record is not None:
         # get_active_platega_subscription_by_subscription уже фильтрует по
         # PENDING/ACTIVE/PAST_DUE — любая непустая запись «активна» для целей UI.
@@ -476,7 +522,12 @@ async def handle_sbp_recurring_enable(
 
     try:
         result = await enable_platega_sbp_recurring(db, user_id=db_user.id, subscription=subscription, tariff=tariff)
-    except (ValueError, RuntimeError) as error:
+    except ValueError as error:
+        # ValueError — осмысленная причина (период/цена/состояние подписки),
+        # показываем её пользователю как есть вместо общей «попробуйте позже».
+        await callback.answer(str(error), show_alert=True)
+        return
+    except RuntimeError as error:
         logger.warning(
             'Не удалось подключить СБП-автопродление',
             error=str(error),
@@ -589,7 +640,12 @@ async def handle_sbp_recurring_enable_for(
 
     try:
         result = await enable_platega_sbp_recurring(db, user_id=db_user.id, subscription=subscription, tariff=tariff)
-    except (ValueError, RuntimeError) as error:
+    except ValueError as error:
+        # ValueError — осмысленная причина (период/цена/состояние подписки),
+        # показываем её пользователю как есть вместо общей «попробуйте позже».
+        await callback.answer(str(error), show_alert=True)
+        return
+    except RuntimeError as error:
         logger.warning(
             'Не удалось подключить СБП-автопродление (оффер success-экрана)',
             error=str(error),
@@ -636,6 +692,42 @@ async def handle_sbp_recurring_enable_for(
 
 
 async def handle_sbp_recurring_cancel(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
+    """Шаг подтверждения отмены СБП-автопродления (удержание): одно случайное
+    нажатие больше не снимает привязку — сначала показываем, что останется без
+    автосписаний, и первой даём кнопку «Оставить автопродление»."""
+    texts = get_texts(db_user.language)
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('SBP_RECURRING_KEEP_BUTTON', '✅ Оставить автопродление'),
+                    callback_data='sbp_recurring_menu',
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('SBP_RECURRING_CANCEL_CONFIRM_BUTTON', '❌ Да, отменить'),
+                    callback_data='sbp_recurring_cancel_confirm',
+                )
+            ],
+        ]
+    )
+    await callback.message.edit_text(
+        texts.t(
+            'SBP_RECURRING_CANCEL_CONFIRM_TEXT',
+            '❓ <b>Отменить автопродление через СБП?</b>\n\n'
+            'Подписка останется активной до конца оплаченного периода, '
+            'но автосписания прекратятся — продлевать нужно будет вручную.',
+        ),
+        reply_markup=keyboard,
+        parse_mode='HTML',
+    )
+    await callback.answer()
+
+
+async def handle_sbp_recurring_cancel_confirm(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
 ):
     """Отменить активное СБП-автопродление и обновить статус-вью.

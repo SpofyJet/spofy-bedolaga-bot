@@ -678,21 +678,35 @@ class PlategaPaymentMixin:
             return
 
         if status == pr.SUB_PAST_DUE:
+            already_past_due = record.status == 'PAST_DUE'
             record.status = 'PAST_DUE'
             await db.commit()
-            await self._notify_sbp_recurring(db, record, 'past_due')
+            if not already_past_due:
+                await self._notify_sbp_recurring(db, record, 'past_due')
             return
 
         if status == pr.SUB_CANCELLED:
+            # «Отменено» показываем только при отмене ЖИВОЙ привязки (была
+            # ACTIVE/PAST_DUE). Если локально уже CANCELLED — это эхо нашей
+            # собственной отмены (юзер в меню, пересоздание устаревшей записи,
+            # свип смены цены), а из PENDING привязка никогда не работала:
+            # «автопродление отменено» в этих случаях только путает («я ничего
+            # не отменял»).
+            was_live = record.status in ('ACTIVE', 'PAST_DUE')
             record.status = 'CANCELLED'
             await db.commit()
-            await self._notify_sbp_recurring(db, record, 'cancelled')
+            if was_live:
+                await self._notify_sbp_recurring(db, record, 'cancelled')
             return
 
         if status == pr.SUB_FAILED:
+            # Повторная доставка того же FAILED (ретрай коллбека) не должна
+            # слать второе одинаковое «списание не удалось».
+            already_failed = record.status == 'FAILED'
             record.status = 'FAILED'
             await db.commit()
-            await self._notify_sbp_recurring(db, record, 'failed')
+            if not already_failed:
+                await self._notify_sbp_recurring(db, record, 'failed')
             return
 
         logger.warning(

@@ -3789,6 +3789,12 @@ async def confirm_tariff_switch(
         await callback.answer(texts.t('NO_SUBSCRIPTION_ERROR', '❌ У вас нет активной подписки'), show_alert=True)
         return
 
+    # Запоминаем старый тариф: после переключения снимаем привязки
+    # автопродления СТАРОГО тарифа (СБП/Lava) — иначе следующее списание по
+    # старой привязке оттянет тариф обратно (логика смены тарифа при списании).
+    _sw_old_tariff_id = getattr(subscription, 'tariff_id', None)
+    _sw_recurring_note = ''
+
     # Проверяем разрешение на смену в данном направлении
     if subscription.tariff_id and subscription.tariff_id != tariff_id:
         cur_tariff_obj = await get_tariff_by_id(db, subscription.tariff_id)
@@ -3881,6 +3887,29 @@ async def confirm_tariff_switch(
             device_limit=effective_device_limit,
             connected_squads=squads,
         )
+
+        # Привязки автопродления старого тарифа больше не соответствуют
+        # подписке: следующее списание по ним оттянуло бы тариф обратно и
+        # списало старую сумму. Отменяем best-effort (сбой не блокирует уже
+        # совершённое переключение) и честно говорим об этом на success-экране —
+        # там же лежит кнопка подключения автопродления к новому тарифу.
+        if _sw_old_tariff_id is not None and _sw_old_tariff_id != tariff.id:
+            try:
+                from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+                await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+            except Exception as cancel_error:  # pragma: no cover - defensive
+                logger.warning('Не удалось отменить СБП-привязку при смене тарифа', error=str(cancel_error))
+            try:
+                from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+
+                await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+            except Exception as cancel_error:  # pragma: no cover - defensive
+                logger.warning('Не удалось отменить Lava-привязку при смене тарифа', error=str(cancel_error))
+            _sw_recurring_note = texts.t(
+                'TARIFF_SWITCH_RECURRING_NOTE',
+                '\n\n⚠️ Автопродление по старому тарифу отменено — подключите заново кнопкой ниже.',
+            )
 
         # Обновляем пользователя в Remnawave
         try:
@@ -4002,7 +4031,7 @@ async def confirm_tariff_switch(
                 devices=tariff.device_limit,
                 price=format_price_kopeks(final_price),
                 time_info=time_info,
-            ),
+            ) + _sw_recurring_note,
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=await _append_sbp_recurring_offer(
                     db,
@@ -4096,6 +4125,11 @@ async def confirm_daily_tariff_switch(
         await callback.answer(texts.t('NO_SUBSCRIPTION_ERROR', '❌ У вас нет активной подписки'), show_alert=True)
         return
 
+    # Запоминаем старый тариф: после переключения снимаем привязки
+    # автопродления СТАРОГО тарифа (см. выше про оттягивание при списании).
+    _sw_old_tariff_id = getattr(subscription, 'tariff_id', None)
+    _sw_recurring_note = ''
+
     # Проверяем разрешение на смену в данном направлении
     if subscription.tariff_id and subscription.tariff_id != tariff_id:
         cur_tariff_daily = await get_tariff_by_id(db, subscription.tariff_id)
@@ -4182,6 +4216,26 @@ async def confirm_daily_tariff_switch(
 
         await db.commit()
         await db.refresh(subscription)
+
+        # См. выше: привязки автопродления старого тарифа отменяем, иначе их
+        # следующее списание оттянет подписку обратно на старый тариф.
+        if _sw_old_tariff_id is not None and _sw_old_tariff_id != tariff.id:
+            try:
+                from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+                await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+            except Exception as cancel_error:  # pragma: no cover - defensive
+                logger.warning('Не удалось отменить СБП-привязку при смене на суточный тариф', error=str(cancel_error))
+            try:
+                from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+
+                await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+            except Exception as cancel_error:  # pragma: no cover - defensive
+                logger.warning('Не удалось отменить Lava-привязку при смене на суточный тариф', error=str(cancel_error))
+            _sw_recurring_note = texts.t(
+                'TARIFF_SWITCH_RECURRING_NOTE',
+                '\n\n⚠️ Автопродление по старому тарифу отменено — подключите заново в разделе «Автоплатёж».',
+            )
 
         # Обновляем пользователя в Remnawave (сброс трафика по админ-настройке)
         try:
@@ -4292,7 +4346,7 @@ async def confirm_daily_tariff_switch(
                 traffic=traffic,
                 devices=tariff.device_limit,
                 price=format_price_kopeks(final_daily_price),
-            ),
+            ) + _sw_recurring_note,
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=await _append_sbp_recurring_offer(
                     db,
