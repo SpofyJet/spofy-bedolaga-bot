@@ -56,6 +56,33 @@ def resolve_platega_interval(period_days: int, is_daily: bool) -> tuple[int, int
     return INTERVAL_MONTH, 30
 
 
+def resolve_platega_cadence(period_days: int, is_daily: bool) -> tuple[int, int, int] | None:
+    """Возвращает (interval, interval_count, charge_days) — или None.
+
+    В отличие от resolve_platega_interval (count всегда 1, неровные периоды
+    приклеиваются к месяцу по 30-дневной цене) использует intervalCount API
+    подписок Platega: 90 дней — это «раз в 3 месяца» с ценой 90 дней, а не
+    «каждый месяц по цене 30 дней». Лимиты intervalCount: день ≤ 31,
+    неделя ≤ 4, месяц ≤ 12, год ≤ 3. None — период невыразим (например,
+    2222 дня): кнопку СБП-оформления для такого периода показывать нельзя.
+    """
+    if is_daily:
+        return (INTERVAL_DAY, 1, 1)
+    if not period_days or period_days <= 0:
+        return None
+    if 28 <= period_days <= 31:
+        return (INTERVAL_MONTH, 1, period_days)
+    if period_days % 7 == 0 and period_days // 7 <= 4:
+        return (INTERVAL_WEEK, period_days // 7, period_days)
+    if 350 <= period_days <= 380:
+        return (INTERVAL_YEAR, 1, period_days)
+    if period_days % 30 == 0 and period_days // 30 <= 12:
+        return (INTERVAL_MONTH, period_days // 30, period_days)
+    if period_days % 360 == 0 and period_days // 360 <= 3:
+        return (INTERVAL_YEAR, period_days // 360, period_days)
+    return None
+
+
 def platega_reconcile_decision(
     local_status: str,
     remote_status: str | None,

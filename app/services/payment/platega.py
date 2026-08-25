@@ -156,6 +156,7 @@ class PlategaPaymentMixin:
         user_id: int,
         subscription: Any,
         tariff: Any,
+        period_days: int | None = None,
     ) -> dict[str, Any]:
         """Создаёт рекуррентную СБП-подписку Platega, привязанную к тарифу подписки.
 
@@ -175,7 +176,27 @@ class PlategaPaymentMixin:
         # прямой импорт на уровне модуля создал бы циклическую зависимость.
         from app.database.crud import platega_subscription as sub_crud
         from app.services.monitoring_service import resolve_autopay_period_candidate
-        from app.services.platega_recurrent import resolve_platega_interval
+        from app.services.platega_recurrent import resolve_platega_cadence
+
+        is_daily = bool(getattr(tariff, 'is_daily', False))
+        period_explicit = period_days is not None
+        if period_days is None:
+            # Каденс не задан явно (меню автоплатежа, кабинет, оффер на
+            # success-экране): прежняя иерархия balance-autopay — выбор
+            # пользователя → глобальный дефолт → короткий период тарифа.
+            period_days = (
+                resolve_autopay_period_candidate(getattr(subscription, 'autopay_period_days', None), tariff)
+                or resolve_autopay_period_candidate(getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0), tariff)
+                or (tariff.get_shortest_period() if tariff else None)
+                or 30
+            )
+        cadence = resolve_platega_cadence(period_days, is_daily)
+        if cadence is None:
+            # Период невыразим в каденсе Platega (лимиты intervalCount) —
+            # например «вечный» тариф на 2222 дня. Кнопки СБП для таких
+            # периодов скрыты; это страховка от старых кнопок/прямых коллбеков.
+            raise ValueError('СБП-автопродление недоступно для этого периода — оплатите разово')
+        interval, interval_count, charge_days = cadence
 
         existing = await sub_crud.get_active_platega_subscription_by_subscription(db, subscription.id)
         if existing:
@@ -185,51 +206,59 @@ class PlategaPaymentMixin:
             if getattr(subscription, 'autopay_enabled', False):
                 subscription.autopay_enabled = False
                 await db.commit()
+            # Запись устарела, если: висит в PENDING без ссылки (создана до
+            # фикса поля redirect/url — ею невозможно воспользоваться), либо
+            # оформлена на ДРУГОЙ тариф или ДРУГОЙ каденс, чем пользователь
+            # выбрал сейчас: старая привязка списывала бы не ту сумму не в те
+            # сроки, а её чарджи переключали бы тариф обратно. Устаревшую
+            # отменяем на стороне Platega best-effort, локально закрываем
+            # CANCELLED и проваливаемся ниже — создаём новую запись.
+            stale_reason: str | None = None
             if existing.status == 'PENDING' and not existing.redirect_url:
-                # Запись без ссылки на подтверждение (создана до фикса поля
-                # redirect/url выше, либо Platega не вернула ссылку):
-                # переиспользовать её бессмысленно — пользователь никогда не
-                # попадёт в банк и подписка не привяжется. Отменяем на стороне
-                # Platega best-effort, локально закрываем CANCELLED и
-                # проваливаемся ниже — создаём новую подписку уже со ссылкой.
-                logger.warning(
-                    'Platega-подписка в PENDING без redirect_url — пересоздаю',
-                    local_id=existing.id,
-                    platega_subscription_id=existing.platega_subscription_id,
+                stale_reason = 'PENDING без ссылки на подтверждение'
+            elif existing.status == 'PENDING' and '/subscription/' not in existing.redirect_url:
+                # Ссылка создана через v2-эндпоинт: это generic-инвойс с
+                # выбором способа (карта/крипта/...), а не форма привязки СБП
+                # (pay.platega.io/subscription/<id>) — подписка по ней не
+                # привяжется. Пересоздаём через v1.
+                stale_reason = 'ссылка не на форму привязки (v2-инвойс)'
+            elif existing.tariff_id and tariff is not None and existing.tariff_id != getattr(tariff, 'id', None):
+                stale_reason = f'тариф записи #{existing.tariff_id} != выбранного #{getattr(tariff, "id", None)}'
+            elif period_explicit and (existing.charge_days != charge_days or existing.interval != interval):
+                stale_reason = (
+                    f'каденс записи {existing.charge_days}д/interval{existing.interval}'
+                    f' != выбранного {charge_days}д/interval{interval}'
                 )
-                if existing.platega_subscription_id:
-                    try:
-                        await self.platega_service.cancel_subscription(existing.platega_subscription_id)
-                    except Exception as cancel_error:  # pragma: no cover - best-effort
-                        logger.warning(
-                            'Не удалось отменить бессылочную Platega-подписку — reconciler повторит',
-                            platega_subscription_id=existing.platega_subscription_id,
-                            error=str(cancel_error),
-                        )
-                existing.status = 'CANCELLED'
-                await db.commit()
-            else:
+            if stale_reason is None:
                 return {
                     'local_id': existing.id,
                     'platega_subscription_id': existing.platega_subscription_id,
                     'redirect_url': existing.redirect_url,
                     'status': existing.status,
                 }
+            logger.warning(
+                'Platega-подписка устарела — пересоздаю',
+                local_id=existing.id,
+                platega_subscription_id=existing.platega_subscription_id,
+                reason=stale_reason,
+            )
+            if existing.platega_subscription_id:
+                try:
+                    await self.platega_service.cancel_subscription(existing.platega_subscription_id)
+                except Exception as cancel_error:  # pragma: no cover - best-effort
+                    logger.warning(
+                        'Не удалось отменить устаревшую Platega-подписку — reconciler повторит',
+                        platega_subscription_id=existing.platega_subscription_id,
+                        error=str(cancel_error),
+                    )
+            existing.status = 'CANCELLED'
+            await db.commit()
 
         # Взаимоисключение с рекуррентом Lava: оба движка push-модели, и две
         # живые привязки на одной подписке списывали бы дважды за цикл.
         from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
 
         await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-
-        period_days = (
-            resolve_autopay_period_candidate(getattr(subscription, 'autopay_period_days', None), tariff)
-            or resolve_autopay_period_candidate(getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0), tariff)
-            or (tariff.get_shortest_period() if tariff else None)
-            or 30
-        )
-        is_daily = bool(getattr(tariff, 'is_daily', False))
-        interval, charge_days = resolve_platega_interval(period_days, is_daily)
 
         # Сумма — полная цена продления, а не голая цена периода: у подписки
         # могут быть докупленные устройства (в классическом режиме — ещё и
@@ -265,6 +294,7 @@ class PlategaPaymentMixin:
             amount=amount_kopeks / 100,
             currency=settings.PLATEGA_CURRENCY,
             interval=interval,
+            interval_count=interval_count,
             description=getattr(tariff, 'name', None) or 'Подписка',
         )
 
@@ -1146,6 +1176,7 @@ async def enable_platega_sbp_recurring(
     user_id: int,
     subscription: Any,
     tariff: Any,
+    period_days: int | None = None,
 ) -> dict[str, Any]:
     """Создать СБП-автопродление. Возвращает {local_id, platega_subscription_id, redirect_url, status}.
 
@@ -1155,7 +1186,7 @@ async def enable_platega_sbp_recurring(
     if not settings.is_platega_recurrent_enabled():
         raise RuntimeError('Platega recurrent is disabled')
     return await _PlategaSbpAgent().create_platega_sbp_subscription(
-        db, user_id=user_id, subscription=subscription, tariff=tariff
+        db, user_id=user_id, subscription=subscription, tariff=tariff, period_days=period_days
     )
 
 
@@ -1164,6 +1195,7 @@ async def purchase_tariff_with_sbp_recurring(
     *,
     user: Any,
     tariff: Any,
+    period_days: int | None = None,
 ) -> dict[str, Any]:
     """Оформление подписки на тариф с оплатой через СБП-автопродление Platega.
 
@@ -1224,7 +1256,7 @@ async def purchase_tariff_with_sbp_recurring(
     if subscription is None:
         subscription = await create_sbp_pending_subscription(db, user.id, tariff)
 
-    result = await enable_platega_sbp_recurring(db, user_id=user.id, subscription=subscription, tariff=tariff)
+    result = await enable_platega_sbp_recurring(db, user_id=user.id, subscription=subscription, tariff=tariff, period_days=period_days)
     return {**result, 'subscription_id': subscription.id}
 
 

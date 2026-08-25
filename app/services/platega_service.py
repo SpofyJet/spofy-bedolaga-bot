@@ -116,6 +116,7 @@ class PlategaService:
         currency: str,
         interval: int,
         description: str | None = None,
+        interval_count: int | None = None,
     ) -> dict[str, Any] | None:
         body: dict[str, Any] = {
             'paymentMethod': 6,
@@ -125,13 +126,22 @@ class PlategaService:
                 'interval': interval,
             },
         }
+        # intervalCount > 1 — каденс «раз в N интервалов» (90д = 3 × месяц и
+        # т.п.). При count=1 поле не шлём: ровно тот payload, что уже работал.
+        if interval_count and interval_count > 1:
+            body['paymentDetails']['intervalCount'] = interval_count
 
         if description:
             body['description'] = self._sanitize_description(description, self._description_max_length)
 
-        # Тот же выбор версии эндпоинта, что и в create_payment (см. #2934):
-        # v1 POST /transaction/process, v2 POST /v2/transaction/process.
-        endpoint = '/v2/transaction/process' if self.api_version == 'v2' else '/transaction/process'
+        # Подписки — ТОЛЬКО v1 POST /transaction/process. v2-эндпоинт из #2934
+        # существует ради карточных каскадов РАЗОВЫХ платежей и про метод 6
+        # (Subscription) не знает: вместо формы привязки СБП
+        # (pay.platega.io/subscription/<id>) он возвращает generic-инвойс с
+        # выбором способа (карта/крипта/международка) — оплата по нему не
+        # привязывает подписку и не даёт доступа. Для СБП-подписок карточный
+        # обход #2934 не нужен, поэтому версия мерчанта здесь игнорируется.
+        endpoint = '/transaction/process'
         data, http_status = await self._request('POST', endpoint, json_data=body, return_status=True)
 
         if http_status is not None and http_status >= 400:

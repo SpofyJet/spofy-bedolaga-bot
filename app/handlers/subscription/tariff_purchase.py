@@ -341,13 +341,14 @@ def get_tariff_confirm_keyboard(
     # Автооплата — ПЕРВАЯ кнопка (рекуррент по умолчанию): первое списание
     # Platega = подтверждение привязки в банке, дальше автосписания по каденсу
     # тарифа. Оплата с баланса остаётся разовой альтернативой рядом ниже.
+    # Период уезжает в callback: каденс и сумма привязки = выбранный период.
     buttons = []
-    if settings.is_platega_recurrent_enabled():
+    if settings.is_platega_recurrent_enabled() and _sbp_period_supported(period):
         buttons.append(
             [
                 InlineKeyboardButton(
                     text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
-                    callback_data=f'tariff_sbp:{tariff_id}',
+                    callback_data=f'tariff_sbp:{tariff_id}:{period}',
                 )
             ]
         )
@@ -391,7 +392,7 @@ def get_tariff_insufficient_balance_keyboard(
     """
     texts = get_texts(language)
     back_button = InlineKeyboardButton(text=texts.BACK, callback_data=f'tariff_select:{tariff_id}')
-    sbp_rows = _sbp_purchase_rows(tariff_id, texts)
+    sbp_rows = _sbp_purchase_rows(tariff_id, texts, period_days=period)
 
     if settings.is_auto_purchase_after_topup_enabled() and missing_kopeks > 0:
         from app.keyboards.inline import get_payment_methods_keyboard
@@ -415,15 +416,32 @@ def get_tariff_insufficient_balance_keyboard(
     )
 
 
-def _sbp_purchase_rows(tariff_id: int, texts) -> list[list[InlineKeyboardButton]]:
+def _sbp_period_supported(period_days: int, is_daily: bool = False) -> bool:
+    """Выразим ли период каденсом подписки Platega (interval × intervalCount).
+
+    Нет — кнопку СБП-оформления для периода показывать нельзя: привязка
+    создалась бы с искажённым каденсом и ценой. Ошибка -> прячем кнопку
+    (fail-closed): лучше разовая оплата, чем битая привязка.
+    """
+    try:
+        from app.services.platega_recurrent import resolve_platega_cadence
+
+        return resolve_platega_cadence(period_days, is_daily) is not None
+    except Exception:
+        return False
+
+
+def _sbp_purchase_rows(tariff_id: int, texts, period_days: int | None = None) -> list[list[InlineKeyboardButton]]:
     """Ряды оформления привязкой провайдера — те же, что на confirm-экранах."""
     rows: list[list[InlineKeyboardButton]] = []
-    if settings.is_platega_recurrent_enabled():
+    if settings.is_platega_recurrent_enabled() and (period_days is None or _sbp_period_supported(period_days)):
         rows.append(
             [
                 InlineKeyboardButton(
                     text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
-                    callback_data=f'tariff_sbp:{tariff_id}',
+                    callback_data=(
+                        f'tariff_sbp:{tariff_id}:{period_days}' if period_days else f'tariff_sbp:{tariff_id}'
+                    ),
                 )
             ]
         )
@@ -457,6 +475,19 @@ async def _append_sbp_recurring_offer(db, subscription, tariff, texts, rows: lis
         if not getattr(subscription, 'tariff_id', None):
             return rows
         if tariff is None or getattr(tariff, 'is_daily', False):
+            return rows
+        # Не показываем оффер, если каденс невыразим в Platega (например,
+        # «вечный» тариф на 2222 дня): клик завершился бы ошибкой.
+        from app.services.monitoring_service import resolve_autopay_period_candidate
+        from app.services.platega_recurrent import resolve_platega_cadence
+
+        _offer_period = (
+            resolve_autopay_period_candidate(getattr(subscription, 'autopay_period_days', None), tariff)
+            or resolve_autopay_period_candidate(getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0), tariff)
+            or (tariff.get_shortest_period() if tariff else None)
+            or 30
+        )
+        if resolve_platega_cadence(_offer_period, getattr(tariff, 'is_daily', False)) is None:
             return rows
         from app.database.crud.platega_subscription import get_active_platega_subscription_by_subscription
 
@@ -5568,7 +5599,12 @@ async def purchase_tariff_with_sbp(
     списания идут по каденс-правилу тарифа.
     """
     texts = get_texts(db_user.language)
-    tariff_id = int(callback.data.split(':')[1])
+    _parts = callback.data.split(':')
+    tariff_id = int(_parts[1])
+    # Выбранный на экране период приходит третьим сегментом
+    # (tariff_sbp:<id>:<period>); кнопки старого формата без периода —
+    # fallback на каденс-цепочку внутри сервиса.
+    period_days = int(_parts[2]) if len(_parts) > 2 else None
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not tariff.is_active:
@@ -5578,7 +5614,7 @@ async def purchase_tariff_with_sbp(
     from app.services.payment.platega import purchase_tariff_with_sbp_recurring
 
     try:
-        result = await purchase_tariff_with_sbp_recurring(db, user=db_user, tariff=tariff)
+        result = await purchase_tariff_with_sbp_recurring(db, user=db_user, tariff=tariff, period_days=period_days)
     except ValueError as error:
         await callback.answer(str(error), show_alert=True)
         return
