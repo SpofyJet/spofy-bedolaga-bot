@@ -504,24 +504,21 @@ class PlategaPaymentMixin:
                 )
                 return
 
-            # Рекуррент оформлен на другой тариф, чем текущий у подписки:
-            # успешное списание переключает подписку на тариф записи (сумма
-            # списания уже посчитана по нему). Синк панели ниже прочитает
-            # уже новый тариф.
-            if record.tariff_id and subscription.tariff_id != record.tariff_id:
-                from app.database.crud.tariff import get_tariff_by_id as _get_tariff_for_switch
+            # Продление/конверсия через полный CRUD-путь: переключает тариф на
+            # тариф записи (сумма списания посчитана по нему), конвертирует
+            # триал в платную (convert_trial=True), оживляет истёкшую,
+            # применяет правила переноса остатка дней. Синк панели ниже
+            # прочитает уже новые параметры.
+            from app.database.crud.subscription import extend_subscription as _crud_extend_subscription
 
-                new_tariff = await _get_tariff_for_switch(db, record.tariff_id)
-                if new_tariff is not None:
-                    logger.info(
-                        'СБП-автопродление: переключаю подписку на тариф рекуррента',
-                        subscription_id=subscription.id,
-                        old_tariff_id=subscription.tariff_id,
-                        new_tariff_id=record.tariff_id,
-                    )
-                    subscription.tariff = new_tariff
-
-            subscription.extend_subscription(record.charge_days)
+            await _crud_extend_subscription(
+                db,
+                subscription,
+                record.charge_days,
+                tariff_id=record.tariff_id,
+                convert_trial=True,
+                commit=False,
+            )
 
             # Списание по локально ОТМЕНЁННОЙ записи = удалённая отмена не
             # прошла (сбой Platega в момент cancel). Деньги взяты — продлеваем
@@ -1183,8 +1180,13 @@ async def purchase_tariff_with_sbp_recurring(
         # остаётся на старом тарифе; отмена привязки ничего не меняет.
 
     if subscription is not None:
-        if getattr(subscription, 'is_trial', False):
-            raise ValueError('СБП-оформление недоступно для триальной подписки — оплатите с баланса')
+        # Триал (живой или истёкший) — НЕ отказ: рекуррент привязывается к
+        # триальной строке, а первое успешное списание конвертирует её в
+        # платную (в чардж-коллбеке — crud.extend_subscription с
+        # convert_trial=True: снимает is_trial, переключает тариф и статус).
+        # Вторая строка подписки не создаётся — partial unique index не
+        # задевается, история триала сохраняется.
+
         # DISABLED чардж не оживит (extend_subscription активирует только
         # EXPIRED/LIMITED) — деньги списались бы без выдачи доступа. PENDING —
         # чужой незавершённый платёжный флоу (миниапп-ордер), не влезаем.
