@@ -525,6 +525,116 @@ async def handle_sbp_recurring_enable(
     await callback.answer()
 
 
+async def handle_sbp_recurring_enable_for(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
+    """Включить СБП-автопродление для КОНКРЕТНОЙ подписки (оффер success-экранов).
+
+    В отличие от handle_sbp_recurring_enable подписка берётся по id из
+    callback_data: в multi-tariff режиме контекстное разрешение может выбрать
+    не ту подписку, а ошибиться в привязке денежного автоплатежа нельзя.
+    Дальше — тот же флоу, что у кнопки в меню автоплатежа.
+    """
+    texts = get_texts(db_user.language)
+
+    if not settings.is_platega_recurrent_enabled():
+        await callback.answer(
+            texts.t('SBP_RECURRING_UNAVAILABLE', '⚠️ Автопродление через СБП сейчас недоступно'),
+            show_alert=True,
+        )
+        return
+
+    try:
+        target_id = int(callback.data.split(':', 1)[1])
+    except (IndexError, ValueError):
+        await callback.answer(texts.t('INVALID_REQUEST', 'Invalid request'), show_alert=True)
+        return
+
+    from app.database.crud.subscription import get_subscription_by_id
+
+    subscription = await get_subscription_by_id(db, target_id)
+    if not subscription or subscription.user_id != db_user.id:
+        await callback.answer(
+            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
+            show_alert=True,
+        )
+        return
+
+    # Trial cannot authorize a real recurring bank payment (same guard as the
+    # menu enable path).
+    if subscription.is_trial or subscription.is_trial is None:
+        await callback.answer(
+            texts.t('AUTOPAY_NOT_AVAILABLE_TRIAL', 'Автоплатеж недоступен для пробных подписок.'),
+            show_alert=True,
+        )
+        return
+
+    try:
+        await db.refresh(subscription, ['tariff'])
+    except Exception:
+        pass
+
+    tariff = getattr(subscription, 'tariff', None)
+    if tariff is None:
+        await callback.answer(
+            texts.t(
+                'SBP_RECURRING_NO_TARIFF',
+                '⚠️ Автопродление через СБП доступно только для подписок с тарифом.',
+            ),
+            show_alert=True,
+        )
+        return
+
+    from app.services.payment.platega import enable_platega_sbp_recurring
+
+    try:
+        result = await enable_platega_sbp_recurring(db, user_id=db_user.id, subscription=subscription, tariff=tariff)
+    except (ValueError, RuntimeError) as error:
+        logger.warning(
+            'Не удалось подключить СБП-автопродление (оффер success-экрана)',
+            error=str(error),
+            subscription_id=subscription.id,
+        )
+        await callback.answer(
+            texts.t(
+                'SBP_RECURRING_ENABLE_ERROR',
+                '❌ Не удалось подключить автопродление через СБП. Попробуйте позже.',
+            ),
+            show_alert=True,
+        )
+        return
+
+    redirect_url = result.get('redirect_url')
+    if not redirect_url:
+        # Идемпотентный повтор по уже живой привязке без сохранённой ссылки.
+        await callback.answer(texts.t('SBP_RECURRING_ALREADY_ACTIVE', 'СБП-автопродление уже подключено.'))
+        return
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('SBP_RECURRING_CONFIRM_BUTTON', '🏦 Подтвердить в банке'),
+                    url=redirect_url,
+                )
+            ],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+        ]
+    )
+
+    await callback.message.edit_text(
+        texts.t(
+            'SBP_RECURRING_ENABLE_SUCCESS',
+            '⚡ <b>Автопродление через СБП</b>\n\n'
+            'Подтвердите подключение в банковском приложении по кнопке ниже.\n'
+            'После подтверждения автопродление станет активным.',
+        ),
+        reply_markup=keyboard,
+        parse_mode='HTML',
+    )
+    await callback.answer()
+
+
 async def handle_sbp_recurring_cancel(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
 ):

@@ -338,17 +338,10 @@ def get_tariff_confirm_keyboard(
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру подтверждения покупки тарифа."""
     texts = get_texts(language)
-    buttons = [
-        [
-            InlineKeyboardButton(
-                text=texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку'),
-                callback_data=f'tariff_confirm:{tariff_id}:{period}',
-            )
-        ],
-    ]
-    # Альтернатива оплате с баланса: оформление через СБП-автопродление
-    # Platega (первое списание = подтверждение привязки в банке, дальше —
-    # автосписания по каденсу тарифа).
+    # Автооплата — ПЕРВАЯ кнопка (рекуррент по умолчанию): первое списание
+    # Platega = подтверждение привязки в банке, дальше автосписания по каденсу
+    # тарифа. Оплата с баланса остаётся разовой альтернативой рядом ниже.
+    buttons = []
     if settings.is_platega_recurrent_enabled():
         buttons.append(
             [
@@ -367,6 +360,14 @@ def get_tariff_confirm_keyboard(
                 )
             ]
         )
+    buttons.append(
+        [
+            InlineKeyboardButton(
+                text=texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку'),
+                callback_data=f'tariff_confirm:{tariff_id}:{period}',
+            )
+        ],
+    )
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'tariff_select:{tariff_id}')])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -403,12 +404,12 @@ def get_tariff_insufficient_balance_keyboard(
             if row and all((button.callback_data or '').startswith('topup_amount|') for button in row)
         ]
         if payment_rows:
-            return InlineKeyboardMarkup(inline_keyboard=[*payment_rows, *sbp_rows, [back_button]])
+            return InlineKeyboardMarkup(inline_keyboard=[*sbp_rows, *payment_rows, [back_button]])
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
             *sbp_rows,
+            [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
             [back_button],
         ]
     )
@@ -436,6 +437,42 @@ def _sbp_purchase_rows(tariff_id: int, texts) -> list[list[InlineKeyboardButton]
             ]
         )
     return rows
+
+
+async def _append_sbp_recurring_offer(db, subscription, tariff, texts, rows: list) -> list:
+    """Ряд «⚡ Включить автопродление (СБП)» для success-экранов покупки.
+
+    Показываем только когда это уместно: фича включена, у подписки есть
+    несуточный тариф, подписка не триальная и живой привязки Platega ещё нет.
+    Любая ошибка -> экран успеха рендерится как раньше: оффер не должен
+    ломать основной флоу.
+    """
+    try:
+        if not settings.is_platega_recurrent_enabled():
+            return rows
+        if not subscription:
+            return rows
+        if getattr(subscription, 'is_trial', None) is not False:
+            return rows
+        if not getattr(subscription, 'tariff_id', None):
+            return rows
+        if tariff is None or getattr(tariff, 'is_daily', False):
+            return rows
+        from app.database.crud.platega_subscription import get_active_platega_subscription_by_subscription
+
+        if await get_active_platega_subscription_by_subscription(db, subscription.id):
+            return rows
+    except Exception:
+        return rows
+    offer_row = [
+        InlineKeyboardButton(
+            text=texts.t('SBP_RECURRING_OFFER_BUTTON', '⚡ Включить автопродление (СБП)'),
+            callback_data=f'sbp_recurring_enable_for:{subscription.id}',
+        )
+    ]
+    if not rows:
+        return [offer_row]
+    return [*rows[:-1], offer_row, rows[-1]]
 
 
 def format_tariff_info_for_user(
@@ -475,14 +512,8 @@ def get_daily_tariff_confirm_keyboard(
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру подтверждения покупки суточного тарифа."""
     texts = get_texts(language)
-    buttons = [
-        [
-            InlineKeyboardButton(
-                text=texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку'),
-                callback_data=f'daily_tariff_confirm:{tariff_id}',
-            )
-        ],
-    ]
+    # Автооплата первой — см. get_tariff_confirm_keyboard.
+    buttons = []
     if settings.is_platega_recurrent_enabled():
         buttons.append(
             [
@@ -501,6 +532,14 @@ def get_daily_tariff_confirm_keyboard(
                 )
             ]
         )
+    buttons.append(
+        [
+            InlineKeyboardButton(
+                text=texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку'),
+                callback_data=f'daily_tariff_confirm:{tariff_id}',
+            )
+        ],
+    )
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -513,8 +552,8 @@ def get_daily_tariff_insufficient_balance_keyboard(
     texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
             *_sbp_purchase_rows(tariff_id, texts),
+            [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
             [InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')],
         ]
     )
@@ -1401,17 +1440,23 @@ async def handle_custom_confirm(
                 price=format_price_kopeks(total_price),
             ),
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
+                inline_keyboard=await _append_sbp_recurring_offer(
+                    db,
+                    subscription,
+                    tariff,
+                    texts,
                     [
-                        InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
-                            callback_data=f'sm:{subscription.id}'
-                            if settings.is_multi_tariff_enabled() and subscription
-                            else 'menu_subscription',
-                        )
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                                callback_data=f'sm:{subscription.id}'
+                                if settings.is_multi_tariff_enabled() and subscription
+                                else 'menu_subscription',
+                            )
+                        ],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
                     ],
-                    [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
-                ]
+                ),
             ),
             parse_mode='HTML',
         )
@@ -2084,17 +2129,23 @@ async def confirm_tariff_purchase(
             price=format_price_kopeks(final_price),
         ),
         reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
+            inline_keyboard=await _append_sbp_recurring_offer(
+                db,
+                subscription,
+                tariff,
+                texts,
                 [
-                    InlineKeyboardButton(
-                        text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
-                        callback_data=f'sm:{subscription.id}'
-                        if settings.is_multi_tariff_enabled() and subscription
-                        else 'menu_subscription',
-                    )
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            callback_data=f'sm:{subscription.id}'
+                            if settings.is_multi_tariff_enabled() and subscription
+                            else 'menu_subscription',
+                        )
+                    ],
+                    [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
                 ],
-                [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
-            ]
+            ),
         ),
         parse_mode='HTML',
     )
@@ -2388,17 +2439,23 @@ async def confirm_daily_tariff_purchase(
             price=format_price_kopeks(final_daily_price),
         ),
         reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
+            inline_keyboard=await _append_sbp_recurring_offer(
+                db,
+                subscription,
+                tariff,
+                texts,
                 [
-                    InlineKeyboardButton(
-                        text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
-                        callback_data=f'sm:{subscription.id}'
-                        if settings.is_multi_tariff_enabled() and subscription
-                        else 'menu_subscription',
-                    )
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                            callback_data=f'sm:{subscription.id}'
+                            if settings.is_multi_tariff_enabled() and subscription
+                            else 'menu_subscription',
+                        )
+                    ],
+                    [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
                 ],
-                [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
-            ]
+            ),
         ),
         parse_mode='HTML',
     )
@@ -3060,17 +3117,23 @@ async def confirm_tariff_extend(
                 price=format_price_kopeks(final_price),
             ),
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
+                inline_keyboard=await _append_sbp_recurring_offer(
+                    db,
+                    subscription,
+                    tariff,
+                    texts,
                     [
-                        InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
-                            callback_data=f'sm:{subscription.id}'
-                            if settings.is_multi_tariff_enabled() and subscription
-                            else 'menu_subscription',
-                        )
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                                callback_data=f'sm:{subscription.id}'
+                                if settings.is_multi_tariff_enabled() and subscription
+                                else 'menu_subscription',
+                            )
+                        ],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
                     ],
-                    [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
-                ]
+                ),
             ),
             parse_mode='HTML',
         )
@@ -3910,17 +3973,23 @@ async def confirm_tariff_switch(
                 time_info=time_info,
             ),
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
+                inline_keyboard=await _append_sbp_recurring_offer(
+                    db,
+                    subscription,
+                    tariff,
+                    texts,
                     [
-                        InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
-                            callback_data=f'sm:{subscription.id}'
-                            if settings.is_multi_tariff_enabled() and subscription
-                            else 'menu_subscription',
-                        )
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                                callback_data=f'sm:{subscription.id}'
+                                if settings.is_multi_tariff_enabled() and subscription
+                                else 'menu_subscription',
+                            )
+                        ],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
                     ],
-                    [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
-                ]
+                ),
             ),
             parse_mode='HTML',
         )
@@ -4194,17 +4263,23 @@ async def confirm_daily_tariff_switch(
                 price=format_price_kopeks(final_daily_price),
             ),
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
+                inline_keyboard=await _append_sbp_recurring_offer(
+                    db,
+                    subscription,
+                    tariff,
+                    texts,
                     [
-                        InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
-                            callback_data=f'sm:{subscription.id}'
-                            if settings.is_multi_tariff_enabled() and subscription
-                            else 'menu_subscription',
-                        )
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                                callback_data=f'sm:{subscription.id}'
+                                if settings.is_multi_tariff_enabled() and subscription
+                                else 'menu_subscription',
+                            )
+                        ],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
                     ],
-                    [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
-                ]
+                ),
             ),
             parse_mode='HTML',
         )

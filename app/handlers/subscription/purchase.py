@@ -122,6 +122,7 @@ from .autopay import (
     handle_autopay_menu,
     handle_sbp_recurring_cancel,
     handle_sbp_recurring_enable,
+    handle_sbp_recurring_enable_for,
     handle_sbp_recurring_menu,
     handle_subscription_cancel,
     handle_subscription_config_back,
@@ -4256,6 +4257,8 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_sbp_recurring_menu, F.data == 'sbp_recurring_menu')
 
     dp.callback_query.register(handle_sbp_recurring_enable, F.data == 'sbp_recurring_enable')
+
+    dp.callback_query.register(handle_sbp_recurring_enable_for, F.data.startswith('sbp_recurring_enable_for:'))
 
     dp.callback_query.register(handle_sbp_recurring_cancel, F.data == 'sbp_recurring_cancel')
 
