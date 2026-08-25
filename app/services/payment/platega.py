@@ -185,12 +185,36 @@ class PlategaPaymentMixin:
             if getattr(subscription, 'autopay_enabled', False):
                 subscription.autopay_enabled = False
                 await db.commit()
-            return {
-                'local_id': existing.id,
-                'platega_subscription_id': existing.platega_subscription_id,
-                'redirect_url': existing.redirect_url,
-                'status': existing.status,
-            }
+            if existing.status == 'PENDING' and not existing.redirect_url:
+                # Запись без ссылки на подтверждение (создана до фикса поля
+                # redirect/url выше, либо Platega не вернула ссылку):
+                # переиспользовать её бессмысленно — пользователь никогда не
+                # попадёт в банк и подписка не привяжется. Отменяем на стороне
+                # Platega best-effort, локально закрываем CANCELLED и
+                # проваливаемся ниже — создаём новую подписку уже со ссылкой.
+                logger.warning(
+                    'Platega-подписка в PENDING без redirect_url — пересоздаю',
+                    local_id=existing.id,
+                    platega_subscription_id=existing.platega_subscription_id,
+                )
+                if existing.platega_subscription_id:
+                    try:
+                        await self.platega_service.cancel_subscription(existing.platega_subscription_id)
+                    except Exception as cancel_error:  # pragma: no cover - best-effort
+                        logger.warning(
+                            'Не удалось отменить бессылочную Platega-подписку — reconciler повторит',
+                            platega_subscription_id=existing.platega_subscription_id,
+                            error=str(cancel_error),
+                        )
+                existing.status = 'CANCELLED'
+                await db.commit()
+            else:
+                return {
+                    'local_id': existing.id,
+                    'platega_subscription_id': existing.platega_subscription_id,
+                    'redirect_url': existing.redirect_url,
+                    'status': existing.status,
+                }
 
         # Взаимоисключение с рекуррентом Lava: оба движка push-модели, и две
         # живые привязки на одной подписке списывали бы дважды за цикл.
@@ -247,7 +271,11 @@ class PlategaPaymentMixin:
         platega_id = (response or {}).get('transactionId')
         if not platega_id:
             raise RuntimeError('Platega не вернула transactionId при создании подписки')
-        redirect_url = (response or {}).get('redirect')
+        # v1 отвечает полем `redirect`, v2 — полем `url` (см. #2934 и
+        # PlategaService.parse_redirect_url). Разовые платежи парсят оба — а
+        # здесь читали только `redirect`, и на v2-мерчанте ссылка терялась:
+        # экран успеха оставался без кнопки подтверждения в банке.
+        redirect_url = PlategaService.parse_redirect_url(response)
 
         try:
             record = await sub_crud.create_platega_subscription(
