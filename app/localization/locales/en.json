@@ -2170,7 +2170,7 @@
   "SBP_RECURRING_NOTIFY_ACTIVATED": "✅ Auto-renewal via SBP activated.{next_charge}",
   "SBP_PURCHASE_BUTTON": "⚡ Pay with auto-renewal (SBP)",
   "SBP_PURCHASE_PENDING_NOTE": "ℹ️ The subscription activates after confirmation and the first charge.",
-  "LAVA_PURCHASE_BUTTON": "⚡ Subscribe with Lava auto-renewal",
+  "LAVA_PURCHASE_BUTTON": "💳 Card auto-renewal (Lava)",
   "LAVA_PURCHASE_PENDING_NOTE": "ℹ️ The subscription activates once the first invoice is paid.",
   "LAVA_RECURRING_ENABLE_ERROR": "❌ Could not enable Lava auto-renewal. Please try again later.",
   "LAVA_RECURRING_ENABLE_SUCCESS": "⚡ <b>Lava auto-renewal</b>\n\nPay the first invoice using the button below.\nAuto-renewal becomes active after payment.",
@@ -2186,5 +2186,7 @@
   "SBP_RECURRING_CANCEL_CONFIRM_TEXT": "❓ <b>Cancel SBP auto-renewal?</b>\n\nThe subscription stays active until the end of the paid period, but charges stop — you will need to renew manually.",
   "SBP_RECURRING_MENU_UNAVAILABLE": "⚠️ SBP auto-renewal is not available for your plan.",
   "TARIFF_SWITCH_RECURRING_NOTE": "\n\n⚠️ Auto-renewal for the old plan was cancelled — set it up again with the button below.",
-  "TRIAL_GO_PAID_BUTTON": "⭐️ Switch to a paid plan"
+  "TRIAL_GO_PAID_BUTTON": "⭐️ Switch to a paid plan",
+  "SBP_PURCHASE_BUTTON_PRICED": "⚡ Pay {price} — then every {period}",
+  "TARIFF_PURCHASE_ONE_TIME_BUTTON": "💳 One-time — this period only"
 }

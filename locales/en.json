@@ -2011,5 +2011,7 @@
   "SBP_RECURRING_CANCEL_CONFIRM_TEXT": "❓ <b>Cancel SBP auto-renewal?</b>\n\nThe subscription stays active until the end of the paid period, but charges stop — you will need to renew manually.",
   "SBP_RECURRING_MENU_UNAVAILABLE": "⚠️ SBP auto-renewal is not available for your plan.",
   "TARIFF_SWITCH_RECURRING_NOTE": "\n\n⚠️ Auto-renewal for the old plan was cancelled — set it up again with the button below.",
-  "TRIAL_GO_PAID_BUTTON": "⭐️ Switch to a paid plan"
+  "TRIAL_GO_PAID_BUTTON": "⭐️ Switch to a paid plan",
+  "SBP_PURCHASE_BUTTON_PRICED": "⚡ Pay {price} — then every {period}",
+  "TARIFF_PURCHASE_ONE_TIME_BUTTON": "💳 One-time — this period only"
 }
