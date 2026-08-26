@@ -2194,5 +2194,7 @@
   "RECURRENT_ENGINE_SWITCH_WARNING": "⚠️ 您已开启自动续订：{engines}。开启新方式时旧的将被停用——不会重复扣费。",
   "SBP_RECURRING_PENDING_REMINDER": "⏳ <b>请完成自动续订设置</b>\n\n您已开始设置 SBP 自动续订，但尚未在银行应用中确认。\n\n💰 每 {days} 天扣款 {amount}——确认后立即首次扣款。\n⚠️ 链接有时间限制。",
   "SBP_RECURRING_PENDING_EXPIRED": "⌛ <b>自动续订设置已取消</b>\n\nSBP 绑定未及时确认。\n如需开启自动续订，请重新开始：「我的订阅」→「自动支付」。",
-  "SBP_RECURRING_PREBILL": "🔔 <b>即将自动扣款（SBP）</b>\n\n{date} 将扣除 <b>{amount}</b> 用于订阅自动续订{tariff_line}。\n\n可在「我的订阅」→「自动支付」中取消。"
+  "SBP_RECURRING_PREBILL": "🔔 <b>即将自动扣款（SBP）</b>\n\n{date} 将扣除 <b>{amount}</b> 用于订阅自动续订{tariff_line}。\n\n可在「我的订阅」→「自动支付」中取消。",
+  "MENU_LEGAL": "📄 规则与文件",
+  "MENU_LEGAL_HEADER": "📄 <b>规则与文件</b>"
 }

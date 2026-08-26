@@ -2195,5 +2195,7 @@
   "RECURRENT_ENGINE_SWITCH_WARNING": "⚠️ Auto-renewal is already on: {engines}. It will be disabled when you enable the new one — no double charges.",
   "SBP_RECURRING_PENDING_REMINDER": "⏳ <b>Finish setting up auto-renewal</b>\n\nYou started enabling SBP auto-renewal but did not confirm it in your banking app.\n\n💰 {amount} every {days} days — the first charge happens right after confirmation.\n⚠️ The link is valid for a limited time.",
   "SBP_RECURRING_PENDING_EXPIRED": "⌛ <b>Auto-renewal setup was cancelled</b>\n\nThe SBP binding was not confirmed in time.\nTo enable auto-renewal, start again: \"My subscription\" → \"Auto-payment\".",
-  "SBP_RECURRING_PREBILL": "🔔 <b>Upcoming SBP auto-charge</b>\n\nOn {date}, <b>{amount}</b> will be charged for your subscription auto-renewal{tariff_line}.\n\nYou can cancel it in \"My subscription\" → \"Auto-payment\"."
+  "SBP_RECURRING_PREBILL": "🔔 <b>Upcoming SBP auto-charge</b>\n\nOn {date}, <b>{amount}</b> will be charged for your subscription auto-renewal{tariff_line}.\n\nYou can cancel it in \"My subscription\" → \"Auto-payment\".",
+  "MENU_LEGAL": "📄 Rules & documents",
+  "MENU_LEGAL_HEADER": "📄 <b>Rules & documents</b>"
 }
