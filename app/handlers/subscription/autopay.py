@@ -446,15 +446,33 @@ async def handle_sbp_recurring_menu(
             text=texts.t('SBP_RECURRING_CANCEL_BUTTON', '❌ Отменить автооплату'),
             callback_data='sbp_recurring_cancel',
         )
+        action_rows = [[action_button]]
+        # Брошенная привязка (PENDING): возвращаем ссылку на банковскую
+        # форму — завершить привязку можно той же ссылкой (enable
+        # идемпотентен, redirect_url хранится в записи). Без этой кнопки
+        # юзер, потерявший сообщение со ссылкой, попадал в тупик с одной
+        # «Отменить».
+        _pending_url = getattr(record, 'redirect_url', None)
+        if record.status == 'PENDING' and _pending_url:
+            action_rows.insert(
+                0,
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('SBP_RECURRING_CONFIRM_BANK_BUTTON', '🏦 Подтвердить в банке'),
+                        url=_pending_url,
+                    )
+                ],
+            )
     else:
         action_button = types.InlineKeyboardButton(
             text=texts.t('SBP_RECURRING_ENABLE_BUTTON', '✅ Подключить'),
             callback_data='sbp_recurring_enable',
         )
+        action_rows = [[action_button]]
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [action_button],
+            *action_rows,
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_autopay')],
         ]
     )

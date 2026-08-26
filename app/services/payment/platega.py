@@ -707,8 +707,10 @@ class PlategaPaymentMixin:
 
         if status == pr.SUB_FAILED:
             # Повторная доставка того же FAILED (ретрай коллбека) не должна
-            # слать второе одинаковое «списание не удалось».
-            already_failed = record.status == 'FAILED'
+            # слать второе одинаковое «списание не удалось». PAST_DUE считаем
+            # уже оповещённым: CHARGE_FAILED выше уже поставил PAST_DUE и
+            # отправил «failed» — парный SUB_FAILED не должен слать дубль.
+            already_failed = record.status in ('FAILED', 'PAST_DUE')
             record.status = 'FAILED'
             await db.commit()
             if not already_failed:
@@ -765,16 +767,64 @@ class PlategaPaymentMixin:
                 return
 
             texts = get_texts(user.language)
+
+            amount_text = f'{(record.amount_kopeks or 0) // 100} ₽'
+            next_charge_text = ''
+            if record.next_charge_at:
+                next_charge_text = record.next_charge_at.strftime('%d.%m.%Y')
+            end_clause = ''
+            try:
+                _subscription = await db.get(Subscription, record.subscription_id)
+                _end_date = getattr(_subscription, 'end_date', None) if _subscription else None
+                if _end_date:
+                    _end_str = _end_date.strftime('%d.%m.%Y')
+                    end_clause = f' Подписка активна до {_end_str}.'
+            except Exception:
+                end_clause = ''
+
+            next_charge_clause = ''
+            if next_charge_text:
+                next_charge_clause = f' Следующее списание — {next_charge_text}.'
+
             messages = {
-                'confirmed': texts.t('SBP_RECURRING_NOTIFY_CONFIRMED', '✅ Подписка продлена автосписанием через СБП.'),
-                'failed': texts.t('SBP_RECURRING_NOTIFY_FAILED', '⚠️ Не удалось списать оплату по СБП-автопродлению.'),
-                'past_due': texts.t('SBP_RECURRING_NOTIFY_PAST_DUE', '⚠️ СБП-автопродление просрочено.'),
-                'cancelled': texts.t('SBP_RECURRING_NOTIFY_CANCELLED', 'ℹ️ СБП-автопродление отменено.'),
-                'activated': texts.t('SBP_RECURRING_NOTIFY_ACTIVATED', '✅ СБП-автопродление активировано.'),
+                'confirmed': texts.t(
+                    'SBP_RECURRING_NOTIFY_CONFIRMED',
+                    '✅ Списано {amount} — подписка продлена автоматически.{next_charge}',
+                ).format(amount=amount_text, next_charge=next_charge_clause),
+                'failed': texts.t(
+                    'SBP_RECURRING_NOTIFY_FAILED',
+                    '⚠️ Не удалось списать {amount} за автопродление.\n\nПополните карту, привязанную к СБП, — банк повторит списание автоматически, ничего нажимать не нужно.{end_clause}',
+                ).format(amount=amount_text, end_clause=end_clause),
+                'past_due': texts.t(
+                    'SBP_RECURRING_NOTIFY_PAST_DUE',
+                    '⚠️ Автопродление: оплата всё ещё не проходит. Проверьте баланс привязанной карты — как только списание пройдёт, подписка продлится сама.{end_clause}',
+                ).format(end_clause=end_clause),
+                'cancelled': texts.t(
+                    'SBP_RECURRING_NOTIFY_CANCELLED',
+                    'ℹ️ Автопродление через СБП отменено.{end_clause}\n\nПередумали? Вернуть автопродление можно в один тап по кнопке ниже.',
+                ).format(end_clause=end_clause),
+                'activated': texts.t(
+                    'SBP_RECURRING_NOTIFY_ACTIVATED',
+                    '✅ Автопродление через СБП активировано.{next_charge}',
+                ).format(next_charge=next_charge_clause),
             }
             text = messages.get(kind)
             if text:
-                await bot.send_message(chat_id=user.telegram_id, text=text)
+                from aiogram import types as aiogram_types
+
+                reply_markup = None
+                if kind in ('failed', 'past_due', 'cancelled'):
+                    reply_markup = aiogram_types.InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [
+                                aiogram_types.InlineKeyboardButton(
+                                    text=texts.t('SBP_RECURRING_NOTIFY_MENU_BUTTON', '⚡ Автопродление (СБП)'),
+                                    callback_data='sbp_recurring_menu',
+                                )
+                            ]
+                        ]
+                    )
+                await bot.send_message(chat_id=user.telegram_id, text=text, reply_markup=reply_markup)
         except Exception as error:  # pragma: no cover - best-effort notify
             logger.warning('Не удалось отправить уведомление о СБП-автопродлении', error=str(error), kind=kind)
 
