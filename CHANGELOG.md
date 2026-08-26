@@ -1,5 +1,45 @@
 # Changelog
 
+## [4.1.0](https://github.com/SpofyJet/spofy-bedolaga-bot/compare/v4.0.0...v4.1.0) (2026-08-26)
+
+
+### New Features
+
+* **platega:** дожим PENDING-привязок + содержательные уведомления СБП ([3e52b7f](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/3e52b7f0f8a3faa9040fed4bcfa5b5c61ac6331a))
+* **platega:** рекуррент СБП по умолчанию — первая кнопка на confirm-экранах, оффер на success-экранах ([2f2b4c7](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/2f2b4c7e1a6357538cf8608ce19a056e8ca5ba2c))
+* **platega:** СБП-оформление для триала — конверсия в платную первым списанием ([d9c0e63](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/d9c0e631f9b9ab94402b80046d0a70b7fb97455a))
+* **platega:** СБП-рекуррент при подписке другого тарифа — переключение на первом списании ([cf208a4](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/cf208a40d1fcc9a01c9820fa423d8c3fa9a8b9bc))
+* **trial:** improve trial activation funnel without discounts ([fd5e1df](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/fd5e1df8f00da4c4d93e9e47013690f5022e9162))
+* **trial:** smart trial button gating, honest active-trial nudge, locale fixes ([260e4e9](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/260e4e9fbbc11c8fb41dff2a9c8ee9cc0f53b153))
+* **trial:** smart trial button gating, honest active-trial nudge, locale fixes ([19777d0](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/19777d016a69f78e523196778007b51443c88c3f))
+
+
+### Bug Fixes
+
+* **channel:** не слать админам traceback на заблокировавших бота ([5841f95](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/5841f95bfbba8c2f85f26a068b9ee6947b9261a2))
+* **devices:** триалу снова разрешено управление устройствами (restore b565a68a) ([c7f27dc](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/c7f27dc9726edb946a1077c8be2c61dfc52377db))
+* **migrations:** renumber remnawave_numeric_id 0104-&gt;0106 (fork chain), keep 0033-0035 in main chain ([77ec26c](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/77ec26c83dda49224116b477c84e013887f576b4))
+* **notifications:** не отправлять отключённые уведомления пользователям ([cf10d70](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/cf10d70475f1307c03bcfd146ce51023059b9d78))
+* **payments:** дренаж фоновой обработки вебхуков при остановке ([a401faf](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/a401fafb6856cefd13e66f5fbbc4ddd9f9680b9c))
+* **payments:** не терять вебхуки платёжек, выключенных на момент старта ([ff2ce4d](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/ff2ce4dee0eeeda6bc8726da8fb148ee3f3bce9b))
+* **platega:** распознавать camelCase-коллбеки рекуррентной СБП-подписки ([e7c59af](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/e7c59af90c7bdd5379a56476e87e19044d8b5523))
+* **platega:** СБП-подписки — v1-эндпоинт, выбранные период и тариф ([319a749](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/319a749df53f599f1b2ab9112696d2740ffd39fd))
+* **platega:** скрываем СБП-автооплату при активной скидке + цена в сообщении привязки ([1424dfc](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/1424dfc92559d4687fc835ac55d02f05bf168a58))
+* **platega:** ссылка подтверждения СБП-подписки терялась на API v2 ([52d8350](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/52d83501a788f94e2ec62c8ab12be489fd7e515c))
+* **platega:** фантомное «отменено», гард меню, подтверждение отмены, снятие привязок при смене тарифа ([ece2a52](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/ece2a5276deb49bcb7aa4374e46fe2b71c1712c7))
+* **trial:** remove duplicated TRIAL_WELCOME_TIP block, unify connect prompt text ([10b0e6e](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/10b0e6e8602990a9c26512335575187f7ea1c7c8))
+* **trial:** settings gate restored, context-aware back from devices page ([010235b](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/010235b45d708fc9e308a0a9582574a45509219f))
+
+
+### Performance
+
+* **etoplatezhi:** ack webhook instantly, process callback in background ([4cb0a88](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/4cb0a883b44f96dafe3dbab52e034826e3f73221))
+
+
+### Refactoring
+
+* **trial:** simplify nudge texts and handle zero traffic coefficient ([dda164a](https://github.com/SpofyJet/spofy-bedolaga-bot/commit/dda164a10f1fa3e580aff77e9470e9b3c886bf97))
+
 ## [4.0.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.67.0...v4.0.0) (2026-08-03)
 
 
