@@ -1412,8 +1412,8 @@
   "SUBSCRIPTION_NOT_FOUND": "❌ Підписку не знайдено",
   "SUBSCRIPTION_NO_ACTIVE_LINK": "⚠ У вас немає активної підписки або посилання ще генерується",
   "SUBSCRIPTION_NO_SERVERS": "Немає серверів",
-  "SUBSCRIPTION_OVERVIEW_TEMPLATE": "👤 {full_name}\n💰 Баланс: {balance}\n📱 Підписка: {status_emoji} {status_display}{warning}{tariff_info_block}\n\n📱 Інформація про підписку\n🎭 Тип: {subscription_type}\n📅 Діє до: {end_date}\n⏰ Залишилося: {time_left}\n📈 Трафік: {traffic}\n🌍 Сервери: {servers}\n📱 Пристрої: {devices_used} / {device_limit}",
-  "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "👤 {full_name}\n💰 Баланс: {balance}\n📱 Підписка: {status_emoji} {status_display}{warning}{tariff_info_block}\n\n📱 Інформація про підписку\n🎭 Тип: {subscription_type}\n📈 Трафік: {traffic}\n🌍 Сервери: {servers}\n📱 Пристрої: {devices_used} / {device_limit}",
+  "SUBSCRIPTION_OVERVIEW_TEMPLATE": "👤 <b>{full_name}</b>\n💰 Баланс: <b>{balance}</b>\n\n{status_emoji} <b>Підписка:</b> {status_display}{warning}{tariff_info_block}{autopay_line}\n\n<blockquote>📅 Діє до: {end_date}\n⏳ Залишилося: {time_left}\n📈 Трафік: {traffic}\n📱 Пристрої: {devices_used} / {device_limit}</blockquote>",
+  "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "👤 <b>{full_name}</b>\n💰 Баланс: <b>{balance}</b>\n\n{status_emoji} <b>Підписка:</b> {status_display}{warning}{tariff_info_block}{autopay_line}\n\n<blockquote>📈 Трафік: {traffic}\n📱 Пристрої: {devices_used} / {device_limit}</blockquote>",
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE": "🚫 Вашу підписку призупинено, оскільки ви відписались від обов'язкового каналу.\n\nПідпишіться на всі канали для відновлення доступу до VPN.",
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE_MULTI": "🚫 Ваші підписки призупинено, оскільки ви відписались від обов'язкового каналу.\n\nПідпишіться на всі канали для відновлення доступу до VPN.",
   "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "⚡ Активовано дод. знижку {percent}%. \n\nСумується з іншими знижками!",
@@ -1966,5 +1966,7 @@
   "PERIOD": "Період",
   "ADMIN_CONTESTS_LIST": "📋 Поточні конкурси",
   "MENU_LEGAL": "📄 Правила та документи",
-  "MENU_LEGAL_HEADER": "📄 <b>Правила та документи</b>"
+  "MENU_LEGAL_HEADER": "📄 <b>Правила та документи</b>",
+  "SUBSCRIPTION_AUTOPAY_ON": "💳 Автопродовження: увімкнено ({engine})",
+  "SUBSCRIPTION_AUTOPAY_OFF": "💳 Автопродовження: вимкнено"
 }

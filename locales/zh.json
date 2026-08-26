@@ -1408,8 +1408,8 @@
   "SUBSCRIPTION_NOT_FOUND": "❌未找到订阅",
   "SUBSCRIPTION_NO_ACTIVE_LINK": "⚠您没有活跃的订阅或链接仍在生成中",
   "SUBSCRIPTION_NO_SERVERS": "没有服务器",
-  "SUBSCRIPTION_OVERVIEW_TEMPLATE": "👤{full_name}\n💰余额：{balance}\n📱订阅：{status_emoji}{status_display}{warning}{tariff_info_block}\n\n📱订阅信息\n🎭类型：{subscription_type}\n📅有效期至：{end_date}\n⏰剩余时间：{time_left}\n📈流量：{traffic}\n🌍服务器：{servers}\n📱设备：{devices_used}/{device_limit}",
-  "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "👤{full_name}\n💰余额：{balance}\n📱订阅：{status_emoji}{status_display}{warning}{tariff_info_block}\n\n📱订阅信息\n🎭类型：{subscription_type}\n📈流量：{traffic}\n🌍服务器：{servers}\n📱设备：{devices_used}/{device_limit}",
+  "SUBSCRIPTION_OVERVIEW_TEMPLATE": "👤 <b>{full_name}</b>\n💰 余额：<b>{balance}</b>\n\n{status_emoji} <b>订阅：</b>{status_display}{warning}{tariff_info_block}{autopay_line}\n\n<blockquote>📅 有效期至：{end_date}\n⏳ 剩余时间：{time_left}\n📈 流量：{traffic}\n📱 设备：{devices_used} / {device_limit}</blockquote>",
+  "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "👤 <b>{full_name}</b>\n💰 余额：<b>{balance}</b>\n\n{status_emoji} <b>订阅：</b>{status_display}{warning}{tariff_info_block}{autopay_line}\n\n<blockquote>📈 流量：{traffic}\n📱 设备：{devices_used} / {device_limit}</blockquote>",
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE": "🚫 由于您退出了必需频道，您的订阅已暂停。\n\n请订阅所有频道以恢复VPN访问。",
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE_MULTI": "🚫 由于您退出了必需频道，您的所有订阅已暂停。\n\n请订阅所有频道以恢复VPN访问。",
   "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "⚡已激活额外{percent}%折扣。\n\n可与其他折扣叠加！",
@@ -1966,5 +1966,7 @@
   "PERIOD": "周期",
   "ADMIN_CONTESTS_LIST": "📋 当前竞赛",
   "MENU_LEGAL": "📄 规则与文件",
-  "MENU_LEGAL_HEADER": "📄 <b>规则与文件</b>"
+  "MENU_LEGAL_HEADER": "📄 <b>规则与文件</b>",
+  "SUBSCRIPTION_AUTOPAY_ON": "💳 自动续订：已开启（{engine}）",
+  "SUBSCRIPTION_AUTOPAY_OFF": "💳 自动续订：已关闭"
 }

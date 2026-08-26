@@ -1517,8 +1517,8 @@
   "SUBSCRIPTION_NOT_FOUND": "❌ Подписка не найдена",
   "SUBSCRIPTION_NO_ACTIVE_LINK": "⏳ Ссылка ещё готовится — загляните сюда через пару секунд.",
   "SUBSCRIPTION_NO_SERVERS": "Нет серверов",
-  "SUBSCRIPTION_OVERVIEW_TEMPLATE": "👤 <b>{full_name}</b>\n💰 Баланс: <b>{balance}</b>\n\n{status_emoji} <b>Подписка:</b> {status_display}{warning}{tariff_info_block}\n\n<blockquote>📅 Действует до: {end_date}\n⏳ Осталось: {time_left}\n📈 Трафик: {traffic}\n📱 Устройства: {devices_used} / {device_limit}</blockquote>",
-  "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "👤 <b>{full_name}</b>\n💰 Баланс: <b>{balance}</b>\n\n{status_emoji} <b>Подписка:</b> {status_display}{warning}{tariff_info_block}\n\n<blockquote>📈 Трафик: {traffic}\n📱 Устройства: {devices_used} / {device_limit}</blockquote>",
+  "SUBSCRIPTION_OVERVIEW_TEMPLATE": "👤 <b>{full_name}</b>\n💰 Баланс: <b>{balance}</b>\n\n{status_emoji} <b>Подписка:</b> {status_display}{warning}{tariff_info_block}{autopay_line}\n\n<blockquote>📅 Действует до: {end_date}\n⏳ Осталось: {time_left}\n📈 Трафик: {traffic}\n📱 Устройства: {devices_used} / {device_limit}</blockquote>",
+  "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "👤 <b>{full_name}</b>\n💰 Баланс: <b>{balance}</b>\n\n{status_emoji} <b>Подписка:</b> {status_display}{warning}{tariff_info_block}{autopay_line}\n\n<blockquote>📈 Трафик: {traffic}\n📱 Устройства: {devices_used} / {device_limit}</blockquote>",
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE": "Ваша подписка приостановлена, так как вы отписались от обязательного канала.\n\nПодпишитесь на все каналы для восстановления доступа к VPN.",
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE_MULTI": "🚫 Ваши подписки приостановлены, так как вы отписались от обязательного канала.\n\nПодпишитесь на все каналы для восстановления доступа к VPN.",
   "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "⚡ Активирована доп. скидка {percent}%. \n\nСуммируется с другими скидками!",
@@ -2196,5 +2196,7 @@
   "SBP_RECURRING_PENDING_EXPIRED": "⌛ <b>Подключение автопродления отменено</b>\n\nПривязка СБП не была подтверждена вовремя.\nЧтобы включить автопродление, начните заново: «Моя подписка» → «Автоплатёж».",
   "SBP_RECURRING_PREBILL": "🔔 <b>Скоро автосписание по СБП</b>\n\n{date} будет списано <b>{amount}</b> за автопродление подписки{tariff_line}.\n\nОтменить можно: «Моя подписка» → «Автоплатёж».",
   "MENU_LEGAL": "📄 Правила и документы",
-  "MENU_LEGAL_HEADER": "📄 <b>Правила и документы</b>"
+  "MENU_LEGAL_HEADER": "📄 <b>Правила и документы</b>",
+  "SUBSCRIPTION_AUTOPAY_ON": "💳 Автопродление: включено ({engine})",
+  "SUBSCRIPTION_AUTOPAY_OFF": "💳 Автопродление: выключено"
 }

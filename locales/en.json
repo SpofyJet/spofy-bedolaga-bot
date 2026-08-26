@@ -1473,8 +1473,8 @@
   "SUBSCRIPTION_NOT_FOUND": "❌ Subscription not found",
   "SUBSCRIPTION_NO_ACTIVE_LINK": "⏳ Your link is still being prepared — check back in a few seconds.",
   "SUBSCRIPTION_NO_SERVERS": "No servers",
-  "SUBSCRIPTION_OVERVIEW_TEMPLATE": "👤 <b>{full_name}</b>\n💰 Balance: <b>{balance}</b>\n\n{status_emoji} <b>Subscription:</b> {status_display}{warning}{tariff_info_block}\n\n<blockquote>📅 Valid until: {end_date}\n⏳ Time left: {time_left}\n📈 Traffic: {traffic}\n📱 Devices: {devices_used} / {device_limit}</blockquote>",
-  "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "👤 <b>{full_name}</b>\n💰 Balance: <b>{balance}</b>\n\n{status_emoji} <b>Subscription:</b> {status_display}{warning}{tariff_info_block}\n\n<blockquote>📈 Traffic: {traffic}\n📱 Devices: {devices_used} / {device_limit}</blockquote>",
+  "SUBSCRIPTION_OVERVIEW_TEMPLATE": "👤 <b>{full_name}</b>\n💰 Balance: <b>{balance}</b>\n\n{status_emoji} <b>Subscription:</b> {status_display}{warning}{tariff_info_block}{autopay_line}\n\n<blockquote>📅 Valid until: {end_date}\n⏳ Time left: {time_left}\n📈 Traffic: {traffic}\n📱 Devices: {devices_used} / {device_limit}</blockquote>",
+  "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE": "👤 <b>{full_name}</b>\n💰 Balance: <b>{balance}</b>\n\n{status_emoji} <b>Subscription:</b> {status_display}{warning}{tariff_info_block}{autopay_line}\n\n<blockquote>📈 Traffic: {traffic}\n📱 Devices: {devices_used} / {device_limit}</blockquote>",
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE": "Your subscription has been paused because you left a required channel.\n\nSubscribe to all channels to restore VPN access.",
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE_MULTI": "🚫 Your subscriptions have been paused because you left a required channel.\n\nSubscribe to all channels to restore VPN access.",
   "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "⚡ Extra {percent}% discount is active and will apply automatically. It stacks with other discounts.",
@@ -2022,5 +2022,7 @@
   "SBP_RECURRING_PENDING_EXPIRED": "⌛ <b>Auto-renewal setup was cancelled</b>\n\nThe SBP binding was not confirmed in time.\nTo enable auto-renewal, start again: \"My subscription\" → \"Auto-payment\".",
   "SBP_RECURRING_PREBILL": "🔔 <b>Upcoming SBP auto-charge</b>\n\nOn {date}, <b>{amount}</b> will be charged for your subscription auto-renewal{tariff_line}.\n\nYou can cancel it in \"My subscription\" → \"Auto-payment\".",
   "MENU_LEGAL": "📄 Rules & documents",
-  "MENU_LEGAL_HEADER": "📄 <b>Rules & documents</b>"
+  "MENU_LEGAL_HEADER": "📄 <b>Rules & documents</b>",
+  "SUBSCRIPTION_AUTOPAY_ON": "💳 Auto-renewal: on ({engine})",
+  "SUBSCRIPTION_AUTOPAY_OFF": "💳 Auto-renewal: off"
 }
