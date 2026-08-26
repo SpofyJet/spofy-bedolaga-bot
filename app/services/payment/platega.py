@@ -299,6 +299,10 @@ class PlategaPaymentMixin:
             interval=interval,
             interval_count=interval_count,
             description=getattr(tariff, 'name', None) or 'Подписка',
+            # n5: корреляционный токен (эхо в коллбеках) + возврат из банка
+            payload=f'platega-sub:{user_id}:{subscription.id}:{uuid.uuid4().hex[:8]}',
+            return_url=settings.get_platega_return_url(),
+            failed_url=settings.get_platega_failed_url(),
         )
 
         platega_id = (response or {}).get('transactionId')
@@ -480,11 +484,35 @@ class PlategaPaymentMixin:
         platega_id = fields.subscription_id
         charge_id = fields.charge_id
 
-        if not platega_id:
+        found = None
+        if platega_id:
+            found = await sub_crud.get_platega_subscription_by_platega_id(db, platega_id)
+
+        if not found:
+            # n5: запасной канал корреляции — payload-токен
+            # platega-sub:{user_id}:{subscription_id}:{rand}, который Platega
+            # эхом возвращает в коллбеке (как у разовых платежей). Выручает,
+            # когда SubscriptionId отсутствует или битый. Lookup по
+            # subscription_id с любым статусом: CANCELLED-записи тоже нужны
+            # (was_cancelled-ветка ниже — чардж по локально отменённой записи
+            # продлевает честно, не воскрешая её).
+            hint = pr.parse_subscription_payload_token(pr.read_callback_payload(payload))
+            if hint is not None:
+                candidate = await sub_crud.get_latest_platega_subscription_by_subscription(db, hint[1])
+                if candidate:
+                    found = candidate
+                    platega_id = platega_id or candidate.platega_subscription_id
+                    logger.info(
+                        'Platega subscription callback: запись найдена по payload-токену',
+                        platega_subscription_id=platega_id,
+                        subscription_id=hint[1],
+                        status=status,
+                    )
+
+        if not platega_id and not found:
             logger.warning('Platega subscription callback без SubscriptionId', status=status)
             return
 
-        found = await sub_crud.get_platega_subscription_by_platega_id(db, platega_id)
         if not found:
             logger.warning(
                 'Platega subscription callback: подписка не найдена',

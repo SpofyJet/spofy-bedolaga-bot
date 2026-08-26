@@ -117,6 +117,10 @@ class PlategaService:
         interval: int,
         description: str | None = None,
         interval_count: int | None = None,
+        # n5: payload/returnUrl для подписок
+        payload: str | None = None,
+        return_url: str | None = None,
+        failed_url: str | None = None,
     ) -> dict[str, Any] | None:
         body: dict[str, Any] = {
             'paymentMethod': 6,
@@ -133,6 +137,17 @@ class PlategaService:
 
         if description:
             body['description'] = self._sanitize_description(description, self._description_max_length)
+
+        # n5: payload/returnUrl для подписок — тот же эндпоинт и схема полей,
+        # что у разовых платежей (POST /transaction/process). payload эхом
+        # возвращается в коллбеках (запасной канал корреляции), return/failedUrl
+        # ведут пользователя из банковского подтверждения на нашу страницу.
+        if payload:
+            body['payload'] = payload
+        if return_url:
+            body['return'] = return_url
+        if failed_url:
+            body['failedUrl'] = failed_url
 
         # Подписки — ТОЛЬКО v1 POST /transaction/process. v2-эндпоинт из #2934
         # существует ради карточных каскадов РАЗОВЫХ платежей и про метод 6

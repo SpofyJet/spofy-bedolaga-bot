@@ -114,3 +114,19 @@ async def list_recently_cancelled_platega_subscriptions(
         )
     )
     return list(result.scalars().all())
+
+async def get_latest_platega_subscription_by_subscription(
+    db: AsyncSession, subscription_id: int
+) -> PlategaSubscription | None:
+    """Последняя запись привязки по подписке независимо от статуса.
+
+    n5: fallback корреляции коллбека по payload-токену — CANCELLED-записи тоже
+    нужны (was_cancelled-ветка: списание по локально отменённой записи
+    продлевает честно, не воскрешая её).
+    """
+    result = await db.execute(
+        select(PlategaSubscription)
+        .where(PlategaSubscription.subscription_id == subscription_id)
+        .order_by(PlategaSubscription.id.desc())
+    )
+    return result.scalars().first()

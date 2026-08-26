@@ -187,3 +187,24 @@ def read_callback_fields(payload: Mapping[str, Any]) -> CallbackFields:
         charge_id=_text(fields.get('id')),
         next_charge_at=fields.get('nextchargeat'),
     )
+
+def read_callback_payload(payload: Mapping[str, Any]) -> str | None:
+    """Payload-токен из коллбека Platega (регистр ключа не важен). n5."""
+    return _text(_lower_keys(payload).get('payload'))
+
+
+def parse_subscription_payload_token(token: str | None) -> tuple[int, int] | None:
+    """Разбор токена ``platega-sub:{user_id}:{subscription_id}:{rand}``.
+
+    Возвращает ``(user_id, subscription_id)`` либо None для чужих/битых
+    токенов (разовые платежи носят ``platega:{correlation_id}``). n5.
+    """
+    if not token:
+        return None
+    parts = token.split(':')
+    if len(parts) != 4 or parts[0] != 'platega-sub':
+        return None
+    try:
+        return int(parts[1]), int(parts[2])
+    except ValueError:
+        return None

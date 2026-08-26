@@ -2886,6 +2886,62 @@ class MonitoringService:
                         local_id=getattr(record, 'id', None),
                         error=record_error,
                     )
+
+            # n5: свип remote-сирот — подписки, числящиеся у Platega без
+            # локальной записи (remote создалась, локальная вставка упала не
+            # IntegrityError: ссылку юзер не получил, привязка в банке
+            # невозможна, а у провайдера копится мусор). Неподтверждённые
+            # сироты отменяем; АКТИВНУЮ не трогаем — вдруг потеряна локальная
+            # запись, а списания реальные: алерт админам (раз в сутки).
+            try:
+                orphans_cancelled = 0
+                remote_page = await service.list_subscriptions(
+                    date_from=(datetime.now(UTC) - timedelta(days=30)).date().isoformat(),
+                    size=100,
+                )
+                remote_items: list = []
+                if isinstance(remote_page, dict):
+                    for list_key in ('data', 'items', 'subscriptions', 'content'):
+                        if isinstance(remote_page.get(list_key), list):
+                            remote_items = remote_page[list_key]
+                            break
+                elif isinstance(remote_page, list):
+                    remote_items = remote_page
+
+                for item in remote_items:
+                    if not isinstance(item, dict):
+                        continue
+                    remote_id = item.get('id') or item.get('subscriptionId') or item.get('transactionId')
+                    if not remote_id:
+                        continue
+                    remote_id = str(remote_id)
+                    try:
+                        local = await sub_crud.get_platega_subscription_by_platega_id(db, remote_id)
+                        if local:
+                            continue
+                        orphan_status = str(item.get('status') or '').strip().lower()
+                        if orphan_status in ('cancelled', 'canceled', 'failed', 'expired'):
+                            continue
+                        if orphan_status in ('active', 'activated', 'confirmed'):
+                            await self._notify_platega_orphan_active(db, remote_id, orphan_status)
+                            continue
+                        await service.cancel_subscription(remote_id)
+                        orphans_cancelled += 1
+                        logger.warning(
+                            'Platega-подписка-сирота без локальной записи — отменена у провайдера',
+                            platega_subscription_id=remote_id,
+                            remote_status=orphan_status,
+                        )
+                    except Exception as orphan_error:
+                        logger.warning(
+                            'Не удалось обработать Platega-подписку-сироту',
+                            platega_subscription_id=remote_id,
+                            error=orphan_error,
+                        )
+                if orphans_cancelled:
+                    logger.info('Свип Platega-сирот завершён', cancelled=orphans_cancelled)
+            except Exception as sweep_error:
+                logger.warning('Ошибка свипа Platega-сирот', error=sweep_error)
         except Exception as e:
             logger.warning('Ошибка реконсиляции Platega-подписок', error=e)
 
@@ -2982,6 +3038,43 @@ class MonitoringService:
             )
         except Exception as error:
             logger.debug('Не удалось отправить уведомление об отмене СБП-привязки', error=error)
+
+    async def _notify_platega_orphan_active(self, db: AsyncSession, remote_id: str, remote_status: str) -> None:
+        """n5: раз-в-сутки алерт админам об АКТИВНОЙ Platega-подписке-сироте.
+
+        Автоматически не отменяем: раз remote активен, по нему могут идти
+        реальные списания — возможно, потеряна локальная запись (восстановление
+        из бэкапа и т.п.), и автоотмена оборвала бы честное автопродление.
+        Дедуп — SystemSetting 'platega_orphan_alert:{remote_id}' = дата алерта.
+        Ошибки глушатся: алерт не должен ронять цикл реконсиляции.
+        """
+        try:
+            if not settings.is_admin_notifications_enabled():
+                return
+            from app.database.crud.system_setting import get_setting_value, upsert_system_setting
+
+            marker_key = f'platega_orphan_alert:{remote_id}'
+            today = datetime.now(UTC).date().isoformat()
+            if await get_setting_value(db, marker_key) == today:
+                return
+            await upsert_system_setting(db, marker_key, today, description='n5: алерт о Platega-сироте (дата)')
+            await db.commit()
+
+            from app.services.admin_notification_service import AdminNotificationService
+
+            admin_service = AdminNotificationService(self.bot)
+            await admin_service.send_admin_notification(
+                '⚠️ <b>Platega: активная подписка-сирота</b>\n\n'
+                f'ID у провайдера: <code>{remote_id}</code>\n'
+                f'Статус: {remote_status}\n\n'
+                'Локальной записи нет — бот такие списания не обрабатывает, '
+                'но провайдер может продолжать их списывать. Разберитесь '
+                'вручную: отмените в кабинете Platega или восстановите '
+                'локальную запись.'
+            )
+            logger.warning('Отправлен алерт админам об активной Platega-сироте', platega_subscription_id=remote_id)
+        except Exception as error:
+            logger.debug('Не удалось отправить алерт о Platega-сироте', error=error)
 
     async def _notify_platega_upcoming_charges(self, db: AsyncSession) -> None:
         """n2: pre-bill — уведомление за ~24ч до автосписания Platega.
