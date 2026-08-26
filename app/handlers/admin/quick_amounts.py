@@ -64,7 +64,7 @@ def _list_keyboard(configs: list, defaults: dict) -> InlineKeyboardMarkup:
                 )
             ]
         )
-    buttons.append([InlineKeyboardButton(text='◀️ Назад', callback_data='admin_submenu_settings')])
+    buttons.append([InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_submenu_settings')])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 

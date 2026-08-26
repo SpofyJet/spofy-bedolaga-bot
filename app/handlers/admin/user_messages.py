@@ -200,7 +200,7 @@ async def _render_user_messages_list(message: types.Message, db: AsyncSession, l
     if nav_buttons:
         keyboard.append(nav_buttons)
 
-    keyboard.append([InlineKeyboardButton(text='🔙 Назад', callback_data='user_messages_panel')])
+    keyboard.append([InlineKeyboardButton(text='⬅️ Назад', callback_data='user_messages_panel')])
 
     await message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode='HTML')
 
@@ -314,7 +314,7 @@ async def show_messages_stats(callback: types.CallbackQuery, db_user: User, db: 
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
     keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text='🔙 Назад', callback_data='user_messages_panel')]]
+        inline_keyboard=[[InlineKeyboardButton(text='⬅️ Назад', callback_data='user_messages_panel')]]
     )
 
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')

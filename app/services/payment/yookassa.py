@@ -1044,7 +1044,7 @@ class YooKassaPaymentMixin:
                                         ],
                                         [
                                             types.InlineKeyboardButton(
-                                                text='🏠 Главное меню', callback_data='back_to_menu'
+                                                text='🏠 В главное меню', callback_data='back_to_menu'
                                             )
                                         ],
                                     ]

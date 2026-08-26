@@ -20,7 +20,7 @@ def get_updates_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                 text='🔗 Открыть репозиторий', url=f'https://github.com/{version_service.repo}/releases'
             )
         ],
-        [InlineKeyboardButton(text='◀️ Назад', callback_data='admin_panel')],
+        [InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_panel')],
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)

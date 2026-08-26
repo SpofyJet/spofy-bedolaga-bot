@@ -448,7 +448,7 @@ async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bo
                         )
                     ],
                     [types.InlineKeyboardButton(text='💰 Мой баланс', callback_data='menu_balance')],
-                    [types.InlineKeyboardButton(text='🏠 Главное меню', callback_data='back_to_menu')],
+                    [types.InlineKeyboardButton(text='🏠 В главное меню', callback_data='back_to_menu')],
                 ]
             )
 

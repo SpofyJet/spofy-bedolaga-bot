@@ -47,7 +47,7 @@ def _channels_keyboard(channels: list) -> InlineKeyboardMarkup:
             ]
         )
     buttons.append([InlineKeyboardButton(text='➕ Добавить канал', callback_data='reqch:add')])
-    buttons.append([InlineKeyboardButton(text='◀️ Назад', callback_data='admin_submenu_settings')])
+    buttons.append([InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_submenu_settings')])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 

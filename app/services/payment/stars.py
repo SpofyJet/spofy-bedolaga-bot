@@ -486,7 +486,7 @@ class TelegramStarsMixin:
                         ],
                         [
                             types.InlineKeyboardButton(
-                                text='🏠 Главное меню',
+                                text='🏠 В главное меню',
                                 callback_data='back_to_menu',
                             )
                         ],

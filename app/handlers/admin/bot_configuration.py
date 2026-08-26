@@ -510,7 +510,7 @@ def _build_search_results_keyboard(results: list[dict[str, object]]) -> types.In
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='⬅️ В главное меню',
+                text='🏠 В главное меню',
                 callback_data='admin_bot_config',
             )
         ]
@@ -543,7 +543,7 @@ async def start_settings_search(
     await state.update_data(botcfg_origin='bot_config')
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ В главное меню', callback_data='admin_bot_config')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text='🏠 В главное меню', callback_data='admin_bot_config')]]
     )
 
     await callback.message.edit_text(
@@ -593,7 +593,7 @@ async def handle_search_query(
                         callback_data='botcfg_action:search',
                     )
                 ],
-                [types.InlineKeyboardButton(text='🏠 Главное меню', callback_data='admin_bot_config')],
+                [types.InlineKeyboardButton(text='🏠 В главное меню', callback_data='admin_bot_config')],
             ]
         )
         text = (
@@ -734,7 +734,7 @@ async def apply_preset(
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [types.InlineKeyboardButton(text='⬅️ К пресетам', callback_data='botcfg_action:presets')],
-            [types.InlineKeyboardButton(text='🏠 Главное меню', callback_data='admin_bot_config')],
+            [types.InlineKeyboardButton(text='🏠 В главное меню', callback_data='admin_bot_config')],
         ]
     )
 
@@ -891,7 +891,7 @@ async def handle_import_message(
         summary_lines.append('\n'.join(f'• {html.escape(err)}' for err in errors))
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='🏠 Главное меню', callback_data='admin_bot_config')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text='🏠 В главное меню', callback_data='admin_bot_config')]]
     )
 
     await message.answer('\n'.join(summary_lines), parse_mode='HTML', reply_markup=keyboard)
@@ -950,7 +950,7 @@ async def show_help(
     )
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='🏠 Главное меню', callback_data='admin_bot_config')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text='🏠 В главное меню', callback_data='admin_bot_config')]]
     )
 
     await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)

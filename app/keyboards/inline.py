@@ -795,6 +795,15 @@ def get_main_menu_keyboard(
         )
     ])
 
+    # Поддержка — сразу в главном меню (не прячем в «Инфо»)
+    if settings.SUPPORT_MENU_ENABLED:
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.MENU_SUPPORT,
+                callback_data='menu_support',
+            )
+        ])
+
     # Активация (если включена)
     if settings.ACTIVATE_BUTTON_VISIBLE:
         keyboard.append([InlineKeyboardButton(text=settings.ACTIVATE_BUTTON_TEXT, callback_data='activate_button')])
