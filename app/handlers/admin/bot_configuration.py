@@ -1254,13 +1254,13 @@ def _build_settings_keyboard(
         label = texts.t('PAYMENT_CARD_WATA', '💳 Банковская карта (WATA)')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'wata')])
     elif category_key == 'PAL24':
-        label = texts.t('PAYMENT_CARD_PAL24', '💳 Банковская карта (PayPalych)')
+        label = texts.t('PAYMENT_CARD_PAL24', '🏦 СБП (PayPalych)')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'pal24')])
     elif category_key == 'TELEGRAM':
         label = texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'stars')])
     elif category_key == 'CRYPTOBOT':
-        label = texts.t('PAYMENT_CRYPTOBOT', '🪙 Криптовалюта (CryptoBot)')
+        label = texts.t('PAYMENT_CRYPTOBOT', '🦋 Криптовалюта (CryptoBot)')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'cryptobot')])
     elif category_key == 'FREEKASSA':
         label = texts.t('PAYMENT_FREEKASSA', '💳 Freekassa')
@@ -2200,7 +2200,7 @@ async def test_payment_provider(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Открыть счет'),
+                        text=texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars'),
                         url=invoice_link,
                     )
                 ]

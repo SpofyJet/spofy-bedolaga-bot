@@ -745,41 +745,41 @@ def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = Fals
 
     # Добавляем доступные методы оплаты
     if settings.TELEGRAM_STARS_ENABLED:
-        keyboard.append([types.InlineKeyboardButton(text='⭐ Telegram Stars', callback_data='trial_payment_stars')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars'), callback_data='trial_payment_stars')])
 
     if settings.is_yookassa_enabled():
         yookassa_methods = []
         if settings.YOOKASSA_SBP_ENABLED:
             yookassa_methods.append(
-                types.InlineKeyboardButton(text='🏦 YooKassa (СБП)', callback_data='trial_payment_yookassa_sbp')
+                types.InlineKeyboardButton(text=texts.t('PAYMENT_SBP_YOOKASSA', '🏦 Оплатить по СБП (YooKassa)'), callback_data='trial_payment_yookassa_sbp')
             )
         yookassa_methods.append(
-            types.InlineKeyboardButton(text='💳 YooKassa (Карта)', callback_data='trial_payment_yookassa')
+            types.InlineKeyboardButton(text=texts.t('PAYMENT_CARD_YOOKASSA', '💳 Банковская карта (YooKassa)'), callback_data='trial_payment_yookassa')
         )
         if yookassa_methods:
             keyboard.append(yookassa_methods)
 
     if settings.is_cryptobot_enabled():
-        keyboard.append([types.InlineKeyboardButton(text='🪙 CryptoBot', callback_data='trial_payment_cryptobot')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_CRYPTOBOT', '🦋 Криптовалюта (CryptoBot)'), callback_data='trial_payment_cryptobot')])
 
     if settings.is_heleket_enabled():
-        keyboard.append([types.InlineKeyboardButton(text='🪙 Heleket', callback_data='trial_payment_heleket')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_HELEKET', '🪙 Криптовалюта (Heleket)'), callback_data='trial_payment_heleket')])
 
     if settings.is_mulenpay_enabled():
         mulenpay_name = settings.get_mulenpay_display_name()
         keyboard.append(
-            [types.InlineKeyboardButton(text=f'💳 {mulenpay_name}', callback_data='trial_payment_mulenpay')]
+            [types.InlineKeyboardButton(text=texts.t('PAYMENT_CARD_MULENPAY', '💳 Банковская карта ({mulenpay_name})').format(mulenpay_name=mulenpay_name), callback_data='trial_payment_mulenpay')]
         )
 
     if settings.is_pal24_enabled():
-        keyboard.append([types.InlineKeyboardButton(text='💳 PayPalych', callback_data='trial_payment_pal24')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_CARD_PAL24', '🏦 СБП (PayPalych)'), callback_data='trial_payment_pal24')])
 
     if settings.is_wata_enabled():
-        keyboard.append([types.InlineKeyboardButton(text='💳 WATA', callback_data='trial_payment_wata')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_CARD_WATA', '💳 Банковская карта (WATA)'), callback_data='trial_payment_wata')])
 
     if settings.is_platega_enabled():
         platega_name = settings.get_platega_display_name()
-        keyboard.append([types.InlineKeyboardButton(text=f'💳 {platega_name}', callback_data='trial_payment_platega')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_PLATEGA', f'💳 {platega_name}'), callback_data='trial_payment_platega')])
 
     # Кнопка назад
     keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_trial')])

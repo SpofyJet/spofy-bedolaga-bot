@@ -404,11 +404,7 @@ async def process_yookassa_sbp_payment_amount(
         # Добавляем кнопку оплаты, если доступна ссылка
         if confirmation_url:
             keyboard_buttons.append([types.InlineKeyboardButton(text='🔗 Перейти к оплате', url=confirmation_url)])
-        else:
-            # Если ссылка недоступна, предлагаем оплатить через ID платежа в приложении банка
-            keyboard_buttons.append(
-                [types.InlineKeyboardButton(text='📱 Оплатить в приложении банка', callback_data='temp_disabled')]
-            )
+        # Кнопка без обработчика удалена (платёж без ссылки просто не предлагает её).
 
         # Добавляем общие кнопки
         keyboard_buttons.append(

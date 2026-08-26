@@ -1803,7 +1803,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('PAYMENT_CRYPTOBOT', '🪙 Криптовалюта (CryptoBot)'),
+                    text=texts.t('PAYMENT_CRYPTOBOT', '🦋 Криптовалюта (CryptoBot)'),
                     callback_data=_build_callback('cryptobot'),
                 )
             ]
