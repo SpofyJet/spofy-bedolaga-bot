@@ -335,15 +335,22 @@ def get_tariff_confirm_keyboard(
     tariff_id: int,
     period: int,
     language: str,
+    show_sbp: bool = True,
 ) -> InlineKeyboardMarkup:
-    """Создает клавиатуру подтверждения покупки тарифа."""
+    """Создает клавиатуру подтверждения покупки тарифа.
+
+    show_sbp=False — у юзера активная скидка: рядом на экране цена со
+    скидкой, а подписка Platega спишет полную (одна фиксированная сумма на
+    все списания, первое — сразу при привязке). Кнопку автооплаты прячем,
+    чтобы не обещать цену, которую подписка повторить не может.
+    """
     texts = get_texts(language)
     # Автооплата — ПЕРВАЯ кнопка (рекуррент по умолчанию): первое списание
     # Platega = подтверждение привязки в банке, дальше автосписания по каденсу
     # тарифа. Оплата с баланса остаётся разовой альтернативой рядом ниже.
     # Период уезжает в callback: каденс и сумма привязки = выбранный период.
     buttons = []
-    if settings.is_platega_recurrent_enabled() and _sbp_period_supported(period):
+    if show_sbp and settings.is_platega_recurrent_enabled() and _sbp_period_supported(period):
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -378,6 +385,7 @@ def get_tariff_insufficient_balance_keyboard(
     period: int,
     language: str,
     missing_kopeks: int = 0,
+    show_sbp: bool = True,
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру при недостаточном балансе.
 
@@ -392,7 +400,9 @@ def get_tariff_insufficient_balance_keyboard(
     """
     texts = get_texts(language)
     back_button = InlineKeyboardButton(text=texts.BACK, callback_data=f'tariff_select:{tariff_id}')
-    sbp_rows = _sbp_purchase_rows(tariff_id, texts, period_days=period)
+    # Скидка на экране (цена «не хватает» посчитана со скидкой) — СБП не
+    # показываем: подписка спишет полную сумму, а не ту, что видит юзер.
+    sbp_rows = _sbp_purchase_rows(tariff_id, texts, period_days=period) if show_sbp else []
 
     if settings.is_auto_purchase_after_topup_enabled() and missing_kopeks > 0:
         from app.keyboards.inline import get_payment_methods_keyboard
@@ -540,12 +550,14 @@ def format_tariff_info_for_user(
 def get_daily_tariff_confirm_keyboard(
     tariff_id: int,
     language: str,
+    show_sbp: bool = True,
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру подтверждения покупки суточного тарифа."""
     texts = get_texts(language)
     # Автооплата первой — см. get_tariff_confirm_keyboard.
+    # show_sbp=False — на экране цена со скидкой, подписка спишет полную.
     buttons = []
-    if settings.is_platega_recurrent_enabled():
+    if show_sbp and settings.is_platega_recurrent_enabled():
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -578,12 +590,14 @@ def get_daily_tariff_confirm_keyboard(
 def get_daily_tariff_insufficient_balance_keyboard(
     tariff_id: int,
     language: str,
+    show_sbp: bool = True,
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру при недостаточном балансе для суточного тарифа."""
     texts = get_texts(language)
+    sbp_rows = _sbp_purchase_rows(tariff_id, texts) if show_sbp else []
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            *_sbp_purchase_rows(tariff_id, texts),
+            *sbp_rows,
             [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
             [InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')],
         ]
@@ -942,7 +956,9 @@ async def select_tariff(
                     discount=discount_text,
                     balance=format_price_kopeks(user_balance),
                 ),
-                reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language),
+                reply_markup=get_daily_tariff_confirm_keyboard(
+                    tariff_id, db_user.language, show_sbp=daily_discount <= 0
+                ),
                 parse_mode='HTML',
             )
         else:
@@ -963,6 +979,7 @@ async def select_tariff(
                 'is_daily': True,
                 'daily_price_kopeks': daily_price,
                 'total_price': daily_price,
+                'discount_percent': daily_discount,
                 'user_id': db_user.id,
                 'saved_cart': True,
                 'missing_amount': missing,
@@ -995,7 +1012,9 @@ async def select_tariff(
                     'TARIFF_PURCHASE_CART_SAVED_HINT',
                     '\n\n🛒 <i>Корзина сохранена! После пополнения баланса подписка будет оформлена автоматически.</i>',
                 ),
-                reply_markup=get_daily_tariff_insufficient_balance_keyboard(tariff_id, db_user.language),
+                reply_markup=get_daily_tariff_insufficient_balance_keyboard(
+                    tariff_id, db_user.language, show_sbp=daily_discount <= 0
+                ),
                 parse_mode='HTML',
             )
     else:
@@ -1656,7 +1675,9 @@ async def select_tariff_period(
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - final_price),
             ),
-            reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language),
+            # Скидка на экране («Итого: 216 ₽») — кнопку автооплаты прячем:
+            # подписка Platega спишет полную цену, а не скидочную.
+            reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language, show_sbp=total_discount <= 0),
             parse_mode='HTML',
         )
     else:
@@ -1703,7 +1724,7 @@ async def select_tariff_period(
                 '\n\n🛒 <i>Корзина сохранена! После пополнения баланса подписка будет оформлена автоматически.</i>',
             ),
             reply_markup=get_tariff_insufficient_balance_keyboard(
-                tariff_id, period, db_user.language, missing_kopeks=missing
+                tariff_id, period, db_user.language, missing_kopeks=missing, show_sbp=total_discount <= 0
             ),
             parse_mode='HTML',
         )
@@ -5452,7 +5473,9 @@ async def return_to_saved_tariff_cart(
                     balance=format_price_kopeks(user_balance),
                     missing=format_price_kopeks(missing),
                 ),
-                reply_markup=get_daily_tariff_insufficient_balance_keyboard(tariff_id, db_user.language),
+                reply_markup=get_daily_tariff_insufficient_balance_keyboard(
+                    tariff_id, db_user.language, show_sbp=cart_data.get('discount_percent', 0) <= 0
+                ),
                 parse_mode='HTML',
             )
         elif cart_mode == 'extend':
@@ -5474,7 +5497,11 @@ async def return_to_saved_tariff_cart(
                     missing=format_price_kopeks(missing),
                 ),
                 reply_markup=get_tariff_insufficient_balance_keyboard(
-                    tariff_id, period, db_user.language, missing_kopeks=missing
+                    tariff_id,
+                    period,
+                    db_user.language,
+                    missing_kopeks=missing,
+                    show_sbp=cart_data.get('discount_percent', 0) <= 0,
                 ),
                 parse_mode='HTML',
             )
@@ -5497,7 +5524,11 @@ async def return_to_saved_tariff_cart(
                     missing=format_price_kopeks(missing),
                 ),
                 reply_markup=get_tariff_insufficient_balance_keyboard(
-                    tariff_id, period, db_user.language, missing_kopeks=missing
+                    tariff_id,
+                    period,
+                    db_user.language,
+                    missing_kopeks=missing,
+                    show_sbp=cart_data.get('discount_percent', 0) <= 0,
                 ),
                 parse_mode='HTML',
             )
@@ -5545,7 +5576,7 @@ async def return_to_saved_tariff_cart(
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - daily_price),
             ),
-            reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language),
+            reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language, show_sbp=discount_percent <= 0),
             parse_mode='HTML',
         )
     elif cart_mode == 'extend':
@@ -5632,7 +5663,7 @@ async def return_to_saved_tariff_cart(
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - total_price),
             ),
-            reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language),
+            reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language, show_sbp=discount_percent <= 0),
             parse_mode='HTML',
         )
 
@@ -5685,6 +5716,14 @@ async def purchase_tariff_with_sbp(
     text = texts.t(
         'SBP_RECURRING_ENABLE_SUCCESS',
         '⚡ <b>Автопродление через СБП</b>\n\nПодтвердите подключение в банковском приложении по кнопке ниже.\nПосле подтверждения автопродление станет активным.',
+    )
+    # Сумма и шаг списания — ДО формы банка (первое списание сразу при привязке).
+    text += texts.t(
+        'SBP_RECURRING_PRICE_LINE',
+        '\n\n💰 <b>{amount}</b> каждые {days} дн. — первое списание сразу при подтверждении.',
+    ).format(
+        amount=f'{(result.get("amount_kopeks") or 0) // 100} ₽',
+        days=result.get('charge_days') or 30,
     )
     text += '\n\n' + texts.t(
         'SBP_PURCHASE_PENDING_NOTE',

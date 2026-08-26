@@ -235,6 +235,8 @@ class PlategaPaymentMixin:
                     'platega_subscription_id': existing.platega_subscription_id,
                     'redirect_url': existing.redirect_url,
                     'status': existing.status,
+                    'amount_kopeks': existing.amount_kopeks,
+                    'charge_days': existing.charge_days,
                 }
             logger.warning(
                 'Platega-подписка устарела — пересоздаю',
@@ -348,6 +350,8 @@ class PlategaPaymentMixin:
                 'platega_subscription_id': winner.platega_subscription_id,
                 'redirect_url': winner.redirect_url,
                 'status': winner.status,
+                'amount_kopeks': winner.amount_kopeks,
+                'charge_days': winner.charge_days,
             }
 
         # Взаимоисключение: у подписки может быть только один движок продления.
@@ -359,6 +363,8 @@ class PlategaPaymentMixin:
             'platega_subscription_id': platega_id,
             'redirect_url': redirect_url,
             'status': (response or {}).get('status', 'PENDING'),
+            'amount_kopeks': amount_kopeks,
+            'charge_days': charge_days,
         }
 
     async def cancel_platega_sbp_subscription(
