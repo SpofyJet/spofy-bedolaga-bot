@@ -401,6 +401,77 @@ async def show_info_menu(
     await callback.answer()
 
 
+async def show_legal_menu(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    """n3c: единый вход «Правила и документы» — подменю включённых документов.
+
+    Ровно один включённый документ открывается сразу, без промежуточного
+    экрана; ни одного (гипотетически) — тихий возврат в инфо-меню.
+    Делегируемые хендлеры сами отвечают на callback — повторный answer не
+    делаем, иначе Telegram отклонит повтор.
+    """
+    texts = get_texts(db_user.language)
+
+    privacy_enabled = is_visible_in_bot(
+        settings.PRIVACY_POLICY_DISPLAY_MODE
+    ) and await PrivacyPolicyService.is_policy_enabled(db, db_user.language)
+    public_offer_enabled = is_visible_in_bot(
+        settings.PUBLIC_OFFER_DISPLAY_MODE
+    ) and await PublicOfferService.is_offer_enabled(db, db_user.language)
+    rules_enabled = is_visible_in_bot(settings.SERVICE_RULES_DISPLAY_MODE)
+
+    enabled_count = int(privacy_enabled) + int(public_offer_enabled) + int(rules_enabled)
+    if enabled_count == 1:
+        if rules_enabled:
+            await show_service_rules(callback, db_user, db)
+        elif privacy_enabled:
+            await show_privacy_policy(callback, db_user, db)
+        else:
+            await show_public_offer(callback, db_user, db)
+        return
+    if enabled_count == 0:
+        await show_info_menu(callback, db_user, db)
+        return
+
+    rows = []
+    if rules_enabled:
+        rows.append([types.InlineKeyboardButton(text=texts.MENU_RULES, callback_data='menu_rules')])
+    if public_offer_enabled:
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('MENU_PUBLIC_OFFER', '📄 Оферта'),
+                    callback_data='menu_public_offer',
+                )
+            ]
+        )
+    if privacy_enabled:
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('MENU_PRIVACY_POLICY', '🛡️ Политика конф.'),
+                    callback_data='menu_privacy_policy',
+                )
+            ]
+        )
+    rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info')])
+
+    header = texts.t('MENU_LEGAL_HEADER', '📄 <b>Правила и документы</b>')
+    prompt = texts.t('MENU_INFO_PROMPT', 'Выберите раздел:')
+    caption = f'{header}\n\n{prompt}' if prompt else header
+
+    await edit_or_answer_photo(
+        callback=callback,
+        caption=caption,
+        keyboard=types.InlineKeyboardMarkup(inline_keyboard=rows),
+        parse_mode='HTML',
+    )
+    await callback.answer()
+
+
 async def show_promo_groups_info(
     callback: types.CallbackQuery,
     db_user: User,
@@ -1731,6 +1802,11 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_info_menu,
         F.data == 'menu_info',
+    )
+
+    dp.callback_query.register(
+        show_legal_menu,
+        F.data == 'menu_legal',
     )
 
     dp.callback_query.register(

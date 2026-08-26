@@ -848,28 +848,17 @@ def get_info_menu_keyboard(
             ]
         )
 
-    if show_privacy_policy:
+    # n3c: три документа схлопнуты в один вход «Правила и документы» —
+    # подменю menu_legal показывает только включённые.
+    if show_privacy_policy or show_public_offer or show_rules:
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('MENU_PRIVACY_POLICY', '🛡️ Политика конф.'),
-                    callback_data='menu_privacy_policy',
+                    text=texts.t('MENU_LEGAL', '📄 Правила и документы'),
+                    callback_data='menu_legal',
                 )
             ]
         )
-
-    if show_public_offer:
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('MENU_PUBLIC_OFFER', '📄 Оферта'),
-                    callback_data='menu_public_offer',
-                )
-            ]
-        )
-
-    if show_rules:
-        buttons.append([InlineKeyboardButton(text=texts.MENU_RULES, callback_data='menu_rules')])
 
     for page_id, page_title in custom_pages or []:
         buttons.append(
