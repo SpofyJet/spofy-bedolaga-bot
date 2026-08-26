@@ -442,6 +442,28 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         except Exception as e:
             logger.warning('Ошибка получения тарифа', error=e, exc_info=True)
 
+    # n4: строка автопродления для платных подписок (на триале недоступно)
+    autopay_line = ''
+    if not subscription.is_trial and actual_status in ('paid_active', 'limited'):
+        try:
+            from app.services.recurrent_amount import get_active_recurrent_engines
+
+            engines = await get_active_recurrent_engines(db, subscription)
+            engine_names = {
+                'platega': texts.t('RECURRENT_ENGINE_SBP', 'СБП'),
+                'lava': texts.t('RECURRENT_ENGINE_LAVA', 'карта (Lava)'),
+                'balance': texts.t('RECURRENT_ENGINE_BALANCE', 'автоплатёж с баланса'),
+            }
+            active_engines = [engine_names[e] for e in ('platega', 'lava', 'balance') if e in engines]
+            if active_engines:
+                autopay_line = '\n' + texts.t(
+                    'SUBSCRIPTION_AUTOPAY_ON', '💳 Автопродление: включено ({engine})'
+                ).format(engine=', '.join(active_engines))
+            else:
+                autopay_line = '\n' + texts.t('SUBSCRIPTION_AUTOPAY_OFF', '💳 Автопродление: выключено')
+        except Exception as e:
+            logger.warning('Не удалось определить статус автопродления', error=e)
+
     # Определяем, суточный ли тариф для выбора шаблона
     is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
 
@@ -449,37 +471,40 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         # Для суточных тарифов другой шаблон без "Действует до" и "Осталось"
         message_template = texts.t(
             'SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE',
-            """👤 {full_name}
-💰 Баланс: {balance}
-📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
+            """👤 <b>{full_name}</b>
+💰 Баланс: <b>{balance}</b>
 
-📱 Информация о подписке
-🎭 Тип: {subscription_type}
-📈 Трафик: {traffic}
-🌍 Серверы: {servers}
-📱 Устройства: {devices_used} / {device_limit}""",
+{status_emoji} <b>Подписка:</b> {status_display}{warning}{tariff_info_block}{autopay_line}
+
+<blockquote>📈 Трафик: {traffic}
+📱 Устройства: {devices_used} / {device_limit}</blockquote>""",
         )
     else:
         message_template = texts.t(
             'SUBSCRIPTION_OVERVIEW_TEMPLATE',
-            """👤 {full_name}
-💰 Баланс: {balance}
-📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
+            """👤 <b>{full_name}</b>
+💰 Баланс: <b>{balance}</b>
 
-📱 Информация о подписке
-🎭 Тип: {subscription_type}
-📅 Действует до: {end_date}
-⏰ Осталось: {time_left}
+{status_emoji} <b>Подписка:</b> {status_display}{warning}{tariff_info_block}{autopay_line}
+
+<blockquote>📅 Действует до: {end_date}
+⏳ Осталось: {time_left}
 📈 Трафик: {traffic}
-🌍 Серверы: {servers}
-📱 Устройства: {devices_used} / {device_limit}""",
+📱 Устройства: {devices_used} / {device_limit}</blockquote>""",
         )
 
     if not show_devices:
-        message_template = message_template.replace(
-            '\n📱 Устройства: {devices_used} / {device_limit}',
-            '',
-        )
+        # n4: строку устройств убираем по плейсхолдеру — работает для любой
+        # локали (старый replace по русскому тексту молча не срабатывал
+        # в ua/zh/fa); закрывающий тег цитаты переносим на строку выше.
+        _tpl_lines = []
+        for _tpl_line in message_template.split('\n'):
+            if '{devices_used}' in _tpl_line:
+                if '</blockquote>' in _tpl_line and _tpl_lines:
+                    _tpl_lines[-1] += '</blockquote>'
+                continue
+            _tpl_lines.append(_tpl_line)
+        message_template = '\n'.join(_tpl_lines)
 
     device_limit_display = Texts.format_device_limit(subscription.device_limit)
 
@@ -490,6 +515,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         status_display=status_display,
         warning=warning_text,
         tariff_info_block=tariff_info_block,
+        autopay_line=autopay_line,
         subscription_type=subscription_type,
         end_date=format_human_datetime(to_local_datetime(subscription.end_date), db_user.language),
         time_left=time_left_text,
