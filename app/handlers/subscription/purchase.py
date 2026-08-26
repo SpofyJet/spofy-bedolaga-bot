@@ -57,6 +57,7 @@ from app.services.trial_activation_service import (
 )
 from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
+from app.utils.formatters import format_human_date, format_human_datetime
 
 
 logger = structlog.get_logger(__name__)
@@ -116,7 +117,7 @@ from app.utils.subscription_utils import (
     get_display_subscription_link,
     resolve_simple_subscription_device_limit,
 )
-from app.utils.timezone import format_local_datetime
+from app.utils.timezone import format_local_datetime, to_local_datetime
 
 from .autopay import (
     handle_autopay_menu,
@@ -490,7 +491,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         warning=warning_text,
         tariff_info_block=tariff_info_block,
         subscription_type=subscription_type,
-        end_date=format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M'),
+        end_date=format_human_datetime(to_local_datetime(subscription.end_date), db_user.language),
         time_left=time_left_text,
         traffic=traffic_used_display,
         servers=servers_display,
@@ -552,7 +553,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 bar = '▰' * filled + '▱' * (bar_length - filled)
 
                 # Форматируем дату истечения
-                expire_date = purchase.expires_at.strftime('%d.%m.%Y')
+                expire_date = format_human_date(purchase.expires_at)
 
                 # Формируем текст о времени
                 if days_remaining == 0:
@@ -2037,7 +2038,7 @@ async def confirm_extend_subscription(
     success_message = (
         '✅ Подписка успешно продлена!\n\n'
         f'⏰ Добавлено: {days} дней\n'
-        f'Действует до: {format_local_datetime(refreshed_end_date, "%d.%m.%Y %H:%M")}\n\n'
+        f'Действует до: {format_human_datetime(to_local_datetime(refreshed_end_date))}\n\n'
         f'💰 Списано: {texts.format_price(price)}'
     )
 
@@ -4746,7 +4747,7 @@ async def _extend_existing_subscription(
     success_message = (
         '✅ Подписка успешно продлена!\n\n'
         f'⏰ Добавлено: {period_days} дней\n'
-        f'Действует до: {format_local_datetime(new_end_date, "%d.%m.%Y %H:%M")}\n\n'
+        f'Действует до: {format_human_datetime(to_local_datetime(new_end_date))}\n\n'
         f'💰 Списано: {texts.format_price(price_kopeks)}'
     )
 

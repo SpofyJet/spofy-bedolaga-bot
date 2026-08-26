@@ -32,7 +32,7 @@ from app.services.subscription_purchase_service import (
 )
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
-from app.utils.formatters import format_days_declension
+from app.utils.formatters import format_days_declension, format_human_date
 from app.utils.pricing_utils import format_period_description
 from app.utils.timezone import format_email_datetime, format_local_datetime
 
@@ -70,7 +70,7 @@ async def _notify_email_user_auto_purchase(
         )
 
         end_date = getattr(subscription, 'end_date', None)
-        end_date_str = end_date.strftime('%d.%m.%Y') if end_date else ''
+        end_date_str = format_human_date(end_date, getattr(user, 'language', 'ru') or 'ru') if end_date else ''
         await notification_delivery_service.send_notification(
             user=user,
             notification_type=(

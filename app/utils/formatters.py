@@ -227,3 +227,47 @@ def format_boolean(value: bool, language: str = 'ru') -> str:
     if language_code in {'ru', 'fa'}:
         return '✅ Да' if value else '❌ Нет'
     return '✅ Yes' if value else '❌ No'
+
+
+# ---------------------------------------------------------------------------
+# n3b: «человеческие» даты — «12 марта» / «March 12» / «3月12日» / «12 مارس».
+# Чистый рендер без сдвига таймзоны: если раньше сайт использовал
+# format_local_datetime, вызывающий сначала делает to_local_datetime(dt).
+# ---------------------------------------------------------------------------
+
+_MONTHS_HUMAN = {
+    'ru': ('января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+           'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'),
+    'ua': ('січня', 'лютого', 'березня', 'квітня', 'травня', 'червня',
+           'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'),
+    'en': ('January', 'February', 'March', 'April', 'May', 'June',
+           'July', 'August', 'September', 'October', 'November', 'December'),
+    'fa': ('ژانویه', 'فوریه', 'مارس', 'آوریل', 'مه', 'ژوئن',
+           'ژوئیه', 'اوت', 'سپتامبر', 'اکتبر', 'نوامبر', 'دسامبر'),
+}
+
+
+def _human_lang(language) -> str:
+    lang = str(language or 'ru').split('-')[0].split('_')[0].lower()
+    return {'uk': 'ua'}.get(lang, lang)
+
+
+def format_human_date(dt, language: str = 'ru') -> str:
+    """«12 марта» без года. language — код локали бота (ru/ua/en/zh/fa)."""
+    if dt is None:
+        return ''
+    lang = _human_lang(language)
+    if lang == 'zh':
+        return f'{dt.month}月{dt.day}日'
+    months = _MONTHS_HUMAN.get(lang, _MONTHS_HUMAN['ru'])
+    name = months[dt.month - 1]
+    if lang == 'en':
+        return f'{name} {dt.day}'
+    return f'{dt.day} {name}'
+
+
+def format_human_datetime(dt, language: str = 'ru') -> str:
+    """«12 марта, 14:30» — человеческая дата + время суток."""
+    if dt is None:
+        return ''
+    return f'{format_human_date(dt, language)}, {dt.strftime("%H:%M")}'

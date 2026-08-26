@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import PaymentMethod, Subscription, TransactionType
 from app.services.platega_service import PlategaService
+from app.utils.formatters import format_human_date
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
@@ -771,13 +772,13 @@ class PlategaPaymentMixin:
             amount_text = f'{(record.amount_kopeks or 0) // 100} ₽'
             next_charge_text = ''
             if record.next_charge_at:
-                next_charge_text = record.next_charge_at.strftime('%d.%m.%Y')
+                next_charge_text = format_human_date(record.next_charge_at)
             end_clause = ''
             try:
                 _subscription = await db.get(Subscription, record.subscription_id)
                 _end_date = getattr(_subscription, 'end_date', None) if _subscription else None
                 if _end_date:
-                    _end_str = _end_date.strftime('%d.%m.%Y')
+                    _end_str = format_human_date(_end_date)
                     end_clause = f' Подписка активна до {_end_str}.'
             except Exception:
                 end_clause = ''

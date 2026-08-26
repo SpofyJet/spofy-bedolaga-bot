@@ -36,6 +36,7 @@ from app.services.subscription_checkout_service import (
 from app.services.support_settings_service import SupportSettingsService
 from app.services.user_cart_service import user_cart_service
 from app.utils.display_mode import is_visible_in_bot
+from app.utils.formatters import format_human_date
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.pricing_utils import format_period_description
 from app.utils.promo_offer import (
@@ -44,7 +45,7 @@ from app.utils.promo_offer import (
 )
 from app.utils.rich_menu import try_edit_rich_main_menu
 from app.utils.telegram_html import html_to_telegram, info_page_faq_to_telegram, split_telegram_text
-from app.utils.timezone import format_local_datetime
+from app.utils.timezone import format_local_datetime, to_local_datetime
 
 
 logger = structlog.get_logger(__name__)
@@ -1289,7 +1290,7 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
     current_time = datetime.now(UTC)
     actual_status = (subscription.actual_status or '').lower()
     end_date = getattr(subscription, 'end_date', None)
-    end_date_text = format_local_datetime(end_date, '%d.%m.%Y') if end_date else None
+    end_date_text = format_human_date(to_local_datetime(end_date), texts.language) if end_date else None
     days_left = 0
 
     if subscription.end_date > current_time:
@@ -1413,7 +1414,7 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
             status_suffix = ' — лимит трафика'
         elif sub.end_date and sub.end_date > current_time:
             days_left = (sub.end_date - current_time).days
-            end_str = format_local_datetime(sub.end_date, '%d.%m.%Y')
+            end_str = format_human_date(to_local_datetime(sub.end_date))
             status_suffix = f' — до {end_str} ({days_left} дн.)'
         else:
             status_suffix = ''

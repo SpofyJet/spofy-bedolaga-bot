@@ -6,10 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.utils.formatters import format_human_date, format_human_datetime
 from app.utils.pricing_utils import (
     format_period_description,
 )
-from app.utils.timezone import format_local_datetime
+from app.utils.timezone import format_local_datetime, to_local_datetime
 
 from .common import logger
 from .countries import _get_available_countries, _get_countries_info
@@ -334,7 +335,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
     info_text = info_template.format(
         status=status_text,
         type=type_text,
-        end_date=format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M'),
+        end_date=format_human_datetime(to_local_datetime(subscription.end_date), texts.language),
         days_left=max(0, subscription.days_left),
         traffic_used=texts.format_traffic(subscription.traffic_used_gb, is_limit=False),
         traffic_limit=traffic_text,
@@ -383,7 +384,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
                 bar = '▰' * filled + '▱' * (bar_length - filled)
 
                 # Форматируем дату истечения
-                expire_date = purchase.expires_at.strftime('%d.%m.%Y')
+                expire_date = format_human_date(purchase.expires_at)
 
                 # Формируем текст о времени
                 if days_remaining == 0:
