@@ -336,6 +336,7 @@ def get_tariff_confirm_keyboard(
     period: int,
     language: str,
     show_sbp: bool = True,
+    sbp_price_kopeks: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру подтверждения покупки тарифа.
 
@@ -351,10 +352,18 @@ def get_tariff_confirm_keyboard(
     # Период уезжает в callback: каденс и сумма привязки = выбранный период.
     buttons = []
     if show_sbp and settings.is_platega_recurrent_enabled() and _sbp_period_supported(period):
+        # Цена на кнопке — всегда ПОЛНАЯ (без скидок): подписка Platega спишет
+        # базовую цену периода, поэтому при активной скидке кнопка скрыта.
+        if sbp_price_kopeks:
+            sbp_label = texts.t(
+                'SBP_PURCHASE_BUTTON_PRICED', '⚡ Оплатить {price} — дальше каждые {period}'
+            ).format(price=format_price_kopeks(sbp_price_kopeks), period=format_period(period))
+        else:
+            sbp_label = texts.t('SBP_PURCHASE_BUTTON', '⚡ Оплатить с автопродлением (СБП)')
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
+                    text=sbp_label,
                     callback_data=f'tariff_sbp:{tariff_id}:{period}',
                 )
             ]
@@ -363,15 +372,21 @@ def get_tariff_confirm_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('LAVA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Lava'),
+                    text=texts.t('LAVA_PURCHASE_BUTTON', '💳 Автооплата картой (Lava)'),
                     callback_data=f'tariff_lava:{tariff_id}',
                 )
             ]
         )
+    # Разовая оплата с баланса: рядом с автооплатой подписываем явно
+    one_time_label = (
+        texts.t('TARIFF_PURCHASE_ONE_TIME_BUTTON', '💳 Разово — только этот период')
+        if buttons
+        else texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку')
+    )
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку'),
+                text=one_time_label,
                 callback_data=f'tariff_confirm:{tariff_id}:{period}',
             )
         ],
@@ -448,7 +463,7 @@ def _sbp_purchase_rows(tariff_id: int, texts, period_days: int | None = None) ->
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
+                    text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оплатить с автопродлением (СБП)'),
                     callback_data=(
                         f'tariff_sbp:{tariff_id}:{period_days}' if period_days else f'tariff_sbp:{tariff_id}'
                     ),
@@ -459,7 +474,7 @@ def _sbp_purchase_rows(tariff_id: int, texts, period_days: int | None = None) ->
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('LAVA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Lava'),
+                    text=texts.t('LAVA_PURCHASE_BUTTON', '💳 Автооплата картой (Lava)'),
                     callback_data=f'tariff_lava:{tariff_id}',
                 )
             ]
@@ -561,7 +576,7 @@ def get_daily_tariff_confirm_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
+                    text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оплатить с автопродлением (СБП)'),
                     callback_data=f'tariff_sbp:{tariff_id}',
                 )
             ]
@@ -570,15 +585,20 @@ def get_daily_tariff_confirm_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('LAVA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Lava'),
+                    text=texts.t('LAVA_PURCHASE_BUTTON', '💳 Автооплата картой (Lava)'),
                     callback_data=f'tariff_lava:{tariff_id}',
                 )
             ]
         )
+    one_time_label = (
+        texts.t('TARIFF_PURCHASE_ONE_TIME_BUTTON', '💳 Разово — только этот период')
+        if buttons
+        else texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку')
+    )
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку'),
+                text=one_time_label,
                 callback_data=f'daily_tariff_confirm:{tariff_id}',
             )
         ],
@@ -1677,7 +1697,7 @@ async def select_tariff_period(
             ),
             # Скидка на экране («Итого: 216 ₽») — кнопку автооплаты прячем:
             # подписка Platega спишет полную цену, а не скидочную.
-            reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language, show_sbp=total_discount <= 0),
+            reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language, show_sbp=total_discount <= 0, sbp_price_kopeks=original_price),
             parse_mode='HTML',
         )
     else:
@@ -2601,19 +2621,72 @@ def get_tariff_extend_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_tariff_extend_confirm_keyboard(
+async def _sbp_renew_recurring_rows(db, subscription, tariff, period, texts, price_kopeks) -> list[list[InlineKeyboardButton]]:
+    """Ряд «⚡ Оплатить N — дальше каждые P» для продления существующей подписки.
+
+    Первое списание Platega = подтверждение привязки в банке (= оплата этого
+    продления), дальше — автосписания по каденсу. Любая ошибка -> без ряда:
+    экран продления рендерится как раньше (fail-closed, как оффер успеха).
+    """
+    try:
+        if not settings.is_platega_recurrent_enabled():
+            return []
+        if not subscription or getattr(subscription, 'is_trial', None) is not False:
+            return []
+        if not getattr(subscription, 'tariff_id', None):
+            return []
+        if tariff is None or getattr(tariff, 'is_daily', False):
+            return []
+        if not _sbp_period_supported(period, getattr(tariff, 'is_daily', False)):
+            return []
+        from app.database.crud.platega_subscription import get_active_platega_subscription_by_subscription
+
+        if await get_active_platega_subscription_by_subscription(db, subscription.id):
+            return []
+    except Exception:
+        return []
+    if price_kopeks:
+        label = texts.t('SBP_PURCHASE_BUTTON_PRICED', '⚡ Оплатить {price} — дальше каждые {period}').format(
+            price=format_price_kopeks(price_kopeks), period=format_period(period)
+        )
+    else:
+        label = texts.t('SBP_RECURRING_OFFER_BUTTON', '⚡ Включить автопродление (СБП)')
+    return [[InlineKeyboardButton(text=label, callback_data=f'sbp_recurring_enable_for:{subscription.id}')]]
+
+
+async def get_tariff_extend_confirm_keyboard(
     subscription_id: int,
     tariff_id: int,
     period: int,
     language: str,
+    db=None,
+    subscription=None,
+    tariff=None,
+    sbp_price_kopeks: int | None = None,
+    show_sbp: bool = True,
 ) -> InlineKeyboardMarkup:
-    """Создает клавиатуру подтверждения продления по тарифу."""
+    """Создает клавиатуру подтверждения продления по тарифу.
+
+    СБП-автопродление — первой кнопкой (рекуррент по умолчанию): первое
+    списание оплачивает это продление, дальше — автосписания по каденсу.
+    Прячем при скидке на экране (подписка Platega спишет полную цену) и при
+    живой привязке.
+    """
     texts = get_texts(language)
+    sbp_rows: list[list[InlineKeyboardButton]] = []
+    if show_sbp and db is not None and subscription is not None:
+        sbp_rows = await _sbp_renew_recurring_rows(db, subscription, tariff, period, texts, sbp_price_kopeks)
+    one_time_label = (
+        texts.t('TARIFF_PURCHASE_ONE_TIME_BUTTON', '💳 Разово — только этот период')
+        if sbp_rows
+        else texts.t('TARIFF_RENEW_CONFIRM_BUTTON', '✅ Подтвердить продление')
+    )
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            *sbp_rows,
             [
                 InlineKeyboardButton(
-                    text=texts.t('TARIFF_RENEW_CONFIRM_BUTTON', '✅ Подтвердить продление'),
+                    text=one_time_label,
                     callback_data=f'tariff_ext_confirm:{subscription_id}:{tariff_id}:{period}',
                 )
             ],
@@ -2893,7 +2966,7 @@ async def select_tariff_extend_period(
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - final_price),
             ),
-            reply_markup=get_tariff_extend_confirm_keyboard(subscription.id, tariff_id, period, db_user.language),
+            reply_markup=await get_tariff_extend_confirm_keyboard(subscription.id, tariff_id, period, db_user.language, db=db, subscription=subscription, tariff=tariff, sbp_price_kopeks=original_price, show_sbp=total_discount <= 0),
             parse_mode='HTML',
         )
     else:
@@ -2918,6 +2991,14 @@ async def select_tariff_extend_period(
         }
         await user_cart_service.save_user_cart(db_user.id, cart_data)
 
+        # Привязке баланс не нужен: вход в СБП-автопродление даём и отсюда
+        # (первое списание = оплата этого продления). Скидка на экране -> прячем.
+        _sbp_ext_rows = (
+            await _sbp_renew_recurring_rows(db, subscription, tariff, period, texts, original_price)
+            if total_discount <= 0
+            else []
+        )
+
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_PURCHASE_INSUFFICIENT',
@@ -2940,6 +3021,7 @@ async def select_tariff_extend_period(
             ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
+                    *_sbp_ext_rows,
                     [
                         InlineKeyboardButton(
                             text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup'
@@ -5663,7 +5745,7 @@ async def return_to_saved_tariff_cart(
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - total_price),
             ),
-            reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language, show_sbp=discount_percent <= 0),
+            reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language, show_sbp=discount_percent <= 0, sbp_price_kopeks=original_price if discount_percent > 0 else total_price),
             parse_mode='HTML',
         )
 
