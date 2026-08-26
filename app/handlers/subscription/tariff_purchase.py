@@ -5076,6 +5076,26 @@ async def purchase_tariff_with_lava(
         await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
         return
 
+    # n2: предупреждение о смене движка автопродления на целевой подписке —
+    # активные СБП/баланс-автоплатёж будут отключены при создании
+    # Lava-привязки. Ошибка предупреждения не должна ломать покупку.
+    try:
+        from app.services.recurrent_amount import get_active_recurrent_engines, recurrent_engines_warning
+
+        if settings.is_multi_tariff_enabled():
+            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+            _target_sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff.id, include_inactive=True)
+        else:
+            _target_sub = await get_subscription_by_user_id(db, db_user.id)
+        if _target_sub is not None:
+            _engines = await get_active_recurrent_engines(db, _target_sub)
+            _warning = recurrent_engines_warning(texts, _engines, enabling='lava')
+            if _warning:
+                await callback.answer(_warning, show_alert=True)
+    except Exception:
+        pass
+
     from app.services.payment.lava import purchase_tariff_with_lava_recurring
 
     try:
@@ -5777,6 +5797,27 @@ async def purchase_tariff_with_sbp(
     if not tariff or not tariff.is_active:
         await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
         return
+
+    # n2: предупреждение о смене движка автопродления на целевой подписке
+    # (та же резолюция, что в сервисе): активные Lava/баланс-автоплатёж будут
+    # отключены при создании СБП-привязки. Ошибка предупреждения не должна
+    # ломать покупку.
+    try:
+        from app.services.recurrent_amount import get_active_recurrent_engines, recurrent_engines_warning
+
+        if settings.is_multi_tariff_enabled():
+            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+            _target_sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff.id, include_inactive=True)
+        else:
+            _target_sub = await get_subscription_by_user_id(db, db_user.id)
+        if _target_sub is not None:
+            _engines = await get_active_recurrent_engines(db, _target_sub)
+            _warning = recurrent_engines_warning(texts, _engines, enabling='platega')
+            if _warning:
+                await callback.answer(_warning, show_alert=True)
+    except Exception:
+        pass
 
     from app.services.payment.platega import purchase_tariff_with_sbp_recurring
 

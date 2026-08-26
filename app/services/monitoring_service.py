@@ -385,6 +385,8 @@ class MonitoringService:
                 # Реконсилиация Platega SBP-подписок: страховка на случай потерянных
                 # коллбеков / зависших PENDING. Гейт внутри метода (PLATEGA_RECURRENT_ENABLED).
                 await self._reconcile_platega_subscriptions(db)
+                # n2: pre-bill — уведомление за ~24ч до автосписания Platega.
+                await self._notify_platega_upcoming_charges(db)
 
                 # Реконсилиация рекуррентных подписок Lava: та же страховка на
                 # случай потерянных вебхуков / недошедших отмен.
@@ -726,6 +728,13 @@ class MonitoringService:
             warning_days = settings.get_autopay_warning_days()
             all_processed_users = set()
 
+            # n2: подписки с активным провайдерским автопродлением (Platega/Lava)
+            # исключаем из «продлите вручную»: у них своё списание, а за ~24ч
+            # до него приходит отдельное pre-bill уведомление.
+            from app.services.recurrent_amount import list_provider_recurrent_subscription_ids
+
+            _recurrent_sub_ids = await list_provider_recurrent_subscription_ids(db)
+
             for days in warning_days:
                 expiring_subscriptions = await self._get_expiring_paid_subscriptions(db, days)
                 sent_count = 0
@@ -747,6 +756,11 @@ class MonitoringService:
                 for subscription in expiring_subscriptions:
                     user = await get_user_by_id(db, subscription.user_id)
                     if not user:
+                        continue
+
+                    # n2: активное провайдерское автопродление — «продлите
+                    # вручную» не шлём (своё списание + pre-bill за сутки).
+                    if subscription.id in _recurrent_sub_ids:
                         continue
 
                     # Respect user notification preferences
@@ -2816,6 +2830,11 @@ class MonitoringService:
                             remote_status=remote_status,
                         )
 
+                        # n2: привязка протухла (TTL) или отклонена — скажем
+                        # юзеру, что подключение надо начать заново (разово).
+                        if new_status == 'FAILED' and previous_status == 'PENDING':
+                            await self._notify_platega_binding_expired(db, record)
+
                     # Потерянный CONFIRMED при живом remote: статус чинится выше,
                     # а деньги — здесь. Порядок важен: сначала статус-решение
                     # (remote cancelled → локально CANCELLED), потом replay —
@@ -2825,6 +2844,11 @@ class MonitoringService:
                         from app.services.payment.platega import replay_missed_platega_charges
 
                         await replay_missed_platega_charges(db, record, remote)
+
+                    # n2: незавершённая привязка — разовое напоминание ~через
+                    # час (цикл мониторинга часовой): ссылка на банк ещё жива.
+                    if record.status == 'PENDING' and age_minutes >= 55:
+                        await self._notify_platega_pending_binding(db, record)
                 except Exception as record_error:
                     logger.warning(
                         'Не удалось реконсилировать Platega-подписку',
@@ -2864,6 +2888,171 @@ class MonitoringService:
                     )
         except Exception as e:
             logger.warning('Ошибка реконсиляции Platega-подписок', error=e)
+
+    async def _notify_platega_pending_binding(self, db: AsyncSession, record) -> None:
+        """n2: разовое напоминание о незавершённой привязке СБП (~через час).
+
+        Дедупликация — SentNotification с days_before=record.id: ровно одно
+        напоминание на каждую попытку привязки. Ошибки глушатся: сбой
+        уведомления не должен ронять цикл реконсиляции.
+        """
+        try:
+            if not NotificationSettingsService.are_notifications_globally_enabled():
+                return
+            if await notification_sent(db, record.user_id, record.subscription_id, 'platega_pending_reminder', record.id):
+                return
+            user = await get_user_by_id(db, record.user_id)
+            if not user or not user.telegram_id:
+                return
+            texts = get_texts(user.language)
+            message = texts.t(
+                'SBP_RECURRING_PENDING_REMINDER',
+                '⏳ <b>Завершите подключение автопродления</b>',
+            ).format(
+                amount=settings.format_price(record.amount_kopeks),
+                days=record.charge_days,
+            )
+            keyboard = None
+            if record.redirect_url:
+                from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t('SBP_RECURRING_CONFIRM_BUTTON', '🏦 Подтвердить в банке'),
+                                url=record.redirect_url,
+                            )
+                        ]
+                    ]
+                )
+            await self._send_message_with_logo(
+                chat_id=user.telegram_id,
+                text=message,
+                parse_mode='HTML',
+                reply_markup=keyboard,
+                user=user,
+            )
+            await record_notification(db, record.user_id, record.subscription_id, 'platega_pending_reminder', record.id)
+            logger.info(
+                '📨 Напоминание о незавершённой СБП-привязке отправлено',
+                user_id=record.user_id,
+                local_id=record.id,
+            )
+        except Exception as error:
+            logger.debug('Не удалось отправить напоминание о СБП-привязке', error=error)
+
+    async def _notify_platega_binding_expired(self, db: AsyncSession, record) -> None:
+        """n2: уведомление, что незавершённая привязка СБП отменена (TTL/отказ).
+
+        Разово на запись (days_before=record.id); ошибки глушатся.
+        """
+        try:
+            if not NotificationSettingsService.are_notifications_globally_enabled():
+                return
+            if await notification_sent(db, record.user_id, record.subscription_id, 'platega_binding_expired', record.id):
+                return
+            user = await get_user_by_id(db, record.user_id)
+            if not user or not user.telegram_id:
+                return
+            texts = get_texts(user.language)
+            message = texts.t(
+                'SBP_RECURRING_PENDING_EXPIRED',
+                '⌛ <b>Подключение автопродления отменено</b>',
+            )
+            from aiogram.types import InlineKeyboardMarkup
+
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [build_miniapp_or_callback_button(text='📱 Моя подписка', callback_data='menu_subscription')],
+                ]
+            )
+            await self._send_message_with_logo(
+                chat_id=user.telegram_id,
+                text=message,
+                parse_mode='HTML',
+                reply_markup=keyboard,
+                user=user,
+            )
+            await record_notification(db, record.user_id, record.subscription_id, 'platega_binding_expired', record.id)
+            logger.info(
+                '📨 Уведомление об отмене СБП-привязки отправлено',
+                user_id=record.user_id,
+                local_id=record.id,
+            )
+        except Exception as error:
+            logger.debug('Не удалось отправить уведомление об отмене СБП-привязки', error=error)
+
+    async def _notify_platega_upcoming_charges(self, db: AsyncSession) -> None:
+        """n2: pre-bill — уведомление за ~24ч до автосписания Platega.
+
+        Дедупликация: days_before = номер суток списания (epoch-day) — ровно
+        одно уведомление на каждое списание. Ошибки не роняют цикл.
+        """
+        try:
+            if not NotificationSettingsService.are_notifications_globally_enabled():
+                return
+            from app.database.crud import platega_subscription as sub_crud
+
+            records = await sub_crud.list_platega_subscriptions_by_statuses(db, ['ACTIVE'])
+            now = datetime.now(UTC)
+            horizon = now + timedelta(hours=24)
+            for record in records:
+                try:
+                    next_charge_at = record.next_charge_at
+                    if next_charge_at is None or next_charge_at <= now or next_charge_at > horizon:
+                        continue
+                    cycle_key = int(next_charge_at.timestamp() // 86400)
+                    if await notification_sent(db, record.user_id, record.subscription_id, 'platega_prebill', cycle_key):
+                        continue
+                    user = await get_user_by_id(db, record.user_id)
+                    if not user or not user.telegram_id:
+                        continue
+                    tariff_line = ''
+                    if record.tariff_id:
+                        from app.database.crud.tariff import get_tariff_by_id
+
+                        tariff = await get_tariff_by_id(db, record.tariff_id)
+                        if tariff:
+                            tariff_line = f' («{tariff.name}»)'
+                    texts = get_texts(user.language)
+                    message = texts.t(
+                        'SBP_RECURRING_PREBILL',
+                        '🔔 <b>Скоро автосписание по СБП</b>',
+                    ).format(
+                        date=format_local_datetime(next_charge_at, '%d.%m.%Y'),
+                        amount=settings.format_price(record.amount_kopeks),
+                        tariff_line=tariff_line,
+                    )
+                    from aiogram.types import InlineKeyboardMarkup
+
+                    keyboard = InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [build_miniapp_or_callback_button(text='📱 Моя подписка', callback_data='menu_subscription')],
+                        ]
+                    )
+                    await self._send_message_with_logo(
+                        chat_id=user.telegram_id,
+                        text=message,
+                        parse_mode='HTML',
+                        reply_markup=keyboard,
+                        user=user,
+                    )
+                    await record_notification(db, record.user_id, record.subscription_id, 'platega_prebill', cycle_key)
+                    logger.info(
+                        '📨 Pre-bill уведомление о списании Platega отправлено',
+                        user_id=record.user_id,
+                        local_id=record.id,
+                        next_charge_at=next_charge_at.isoformat(),
+                    )
+                except Exception as record_error:
+                    logger.debug(
+                        'Не удалось отправить pre-bill по Platega-подписке',
+                        local_id=getattr(record, 'id', None),
+                        error=record_error,
+                    )
+        except Exception as error:
+            logger.warning('Ошибка pre-bill уведомлений Platega', error=error)
 
     async def _reconcile_lava_subscriptions(self, db: AsyncSession):
         """Safety net для рекуррентных подписок Lava — зеркало Platega-реконсиляции.

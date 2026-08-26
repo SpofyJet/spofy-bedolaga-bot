@@ -189,6 +189,20 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
             )
             return
 
+    # n2: включение баланс-автоплатежа централизованно гасит провайдерские
+    # привязки этой подписки (см. crud.update_subscription_autopay) —
+    # предупреждаем alert'ом, флоу не прерываем.
+    if enable:
+        try:
+            from app.services.recurrent_amount import get_active_recurrent_engines, recurrent_engines_warning
+
+            _engines = await get_active_recurrent_engines(db, subscription)
+            _warning = recurrent_engines_warning(get_texts(db_user.language), _engines, enabling='balance')
+            if _warning:
+                await callback.answer(_warning, show_alert=True)
+        except Exception:
+            pass
+
     await update_subscription_autopay(db, subscription, enable)
 
     if enable:
@@ -536,6 +550,19 @@ async def handle_sbp_recurring_enable(
         )
         return
 
+    # n2: предупреждение о смене движка: активная Lava-привязка или
+    # баланс-автоплатёж этой подписки будут отключены при создании
+    # СБП-привязки — предупреждаем alert'ом, флоу не прерываем.
+    try:
+        from app.services.recurrent_amount import get_active_recurrent_engines, recurrent_engines_warning
+
+        _engines = await get_active_recurrent_engines(db, subscription)
+        _warning = recurrent_engines_warning(texts, _engines, enabling='platega')
+        if _warning:
+            await callback.answer(_warning, show_alert=True)
+    except Exception:
+        pass
+
     from app.services.payment.platega import enable_platega_sbp_recurring
 
     try:
@@ -663,6 +690,19 @@ async def handle_sbp_recurring_enable_for(
             show_alert=True,
         )
         return
+
+    # n2: предупреждение о смене движка: активная Lava-привязка или
+    # баланс-автоплатёж этой подписки будут отключены при создании
+    # СБП-привязки — предупреждаем alert'ом, флоу не прерываем.
+    try:
+        from app.services.recurrent_amount import get_active_recurrent_engines, recurrent_engines_warning
+
+        _engines = await get_active_recurrent_engines(db, subscription)
+        _warning = recurrent_engines_warning(texts, _engines, enabling='platega')
+        if _warning:
+            await callback.answer(_warning, show_alert=True)
+    except Exception:
+        pass
 
     from app.services.payment.platega import enable_platega_sbp_recurring
 

@@ -119,6 +119,9 @@ def lava_reconcile_decision(
         return 'FAILED'
     if remote_status == 'past_due' and local_status not in ('PAST_DUE', 'CANCELLED'):
         return 'PAST_DUE'
+    # TTL незавершённой привязки (n2) — зеркало platega_reconcile_decision.
+    if local_status == 'PENDING' and age_minutes > 48 * 60:
+        return 'FAILED'
     if remote_status is None and remote_missing and local_status == 'PENDING' and age_minutes > 30:
         return 'FAILED'
     return None

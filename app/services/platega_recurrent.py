@@ -109,6 +109,12 @@ def platega_reconcile_decision(
         return 'FAILED'
     if remote_status in ('pastdue', 'past_due', 'past due') and local_status not in ('PAST_DUE', 'CANCELLED'):
         return 'PAST_DUE'
+    # TTL незавершённой привязки (n2): 48ч без подтверждения в банке — хороним:
+    # висящий PENDING держит unique-индекс (новую привязку не создать) и
+    # статусную строку в UI. Правила выше приоритетнее: живой remote
+    # (active/cancelled/failed/pastdue) всегда побеждает TTL.
+    if local_status == 'PENDING' and age_minutes > 48 * 60:
+        return 'FAILED'
     if remote_status is None and remote_missing and local_status == 'PENDING' and age_minutes > 30:
         return 'FAILED'
     return None

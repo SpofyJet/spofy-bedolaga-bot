@@ -136,3 +136,84 @@ async def sync_recurrent_bindings_after_price_change(db: AsyncSession, subscript
             subscription_id=subscription_id,
             error=str(error),
         )
+
+
+async def get_active_recurrent_engines(db: AsyncSession, subscription) -> set[str]:
+    """Какие движки автопродления активны у подписки: {'platega', 'lava', 'balance'}.
+
+    n2: предупреждение о взаимоисключении при подключении нового движка.
+    Ошибки провайдерских запросов глушатся: лучше не предупредить, чем
+    сломать флоу включения.
+    """
+    engines: set[str] = set()
+    if getattr(subscription, 'autopay_enabled', False):
+        engines.add('balance')
+    try:
+        from app.database.crud.platega_subscription import get_active_platega_subscription_by_subscription
+
+        if await get_active_platega_subscription_by_subscription(db, subscription.id):
+            engines.add('platega')
+    except Exception:
+        pass
+    try:
+        from app.database.crud.lava_subscription import get_active_lava_subscription_by_subscription
+
+        if await get_active_lava_subscription_by_subscription(db, subscription.id):
+            engines.add('lava')
+    except Exception:
+        pass
+    return engines
+
+
+def recurrent_engines_warning(texts, engines: set[str], *, enabling: str) -> str | None:
+    """Текст предупреждения о смене движка автопродления, либо None.
+
+    ``enabling`` — движок, который подключают ('platega'/'lava'/'balance');
+    остальные активные будут отключены сервисом при создании привязки
+    (взаимоисключение централизовано там) — об этом и предупреждаем.
+    """
+    others = engines - {enabling}
+    if not others:
+        return None
+    names = {
+        'platega': texts.t('RECURRENT_ENGINE_SBP', 'СБП'),
+        'lava': texts.t('RECURRENT_ENGINE_LAVA', 'карта (Lava)'),
+        'balance': texts.t('RECURRENT_ENGINE_BALANCE', 'автоплатёж с баланса'),
+    }
+    listed = ', '.join(names[engine] for engine in ('platega', 'lava', 'balance') if engine in others)
+    return texts.t(
+        'RECURRENT_ENGINE_SWITCH_WARNING',
+        '⚠️ У вас уже включено автопродление: {engines}. '
+        'При подключении нового оно будет отключено — двойных списаний не будет.',
+    ).format(engines=listed)
+
+
+async def list_provider_recurrent_subscription_ids(db: AsyncSession) -> set[int]:
+    """id подписок с живой провайдерской привязкой (Platega/Lava), любой alive-статус.
+
+    n2: исключение таких подписок из «продлите вручную»-уведомлений — у них
+    своё списание, а за ~24ч до него приходит pre-bill. Ошибки -> пустое
+    множество (уведомления уходят как раньше — безопасная деградация).
+    """
+    ids: set[int] = set()
+    try:
+        from app.database.crud import platega_subscription as platega_crud
+
+        for record in await platega_crud.list_platega_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE']):
+            ids.add(record.subscription_id)
+    except Exception:
+        pass
+    try:
+        from sqlalchemy import select
+
+        from app.database.models import LavaSubscription
+
+        result = await db.execute(
+            select(LavaSubscription.subscription_id).where(
+                LavaSubscription.status.in_(('PENDING', 'ACTIVE', 'PAST_DUE'))
+            )
+        )
+        ids.update(row[0] for row in result.all())
+    except Exception:
+        pass
+    return ids
