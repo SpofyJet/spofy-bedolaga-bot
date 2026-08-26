@@ -2188,5 +2188,12 @@
   "TARIFF_SWITCH_RECURRING_NOTE": "\n\n⚠️ Auto-renewal for the old plan was cancelled — set it up again with the button below.",
   "TRIAL_GO_PAID_BUTTON": "⭐️ Switch to a paid plan",
   "SBP_PURCHASE_BUTTON_PRICED": "⚡ Pay {price} — then every {period}",
-  "TARIFF_PURCHASE_ONE_TIME_BUTTON": "💳 One-time — this period only"
+  "TARIFF_PURCHASE_ONE_TIME_BUTTON": "💳 One-time — this period only",
+  "RECURRENT_ENGINE_SBP": "SBP",
+  "RECURRENT_ENGINE_LAVA": "card (Lava)",
+  "RECURRENT_ENGINE_BALANCE": "balance auto-payment",
+  "RECURRENT_ENGINE_SWITCH_WARNING": "⚠️ Auto-renewal is already on: {engines}. It will be disabled when you enable the new one — no double charges.",
+  "SBP_RECURRING_PENDING_REMINDER": "⏳ <b>Finish setting up auto-renewal</b>\n\nYou started enabling SBP auto-renewal but did not confirm it in your banking app.\n\n💰 {amount} every {days} days — the first charge happens right after confirmation.\n⚠️ The link is valid for a limited time.",
+  "SBP_RECURRING_PENDING_EXPIRED": "⌛ <b>Auto-renewal setup was cancelled</b>\n\nThe SBP binding was not confirmed in time.\nTo enable auto-renewal, start again: \"My subscription\" → \"Auto-payment\".",
+  "SBP_RECURRING_PREBILL": "🔔 <b>Upcoming SBP auto-charge</b>\n\nOn {date}, <b>{amount}</b> will be charged for your subscription auto-renewal{tariff_line}.\n\nYou can cancel it in \"My subscription\" → \"Auto-payment\"."
 }
