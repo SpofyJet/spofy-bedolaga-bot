@@ -32,6 +32,7 @@ from app.services.subscription_checkout_service import (
 from app.services.user_cart_service import user_cart_service
 from app.states import SubscriptionStates
 from app.utils.formatters import format_datetime
+from app.utils.photo_message import edit_or_answer_photo
 
 from .countries import (
     _build_countries_selection_text,
@@ -449,7 +450,9 @@ async def handle_sbp_recurring_menu(
                     [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_autopay')],
                 ]
             )
-            await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+            # n7: точка входа может быть медиа-рассылкой — edit_text по фото
+            # падает; edit_or_answer_photo сам выберет caption/текст.
+            await edit_or_answer_photo(callback, text, keyboard)
             await callback.answer()
             return
 
@@ -491,7 +494,8 @@ async def handle_sbp_recurring_menu(
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+    # n7: точка входа может быть медиа-рассылкой — безопасная замена.
+    await edit_or_answer_photo(callback, text, keyboard)
     await callback.answer()
 
 
@@ -608,7 +612,10 @@ async def handle_sbp_recurring_enable(
         ]
     )
 
-    await callback.message.edit_text(
+    # n7: точка входа может быть медиа-рассылкой (кнопка из broadcast'а) —
+    # edit_text по фото упадёт; edit_or_answer_photo сам выберет caption/текст.
+    await edit_or_answer_photo(
+        callback,
         texts.t(
             'SBP_RECURRING_ENABLE_SUCCESS',
             '⚡ <b>Автопродление через СБП</b>\n\n'
@@ -625,8 +632,7 @@ async def handle_sbp_recurring_enable(
             amount=f'{(result.get("amount_kopeks") or 0) // 100} ₽',
             days=result.get('charge_days') or 30,
         ),
-        reply_markup=keyboard,
-        parse_mode='HTML',
+        keyboard,
     )
     await callback.answer()
 
@@ -746,7 +752,10 @@ async def handle_sbp_recurring_enable_for(
         ]
     )
 
-    await callback.message.edit_text(
+    # n7: точка входа может быть медиа-рассылкой (кнопка из broadcast'а) —
+    # edit_text по фото упадёт; edit_or_answer_photo сам выберет caption/текст.
+    await edit_or_answer_photo(
+        callback,
         texts.t(
             'SBP_RECURRING_ENABLE_SUCCESS',
             '⚡ <b>Автопродление через СБП</b>\n\n'
@@ -763,8 +772,7 @@ async def handle_sbp_recurring_enable_for(
             amount=f'{(result.get("amount_kopeks") or 0) // 100} ₽',
             days=result.get('charge_days') or 30,
         ),
-        reply_markup=keyboard,
-        parse_mode='HTML',
+        keyboard,
     )
     await callback.answer()
 
