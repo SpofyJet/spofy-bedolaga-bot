@@ -278,8 +278,8 @@ def get_tariff_periods_keyboard(
                 _per_month = int(round(price * 30 / period))
                 _saving = 100 - (_per_month * 100 // _base_30)
                 if _saving >= 5:
-                    price_text = f'{price_text} (−{_saving}%)'
-        button_text = f'{format_period(period)} — {price_text}'
+                    price_text = f'{price_text} (-{_saving}%)'
+        button_text = f'📅 {format_period(period)} — {price_text}'
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_period:{tariff.id}:{period}')])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
@@ -319,8 +319,8 @@ def get_tariff_periods_keyboard_with_traffic(
                 _per_month = int(round(price * 30 / period))
                 _saving = 100 - (_per_month * 100 // _base_30)
                 if _saving >= 5:
-                    price_text = f'{price_text} (−{_saving}%)'
-        button_text = f'{format_period(period)} — {price_text}'
+                    price_text = f'{price_text} (-{_saving}%)'
+        button_text = f'📅 {format_period(period)} — {price_text}'
         # Используем другой callback для перехода к настройке трафика
         buttons.append(
             [InlineKeyboardButton(text=button_text, callback_data=f'tariff_period_traffic:{tariff.id}:{period}')]
@@ -644,63 +644,57 @@ def get_custom_tariff_keyboard(
     buttons = []
 
     # Кнопки изменения дней
+    # n6-П11: минусы и плюсы — разными рядами (≤4 кнопок в ряду),
+    # текущее значение уже есть в тексте экрана — мёртвая noop-кнопка убрана
     if can_custom_days:
-        days_row = []
+        days_minus_row = []
         # -30 / -7 / -1
         if days > min_days:
             if days - 30 >= min_days:
-                days_row.append(InlineKeyboardButton(text='-30', callback_data=f'custom_days:{tariff_id}:-30'))
+                days_minus_row.append(InlineKeyboardButton(text='-30', callback_data=f'custom_days:{tariff_id}:-30'))
             if days - 7 >= min_days:
-                days_row.append(InlineKeyboardButton(text='-7', callback_data=f'custom_days:{tariff_id}:-7'))
-            days_row.append(InlineKeyboardButton(text='-1', callback_data=f'custom_days:{tariff_id}:-1'))
+                days_minus_row.append(InlineKeyboardButton(text='-7', callback_data=f'custom_days:{tariff_id}:-7'))
+            days_minus_row.append(InlineKeyboardButton(text='-1', callback_data=f'custom_days:{tariff_id}:-1'))
+        if days_minus_row:
+            buttons.append(days_minus_row)
 
-        # Текущее значение
-        days_row.append(
-            InlineKeyboardButton(
-                text=texts.t('TARIFF_PURCHASE_DAYS_BUTTON', '📅 {days} дн.').format(days=days), callback_data='noop'
-            )
-        )
-
+        days_plus_row = []
         # +1 / +7 / +30
         if days < max_days:
-            days_row.append(InlineKeyboardButton(text='+1', callback_data=f'custom_days:{tariff_id}:1'))
+            days_plus_row.append(InlineKeyboardButton(text='+1', callback_data=f'custom_days:{tariff_id}:1'))
             if days + 7 <= max_days:
-                days_row.append(InlineKeyboardButton(text='+7', callback_data=f'custom_days:{tariff_id}:7'))
+                days_plus_row.append(InlineKeyboardButton(text='+7', callback_data=f'custom_days:{tariff_id}:7'))
             if days + 30 <= max_days:
-                days_row.append(InlineKeyboardButton(text='+30', callback_data=f'custom_days:{tariff_id}:30'))
-
-        if days_row:
-            buttons.append(days_row)
+                days_plus_row.append(InlineKeyboardButton(text='+30', callback_data=f'custom_days:{tariff_id}:30'))
+        if days_plus_row:
+            buttons.append(days_plus_row)
 
     # Кнопки изменения трафика
+    # n6-П11: трафик — минусы и плюсы разными рядами, noop-кнопка убрана
     if can_custom_traffic:
-        traffic_row = []
+        traffic_minus_row = []
         # -100 / -10 / -1
         if traffic_gb > min_traffic:
             if traffic_gb - 100 >= min_traffic:
-                traffic_row.append(InlineKeyboardButton(text='-100', callback_data=f'custom_traffic:{tariff_id}:-100'))
+                traffic_minus_row.append(
+                    InlineKeyboardButton(text='-100', callback_data=f'custom_traffic:{tariff_id}:-100')
+                )
             if traffic_gb - 10 >= min_traffic:
-                traffic_row.append(InlineKeyboardButton(text='-10', callback_data=f'custom_traffic:{tariff_id}:-10'))
-            traffic_row.append(InlineKeyboardButton(text='-1', callback_data=f'custom_traffic:{tariff_id}:-1'))
+                traffic_minus_row.append(InlineKeyboardButton(text='-10', callback_data=f'custom_traffic:{tariff_id}:-10'))
+            traffic_minus_row.append(InlineKeyboardButton(text='-1', callback_data=f'custom_traffic:{tariff_id}:-1'))
+        if traffic_minus_row:
+            buttons.append(traffic_minus_row)
 
-        # Текущее значение
-        traffic_row.append(
-            InlineKeyboardButton(
-                text=texts.t('TARIFF_PURCHASE_TRAFFIC_BUTTON', '📊 {traffic} ГБ').format(traffic=traffic_gb),
-                callback_data='noop',
-            )
-        )
-
+        traffic_plus_row = []
         # +1 / +10 / +100
         if traffic_gb < max_traffic:
-            traffic_row.append(InlineKeyboardButton(text='+1', callback_data=f'custom_traffic:{tariff_id}:1'))
+            traffic_plus_row.append(InlineKeyboardButton(text='+1', callback_data=f'custom_traffic:{tariff_id}:1'))
             if traffic_gb + 10 <= max_traffic:
-                traffic_row.append(InlineKeyboardButton(text='+10', callback_data=f'custom_traffic:{tariff_id}:10'))
+                traffic_plus_row.append(InlineKeyboardButton(text='+10', callback_data=f'custom_traffic:{tariff_id}:10'))
             if traffic_gb + 100 <= max_traffic:
-                traffic_row.append(InlineKeyboardButton(text='+100', callback_data=f'custom_traffic:{tariff_id}:100'))
-
-        if traffic_row:
-            buttons.append(traffic_row)
+                traffic_plus_row.append(InlineKeyboardButton(text='+100', callback_data=f'custom_traffic:{tariff_id}:100'))
+        if traffic_plus_row:
+            buttons.append(traffic_plus_row)
 
     # Кнопка подтверждения
     buttons.append(
@@ -2602,8 +2596,8 @@ def get_tariff_extend_keyboard(
                 _per_month = int(round(price * 30 / period))
                 _saving = 100 - (_per_month * 100 // _base_30)
                 if _saving >= 5:
-                    price_text = f'{price_text} (−{_saving}%)'
-        button_text = f'{format_period(period)} — {price_text}'
+                    price_text = f'{price_text} (-{_saving}%)'
+        button_text = f'📅 {format_period(period)} — {price_text}'
         # subscription_id ОБЯЗАН быть первым сегментом: иначе резолвер по callback
         # принял бы хвостовой {period} за subscription_id (см. issue #3012 —
         # период совпадал с id чужой подписки и продлевалась не та подписка).
@@ -3407,8 +3401,8 @@ def get_tariff_switch_periods_keyboard(
                 _per_month = int(round(price * 30 / period))
                 _saving = 100 - (_per_month * 100 // _base_30)
                 if _saving >= 5:
-                    price_text = f'{price_text} (−{_saving}%)'
-        button_text = f'{format_period(period)} — {price_text}'
+                    price_text = f'{price_text} (-{_saving}%)'
+        button_text = f'📅 {format_period(period)} — {price_text}'
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_sw_period:{tariff.id}:{period}')])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_switch')])

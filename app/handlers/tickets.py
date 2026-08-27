@@ -573,8 +573,9 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     )
     if has_photos:
         try:
+            # n6-П14: служебные ряды — после действий тикета, перед «Назад»
             keyboard.inline_keyboard.insert(
-                0,
+                max(0, len(keyboard.inline_keyboard) - 1),
                 [
                     types.InlineKeyboardButton(
                         text=texts.t('TICKET_ATTACHMENTS', '📎 Вложения'),
@@ -597,7 +598,8 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
                 types.InlineKeyboardButton(text='➡️', callback_data=f'ticket_view_page_{ticket_id}_{page + 1}')
             )
         try:
-            keyboard.inline_keyboard.insert(0, nav_row)
+            # n6-П14: пагинация — после действий, перед «Назад»
+            keyboard.inline_keyboard.insert(max(0, len(keyboard.inline_keyboard) - 1), nav_row)
         except Exception:
             pass
     # Показываем как текст (чтобы не упереться в caption лимит)

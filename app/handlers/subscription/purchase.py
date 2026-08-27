@@ -1434,7 +1434,10 @@ async def _edit_message_text_or_caption(
             return
 
         if 'there is no text in the message to edit' in error_message:
-            if message.caption is not None:
+            # n6: лимит caption 1024 — при переполнении пересылаем обычным сообщением
+            from app.utils.message_patch import caption_exceeds_telegram_limit
+
+            if message.caption is not None and not caption_exceeds_telegram_limit(text):
                 await message.edit_caption(
                     caption=text,
                     reply_markup=reply_markup,

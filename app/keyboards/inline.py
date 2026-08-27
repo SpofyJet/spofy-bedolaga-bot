@@ -212,6 +212,8 @@ def get_rules_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup
         inline_keyboard=[
             [
                 InlineKeyboardButton(text=texts.RULES_ACCEPT, callback_data='rules_accept'),
+            ],
+            [
                 InlineKeyboardButton(text=texts.RULES_DECLINE, callback_data='rules_decline'),
             ]
         ]
@@ -224,6 +226,8 @@ def get_privacy_policy_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeybo
         inline_keyboard=[
             [
                 InlineKeyboardButton(text=texts.PRIVACY_POLICY_ACCEPT, callback_data='privacy_policy_accept'),
+            ],
+            [
                 InlineKeyboardButton(text=texts.PRIVACY_POLICY_DECLINE, callback_data='privacy_policy_decline'),
             ]
         ]
@@ -692,10 +696,16 @@ def get_main_menu_keyboard(
             if settings.is_multi_tariff_enabled()
             else texts.MENU_SUBSCRIPTION
         )
-        paired_buttons.append(InlineKeyboardButton(text=sub_btn_text, callback_data='menu_subscription'))
-        # Для пробной подписки — добавляем кнопку покупки рядом
+        # n6-П2: «Подписка» и покупка (для триала) — отдельными рядами, без слипания
         if subscription and getattr(subscription, 'is_trial', False):
-            paired_buttons.append(InlineKeyboardButton(text=texts.t('MENU_BUY_SUBSCRIPTION', '💎 Купить Подписку'), callback_data='menu_buy'))
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('MENU_BUY_SUBSCRIPTION', '💎 Купить Подписку'), callback_data='menu_buy'
+                    )
+                ]
+            )
+        keyboard.append([InlineKeyboardButton(text=sub_btn_text, callback_data='menu_subscription')])
 
         # Добавляем кнопку докупки трафика для лимитированных подписок
         # В режиме тарифов проверяем tariff_id (детальная проверка в хендлере)
@@ -710,10 +720,13 @@ def get_main_menu_keyboard(
                 show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
 
         if show_traffic_topup:
-            paired_buttons.append(
-                InlineKeyboardButton(
-                    text=texts.t('BUY_TRAFFIC_BUTTON', '📈 Докупить трафик'), callback_data='buy_traffic'
-                )
+            # n6-П2: докупка трафика — отдельным рядом
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('BUY_TRAFFIC_BUTTON', '📊 Докупить трафик'), callback_data='buy_traffic'
+                    )
+                ]
             )
 
     # smart-trial-button: скрываем триал, если он уже использован (не только оплачен)
@@ -748,10 +761,16 @@ def get_main_menu_keyboard(
         for sub_btn in subscription_buttons:
             keyboard.append([sub_btn])
 
-    keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data='menu_balance')])
+    # n6-П1: у нового пользователя (есть CTA-ряды) баланс уходит ниже рефералки
+    defer_balance = bool(subscription_buttons)
+    if not defer_balance:
+        keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data='menu_balance')])
 
     if simple_purchase_button:
-        paired_buttons.append(simple_purchase_button)
+        if defer_balance:
+            keyboard.append([simple_purchase_button])
+        else:
+            paired_buttons.append(simple_purchase_button)
 
     if show_resume_checkout or has_saved_cart:
         resume_callback = 'return_to_saved_cart' if has_saved_cart else 'subscription_resume_checkout'
@@ -780,6 +799,10 @@ def get_main_menu_keyboard(
                 callback_data='menu_referrals'
             )
         ])
+
+    if defer_balance:
+        # n6-П1: баланс после социального CTA
+        keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data='menu_balance')])
 
     # Конкурсы — отдельной строкой
     if settings.CONTESTS_ENABLED and settings.CONTESTS_BUTTON_VISIBLE:
@@ -1079,10 +1102,8 @@ def get_insufficient_balance_keyboard(
             and isinstance(last_row[0], InlineKeyboardButton)
             and last_row[0].callback_data in {'menu_balance', 'back_to_menu'}
         ):
-            keyboard.inline_keyboard[-1][0] = InlineKeyboardButton(
-                text=texts.t('PAYMENT_RETURN_HOME_BUTTON', '🏠 На главную'),
-                callback_data='back_to_menu',
-            )
+            # n6-П17: «Назад» (к балансу) не подменяем на «На главную» —
+            # пользователь сохраняет шаг назад
             back_row_index = len(keyboard.inline_keyboard) - 1
 
     # Если есть сохраненная корзина, добавляем кнопку возврата к оформлению
@@ -1313,7 +1334,14 @@ def get_subscription_keyboard(
             keyboard.append(settings_row)
 
 
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
+    # n6-П3: из экрана подписки — сразу «🏠 В главное меню» (callback тот же)
+    keyboard.append(
+        [
+            InlineKeyboardButton(
+                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 В главное меню'), callback_data='back_to_menu'
+            )
+        ]
+    )
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -1325,18 +1353,22 @@ def get_payment_methods_keyboard_with_cart(
     texts = get_texts(language)
     keyboard = get_payment_methods_keyboard(amount_kopeks, language)
 
-    # Добавляем кнопку "Очистить корзину"
+    # n6-П28: «Назад» остаётся последним рядом; разрушительная
+    # «Очистить корзину» — перед ним, возврат к оформлению — выше
+    back_row = keyboard.inline_keyboard.pop() if keyboard.inline_keyboard else []
+
+    # Кнопка возврата к оформлению подписки
+    keyboard.inline_keyboard.append(
+        [InlineKeyboardButton(text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT, callback_data='return_to_saved_cart')]
+    )
+
+    # Кнопка "Очистить корзину"
     keyboard.inline_keyboard.append(
         [InlineKeyboardButton(text='🗑️ Очистить корзину и вернуться', callback_data='clear_saved_cart')]
     )
 
-    # Добавляем кнопку возврата к оформлению подписки
-    keyboard.inline_keyboard.insert(
-        -1,
-        [  # Вставляем перед кнопкой "назад"
-            InlineKeyboardButton(text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT, callback_data='return_to_saved_cart')
-        ],
-    )
+    if back_row:
+        keyboard.inline_keyboard.append(back_row)
 
     return keyboard
 
@@ -1368,9 +1400,9 @@ def get_insufficient_balance_keyboard_with_cart(
         has_saved_cart=True,
     )
 
-    # Добавляем кнопку очистки корзины в начало
+    # n6-П28: очистка корзины — перед последним рядом («Назад»), не в начало
     keyboard.inline_keyboard.insert(
-        0,
+        max(0, len(keyboard.inline_keyboard) - 1),
         [
             InlineKeyboardButton(
                 text='🗑️ Очистить корзину и вернуться',
@@ -1390,6 +1422,8 @@ def get_trial_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=texts.t('TRIAL_ACTIVATE_BUTTON', '🎁 Активировать'), callback_data='trial_activate'
                 ),
+            ],
+            [
                 InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu'),
             ]
         ]
@@ -1406,6 +1440,29 @@ def _spofy_days_word(n: int) -> str:
     if 2 <= last <= 4:
         return 'дня'
     return 'дней'
+
+
+def _spofy_days_label(days: int, language: str = 'ru') -> str:
+    """n6-П5: «N дней» с учётом языка — единый формат кнопок периодов."""
+    lang = (language or 'ru').split('-')[0].lower()
+    n = abs(int(days))
+    if lang == 'en':
+        return f'{n} day' if n == 1 else f'{n} days'
+    if lang == 'zh':
+        return f'{n} 天'
+    if lang == 'fa':
+        return f'{n} روز'
+    if lang == 'ua':
+        if 11 <= (n % 100) <= 14:
+            word = 'днів'
+        elif n % 10 == 1:
+            word = 'день'
+        elif 2 <= n % 10 <= 4:
+            word = 'дні'
+        else:
+            word = 'днів'
+        return f'{n} {word}'
+    return f'{n} {_spofy_days_word(n)}'
 
 
 def get_subscription_period_keyboard(
@@ -1442,16 +1499,14 @@ def get_subscription_period_keyboard(
         elif getattr(price_info, 'has_discount', False):
             button_text = (
                 f'📅 {_days_label} — '
-                f'{texts.format_price(price_info.base_price)} ➜ '
+                f'{texts.format_price(price_info.base_price)} → '
                 f'{texts.format_price(price_info.final_price)} '
                 f'(-{price_info.discount_percent}%)'
             )
         else:
             button_text = f'📅 {_days_label} — {texts.format_price(price_info.final_price)}'
 
-        if days >= 60 and price_info.final_price > 0:
-            _per_month = int(round(price_info.final_price * 30 / days))
-            button_text = f'{button_text} · {texts.format_price(_per_month)}/мес'
+        # n6-П5: цену за месяц с кнопки убрали — кнопка короткая, детали в тексте экрана
 
         keyboard.append([InlineKeyboardButton(text=button_text, callback_data=f'period_{days}')])
 
@@ -1532,7 +1587,7 @@ def get_countries_keyboard(
         if country['price_kopeks'] > 0:
             price_text = f' (+{texts.format_price(country["price_kopeks"])})'
         else:
-            price_text = ' (Бесплатно)'
+            price_text = ' (бесплатно)'
 
         keyboard.append(
             [
@@ -1577,7 +1632,7 @@ def get_devices_keyboard(current: int, language: str = DEFAULT_LANGUAGE) -> Inli
 
     for devices in range(start_devices, end_devices):
         price = max(0, devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
-        price_text = f' (+{texts.format_price(price)})' if price > 0 else ' (вкл.)'
+        price_text = f' (+{texts.format_price(price)})' if price > 0 else ' (включено)'
         emoji = '✅' if devices == current else '⚪'
 
         button_text = f'{emoji} {devices}{price_text}'
@@ -1614,6 +1669,8 @@ def get_subscription_confirm_keyboard(language: str = DEFAULT_LANGUAGE) -> Inlin
         inline_keyboard=[
             [
                 InlineKeyboardButton(text=texts.CONFIRM, callback_data='subscription_confirm'),
+            ],
+            [
                 InlineKeyboardButton(text=texts.CANCEL, callback_data='subscription_cancel'),
             ]
         ]
@@ -1623,12 +1680,13 @@ def get_subscription_confirm_keyboard(language: str = DEFAULT_LANGUAGE) -> Inlin
 def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
+    # n6-П4: «Пополнить» — главное действие, первым рядом на всю ширину
     keyboard = [
+        [InlineKeyboardButton(text=texts.BALANCE_TOP_UP, callback_data='balance_topup')],
         [
             InlineKeyboardButton(text=texts.BALANCE_HISTORY, callback_data='balance_history'),
-            InlineKeyboardButton(text=texts.BALANCE_TOP_UP, callback_data='balance_topup'),
+            InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode'),
         ],
-        [InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode')],
     ]
     if settings.YOOKASSA_RECURRENT_ENABLED:
         keyboard.append(
@@ -1639,7 +1697,14 @@ def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
                 )
             ]
         )
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
+    # n6-П4: выход из баланса — «🏠 В главное меню» (callback тот же)
+    keyboard.append(
+        [
+            InlineKeyboardButton(
+                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 В главное меню'), callback_data='back_to_menu'
+            )
+        ]
+    )
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -2478,6 +2543,8 @@ def get_autopay_keyboard(language: str = DEFAULT_LANGUAGE, sub_id: int | None = 
         inline_keyboard=[
             [
                 InlineKeyboardButton(text=texts.t('ENABLE_BUTTON', '✅ Включить'), callback_data='autopay_enable'),
+            ],
+            [
                 InlineKeyboardButton(text=texts.t('DISABLE_BUTTON', '❌ Выключить'), callback_data='autopay_disable'),
             ],
             [
@@ -2549,6 +2616,8 @@ def get_confirm_unlink_keyboard(card_id: int, language: str = DEFAULT_LANGUAGE) 
                     text=texts.t('SAVED_CARDS_CONFIRM_YES', '✅ Да, отвязать'),
                     callback_data=f'confirm_unlink_{card_id}',
                 ),
+            ],
+            [
                 InlineKeyboardButton(
                     text=texts.t('CANCEL', '❌ Отмена'),
                     callback_data='saved_cards_list',
@@ -2810,7 +2879,7 @@ def get_change_devices_keyboard(
     for devices_count in range(start_range, end_range):
         if devices_count == current_devices:
             emoji = '✅'
-            action_text = ' (текущее)'
+            action_text = ' (сейчас)'
             price_text = ''
         elif devices_count > current_devices:
             emoji = '➕'
@@ -2827,25 +2896,24 @@ def get_change_devices_keyboard(
                 )
                 total_price = int(discounted_per_month * price_multiplier)
                 total_price = max(100, total_price)  # Минимум 1 рубль
-                price_text = f' (+{total_price // 100}₽{period_text})'
-                total_discount = int(discount_per_month * price_multiplier)
-                if discount_percent > 0 and total_discount > 0:
-                    price_text += f' (скидка {discount_percent}%: -{total_discount // 100}₽)'
+                # n6-П10: на кнопке — только итог; прорейт и скидка видны в тексте экрана
+                price_text = f' (+{texts.format_price(total_price)})'
                 action_text = ''
             else:
                 price_text = ' (бесплатно)'
                 action_text = ''
         else:
             emoji = '➖'
+            # n6-П10: «без возврата» уже объяснено в тексте экрана — с кнопки убираем
             action_text = ''
-            price_text = ' (без возврата)'
+            price_text = ''
 
-        button_text = f'{emoji} {devices_count} устр.{action_text}{price_text}'
+        button_text = f'{emoji} {devices_count} {_get_device_declension(devices_count)}{action_text}{price_text}'
 
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'change_devices_{devices_count}')])
 
     if current_devices < start_range or current_devices >= end_range:
-        current_button = f'✅ {current_devices} устр. (текущее)'
+        current_button = f'✅ {current_devices} {_get_device_declension(current_devices)} (сейчас)'
         buttons.insert(
             0, [InlineKeyboardButton(text=current_button, callback_data=f'change_devices_{current_devices}')]
         )
@@ -2978,21 +3046,9 @@ def get_manage_countries_keyboard(
         if uuid not in current_subscription_countries and uuid in selected:
             total_price = int(discounted_per_month * price_multiplier)
             total_price = max(100, total_price) if total_price > 0 else 0
-            if days_left > 30:
-                price_text = f' ({discounted_per_month // 100}₽/мес × {days_left} дн. = {total_price // 100}₽)'
-                logger.info(
-                    '🔍 Сервер : ₽/мес × дн./30 = ₽ (скидка ₽)',
-                    name=name,
-                    discounted_per_month=discounted_per_month / 100,
-                    days_left=days_left,
-                    total_price=total_price / 100,
-                    discount_per_month=int(discount_per_month * price_multiplier) / 100,
-                )
-            else:
-                price_text = f' ({total_price // 100}₽)'
-            total_discount_for_server = int(discount_per_month * price_multiplier)
-            if discount_percent > 0 and total_discount_for_server > 0:
-                price_text += f' (скидка {discount_percent}%: -{total_discount_for_server // 100}₽)'
+            # n6-П9: детальный расчёт не помещается на кнопке (обрезается на
+            # мобильном) — показываем только итоговую доплату
+            price_text = f' (+{texts.format_price(total_price)})' if total_price > 0 else ''
             display_name = f'{icon} {name}{price_text}'
         else:
             display_name = f'{icon} {name}'
@@ -3000,8 +3056,7 @@ def get_manage_countries_keyboard(
         buttons.append([InlineKeyboardButton(text=display_name, callback_data=f'country_manage_{uuid}')])
 
     if total_cost > 0:
-        apply_text = f'✅ Применить изменения ({total_cost // 100} ₽)'
-        logger.info('🔍 Общая стоимость новых серверов: ₽', total_cost=total_cost / 100)
+        apply_text = f'✅ Применить (+{texts.format_price(total_cost)})'
     else:
         apply_text = '✅ Применить изменения'
 
@@ -3270,7 +3325,8 @@ def get_extend_subscription_keyboard_with_prices(language: str, prices: dict) ->
             final_price = price_info
             original_price = price_info
 
-        period_display = format_period_description(days, language)
+        # n6-П5: единый формат «N дней» (вместо «1 месяц»)
+        period_display = _spofy_days_label(days, language)
 
         # Create PriceInfo from already calculated prices
         # Note: original_price and final_price are calculated in the handler

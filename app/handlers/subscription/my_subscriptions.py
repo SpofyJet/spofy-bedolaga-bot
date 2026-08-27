@@ -81,53 +81,74 @@ def _format_subscription_line(sub, idx: int) -> str:
 
 def _build_subscriptions_keyboard(subscriptions: list, language: str) -> types.InlineKeyboardMarkup:
     """Build inline keyboard with per-subscription management buttons."""
+    texts = get_texts(language)
     buttons = []
     for idx, sub in enumerate(subscriptions, 1):
         tariff_name = sub.tariff.name if sub.tariff else f'Подписка #{sub.id}'
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'⚙️ {tariff_name}',
+                    text=f'📦 {tariff_name}',
                     callback_data=f'sm:{sub.id}',
                 )
             ]
         )
 
-    # "Buy another tariff" button
-    texts = get_texts(language)
-    buy_text = getattr(texts, 'MENU_BUY_SUBSCRIPTION', 'Купить ещё тариф')
+    # n6-П12: «Купить ещё» без сдвоенного эмодзи — готовая подпись из локали
     buttons.append(
         [
-            types.InlineKeyboardButton(text=f'➕ {buy_text}', callback_data='menu_buy'),
+            types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy'),
         ]
     )
     # Back button
     buttons.append(
         [
-            types.InlineKeyboardButton(text='⬅️ Назад', callback_data='back_to_menu'),
+            types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu'),
         ]
     )
 
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def _build_subscription_detail_keyboard(sub_id: int, sub=None) -> types.InlineKeyboardMarkup:
+def _build_subscription_detail_keyboard(
+    sub_id: int, sub=None, language: str = 'ru'
+) -> types.InlineKeyboardMarkup:
     """Build keyboard for single subscription management.
 
     For expired/disabled subscriptions, only 'Renew' and 'Back' are shown —
     connection link and traffic/device management are irrelevant.
     """
+    # n6-П12: подписи из локалей, единый словарь эмодзи
+    texts = get_texts(language)
     is_inactive = sub is not None and sub.actual_status in ('expired', 'disabled')
 
     buttons = []
 
     if not is_inactive:
-        buttons.append([types.InlineKeyboardButton(text='🔗 Ссылка подключения', callback_data=f'sl:{sub_id}')])
+        buttons.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), callback_data=f'sl:{sub_id}'
+                )
+            ]
+        )
 
-    buttons.append([types.InlineKeyboardButton(text='🔄 Продлить', callback_data=f'se:{sub_id}')])
+    buttons.append(
+        [
+            types.InlineKeyboardButton(
+                text=texts.t('MENU_EXTEND_SUBSCRIPTION', '⏰ Продлить подписку'), callback_data=f'se:{sub_id}'
+            )
+        ]
+    )
 
     if not is_inactive:
-        buttons.append([types.InlineKeyboardButton(text='💳 Автоплатеж', callback_data='subscription_autopay')])
+        buttons.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('AUTOPAY_BUTTON', '🔁 Автоплатёж'), callback_data='subscription_autopay'
+                )
+            ]
+        )
         buttons.append([types.InlineKeyboardButton(text='📊 Трафик', callback_data=f'st:{sub_id}')])
         buttons.append([types.InlineKeyboardButton(text='📱 Устройства', callback_data=f'sd:{sub_id}')])
 
@@ -138,13 +159,13 @@ def _build_subscription_detail_keyboard(sub_id: int, sub=None) -> types.InlineKe
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text='🔄 Перевыпустить',
+                    text=texts.t('SUBSCRIPTION_REVOKE_BTN', '🔑 Перевыпустить подписку'),
                     callback_data=f'sr:{sub_id}',
                 )
             ]
         )
 
-    buttons.append([types.InlineKeyboardButton(text='◀️ К списку подписок', callback_data='my_subscriptions')])
+    buttons.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='my_subscriptions')])
 
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -229,7 +250,7 @@ async def show_subscription_detail(
     if subscription.subscription_url and not settings.should_hide_subscription_link():
         text += f'\n🔗 <code>{subscription.subscription_url}</code>'
 
-    keyboard = _build_subscription_detail_keyboard(sub_id, sub=subscription)
+    keyboard = _build_subscription_detail_keyboard(sub_id, sub=subscription, language=db_user.language)
 
     if callback.message:
         await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')

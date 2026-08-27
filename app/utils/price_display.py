@@ -135,15 +135,16 @@ def format_price_button(
     if price_info.final_price == 0:
         button_text = f'📅 {period_label}'
     elif price_info.has_discount:
+        # n6-П5: длинное тире и стрелка →
         exclamation = '!' if add_exclamation else ''
         button_text = (
-            f'📅 {period_label} - '
-            f'{format_price_func(price_info.base_price)} ➜ '
+            f'📅 {period_label} — '
+            f'{format_price_func(price_info.base_price)} → '
             f'{format_price_func(price_info.final_price)} '
             f'(-{price_info.discount_percent}%){exclamation}'
         )
     else:
-        button_text = f'📅 {period_label} - {format_price_func(price_info.final_price)}'
+        button_text = f'📅 {period_label} — {format_price_func(price_info.final_price)}'
 
     # Add emphasis for best deals
     if emphasize:
