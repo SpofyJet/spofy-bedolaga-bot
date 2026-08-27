@@ -706,6 +706,26 @@ class PlategaPaymentMixin:
             return
 
         if status in pr.CHARGE_FAILED:
+            if record.status in ('FAILED', 'CANCELLED'):
+                # n8: позднее эхо по уже похороненной/отменённой записи —
+                # статус не дёргаем, уведомление не шлём
+                logger.info(
+                    'Platega subscription callback: провальный чардж по терминальной записи',
+                    platega_subscription_id=platega_id,
+                    status=status,
+                    local_status=record.status,
+                )
+                return
+            if record.status == 'PENDING':
+                # n8: привязка не была подтверждена в банке — EXPIRED/CANCELED
+                # здесь означает смерть СЕССИИ привязки, а не провал списания
+                # (мандата нет, списывать нечего и нечем). FAILED — терминально:
+                # освобождает alive-индекс для повторной привязки. Уведомление —
+                # честное «подключение отменено», а не «банк повторит списание».
+                record.status = 'FAILED'
+                await db.commit()
+                await self._notify_sbp_recurring(db, record, 'bind_expired')
+                return
             record.status = 'PAST_DUE'
             record.charges_failed += 1
             await db.commit()
@@ -740,10 +760,13 @@ class PlategaPaymentMixin:
             # уже оповещённым: CHARGE_FAILED выше уже поставил PAST_DUE и
             # отправил «failed» — парный SUB_FAILED не должен слать дубль.
             already_failed = record.status in ('FAILED', 'PAST_DUE')
+            was_pending = record.status == 'PENDING'
             record.status = 'FAILED'
             await db.commit()
             if not already_failed:
-                await self._notify_sbp_recurring(db, record, 'failed')
+                # n8: SUBSCRIPTION_FAILED по PENDING = не удалась сама привязка
+                # (списания ещё не было) — честное «подключение отменено»
+                await self._notify_sbp_recurring(db, record, 'bind_expired' if was_pending else 'failed')
             return
 
         logger.warning(
@@ -832,6 +855,11 @@ class PlategaPaymentMixin:
                     'SBP_RECURRING_NOTIFY_CANCELLED',
                     'ℹ️ Автопродление через СБП отменено.{end_clause}\n\nПередумали? Вернуть автопродление можно в один тап по кнопке ниже.',
                 ).format(end_clause=end_clause),
+                # n8: сессия привязки истекла до подтверждения (текст из n2)
+                'bind_expired': texts.t(
+                    'SBP_RECURRING_PENDING_EXPIRED',
+                    '⌛ <b>Подключение автопродления отменено</b>',
+                ),
                 'activated': texts.t(
                     'SBP_RECURRING_NOTIFY_ACTIVATED',
                     '✅ Автопродление через СБП активировано.{next_charge}',
@@ -842,7 +870,7 @@ class PlategaPaymentMixin:
                 from aiogram import types as aiogram_types
 
                 reply_markup = None
-                if kind in ('failed', 'past_due', 'cancelled'):
+                if kind in ('failed', 'past_due', 'cancelled', 'bind_expired'):
                     reply_markup = aiogram_types.InlineKeyboardMarkup(
                         inline_keyboard=[
                             [
