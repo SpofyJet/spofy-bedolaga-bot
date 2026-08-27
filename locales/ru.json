@@ -2024,5 +2024,6 @@
   "MENU_LEGAL": "📄 Правила и документы",
   "MENU_LEGAL_HEADER": "📄 <b>Правила и документы</b>",
   "SUBSCRIPTION_AUTOPAY_ON": "💳 Автопродление: включено ({engine})",
-  "SUBSCRIPTION_AUTOPAY_OFF": "💳 Автопродление: выключено"
+  "SUBSCRIPTION_AUTOPAY_OFF": "💳 Автопродление: выключено",
+  "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ Автопродление через СБП"
 }

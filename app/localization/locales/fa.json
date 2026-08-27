@@ -2198,5 +2198,6 @@
   "MENU_LEGAL": "📄 قوانین و اسناد",
   "MENU_LEGAL_HEADER": "📄 <b>قوانین و اسناد</b>",
   "SUBSCRIPTION_AUTOPAY_ON": "💳 تمدید خودکار: فعال ({engine})",
-  "SUBSCRIPTION_AUTOPAY_OFF": "💳 تمدید خودکار: غیرفعال"
+  "SUBSCRIPTION_AUTOPAY_OFF": "💳 تمدید خودکار: غیرفعال",
+  "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ تمدید خودکار از طریق SBP"
 }

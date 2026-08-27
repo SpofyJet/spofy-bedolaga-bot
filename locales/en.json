@@ -2024,5 +2024,6 @@
   "MENU_LEGAL": "📄 Rules & documents",
   "MENU_LEGAL_HEADER": "📄 <b>Rules & documents</b>",
   "SUBSCRIPTION_AUTOPAY_ON": "💳 Auto-renewal: on ({engine})",
-  "SUBSCRIPTION_AUTOPAY_OFF": "💳 Auto-renewal: off"
+  "SUBSCRIPTION_AUTOPAY_OFF": "💳 Auto-renewal: off",
+  "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ Auto-renewal via SBP"
 }

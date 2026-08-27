@@ -2198,5 +2198,6 @@
   "MENU_LEGAL": "📄 规则与文件",
   "MENU_LEGAL_HEADER": "📄 <b>规则与文件</b>",
   "SUBSCRIPTION_AUTOPAY_ON": "💳 自动续订：已开启（{engine}）",
-  "SUBSCRIPTION_AUTOPAY_OFF": "💳 自动续订：已关闭"
+  "SUBSCRIPTION_AUTOPAY_OFF": "💳 自动续订：已关闭",
+  "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ 通过 SBP 自动续订"
 }
