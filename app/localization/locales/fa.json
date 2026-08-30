@@ -2199,5 +2199,7 @@
   "MENU_LEGAL_HEADER": "📄 <b>قوانین و اسناد</b>",
   "SUBSCRIPTION_AUTOPAY_ON": "💳 تمدید خودکار: فعال ({engine})",
   "SUBSCRIPTION_AUTOPAY_OFF": "💳 تمدید خودکار: غیرفعال",
-  "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ تمدید خودکار از طریق SBP"
+  "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ تمدید خودکار از طریق SBP",
+  "TICKET_MESSAGE_TOO_LONG": "پیام خیلی طولانی است. حداکثر {limit} کاراکتر. متن را کوتاه کنید و دوباره ارسال کنید:",
+  "TICKET_REPLY_TOO_LONG": "پاسخ خیلی طولانی است. حداکثر {limit} کاراکتر. متن را کوتاه کنید و دوباره ارسال کنید:"
 }

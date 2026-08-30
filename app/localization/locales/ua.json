@@ -2199,5 +2199,7 @@
   "MENU_LEGAL_HEADER": "📄 <b>Правила та документи</b>",
   "SUBSCRIPTION_AUTOPAY_ON": "💳 Автопродовження: увімкнено ({engine})",
   "SUBSCRIPTION_AUTOPAY_OFF": "💳 Автопродовження: вимкнено",
-  "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ Автоподовження через СБП"
+  "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ Автоподовження через СБП",
+  "TICKET_MESSAGE_TOO_LONG": "Повідомлення занадто довге. Максимум {limit} символів. Скоротіть текст і надішліть ще раз:",
+  "TICKET_REPLY_TOO_LONG": "Відповідь занадто довга. Максимум {limit} символів. Скоротіть текст і надішліть ще раз:"
 }
