@@ -149,6 +149,18 @@ async def get_main_menu_keyboard_async(
             trial_already_used = None
     if trial_already_used is None:
         trial_already_used = has_had_paid_subscription
+    # n13: проверяем, поддерживает ли тариф докупку трафика (скрываем кнопку на безлимите)
+    traffic_topup_tariff_allowed = None
+    try:
+        if settings.is_tariffs_mode() and subscription is not None and getattr(subscription, 'tariff_id', None):
+            if (getattr(subscription, 'traffic_limit_gb', 0) or 0) > 0:
+                from app.database.crud.tariff import get_tariff_by_id
+
+                _topup_tariff = await get_tariff_by_id(db, subscription.tariff_id)
+                traffic_topup_tariff_allowed = bool(_topup_tariff and _topup_tariff.can_topup_traffic())
+    except Exception as e:
+        logger.error('n13: traffic topup tariff check failed', error=e)
+
     return get_main_menu_keyboard(
         language=language,
         is_admin=is_admin,
@@ -162,6 +174,7 @@ async def get_main_menu_keyboard_async(
         has_saved_cart=has_saved_cart,
         is_moderator=is_moderator,
         custom_buttons=custom_buttons,
+        traffic_topup_tariff_allowed=traffic_topup_tariff_allowed,
     )
 
 
@@ -596,6 +609,7 @@ def get_main_menu_keyboard(
     is_moderator: bool = False,
     custom_buttons: list[InlineKeyboardButton] | None = None,
     trial_already_used: bool | None = None,  # smart-trial-button
+    traffic_topup_tariff_allowed: bool | None = None,  # n13: тариф поддерживает докупку трафика
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
@@ -713,8 +727,10 @@ def get_main_menu_keyboard(
         show_traffic_topup = False
         if subscription and not subscription.is_trial and (subscription.traffic_limit_gb or 0) > 0:
             if settings.is_tariffs_mode() and getattr(subscription, 'tariff_id', None):
-                # Режим тарифов - показываем кнопку, проверка настроек тарифа в хендлере
-                show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
+                # n13: скрываем кнопку, если тариф не поддерживает докупку (безлимит/выключено)
+                show_traffic_topup = (
+                    settings.BUY_TRAFFIC_BUTTON_VISIBLE and traffic_topup_tariff_allowed is not False
+                )
             elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
                 # Классический режим - проверяем глобальные настройки
                 show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
