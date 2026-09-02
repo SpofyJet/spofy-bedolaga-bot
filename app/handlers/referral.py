@@ -502,10 +502,25 @@ def _build_referral_share_url(bot_referral_link: str, texts) -> str:
     """URL вида t.me/share/url — открывает нативный диалог пересылки в чаты."""
     from urllib.parse import quote
 
+    # n14: бонус друга в тексте шеринга — из актуальных настроек
+    share_bonus_block = ''
+    if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
+        share_bonus_block = texts.t(
+            'REFERRAL_SHARE_BONUS',
+            ' По ссылке — {bonus} на баланс при первом пополнении от {minimum}!',
+        ).format(
+            bonus=texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS),
+            minimum=texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS),
+        )
+
     share_text = texts.t(
         'REFERRAL_SHARE_TEXT',
-        '🎁 Бесплатный VPN — быстрые серверы по всему миру, надёжная защита трафика, работает на всех устройствах. Попробуй бесплатно 👇',
+        'Привет! Советую VPN, которым сам пользуюсь — всё летает 🚀{bonus_block}',
     )
+    try:
+        share_text = share_text.format(bonus_block=share_bonus_block)
+    except (KeyError, IndexError, ValueError):
+        pass
     return f'https://t.me/share/url?url={quote(bot_referral_link, safe="")}&text={quote(share_text, safe="")}'
 
 
@@ -530,29 +545,39 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User):
             bonus=texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS),
         )
 
-    # Ссылки оборачиваем в <code>: при тапе по <blockquote> для копирования
-    # Telegram сохраняет содержимое <code> в буфере, но ВЫБРАСЫВАЕТ авто-линкнутые
-    # сырые URL — поэтому из скопированного приглашения выпадали обе ссылки
-    # (#634720). Экранируем прозу сами и подставляем ссылки уже в <code>, а не
-    # html_escape-им всю собранную строку (иначе экранировались бы и теги <code>).
+    # n14: весь текст приглашения — ОДИН <code>-блок внутри <blockquote>.
+    # При тапе Telegram копирует содержимое целиком, включая сырые URL.
+    # Прежняя смешанная разметка (проза + отдельные <code>-ссылки) на iOS
+    # при копировании выбрасывала <code>-части — ссылки снова терялись (#634720).
+    # Внутри <code> ничего не авто-линкуется, поэтому исходный баг не возвращается.
+    trial_block = ''
+    if (
+        settings.TRIAL_DURATION_DAYS > 0
+        and settings.TRIAL_DISABLED_FOR != 'all'
+        and not settings.is_trial_paid_activation_enabled()
+    ):
+        trial_block = '\n' + texts.t(
+            'REFERRAL_INVITE_TRIAL',
+            '🎁 Бесплатный пробный период на {days} дн. — без карты!',
+        ).format(days=settings.TRIAL_DURATION_DAYS)
+
     cabinet_block = ''
     if cabinet_referral_link:
-        cabinet_block = f'\n\n🌐 <code>{html_escape(cabinet_referral_link)}</code>'
+        cabinet_block = f'\n\n🌐 {cabinet_referral_link}'
 
     invite_template = texts.t(
         'REFERRAL_INVITE_TEXT',
-        '🎉 Присоединяйся к VPN сервису!{bonus_block}\n\n'
-        '🚀 Быстрое подключение\n'
-        '🌍 Серверы по всему миру\n'
-        '🔒 Надежная защита\n\n'
-        '👇 Переходи по ссылке:\n'
+        'Привет! Советую VPN, которым сам пользуюсь — всё летает 🚀{bonus_block}{trial_block}\n\n'
+        '👇 Заходи по ссылке:\n'
         '{link}{cabinet_block}',
     )
-    invite_html = html_escape(invite_template).format(
-        bonus_block=html_escape(bonus_block),
-        link=f'<code>{html_escape(bot_referral_link)}</code>',
+    invite_text = invite_template.format(
+        bonus_block=bonus_block,
+        trial_block=trial_block,
+        link=bot_referral_link,
         cabinet_block=cabinet_block,
     )
+    invite_html = f'<code>{html_escape(invite_text)}</code>'
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[

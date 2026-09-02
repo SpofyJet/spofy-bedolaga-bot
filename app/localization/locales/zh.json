@@ -1300,7 +1300,7 @@
   "REFERRAL_INVITE_FOOTER": "📢邀请朋友并赚钱！",
   "REFERRAL_INVITE_LINK_PROMPT": "👇点击链接：",
   "REFERRAL_INVITE_MESSAGE": "\n🎯<b>邀请加入VPN服务</b>\n\n嗨！我邀请您加入一个很棒的VPN服务！\n\n🎁通过我的链接，您将获得奖励：{bonus}\n\n🔗点击：{link}\n🎫或使用优惠码：{code}\n\n💪快速、可靠、不贵！\n",
-  "REFERRAL_INVITE_TEXT": "嗨！推荐一个我自己在用的 VPN——速度快到飞起 🚀{bonus_block}\n\n👇 点链接领取免费试用，无需绑卡：\n{link}{cabinet_block}",
+  "REFERRAL_INVITE_TEXT": "嗨！推荐一个我自己在用的 VPN——速度快到飞起 🚀{bonus_block}{trial_block}\n\n👇 点链接：\n{link}{cabinet_block}",
   "REFERRAL_INVITE_TITLE": "🎉加入VPN服务！",
   "REFERRAL_LINK_CAPTION": "🔗您的推荐链接：\n{link}",
   "REFERRAL_LINK_TITLE": "🔗<b>您的推荐链接：</b>",
@@ -2173,7 +2173,7 @@
   "FUNNEL_ABANDONED_TOPUP": "💳 <b>充值未完成</b>\n\n您创建了 <b>{amount} ₽</b> 的充值订单，但付款未完成。\n\n如果遇到问题，请尝试其他方式：SBP、银行卡或加密货币。支付不到一分钟即可完成。",
   "FUNNEL_ABANDONED_TOPUP_PAY": "💳 支付 {amount} ₽",
   "FUNNEL_ABANDONED_TOPUP_OTHER": "🔄 其他支付方式",
-  "REFERRAL_SHARE_TEXT": "嗨！推荐一个我自己在用的 VPN——速度快到飞起 🚀",
+  "REFERRAL_SHARE_TEXT": "嗨！推荐一个我自己在用的 VPN——速度快到飞起 🚀{bonus_block}",
   "CHANGE_DEVICES_PROMPT_TARIFF_FLAT": "📱 <b>修改设备数量</b>\n\n当前限制：{current_devices} 台设备\n每增加一台设备：{price}（一次性）\n请选择新的设备数量：\n\n💡 <b>重要：</b>\n• 增加——一次性补差价\n• 减少——不退还差价",
   "TARIFF_SWITCH_FULL_PRICE_DAYS_NOTE": "📅 套餐全价——将在剩余时长基础上额外计入 <b>{days} 天</b>。",
   "SBP_RECURRING_OFFER_BUTTON": "⚡ 开启自动续订（SBP）",
@@ -2201,5 +2201,7 @@
   "SUBSCRIPTION_AUTOPAY_OFF": "💳 自动续订：已关闭",
   "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ 通过 SBP 自动续订",
   "TICKET_MESSAGE_TOO_LONG": "消息太长。最多{limit}个字符。请缩短后重新发送：",
-  "TICKET_REPLY_TOO_LONG": "回复太长。最多{limit}个字符。请缩短后重新发送："
+  "TICKET_REPLY_TOO_LONG": "回复太长。最多{limit}个字符。请缩短后重新发送：",
+  "REFERRAL_SHARE_BONUS": " 通过链接首次充值满 {minimum} 即送 {bonus} 到余额！",
+  "REFERRAL_INVITE_TRIAL": "🎁 免费试用 {days} 天——无需银行卡！"
 }

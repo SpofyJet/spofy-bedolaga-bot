@@ -1346,7 +1346,7 @@
   "REFERRAL_INVITE_FOOTER": "📢 Invite friends and earn!",
   "REFERRAL_INVITE_LINK_PROMPT": "👇 Follow the link:",
   "REFERRAL_INVITE_MESSAGE": "\n🎯 <b>Invitation to the VPN service</b>\n\nHi! I invite you to an excellent VPN service!\n\n🎁 Use my link to get a bonus: {bonus}\n\n🔗 Join: {link}\n🎫 Or use promo code: {code}\n\n💪 Fast, reliable, affordable!\n",
-  "REFERRAL_INVITE_TEXT": "Hey! Recommending a VPN I use myself — everything just flies 🚀{bonus_block}\n\n👇 Grab the link — there’s a free trial, no card needed:\n{link}{cabinet_block}",
+  "REFERRAL_INVITE_TEXT": "Hey! Recommending a VPN I use myself — everything just flies 🚀{bonus_block}{trial_block}\n\n👇 Grab the link:\n{link}{cabinet_block}",
   "REFERRAL_INVITE_TITLE": "🎉 Join the VPN service!",
   "REFERRAL_LINK_CAPTION": "🔗 Your referral link:\n{link}",
   "REFERRAL_LINK_TITLE": "🔗 <b>Your referral link:</b>",
@@ -2140,7 +2140,7 @@
   "FUNNEL_ABANDONED_TOPUP_PAY": "💳 Pay {amount} ₽",
   "FUNNEL_ABANDONED_TOPUP_OTHER": "🔄 Another payment method",
   "PAYMENT_PLATEGA_M13": "🪙 Crypto",
-  "REFERRAL_SHARE_TEXT": "Hey! Recommending a VPN I use myself — everything just flies 🚀",
+  "REFERRAL_SHARE_TEXT": "Hey! Recommending a VPN I use myself — everything just flies 🚀{bonus_block}",
   "CHANGE_DEVICES_PROMPT_TARIFF_FLAT": "📱 <b>Change device count</b>\n\nCurrent limit: {current_devices} devices\nPrice per extra device: {price} (one-time)\nSelect new device count:\n\n💡 <b>Note:</b>\n• Increase — one-time charge\n• Decrease — no refund",
   "TARIFF_SWITCH_FULL_PRICE_DAYS_NOTE": "📅 Full tariff price — <b>{days} days</b> will be added on top of your remaining days.",
   "SBP_RECURRING_MENU_BUTTON": "⚡ Auto-renewal via SBP",
@@ -2202,5 +2202,7 @@
   "SUBSCRIPTION_AUTOPAY_OFF": "💳 Auto-renewal: off",
   "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ Auto-renewal via SBP",
   "TICKET_MESSAGE_TOO_LONG": "Message is too long. Maximum {limit} characters. Shorten the text and send it again:",
-  "TICKET_REPLY_TOO_LONG": "Reply is too long. Maximum {limit} characters. Shorten the text and send it again:"
+  "TICKET_REPLY_TOO_LONG": "Reply is too long. Maximum {limit} characters. Shorten the text and send it again:",
+  "REFERRAL_SHARE_BONUS": " Via the link — {bonus} to the balance with the first top-up from {minimum}!",
+  "REFERRAL_INVITE_TRIAL": "🎁 Free trial period for {days} days — no card needed!"
 }
