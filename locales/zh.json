@@ -1972,5 +1972,6 @@
   "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ 通过 SBP 自动续订",
   "REFERRAL_SHARE_TEXT": "嗨！推荐一个我自己在用的 VPN——速度快到飞起 🚀{bonus_block}",
   "REFERRAL_SHARE_BONUS": " 通过链接首次充值满 {minimum} 即送 {bonus} 到余额！",
-  "REFERRAL_INVITE_TRIAL": "🎁 免费试用 {days} 天——无需银行卡！"
+  "REFERRAL_INVITE_TRIAL": "🎁 免费试用 {days} 天——无需银行卡！",
+  "TARIFF_SWITCH_ADDONS_KEPT": "\n\n🔗 已购附加服务：{addons} — 切换后将保留。"
 }

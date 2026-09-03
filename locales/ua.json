@@ -1972,5 +1972,6 @@
   "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ Автоподовження через СБП",
   "REFERRAL_SHARE_TEXT": "Привіт! Раджу VPN, яким сам користуюсь — все летить 🚀{bonus_block}",
   "REFERRAL_SHARE_BONUS": " За посиланням — {bonus} на баланс при першому поповненні від {minimum}!",
-  "REFERRAL_INVITE_TRIAL": "🎁 Безкоштовний пробний період на {days} дн. — без картки!"
+  "REFERRAL_INVITE_TRIAL": "🎁 Безкоштовний пробний період на {days} дн. — без картки!",
+  "TARIFF_SWITCH_ADDONS_KEPT": "\n\n🔗 Докуплено: {addons} — збережеться при переході."
 }

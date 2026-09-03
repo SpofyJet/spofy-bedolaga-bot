@@ -2027,5 +2027,6 @@
   "SUBSCRIPTION_AUTOPAY_OFF": "💳 Автопродление: выключено",
   "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ Автопродление через СБП",
   "REFERRAL_SHARE_BONUS": " По ссылке — {bonus} на баланс при первом пополнении от {minimum}!",
-  "REFERRAL_INVITE_TRIAL": "🎁 Бесплатный пробный период на {days} дн. — без карты!"
+  "REFERRAL_INVITE_TRIAL": "🎁 Бесплатный пробный период на {days} дн. — без карты!",
+  "TARIFF_SWITCH_ADDONS_KEPT": "\n\n🔗 Докуплено: {addons} — сохранится при переходе."
 }

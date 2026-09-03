@@ -1972,5 +1972,6 @@
   "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ تمدید خودکار از طریق SBP",
   "REFERRAL_SHARE_TEXT": "سلام! این VPN رو خودم استفاده می‌کنم — همه‌چیز سریع و روانه 🚀{bonus_block}",
   "REFERRAL_SHARE_BONUS": " با این لینک — {bonus} هدیه با اولین شارژ از {minimum}!",
-  "REFERRAL_INVITE_TRIAL": "🎁 دوره آزمایشی رایگان {days} روزه — بدون کارت بانکی!"
+  "REFERRAL_INVITE_TRIAL": "🎁 دوره آزمایشی رایگان {days} روزه — بدون کارت بانکی!",
+  "TARIFF_SWITCH_ADDONS_KEPT": "\n\n🔗 افزودنی‌های خریداری‌شده: {addons} — پس از تغییر تعرفه حفظ می‌شود."
 }
