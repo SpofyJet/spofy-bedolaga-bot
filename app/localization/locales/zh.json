@@ -2203,5 +2203,6 @@
   "TICKET_MESSAGE_TOO_LONG": "消息太长。最多{limit}个字符。请缩短后重新发送：",
   "TICKET_REPLY_TOO_LONG": "回复太长。最多{limit}个字符。请缩短后重新发送：",
   "REFERRAL_SHARE_BONUS": " 通过链接首次充值满 {minimum} 即送 {bonus} 到余额！",
-  "REFERRAL_INVITE_TRIAL": "🎁 免费试用 {days} 天——无需银行卡！"
+  "REFERRAL_INVITE_TRIAL": "🎁 免费试用 {days} 天——无需银行卡！",
+  "TARIFF_SWITCH_ADDONS_KEPT": "\n\n🔗 已购附加服务：{addons} — 切换后将保留。"
 }

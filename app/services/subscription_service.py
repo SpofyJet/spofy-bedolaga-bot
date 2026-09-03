@@ -778,6 +778,17 @@ class SubscriptionService:
             except Exception:
                 pass  # tariff может быть None или уже загружен
 
+            # Снапшот traffic_limit_gb — источник истины для панели; если тариф
+            # редактировали после покупки, снапшот протух и панель режет по
+            # старому лимиту. Лечим из живого тарифа ДО пуша trafficLimitBytes.
+            try:
+                if getattr(subscription, 'tariff', None) is not None:
+                    from app.database.crud.subscription import reconcile_subscription_traffic_limit
+
+                    await reconcile_subscription_traffic_limit(db, subscription, subscription.tariff)
+            except Exception as _rec_err:
+                logger.warning('Не удалось сверить лимит трафика с тарифом перед обновлением панели', error=_rec_err)
+
             current_time = datetime.now(UTC)
             # Определяем актуальный статус для отправки в RemnaWave
             # НЕ меняем статус подписки здесь - это задача scheduled job

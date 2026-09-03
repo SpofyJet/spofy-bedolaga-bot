@@ -1206,6 +1206,18 @@ async def process_edit_tariff_traffic(
     tariff = await update_tariff(db, tariff, traffic_limit_gb=traffic)
     await state.clear()
 
+    # Подписки хранят снапшот лимита — после правки тарифа он протухает
+    # (классический «тариф безлимитный, а в подписке 100 ГБ»). Ресинкаем все
+    # подписки этого тарифа: база из тарифа, активные докупки сохраняются.
+    try:
+        from app.database.crud.subscription import resync_traffic_limit_for_tariff_subscriptions
+
+        _resynced = await resync_traffic_limit_for_tariff_subscriptions(db, tariff)
+        if _resynced:
+            logger.info('🩹 После правки трафика тарифа ресинкнуто подписок', tariff_id=tariff.id, resynced=_resynced)
+    except Exception as _rec_err:
+        logger.error('Ошибка ресинка подписок после правки тарифа', error=_rec_err)
+
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
 
     await message.answer(

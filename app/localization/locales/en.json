@@ -2204,5 +2204,6 @@
   "TICKET_MESSAGE_TOO_LONG": "Message is too long. Maximum {limit} characters. Shorten the text and send it again:",
   "TICKET_REPLY_TOO_LONG": "Reply is too long. Maximum {limit} characters. Shorten the text and send it again:",
   "REFERRAL_SHARE_BONUS": " Via the link — {bonus} to the balance with the first top-up from {minimum}!",
-  "REFERRAL_INVITE_TRIAL": "🎁 Free trial period for {days} days — no card needed!"
+  "REFERRAL_INVITE_TRIAL": "🎁 Free trial period for {days} days — no card needed!",
+  "TARIFF_SWITCH_ADDONS_KEPT": "\n\n🔗 Add-ons: {addons} — will be kept after the switch."
 }

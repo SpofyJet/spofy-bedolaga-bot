@@ -2478,16 +2478,13 @@ async def confirm_daily_tariff_purchase(
             # Для суточного тарифа ставим срок на 1 день
             existing_subscription.end_date = datetime.now(UTC) + timedelta(days=1)
 
-            # Сбрасываем докупленный трафик при смене тарифа
-            from sqlalchemy import delete as sql_delete
+            # Докупленный трафик ПЕРЕНОСИМ: активные пакеты сохраняются поверх
+            # базы нового тарифа (на безлимите удаляются внутри хелпера).
+            from app.database.crud.subscription import _apply_base_limit_preserving_active_purchases
 
-            from app.database.models import TrafficPurchase
-
-            await db.execute(
-                sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == existing_subscription.id)
+            await _apply_base_limit_preserving_active_purchases(
+                db, existing_subscription, tariff.traffic_limit_gb, now=datetime.now(UTC)
             )
-            existing_subscription.purchased_traffic_gb = 0
-            existing_subscription.traffic_reset_at = None
 
             await db.commit()
             await db.refresh(existing_subscription)
@@ -4429,14 +4426,13 @@ async def confirm_daily_tariff_switch(
         # Для суточного тарифа ставим срок на 1 день
         subscription.end_date = datetime.now(UTC) + timedelta(days=1)
 
-        # Сбрасываем докупленный трафик при смене тарифа
-        from sqlalchemy import delete as sql_delete
+        # Докупленный трафик ПЕРЕНОСИМ: активные пакеты сохраняются поверх
+        # базы нового тарифа (на безлимите удаляются внутри хелпера).
+        from app.database.crud.subscription import _apply_base_limit_preserving_active_purchases
 
-        from app.database.models import TrafficPurchase
-
-        await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
-        subscription.purchased_traffic_gb = 0
-        subscription.traffic_reset_at = None
+        await _apply_base_limit_preserving_active_purchases(
+            db, subscription, tariff.traffic_limit_gb, now=datetime.now(UTC)
+        )
 
         if settings.RESET_TRAFFIC_ON_TARIFF_SWITCH:
             subscription.traffic_used_gb = 0.0
@@ -4990,8 +4986,41 @@ async def preview_instant_switch(
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
-    traffic = format_traffic(new_tariff.traffic_limit_gb)
-    current_traffic = format_traffic(current_tariff.traffic_limit_gb)
+    # Эффективные значения: у пользователя могут быть докупленные устройства
+    # и трафик — показываем их, а не голую базу тарифа (баг «у меня 4
+    # устройства, а в превью 3»).
+    current_traffic = format_traffic(
+        subscription.traffic_limit_gb if subscription else current_tariff.traffic_limit_gb
+    )
+    from app.database.crud.subscription import calc_device_limit_on_tariff_switch as _calc_sw_devices
+
+    effective_new_devices = _calc_sw_devices(
+        current_device_limit=subscription.device_limit if subscription else None,
+        old_tariff_device_limit=current_tariff.device_limit if current_tariff else None,
+        new_tariff_device_limit=new_tariff.device_limit,
+        max_device_limit=getattr(new_tariff, 'max_device_limit', None),
+    )
+    _purchased_gb_sw = (subscription.purchased_traffic_gb or 0) if subscription else 0
+    traffic = (
+        format_traffic(0)
+        if new_tariff.traffic_limit_gb == 0
+        else format_traffic(new_tariff.traffic_limit_gb + _purchased_gb_sw)
+    )
+    addons_note = ''
+    if subscription:
+        _paid_dev = (
+            max(0, (subscription.device_limit or 0) - (current_tariff.device_limit or 0)) if current_tariff else 0
+        )
+        _addon_parts = []
+        if _paid_dev:
+            _addon_parts.append(f'📱 +{_paid_dev}')
+        if _purchased_gb_sw:
+            _addon_parts.append(f'📈 +{_purchased_gb_sw} GB')
+        if _addon_parts:
+            addons_note = texts.t(
+                'TARIFF_SWITCH_ADDONS_KEPT',
+                '\n\n🔗 Докуплено: {addons} — сохранится при переходе.',
+            ).format(addons=', '.join(_addon_parts))
 
     # Проверяем, суточный ли новый тариф
     is_new_daily = getattr(new_tariff, 'is_daily', False)
@@ -5037,15 +5066,15 @@ async def preview_instant_switch(
                 ).format(
                     current=html.escape(current_tariff.name),
                     current_traffic=current_traffic,
-                    current_devices=current_tariff.device_limit,
+                    current_devices=subscription.device_limit if subscription else current_tariff.device_limit,
                     name=html.escape(new_tariff.name),
                     traffic=traffic,
-                    devices=new_tariff.device_limit,
+                    devices=effective_new_devices,
                     price=format_price_kopeks(daily_price),
                     discount=discount_text,
                     balance=format_price_kopeks(user_balance),
                     warning=daily_warning,
-                ),
+                ) + addons_note,
                 reply_markup=get_instant_switch_confirm_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
             )
@@ -5112,15 +5141,15 @@ async def preview_instant_switch(
                 ).format(
                     current=html.escape(current_tariff.name),
                     current_traffic=current_traffic,
-                    current_devices=current_tariff.device_limit,
+                    current_devices=subscription.device_limit if subscription else current_tariff.device_limit,
                     name=html.escape(new_tariff.name),
                     traffic=traffic,
-                    devices=new_tariff.device_limit,
+                    devices=effective_new_devices,
                     days=remaining_days,
                     cost=format_price_kopeks(upgrade_cost),
                     balance=format_price_kopeks(user_balance),
                     after=format_price_kopeks(user_balance - upgrade_cost),
-                ) + full_price_note,
+                ) + full_price_note + addons_note,
                 reply_markup=get_instant_switch_confirm_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
             )
@@ -5160,12 +5189,12 @@ async def preview_instant_switch(
             ).format(
                 current=html.escape(current_tariff.name),
                 current_traffic=current_traffic,
-                current_devices=current_tariff.device_limit,
+                current_devices=subscription.device_limit if subscription else current_tariff.device_limit,
                 name=html.escape(new_tariff.name),
                 traffic=traffic,
-                devices=new_tariff.device_limit,
+                devices=effective_new_devices,
                 days=remaining_days,
-            ),
+            ) + addons_note,
             reply_markup=get_instant_switch_confirm_keyboard(tariff_id, db_user.language),
             parse_mode='HTML',
         )
@@ -5389,14 +5418,14 @@ async def confirm_instant_switch(
             _base_sw = subscription.end_date if subscription.end_date and subscription.end_date > _now_sw else _now_sw
             subscription.end_date = _base_sw + timedelta(days=switch_result.new_period_days)
 
-        # Сбрасываем докупленный трафик при смене тарифа
-        from sqlalchemy import delete as sql_delete
+        # Докупленный трафик ПЕРЕНОСИМ: активные TrafficPurchase сохраняются
+        # поверх базы нового тарифа (как при продлении). При переходе на
+        # безлимит пакеты удаляются внутри хелпера — там они бессмысленны.
+        from app.database.crud.subscription import _apply_base_limit_preserving_active_purchases
 
-        from app.database.models import TrafficPurchase
-
-        await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
-        subscription.purchased_traffic_gb = 0
-        subscription.traffic_reset_at = None
+        await _apply_base_limit_preserving_active_purchases(
+            db, subscription, new_tariff.traffic_limit_gb, now=datetime.now(UTC)
+        )
 
         if settings.RESET_TRAFFIC_ON_TARIFF_SWITCH:
             subscription.traffic_used_gb = 0.0
@@ -5559,7 +5588,8 @@ async def confirm_instant_switch(
 
         await state.clear()
 
-        traffic = format_traffic(new_tariff.traffic_limit_gb)
+        # Показываем эффективные значения ПОСЛЕ перехода (база + перенесённые допы)
+        traffic = format_traffic(subscription.traffic_limit_gb)
 
         # Для суточного тарифа другое сообщение об успехе
         if is_new_daily:
@@ -5576,7 +5606,7 @@ async def confirm_instant_switch(
                 ).format(
                     name=html.escape(new_tariff.name),
                     traffic=traffic,
-                    devices=new_tariff.device_limit,
+                    devices=subscription.device_limit,
                     price=format_price_kopeks(daily_price),
                 ),
                 reply_markup=InlineKeyboardMarkup(
@@ -5614,7 +5644,7 @@ async def confirm_instant_switch(
                 ).format(
                     name=html.escape(new_tariff.name),
                     traffic=traffic,
-                    devices=new_tariff.device_limit,
+                    devices=subscription.device_limit,
                     days=remaining_days,
                     cost_text=cost_text,
                 ),

@@ -293,6 +293,18 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         else texts.t('SUBSCRIPTION_TYPE_PAID', 'Платная')
     )
 
+    # Снапшот лимита мог разойтись с тарифом (тариф редактировали после
+    # покупки) — лечим из живого тарифа ДО отображения, иначе на безлимитном
+    # тарифе пользователь видит «0.0 / 100 ГБ», а панель реально режет трафик.
+    try:
+        from app.database.crud.subscription import reconcile_subscription_traffic_limit
+
+        _rec_fixed, _rec_total = await reconcile_subscription_traffic_limit(db, subscription)
+        if _rec_fixed:
+            await db.commit()
+    except Exception as _rec_err:
+        logger.warning('Не удалось сверить лимит трафика подписки с тарифом', error=_rec_err)
+
     used_traffic = f'{subscription.traffic_used_gb:.1f}'
     if subscription.traffic_limit_gb == 0:
         traffic_used_display = texts.t(

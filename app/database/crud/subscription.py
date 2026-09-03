@@ -93,16 +93,26 @@ def calc_device_limit_on_tariff_switch(
 ) -> int:
     """Calculate device_limit when switching tariffs.
 
-    Resets to new tariff base device limit — previously purchased
-    extra devices are NOT carried over.  Capped at max_device_limit.
+    Previously purchased extra devices ARE carried over on top of the new
+    tariff base device limit — they were paid for separately and must not
+    silently burn on a tariff switch.  Capped at max_device_limit.
     """
     new_base = new_tariff_device_limit if new_tariff_device_limit is not None else 1
 
-    effective_max = max_device_limit or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
-    if effective_max and new_base > effective_max:
-        new_base = effective_max
+    # Докупленные устройства = эффективный лимит минус база СТАРОГО тарифа.
+    # Если старый тариф неизвестен, считаем допов нет — переносим только то,
+    # что точно было оплачено сверх базы.
+    paid_addons = 0
+    if current_device_limit is not None and old_tariff_device_limit is not None:
+        paid_addons = max(0, current_device_limit - old_tariff_device_limit)
 
-    return new_base
+    effective_max = max_device_limit or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
+
+    new_limit = new_base + paid_addons
+    if effective_max and new_limit > effective_max:
+        new_limit = effective_max
+
+    return new_limit
 
 
 def is_active_paid_subscription(subscription: Subscription | None) -> bool:
@@ -993,6 +1003,116 @@ async def _apply_base_limit_preserving_active_purchases(
     subscription.traffic_reset_at = nearest_expiry
 
     return purchased_gb, subscription.traffic_limit_gb
+
+
+async def reconcile_subscription_traffic_limit(
+    db: AsyncSession,
+    subscription: Subscription,
+    tariff=None,
+) -> tuple[bool, int]:
+    """Приводит снапшот traffic_limit_gb к инварианту «база тарифа + активные докупки».
+
+    Снапшот — источник истины для панели (bot → RemnaWave), но он протухает,
+    когда тариф редактируют ПОСЛЕ покупки подписки: подписка продолжает жить
+    со старой базой (классический баг «тариф безлимитный, а показывает 100 ГБ»,
+    и панель реально режет по старому лимиту). Здесь база берётся из ЖИВОГО
+    тарифа, активные TrafficPurchase сохраняются, истёкшие подчищаются.
+
+    Безлимитный тариф (base == 0): total = 0, счётчик докупок обнуляем, но
+    строки TrafficPurchase НЕ удаляем — они безвредны и снова станут актуальны
+    при возврате на лимитный тариф (конвенция _housekeep_expired_purchases).
+
+    Возвращает (было_ли_исправление, актуальный_total).
+    """
+    from app.database.models import TrafficPurchase
+
+    if tariff is None:
+        tariff_id = getattr(subscription, 'tariff_id', None)
+        if not tariff_id:
+            return False, subscription.traffic_limit_gb or 0
+        from app.database.crud.tariff import get_tariff_by_id
+
+        tariff = await get_tariff_by_id(db, tariff_id)
+        if tariff is None:
+            return False, subscription.traffic_limit_gb or 0
+
+    # Lock subscription row — как в add_subscription_traffic / housekeeping,
+    # чтобы не затереть конкурентную докупку.
+    await _lock_subscription_row(db, subscription)
+
+    now = datetime.now(UTC)
+    await db.execute(
+        delete(TrafficPurchase).where(
+            TrafficPurchase.subscription_id == subscription.id,
+            TrafficPurchase.expires_at <= now,
+        )
+    )
+    active_result = await db.execute(
+        select(TrafficPurchase).where(
+            TrafficPurchase.subscription_id == subscription.id,
+            TrafficPurchase.expires_at > now,
+        )
+    )
+    active_packages = active_result.scalars().all()
+    purchased_gb = sum(p.traffic_gb for p in active_packages) if active_packages else 0
+    nearest_expiry = min((p.expires_at for p in active_packages), default=None)
+
+    base_limit = tariff.traffic_limit_gb or 0
+    if base_limit == 0:
+        expected_total = 0
+        expected_purchased = 0
+        expected_reset_at = None
+    else:
+        expected_total = base_limit + purchased_gb
+        expected_purchased = purchased_gb
+        expected_reset_at = nearest_expiry
+
+    fixed = False
+    if (subscription.traffic_limit_gb or 0) != expected_total:
+        logger.warning(
+            '🩹 Рассинхрон лимита трафика подписки — лечим из живого тарифа',
+            subscription_id=subscription.id,
+            old_limit=subscription.traffic_limit_gb,
+            new_limit=expected_total,
+            tariff_id=tariff.id,
+            tariff_base=base_limit,
+            purchased_gb=purchased_gb,
+        )
+        subscription.traffic_limit_gb = expected_total
+        fixed = True
+    if (subscription.purchased_traffic_gb or 0) != expected_purchased:
+        subscription.purchased_traffic_gb = expected_purchased
+        fixed = True
+    if subscription.traffic_reset_at != expected_reset_at:
+        subscription.traffic_reset_at = expected_reset_at
+        fixed = True
+
+    return fixed, expected_total
+
+
+async def resync_traffic_limit_for_tariff_subscriptions(db: AsyncSession, tariff) -> int:
+    """Ресинк снапшотов traffic_limit_gb всех подписок тарифа после его правки.
+
+    Активные докупки каждой подписки сохраняются. Возвращает число
+    исправленных подписок.
+    """
+    result = await db.execute(select(Subscription).where(Subscription.tariff_id == tariff.id))
+    subscriptions = result.scalars().all()
+    fixed_count = 0
+    for sub in subscriptions:
+        try:
+            fixed, _ = await reconcile_subscription_traffic_limit(db, sub, tariff)
+            if fixed:
+                fixed_count += 1
+        except Exception as err:
+            logger.error(
+                'Ошибка ресинка подписки при правке тарифа',
+                subscription_id=getattr(sub, 'id', None),
+                error=err,
+            )
+    if fixed_count:
+        await db.commit()
+    return fixed_count
 
 
 def should_carry_trial_remaining_days() -> bool:
