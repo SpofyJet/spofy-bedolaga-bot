@@ -4553,6 +4553,7 @@ class GuestPurchase(Base):
         Index('ix_guest_purchases_user_gift_status', 'user_id', 'is_gift', 'status'),
         Index('ix_guest_purchases_status_paid_at', 'status', 'paid_at'),
         Index('ix_guest_purchases_buyer_user_id', 'buyer_user_id'),
+        Index('ux_guest_purchases_idempotency_key', 'idempotency_key', unique=True),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -4589,6 +4590,7 @@ class GuestPurchase(Base):
     yandex_cid = Column(String(128), nullable=True)
     subid = Column(String(255), nullable=True)
     referrer = Column(String(500), nullable=True)
+    idempotency_key = Column(String(64), nullable=True)
 
     landing = relationship('LandingPage', back_populates='guest_purchases', lazy='selectin')
     tariff = relationship('Tariff', lazy='selectin')

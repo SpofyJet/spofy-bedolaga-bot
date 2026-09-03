@@ -157,6 +157,7 @@ async def create_purchase(
     subid: str | None = None,
     referrer: str | None = None,
     buyer_user_id: int | None = None,
+    idempotency_key: str | None = None,
     commit: bool = True,
 ) -> GuestPurchase:
     """Create a guest purchase record."""
@@ -178,6 +179,7 @@ async def create_purchase(
         gift_message=gift_message,
         source=source,
         buyer_user_id=buyer_user_id,
+        idempotency_key=idempotency_key,
         status=GuestPurchaseStatus.PENDING.value,
     )
 
