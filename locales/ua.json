@@ -1268,7 +1268,7 @@
   "REFERRAL_INVITE_FOOTER": "📢 Запрошуйте друзів та заробляйте!",
   "REFERRAL_INVITE_LINK_PROMPT": "👇 Переходь за посиланням:",
   "REFERRAL_INVITE_MESSAGE": "\n🎯 <b>Запрошення до VPN сервісу</b>\n\nПривіт! Запрошую тебе у відмінний VPN сервіс!\n\n🎁 За моїм посиланням ти отримаєш бонус: {bonus}\n\n🔗 Переходь: {link}\n🎫 Або використовуй промокод: {code}\n\n💪 Швидко, надійно, недорого!\n",
-  "REFERRAL_INVITE_TEXT": "🎉 Приєднуйся до VPN сервісу!{bonus_block}\n\n🚀 Швидке підключення\n🌍 Сервери по всьому світу\n🔒 Надійний захист\n\n👇 Переходь за посиланням:\n{link}{cabinet_block}",
+  "REFERRAL_INVITE_TEXT": "Привіт! Раджу VPN, яким сам користуюсь — все летить 🚀{bonus_block}{trial_block}\n\n👇 Заходь за посиланням:\n{link}{cabinet_block}",
   "REFERRAL_INVITE_TITLE": "🎉 Приєднуйся до VPN сервісу!",
   "REFERRAL_LINK_CAPTION": "🔗 Ваше реферальне посилання:\n{link}",
   "REFERRAL_LINK_TITLE": "🔗 <b>Ваше реферальне посилання:</b>",
@@ -1969,5 +1969,8 @@
   "MENU_LEGAL_HEADER": "📄 <b>Правила та документи</b>",
   "SUBSCRIPTION_AUTOPAY_ON": "💳 Автопродовження: увімкнено ({engine})",
   "SUBSCRIPTION_AUTOPAY_OFF": "💳 Автопродовження: вимкнено",
-  "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ Автоподовження через СБП"
+  "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ Автоподовження через СБП",
+  "REFERRAL_SHARE_TEXT": "Привіт! Раджу VPN, яким сам користуюсь — все летить 🚀{bonus_block}",
+  "REFERRAL_SHARE_BONUS": " За посиланням — {bonus} на баланс при першому поповненні від {minimum}!",
+  "REFERRAL_INVITE_TRIAL": "🎁 Безкоштовний пробний період на {days} дн. — без картки!"
 }

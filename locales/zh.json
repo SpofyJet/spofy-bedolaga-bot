@@ -1266,7 +1266,7 @@
   "REFERRAL_INVITE_FOOTER": "📢邀请朋友并赚钱！",
   "REFERRAL_INVITE_LINK_PROMPT": "👇点击链接：",
   "REFERRAL_INVITE_MESSAGE": "\n🎯<b>邀请加入VPN服务</b>\n\n嗨！我邀请您加入一个很棒的VPN服务！\n\n🎁通过我的链接，您将获得奖励：{bonus}\n\n🔗点击：{link}\n🎫或使用优惠码：{code}\n\n💪快速、可靠、不贵！\n",
-  "REFERRAL_INVITE_TEXT": "🎉加入VPN服务！{bonus_block}\n\n🚀快速连接\n🌍全球服务器\n🔒可靠保护\n\n👇点击链接：\n{link}{cabinet_block}",
+  "REFERRAL_INVITE_TEXT": "嗨！推荐一个我自己在用的 VPN——速度快到飞起 🚀{bonus_block}{trial_block}\n\n👇 点链接：\n{link}{cabinet_block}",
   "REFERRAL_INVITE_TITLE": "🎉加入VPN服务！",
   "REFERRAL_LINK_CAPTION": "🔗您的推荐链接：\n{link}",
   "REFERRAL_LINK_TITLE": "🔗<b>您的推荐链接：</b>",
@@ -1969,5 +1969,8 @@
   "MENU_LEGAL_HEADER": "📄 <b>规则与文件</b>",
   "SUBSCRIPTION_AUTOPAY_ON": "💳 自动续订：已开启（{engine}）",
   "SUBSCRIPTION_AUTOPAY_OFF": "💳 自动续订：已关闭",
-  "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ 通过 SBP 自动续订"
+  "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ 通过 SBP 自动续订",
+  "REFERRAL_SHARE_TEXT": "嗨！推荐一个我自己在用的 VPN——速度快到飞起 🚀{bonus_block}",
+  "REFERRAL_SHARE_BONUS": " 通过链接首次充值满 {minimum} 即送 {bonus} 到余额！",
+  "REFERRAL_INVITE_TRIAL": "🎁 免费试用 {days} 天——无需银行卡！"
 }

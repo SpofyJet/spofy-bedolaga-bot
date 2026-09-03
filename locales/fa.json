@@ -1353,7 +1353,7 @@
   "REFERRAL_INVITE_FOOTER": "📢 دوستان را دعوت کنید و درآمد کسب کنید!",
   "REFERRAL_INVITE_LINK_PROMPT": "👇 از لینک زیر استفاده کن:",
   "REFERRAL_INVITE_MESSAGE": "\n🎯 <b>دعوت به سرویس VPN</b>\n\nسلام! به سرویس VPN عالی دعوتت می‌کنم!\n\n🎁 با لینک من پاداش بگیر: {bonus}\n\n🔗 لینک: {link}\n🎫 یا کد: {code}\n\n💪 سریع، امن، مقرون‌به‌صرفه!\n",
-  "REFERRAL_INVITE_TEXT": "🎉 به سرویس VPN بپیوند!{bonus_block}\n\n🚀 اتصال سریع\n🌍 سرورهای سراسر جهان\n🔒 امنیت بالا\n\n👇 از لینک زیر استفاده کن:\n{link}{cabinet_block}",
+  "REFERRAL_INVITE_TEXT": "سلام! این VPN رو خودم استفاده می‌کنم — همه‌چیز سریع و روانه 🚀{bonus_block}{trial_block}\n\n👇 از این لینک وارد شو:\n{link}{cabinet_block}",
   "REFERRAL_INVITE_TITLE": "🎉 به سرویس VPN بپیوند!",
   "REFERRAL_LINK_CAPTION": "🔗 لینک دعوت شما:\n{link}",
   "REFERRAL_LINK_TITLE": "🔗 <b>لینک دعوت شما:</b>",
@@ -1969,5 +1969,8 @@
   "MENU_LEGAL_HEADER": "📄 <b>قوانین و اسناد</b>",
   "SUBSCRIPTION_AUTOPAY_ON": "💳 تمدید خودکار: فعال ({engine})",
   "SUBSCRIPTION_AUTOPAY_OFF": "💳 تمدید خودکار: غیرفعال",
-  "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ تمدید خودکار از طریق SBP"
+  "ADMIN_BROADCAST_BUTTON_SBP_RECURRING": "⚡ تمدید خودکار از طریق SBP",
+  "REFERRAL_SHARE_TEXT": "سلام! این VPN رو خودم استفاده می‌کنم — همه‌چیز سریع و روانه 🚀{bonus_block}",
+  "REFERRAL_SHARE_BONUS": " با این لینک — {bonus} هدیه با اولین شارژ از {minimum}!",
+  "REFERRAL_INVITE_TRIAL": "🎁 دوره آزمایشی رایگان {days} روزه — بدون کارت بانکی!"
 }
