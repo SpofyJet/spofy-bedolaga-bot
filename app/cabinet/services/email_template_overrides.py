@@ -14,13 +14,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.database import AsyncSessionLocal
 
+from .email_layout import EMAIL_LAYOUT_TYPE, layout_is_valid, refresh_email_layout_cache, render_email_layout
+
 
 logger = structlog.get_logger(__name__)
 
 # Placeholders available in EVERY template regardless of notification type.
 # Injected at the single render chokepoint (get_rendered_override), so an
 # admin can use them in any subject/body; per-type context wins on conflict.
-COMMON_CONTEXT_VARS = ['service_name', 'cabinet_url', 'support_username', 'username', 'email', 'date']
+COMMON_CONTEXT_VARS = [
+    'service_name',
+    'cabinet_url',
+    'support_username',
+    'username',
+    'email',
+    'date',
+    'unsubscribe_url',
+]
 
 
 def build_common_context() -> dict[str, Any]:
@@ -41,6 +51,10 @@ def build_common_context() -> dict[str, Any]:
         'username': '',
         'email': '',
         'date': format_email_datetime(datetime.now(UTC), fmt='%d.%m.%Y'),
+        # Пустая строка по умолчанию: у транзакционных писем отписки нет, но
+        # плейсхолдер обязан резолвиться — иначе админский шаблон с
+        # {unsubscribe_url} доставил бы его литералом.
+        'unsubscribe_url': '',
     }
 
 
@@ -251,6 +265,10 @@ async def get_rendered_override(
     Returns:
         Tuple of (subject, body_html) if a usable override exists, None otherwise.
     """
+    # Все пути отправки проходят здесь — заодно подтягивается сохранённая
+    # обёртка писем, которой синхронный рендер пользуется из кэша.
+    await refresh_email_layout_cache(db)
+
     override = await get_template_override(notification_type, language, db)
     if not override:
         return None
@@ -260,6 +278,12 @@ async def get_rendered_override(
     templates = EmailNotificationTemplates()
     # Type-independent placeholders work in every template; caller context wins.
     context = {**build_common_context(), **(context or {})}
+
+    if notification_type == EMAIL_LAYOUT_TYPE:
+        # Превью/тест самой обёртки: в {content} встаёт пример письма как HTML.
+        if not layout_is_valid(override['body_html']):
+            return None
+        return (override['subject'], render_email_layout(override['body_html'], language, context))
     body_html = substitute_context_vars(override['body_html'], context)
 
     if required_vars and context:
@@ -277,7 +301,10 @@ async def get_rendered_override(
             )
             return None
 
-    rendered = templates._wrap_override_template(body_html, language)
+    # Маркетинговый override без ссылки отписки в подвале — раньше терялась.
+    rendered = templates._wrap_override_template(
+        body_html, language, unsubscribe_url=str(context.get('unsubscribe_url') or ''), context=context
+    )
     subject = substitute_context_vars(override['subject'], context, escape=False)
 
     return (subject, rendered)

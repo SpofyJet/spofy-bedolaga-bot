@@ -714,30 +714,45 @@ async def _send_receipt_email(
     amount_text: str,
     receipt_url: str,
     attachment: tuple[str, bytes, str] | None,
+    language: str = 'ru',
 ) -> bool:
     """Отправляет чек NaloGO на почту: файл во вложении + ссылка в тексте.
 
     Ссылка lknpd.nalog.ru у покупателя с включённым VPN не открывается
     (см. _download_receipt_file), поэтому главный носитель чека — вложение;
     ссылка — запасной вариант. Возвращает True при успешной отправке.
+
+    Письмо строится по шаблону nalogo_receipt: сохранённый в редакторе, иначе
+    дефолтный. Раньше текст был зашит здесь — без обёртки и без возможности
+    поменять.
     """
     import asyncio
 
     from app.cabinet.services.email_service import email_service
+    from app.cabinet.services.email_template_overrides import get_rendered_override
+    from app.cabinet.services.email_templates import EmailNotificationTemplates
+    from app.services.notification_delivery_service import NotificationType
 
     if not email_service.is_configured():
         logger.warning('SMTP не настроен — чек NaloGO не отправлен на почту')
         return False
 
-    subject = 'Чек по вашему платежу'
-    body_html = (
-        '<h2>🧾 Чек по вашему платежу сформирован</h2>'
-        f'<p>💰 Сумма: <b>{amount_text}</b></p>'
-        '<p>Чек зарегистрирован в ФНС через сервис «Мой налог».</p>'
-        + ('<p>Файл чека — во вложении к этому письму.</p>' if attachment else '')
-        + f'<p><a href="{receipt_url}">Открыть чек на сайте ФНС</a> '
-        '(ссылка может не открываться при включённом VPN или из-за рубежа).</p>'
-    )
+    from app.cabinet.services.email_type_switch import is_email_type_enabled
+
+    if not is_email_type_enabled(NotificationType.NALOGO_RECEIPT.value):
+        logger.info('Письмо с чеком NaloGO отключено админом — не отправляем')
+        return False
+
+    context = {'amount': amount_text, 'receipt_url': receipt_url, 'has_attachment': attachment is not None}
+    rendered = await get_rendered_override(NotificationType.NALOGO_RECEIPT.value, language, context)
+    if rendered:
+        subject, body_html = rendered
+    else:
+        template = EmailNotificationTemplates().get_template(NotificationType.NALOGO_RECEIPT, language, context)
+        if not template:
+            logger.error('Нет email-шаблона чека NaloGO')
+            return False
+        subject, body_html = template['subject'], template['body_html']
     return await asyncio.to_thread(
         email_service.send_email,
         to_email,

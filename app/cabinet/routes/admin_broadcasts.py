@@ -35,6 +35,8 @@ from ..schemas.broadcasts import (
     EmailFiltersResponse,
     EmailPreviewRequest,
     EmailPreviewResponse,
+    EmailRenderRequest,
+    EmailRenderResponse,
     TariffFilter,
     TariffForBroadcast,
 )
@@ -556,6 +558,31 @@ async def preview_email_broadcast(
     return EmailPreviewResponse(target=request.target, count=count)
 
 
+@router.post('/email-render', response_model=EmailRenderResponse)
+async def render_email_broadcast(
+    request: EmailRenderRequest,
+    admin: User = Depends(require_permission('broadcasts:read')),
+) -> EmailRenderResponse:
+    """Письмо рассылки так, как его получит адресат.
+
+    Фрагмент HTML встаёт в общую обёртку писем (сохранённую в редакторе
+    шаблонов или встроенную), полный документ уходит как есть — ровно как при
+    отправке, чтобы превью в кабинете не расходилось с письмом.
+    """
+    from app.cabinet.services.email_layout import refresh_email_layout_cache
+    from app.services.broadcast_service import EmailBroadcastService, _EmailRecipient
+
+    await refresh_email_layout_cache()
+    recipient = _EmailRecipient(
+        email=admin.email or 'user@example.com',
+        user_name=admin.username or admin.first_name or 'User',
+        user_id=admin.id,
+        language=request.language or 'ru',
+    )
+    subject, body_html = EmailBroadcastService.render_email(request.subject, request.html_content, recipient)
+    return EmailRenderResponse(subject=subject, body_html=body_html)
+
+
 @router.post('/send', response_model=BroadcastResponse, status_code=status.HTTP_201_CREATED)
 async def create_combined_broadcast(
     request: CombinedBroadcastCreateRequest,
@@ -673,6 +700,7 @@ async def create_combined_broadcast(
             email_subject=request.email_subject.strip(),
             email_html_content=request.email_html_content.strip(),
             initiator_name=admin_name,
+            category=request.category,
         )
 
         await email_broadcast_service.start_broadcast(broadcast.id, email_config)

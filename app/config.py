@@ -615,6 +615,9 @@ class Settings(BaseSettings):
     NALOGO_DEVICE_ID: str | None = None
     NALOGO_STORAGE_PATH: str = './nalogo_tokens.json'
     NALOGO_PROXY_URL: str | None = None  # SOCKS proxy for nalog.ru; falls back to PROXY_URL if not set
+    # Типы писем, которые не отправлять (через запятую). Управляется переключателем
+    # в редакторе email-шаблонов; см. app/cabinet/services/email_type_switch.py
+    EMAIL_DISABLED_TYPES: str = ''
 
     AUTO_PURCHASE_AFTER_TOPUP_ENABLED: bool = False
 
@@ -1933,6 +1936,11 @@ class Settings(BaseSettings):
         if not value:
             return []
         return [n.strip() for n in value.split(',') if n.strip()]
+
+    def get_email_disabled_types(self) -> set[str]:
+        """Типы писем, отключённые админом в редакторе шаблонов."""
+        raw = (self.EMAIL_DISABLED_TYPES or '').split('#')[0]
+        return {item.strip() for item in raw.split(',') if item.strip()}
 
     def get_traffic_excluded_user_ids(self) -> list[int]:
         """Возвращает список id пользователей панели для исключения из мониторинга

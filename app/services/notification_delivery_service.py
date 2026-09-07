@@ -86,9 +86,13 @@ class NotificationType(Enum):
     WEBHOOK_DEVICE_DELETED = 'webhook_device_deleted'
     WEBHOOK_TORRENT_DETECTED = 'webhook_torrent_detected'
 
+    # Support tickets
+    TICKET_REPLY = 'ticket_reply'
+
     # Other
     BROADCAST = 'broadcast'
     PAYMENT_RECEIVED = 'payment_received'
+    NALOGO_RECEIPT = 'nalogo_receipt'
     PROMO_OFFER = 'promo_offer'
 
     # Guest purchase notifications
@@ -96,6 +100,7 @@ class NotificationType(Enum):
     GUEST_ACTIVATION_REQUIRED = 'guest_activation_required'
     GUEST_GIFT_RECEIVED = 'guest_gift_received'
     GUEST_CABINET_CREDENTIALS = 'guest_cabinet_credentials'
+    GUEST_GIFT_LINK_BUYER = 'guest_gift_link_buyer'
 
 
 class NotificationDeliveryService:
@@ -414,6 +419,12 @@ class NotificationDeliveryService:
 
         if not user.email or not user.email_verified:
             logger.debug('У пользователя нет подтверждённого email', user_id=user.id)
+            return False
+
+        from app.cabinet.services.email_type_switch import is_email_type_enabled
+
+        if not is_email_type_enabled(notification_type.value):
+            logger.debug('Письмо этого типа отключено админом', notification_type=notification_type.value)
             return False
 
         try:

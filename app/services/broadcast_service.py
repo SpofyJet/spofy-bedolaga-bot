@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -86,6 +87,7 @@ class EmailBroadcastConfig:
     email_subject: str
     email_html_content: str
     initiator_name: str | None = None
+    category: str = 'system'  # system|news|promo — как у Telegram-рассылки
 
 
 @dataclass(slots=True)
@@ -94,6 +96,8 @@ class _EmailRecipient:
 
     email: str
     user_name: str
+    user_id: int = 0
+    language: str = 'ru'
 
 
 @dataclass(slots=True)
@@ -262,15 +266,10 @@ class BroadcastService:
                 users_orm = await get_target_users(session, target)
 
             # Filter by user notification preferences based on broadcast category
-            if category == 'news':
-                from app.utils.notification_prefs import is_news_enabled
+            from app.utils.notification_prefs import filter_users_by_broadcast_category
 
-                users_orm = [u for u in users_orm if is_news_enabled(u)]
-            elif category == 'promo':
-                from app.utils.notification_prefs import is_promo_offers_enabled
-
-                users_orm = [u for u in users_orm if is_promo_offers_enabled(u)]
             # category == 'system' → no filtering, sent to everyone
+            users_orm = filter_users_by_broadcast_category(users_orm, category)
 
             # Извлекаем telegram_id сразу, пока сессия жива.
             # После выхода из блока ORM-объекты станут detached.
@@ -739,7 +738,7 @@ class EmailBroadcastService:
                 await session.commit()
 
             # Fetch email recipients
-            recipients = await self._fetch_email_recipients(config.target)
+            recipients = await self._fetch_email_recipients(config.target, config.category)
 
             # Update total count
             async with AsyncSessionLocal() as session:
@@ -781,16 +780,21 @@ class EmailBroadcastService:
             logger.exception('Critical error in email broadcast', broadcast_id=broadcast_id, exc=exc)
             await self._mark_failed(broadcast_id, sent_count, failed_count)
 
-    async def _fetch_email_recipients(self, target: str) -> list[_EmailRecipient]:
+    async def _fetch_email_recipients(self, target: str, category: str = 'system') -> list[_EmailRecipient]:
         """
         Загружает получателей email-рассылки.
 
         Возвращает список _EmailRecipient (скалярные данные), а не ORM-объектов,
         чтобы избежать detached state при долгих рассылках.
+
+        Фильтрует по тем же тумблерам кабинета, что и Telegram-путь: до этого
+        выключенные новости резали только Telegram, а на почту всё равно
+        приходили.
         """
         from sqlalchemy import select
 
         from app.database.models import Subscription, SubscriptionStatus, User
+        from app.utils.notification_prefs import filter_users_by_broadcast_category
 
         async with AsyncSessionLocal() as session:
             # Base query: verified email users with active status
@@ -857,7 +861,7 @@ class EmailBroadcastService:
                 if not batch:
                     break
 
-                for user in batch:
+                for user in filter_users_by_broadcast_category(list(batch), category):
                     email = user.email
                     if not email:
                         continue
@@ -871,7 +875,11 @@ class EmailBroadcastService:
                     if not user_name:
                         user_name = email.split('@')[0]
 
-                    recipients.append(_EmailRecipient(email=email, user_name=user_name))
+                    recipients.append(
+                        _EmailRecipient(
+                            email=email, user_name=user_name, user_id=user.id, language=user.language or 'ru'
+                        )
+                    )
 
                 offset += batch_size
 
@@ -903,17 +911,23 @@ class EmailBroadcastService:
                 if cancel_event.is_set():
                     return None
 
-                html_content = self._render_template(config.email_html_content, recipient)
-                subject = self._render_template(config.email_subject, recipient)
+                # Отписка (RFC 8058) в этой сборке не перенесена — URL пустой,
+                # плейсхолдер {{unsubscribe_url}} в шаблоне рассылки резолвится в ''.
+                unsubscribe_url = ''
+                subject, html_content = self.render_email(
+                    config.email_subject, config.email_html_content, recipient, unsubscribe_url
+                )
 
                 try:
                     loop = asyncio.get_event_loop()
                     success = await loop.run_in_executor(
                         None,
-                        self._email_service.send_email,
-                        recipient.email,
-                        subject,
-                        html_content,
+                        functools.partial(
+                            self._email_service.send_email,
+                            to_email=recipient.email,
+                            subject=subject,
+                            body_html=html_content,
+                        ),
                     )
                     return success
                 except Exception as exc:
@@ -957,14 +971,38 @@ class EmailBroadcastService:
         return sent_count, failed_count, False
 
     @staticmethod
-    def _render_template(template: str, recipient: _EmailRecipient) -> str:
+    def _render_template(template: str, recipient: _EmailRecipient, unsubscribe_url: str = '') -> str:
         """Подставляет переменные в шаблон email."""
         if not template:
             return template
 
         result = template.replace('{{user_name}}', recipient.user_name)
         result = result.replace('{{email}}', recipient.email)
+        result = result.replace('{{unsubscribe_url}}', unsubscribe_url)
         return result
+
+    @staticmethod
+    def render_email(
+        subject: str, html_content: str, recipient: _EmailRecipient, unsubscribe_url: str = ''
+    ) -> tuple[str, str]:
+        """Тема и тело письма рассылки для адресата — ровно то, что уйдёт.
+
+        После подстановки переменных фрагмент HTML встаёт в общую обёртку писем
+        (как шаблоны из редактора: полный документ уходит как есть, стилизованный
+        фрагмент — в минимальной обёртке). Раньше рассылка уходила голым HTML и
+        обходила обёртку, которую админ настроил для всех остальных писем.
+        """
+        from app.cabinet.services.email_templates import EmailNotificationTemplates
+
+        render = EmailBroadcastService._render_template
+        fragment = render(html_content, recipient, unsubscribe_url)
+        body_html = EmailNotificationTemplates()._wrap_override_template(
+            fragment,
+            recipient.language,
+            unsubscribe_url=unsubscribe_url,
+            context={'username': recipient.user_name, 'email': recipient.email, 'unsubscribe_url': unsubscribe_url},
+        )
+        return render(subject, recipient, unsubscribe_url), body_html
 
     async def _mark_finished(
         self,
