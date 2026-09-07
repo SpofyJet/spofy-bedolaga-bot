@@ -1479,7 +1479,7 @@
   "TICKET_CREATION_CANCELLED": "工单创建已取消。",
   "TICKET_CREATION_ERROR": "❌创建工单时出错。请稍后再试。",
   "TICKET_MARKED_ANSWERED": "✅工单已标记为已回复。",
-  "TICKET_MESSAGE_INPUT": "请描述问题（最多500个字符）或发送带标题的照片：",
+  "TICKET_MESSAGE_INPUT": "请描述问题（最多{limit}个字符）或发送带标题的照片：",
   "TICKET_MESSAGE_TOO_SHORT": "消息必须至少包含10个字符。请重试：",
   "TICKET_NOT_FOUND": "未找到工单。",
   "TICKET_PRIORITY_HIGH": "🟠高",
@@ -2055,5 +2055,7 @@
   "GIFT_COPY_TEXT_HINT": "点击下方文本即可整段复制，然后发送给接收者。",
   "GIFT_COPY_TEXT_BODY": "🎁 送你一份 {tariff_name} 订阅，为期 {period_days} 天。\n\n激活：{claim_link}\n\n如果链接打不开，请在机器人中输入代码：{public_code}",
   "GIFT_ITEM_NOT_CLAIMABLE": "该礼物已被激活——没有可分享的内容。",
-  "GIFT_MY_BACK_TO_CARD": "◀️ 返回礼物"
+  "GIFT_MY_BACK_TO_CARD": "◀️ 返回礼物",
+  "TICKET_MESSAGE_TOO_LONG": "消息太长。最多{limit}个字符。请缩短后重新发送：",
+  "TICKET_REPLY_TOO_LONG": "回复太长。最多{limit}个字符。请缩短后重新发送："
 }

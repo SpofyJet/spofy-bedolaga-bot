@@ -1513,7 +1513,7 @@
   "TICKET_CREATION_CANCELLED": "工单创建已取消。",
   "TICKET_CREATION_ERROR": "❌创建工单时出错。请稍后再试。",
   "TICKET_MARKED_ANSWERED": "✅工单已标记为已回复。",
-  "TICKET_MESSAGE_INPUT": "请描述问题（最多500个字符）或发送带标题的照片：",
+  "TICKET_MESSAGE_INPUT": "请描述问题（最多{limit}个字符）或发送带标题的照片：",
   "TICKET_MESSAGE_TOO_SHORT": "消息必须至少包含10个字符。请重试：",
   "TICKET_NOT_FOUND": "未找到工单。",
   "TICKET_PRIORITY_HIGH": "🟠高",
