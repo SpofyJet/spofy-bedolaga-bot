@@ -1297,6 +1297,17 @@ class Settings(BaseSettings):
     VERSION_CHECK_REPO: str = 'fr1ngg/remnawave-bedolaga-telegram-bot'
     VERSION_CHECK_INTERVAL_HOURS: int = 1
 
+    # === Антиабуз триалов (n20) ===
+    TRIAL_ABUSE_ENABLED: bool = True
+    TRIAL_ABUSE_ACTION: str = 'expire'
+    TRIAL_ABUSE_INTERVAL_HOURS: int = 12
+    TRIAL_ABUSE_MIN_ACCOUNTS: int = 3
+    TRIAL_ABUSE_NOTIFY: bool = True
+    TRIAL_ABUSE_START_DELAY_MINUTES: int = 5
+    TRIAL_ABUSE_REPORT_MODE: str = 'changes'
+    TRIAL_ABUSE_WARNING_TEXT: str = ''
+    TRIAL_ABUSE_EXCLUDE_TELEGRAM_IDS: str = ''
+
     BACKUP_AUTO_ENABLED: bool = True
     BACKUP_INTERVAL_HOURS: int = 24
     BACKUP_TIME: str = '03:00'
