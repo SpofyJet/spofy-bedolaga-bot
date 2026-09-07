@@ -882,10 +882,7 @@ async def main():
             logger.info('ℹ️ Остановка службы мониторинга...')
             monitoring_service.stop_monitoring()
             monitoring_task.cancel()
-            try:
-                await monitoring_task
-            except asyncio.CancelledError:
-                pass
+            await asyncio.wait([monitoring_task])
 
         if maintenance_task and not maintenance_task.done():
             logger.info('ℹ️ Остановка службы техработ...')
