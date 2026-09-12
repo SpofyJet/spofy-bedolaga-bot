@@ -1857,6 +1857,7 @@
   "AUTO_PURCHASE_TRAFFIC_SUCCESS": "✅ <b>Traffic added automatically!</b>\n\n📈 Added: {traffic_gb} GB\n📊 New limit: {new_limit} GB\n💰 Charged: {price}",
   "ADDON_CART_STILL_INSUFFICIENT": "❌ Still not enough funds\n\nRequired: {required}\nYou have: {balance}\nMissing: {missing}",
   "ADDON_CART_COMPLETED": "✅ Done!",
+  "TOPUP_OTHER_AMOUNT": "💰 Another amount",
   "ADDON_CART_FAILED": "❌ Could not complete the purchase. Try again or contact support.",
   "ADDON_PURCHASE_TRAFFIC_SUCCESS": "✅ <b>Traffic added!</b>\n\n📈 Added: {traffic_gb} GB\n📊 New limit: {new_limit} GB\n💰 Charged: {price}",
   "ADDON_PURCHASE_DEVICES_SUCCESS": "✅ <b>Devices added!</b>\n\n📱 Added: {devices_to_add} devices\n📊 New limit: {new_limit} devices\n💰 Charged: {price}",

@@ -1878,6 +1878,7 @@
   "AUTO_PURCHASE_TRAFFIC_SUCCESS": "✅ <b>Трафик добавлен автоматически!</b>\n\n📈 Добавлено: {traffic_gb} ГБ\n📊 Новый лимит: {new_limit} ГБ\n💰 Списано: {price}",
   "ADDON_CART_STILL_INSUFFICIENT": "❌ Все еще недостаточно средств\n\nТребуется: {required}\nУ вас: {balance}\nНе хватает: {missing}",
   "ADDON_CART_COMPLETED": "✅ Готово!",
+  "TOPUP_OTHER_AMOUNT": "💰 Другая сумма",
   "ADDON_CART_FAILED": "❌ Не удалось завершить покупку. Попробуйте ещё раз или напишите в поддержку.",
   "ADDON_PURCHASE_TRAFFIC_SUCCESS": "✅ <b>Трафик добавлен!</b>\n\n📈 Добавлено: {traffic_gb} ГБ\n📊 Новый лимит: {new_limit} ГБ\n💰 Списано: {price}",
   "ADDON_PURCHASE_DEVICES_SUCCESS": "✅ <b>Устройства добавлены!</b>\n\n📱 Добавлено: {devices_to_add} устройств\n📊 Новый лимит: {new_limit} устройств\n💰 Списано: {price}",

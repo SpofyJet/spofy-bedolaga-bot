@@ -378,6 +378,18 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
     full_text = payment_text
 
     keyboard = get_payment_methods_keyboard(amount_kopeks, db_user.language)
+    if amount_kopeks > 0:
+        # n23: корзина предзаполнила сумму — все кнопки способов ведут на оплату
+        # ровно её. Даём выход к произвольной сумме, иначе до истечения TTL
+        # корзины (1 час) юзер не может пополнить на свою сумму.
+        keyboard.inline_keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('TOPUP_OTHER_AMOUNT', '💰 Другая сумма'),
+                    callback_data='topup_other_amount',
+                )
+            ]
+        )
 
     # Если сообщение недоступно, отправляем новое
     if isinstance(callback.message, InaccessibleMessage):
@@ -397,6 +409,21 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
                 pass
             await callback.message.answer(full_text, reply_markup=keyboard, parse_mode='HTML')
 
+    await callback.answer()
+
+
+@error_handler
+async def show_payment_methods_other_amount(callback: types.CallbackQuery, db_user: User):
+    """«Другая сумма»: способы оплаты без предзаполненной суммы корзины —
+    кнопки ведут на классический ввод произвольной суммы (topup_<метод>)."""
+    from app.utils.payment_utils import get_payment_methods_text
+
+    full_text = get_payment_methods_text(db_user.language)
+    keyboard = get_payment_methods_keyboard(0, db_user.language)
+    try:
+        await callback.message.edit_text(full_text, reply_markup=keyboard, parse_mode='HTML')
+    except TelegramBadRequest:
+        await callback.message.answer(full_text, reply_markup=keyboard, parse_mode='HTML')
     await callback.answer()
 
 
@@ -700,6 +727,7 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_balance_history_pagination, F.data.startswith('balance_history_page_'))
 
     dp.callback_query.register(show_payment_methods, F.data == 'balance_topup')
+    dp.callback_query.register(show_payment_methods_other_amount, F.data == 'topup_other_amount')
 
     from .stars import start_stars_payment
 

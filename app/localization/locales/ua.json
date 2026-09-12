@@ -1770,6 +1770,7 @@
   "AUTO_PURCHASE_TRAFFIC_SUCCESS": "✅ <b>Трафік додано автоматично!</b>\n\n📈 Додано: {traffic_gb} ГБ\n📊 Новий ліміт: {new_limit} ГБ\n💰 Списано: {price}",
   "ADDON_CART_STILL_INSUFFICIENT": "❌ Все ще недостатньо коштів\n\nПотрібно: {required}\nУ вас: {balance}\nНе вистачає: {missing}",
   "ADDON_CART_COMPLETED": "✅ Готово!",
+  "TOPUP_OTHER_AMOUNT": "💰 Інша сума",
   "ADDON_CART_FAILED": "❌ Не вдалося завершити покупку. Спробуйте ще раз або напишіть у підтримку.",
   "ADDON_PURCHASE_TRAFFIC_SUCCESS": "✅ <b>Трафік додано!</b>\n\n📈 Додано: {traffic_gb} ГБ\n📊 Новий ліміт: {new_limit} ГБ\n💰 Списано: {price}",
   "ADDON_PURCHASE_DEVICES_SUCCESS": "✅ <b>Пристрої додано!</b>\n\n📱 Додано: {devices_to_add} пристроїв\n📊 Новий ліміт: {new_limit} пристроїв\n💰 Списано: {price}",
