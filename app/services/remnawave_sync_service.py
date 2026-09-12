@@ -21,6 +21,27 @@ logger = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
+class FullSyncAlreadyRunning(RuntimeError):
+    """Полная синхронизация уже идёт — второй проход параллельно не запускаем.
+
+    Проход по тысячам подписок идёт десятки минут; запрос из кабинета
+    отваливается по таймауту и показывает ошибку, оператор жмёт ещё раз — и второй
+    проход удваивал нагрузку на панель и ловил её лимит частоты. Замок один на
+    все поверхности: бот, кабинет, расписание.
+    """
+
+    def __init__(self) -> None:
+        super().__init__('Полная синхронизация уже выполняется')
+
+
+_full_sync_lock = asyncio.Lock()
+
+
+def is_full_sync_running() -> bool:
+    return _full_sync_lock.locked()
+
+
+@dataclass(frozen=True)
 class RemnaWaveAutoSyncStatus:
     enabled: bool
     times: list[time]
@@ -124,7 +145,7 @@ class RemnaWaveAutoSyncService:
             self._next_run = None
 
     async def run_sync_now(self, *, reason: str = 'manual') -> dict[str, Any]:
-        if self._sync_lock.locked():
+        if self._sync_lock.locked() or is_full_sync_running():
             return {'started': False, 'reason': 'already_running'}
 
         async with self._sync_lock:
@@ -196,7 +217,7 @@ class RemnaWaveAutoSyncService:
             last_run_error=self._last_run_error,
             last_user_stats=self._last_user_stats,
             last_server_stats=self._last_server_stats,
-            is_running=self._sync_lock.locked(),
+            is_running=self._sync_lock.locked() or is_full_sync_running(),
         )
 
     async def _run_scheduler(self, times: list[time]) -> None:
@@ -225,9 +246,13 @@ class RemnaWaveAutoSyncService:
         if not service.is_configured:
             raise RemnaWaveConfigurationError(service.configuration_error or 'RemnaWave API не настроен')
 
-        async with AsyncSessionLocal() as session:
-            user_stats = await service.sync_users_from_panel(session, 'all')
-            server_stats = await self._sync_servers(session, service)
+        # Расписание делит замок с ручными запусками из бота/кабинета.
+        if _full_sync_lock.locked():
+            raise FullSyncAlreadyRunning
+        async with _full_sync_lock:
+            async with AsyncSessionLocal() as session:
+                user_stats = await service.sync_users_from_panel(session, 'all')
+                server_stats = await self._sync_servers(session, service)
 
         return user_stats, server_stats
 
@@ -269,6 +294,20 @@ class RemnaWaveAutoSyncService:
         first_time = sorted(times)[0]
         next_day = today + timedelta(days=1)
         return datetime.combine(next_day, first_time, tzinfo=UTC)
+
+
+async def perform_full_sync(session: AsyncSession, service: 'RemnaWaveService') -> tuple[dict[str, Any], dict[str, Any]]:
+    """Полная синхронизация из бота и кабинета: импорт из панели + серверы.
+
+    Экспорт «в панель» остаётся отдельным действием (своя кнопка и роут) — как и
+    было в проде; здесь только замок против параллельного второго прохода.
+    """
+    if _full_sync_lock.locked():
+        raise FullSyncAlreadyRunning
+    async with _full_sync_lock:
+        user_stats = dict(await service.sync_users_from_panel(session, 'all'))
+        server_stats = await remnawave_sync_service._sync_servers(session, service)
+    return user_stats, server_stats
 
 
 def _create_service() -> RemnaWaveAutoSyncService:

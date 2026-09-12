@@ -533,11 +533,16 @@ async def handle_subscription_delete_execute(
             # сюда telegram_id значило бы на 5 минут заглушить user.deleted для
             # ВСЕХ панельных аккаунтов этого пользователя — включая законное
             # удаление соседней подписки оператором.
-            RemnaWaveWebhookService.mark_intentional_panel_deletion(
-                panel_user_ids=[subscription.remnawave_id],
-            )
             service = SubscriptionService()
-            await service.delete_remnawave_user(subscription.remnawave_id)
+            if settings.get_remnawave_user_delete_mode() == 'delete':
+                RemnaWaveWebhookService.mark_intentional_panel_deletion(
+                    panel_user_ids=[subscription.remnawave_id],
+                )
+                await service.delete_remnawave_user(subscription.remnawave_id)
+            else:
+                # Режим disable: аккаунт панели не сносим, только отключаем —
+                # следующая покупка включит его же, а не заведёт дубль.
+                await service.disable_remnawave_user(subscription.remnawave_id, db=db)
         except Exception as e:
             logger.warning('Failed to delete RemnaWave user on subscription delete', error=e)
 

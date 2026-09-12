@@ -36,7 +36,9 @@ from app.external.remnawave_api import (
     coerce_panel_user_id,
     is_user_not_found_error,
 )
+from app.services.panel_expiry import panel_expire_at
 from app.services.subscription_service import get_traffic_reset_strategy
+from app.services.panel_sync.db_session import release_transaction, rollback_quietly
 from app.utils.subscription_utils import (
     coerce_panel_device_limit,
     device_limit_needs_heal,
@@ -317,33 +319,6 @@ class RemnaWaveService:
             logger.warning('⚠️ Не удалось распарсить дату . Используем дефолтную дату.', date_str=date_str, error=e)
             return self._now_utc() + timedelta(days=30)
 
-    def _safe_expire_at_for_panel(self, expire_at: datetime | None) -> datetime:
-        """Гарантирует, что дата окончания не в прошлом для панели.
-
-        Принимает naive UTC datetime, возвращает naive datetime в таймзоне панели.
-        """
-
-        now = self._now_utc()
-        minimum_expire = now + timedelta(minutes=1)
-
-        if not expire_at:
-            result = minimum_expire
-        else:
-            normalized_expire = expire_at
-
-            if normalized_expire < minimum_expire:
-                logger.debug(
-                    '⚙️ Коррекция даты истечения до минимально допустимой для панели',
-                    normalized_expire=normalized_expire,
-                    minimum_expire=minimum_expire,
-                )
-                result = minimum_expire
-            else:
-                result = normalized_expire
-
-        # Панель RemnaWave ожидает время в UTC
-        return result
-
     def _safe_panel_expire_date(self, panel_user: dict[str, Any]) -> datetime:
         """Парсит дату окончания подписки пользователя панели для сравнения."""
 
@@ -583,7 +558,7 @@ class RemnaWaveService:
                 logger.info('Получение системной статистики RemnaWave...')
 
                 try:
-                    system_stats = await api.get_system_stats(tz=settings.TIMEZONE)
+                    system_stats = await api.get_system_stats()
                     logger.info('Системная статистика получена')
                 except Exception as e:
                     logger.error('Ошибка получения системной статистики', error=e)
@@ -1360,6 +1335,9 @@ class RemnaWaveService:
             await exit_stack.aclose()
 
     async def sync_users_from_panel(self, db: AsyncSession, sync_type: str = 'all') -> dict[str, int]:
+        # Выгрузка панели идёт минутами; транзакцию, с которой пришла сессия
+        # (авторизация кабинета, middleware бота), на это время не держим.
+        await release_transaction(db)
         # In multi-tariff mode, match panel users to subscriptions by remnawave_id
         if settings.is_multi_tariff_enabled():
             return await self._sync_users_from_panel_multi(db, sync_type)
@@ -1964,6 +1942,7 @@ class RemnaWaveService:
 
         except Exception as e:
             logger.error('❌ Критическая ошибка синхронизации пользователей', error=e)
+            await rollback_quietly(db)  # иначе следующий шаг синхронизации упадёт на этой сессии
             return {'created': 0, 'updated': 0, 'errors': 1, 'deleted': 0}
 
     async def _sync_users_from_panel_multi(self, db: AsyncSession, sync_type: str) -> dict[str, int]:
@@ -2304,6 +2283,7 @@ class RemnaWaveService:
 
         except Exception as e:
             logger.error('❌ [multi-tariff] Критическая ошибка синхронизации', error=e)
+            await rollback_quietly(db)  # иначе следующий шаг синхронизации упадёт на этой сессии
             return {'created': 0, 'updated': 0, 'errors': 1, 'deleted': 0}
 
     async def _create_subscription_from_panel_data(self, db: AsyncSession, user, panel_user):
@@ -2447,9 +2427,9 @@ class RemnaWaveService:
                 expire_at = self._parse_remnawave_date(expire_at_str)
 
                 # Обновляем end_date только если пользователь ACTIVE в панели.
-                # Для EXPIRED/DISABLED панель может содержать искусственную дату
-                # (установленную _safe_expire_at_for_panel при sync_users_to_panel),
-                # которая не должна перезаписывать реальную дату окончания подписки.
+                # У EXPIRED/DISABLED в панели может лежать искусственная дата,
+                # проставленная старыми версиями бота («сейчас плюс минута»), —
+                # ей нельзя перезаписывать настоящую дату окончания подписки.
                 if panel_status == 'ACTIVE':
                     # Конвертируем локальную дату из БД в UTC для корректного сравнения
                     local_end_date_utc = self._local_to_utc(subscription.end_date)
@@ -2635,8 +2615,6 @@ class RemnaWaveService:
                             try:
                                 user = sub.user
                                 hwid_limit = resolve_hwid_device_limit_for_payload(sub)
-                                expire_at = self._safe_expire_at_for_panel(sub.end_date)
-
                                 # Определяем статус для панели
                                 is_subscription_active = sub.status in (
                                     SubscriptionStatus.ACTIVE.value,
@@ -2663,7 +2641,9 @@ class RemnaWaveService:
 
                                 create_kwargs = dict(
                                     username=username,
-                                    expire_at=expire_at,
+                                    expire_at=panel_expire_at(
+                                        sub.end_date, is_active=is_subscription_active, creating=True
+                                    ),
                                     status=status,
                                     traffic_limit_bytes=sub.traffic_limit_gb * (1024**3)
                                     if sub.traffic_limit_gb > 0
@@ -2752,7 +2732,9 @@ class RemnaWaveService:
                                     update_kwargs = dict(
                                         user_id=panel_user_id,
                                         status=status,
-                                        expire_at=expire_at,
+                                        expire_at=panel_expire_at(
+                                            sub.end_date, is_active=is_subscription_active, creating=False
+                                        ),
                                         traffic_limit_bytes=create_kwargs['traffic_limit_bytes'],
                                         traffic_limit_strategy=get_traffic_reset_strategy(sub.tariff),
                                         email=user.email,

@@ -60,6 +60,7 @@ from app.services.notification_delivery_service import (
     notification_delivery_service,
 )
 from app.services.notification_settings_service import NotificationSettingsService
+from app.services.panel_expiry import panel_expire_at
 from app.services.promo_offer_service import promo_offer_service
 from app.services.subscription_service import SubscriptionService, get_traffic_reset_strategy
 from app.utils.cache import cache
@@ -666,9 +667,7 @@ class MonitoringService:
                 update_kwargs = dict(
                     user_id=panel_user_id,
                     status=RemnaWaveUserStatus.ACTIVE if is_active else RemnaWaveUserStatus.DISABLED,
-                    expire_at=subscription.end_date
-                    if is_active
-                    else max(subscription.end_date, current_time + timedelta(minutes=1)),
+                    expire_at=panel_expire_at(subscription.end_date, is_active=is_active, creating=False),
                     # _gb_to_bytes живёт в SubscriptionService — у MonitoringService своего
                     # никогда не было, и self._gb_to_bytes ронял весь метод AttributeError-ом
                     # ещё до запроса в панель (молча гасился общим except → return None).
@@ -735,8 +734,17 @@ class MonitoringService:
 
             _recurrent_sub_ids = await list_provider_recurrent_subscription_ids(db)
 
+            # n22: выборки по всем дням — один раз до цикла. Раньше проверка
+            # «есть ли более срочное» звала _get_expiring_paid_subscriptions на
+            # КАЖДУЮ подписку × каждый день (подписки × дни² запросов за цикл).
+            expiring_by_days: dict[int, list] = {}
+            urgent_ids_by_days: dict[int, set[int]] = {}
             for days in warning_days:
-                expiring_subscriptions = await self._get_expiring_paid_subscriptions(db, days)
+                expiring_by_days[days] = await self._get_expiring_paid_subscriptions(db, days)
+                urgent_ids_by_days[days] = {sub.id for sub in expiring_by_days[days]}
+
+            for days in warning_days:
+                expiring_subscriptions = expiring_by_days[days]
                 sent_count = 0
 
                 # Batch-запрос: собираем user_id с autopay и проверяем наличие карт одним запросом
@@ -791,17 +799,15 @@ class MonitoringService:
 
                     should_send = True
                     for other_days in warning_days:
-                        if other_days < days:
-                            other_subs = await self._get_expiring_paid_subscriptions(db, other_days)
-                            if any(s.id == subscription.id for s in other_subs):
-                                should_send = False
-                                logger.debug(
-                                    '🎯 Пропускаем уведомление на дней для пользователя есть более срочное на дней',
-                                    days=days,
-                                    user_identifier=user_identifier,
-                                    other_days=other_days,
-                                )
-                                break
+                        if other_days < days and subscription.id in urgent_ids_by_days[other_days]:
+                            should_send = False
+                            logger.debug(
+                                '🎯 Пропускаем уведомление на дней для пользователя есть более срочное на дней',
+                                days=days,
+                                user_identifier=user_identifier,
+                                other_days=other_days,
+                            )
+                            break
 
                     if not should_send:
                         continue
@@ -1225,6 +1231,13 @@ class MonitoringService:
         if not NotificationSettingsService.are_notifications_globally_enabled():
             return
         if not self.bot:
+            return
+        # Переключатели читаются живьём из settings (база), не из файла: выключили — этот цикл уже видит.
+        if not (
+            NotificationSettingsService.is_expired_1d_enabled()
+            or NotificationSettingsService.is_second_wave_enabled()
+            or NotificationSettingsService.is_third_wave_enabled()
+        ):
             return
 
         try:
@@ -3076,6 +3089,9 @@ class MonitoringService:
         одно уведомление на каждое списание. Ошибки не роняют цикл.
         """
         try:
+            # n22: фича вырезана — pre-bill уведомления о списаниях Platega не шлём.
+            if not settings.is_platega_recurrent_enabled():
+                return
             if not NotificationSettingsService.are_notifications_globally_enabled():
                 return
             from app.database.crud import platega_subscription as sub_crud
