@@ -38,6 +38,12 @@ from app.external.remnawave_api import (
 )
 from app.services.panel_expiry import panel_expire_at
 from app.services.subscription_service import get_traffic_reset_strategy
+from app.services.panel_sync import (
+    BULK_SNAPSHOT,
+    link_subscription_panel_identity,
+    project_onto_subscription,
+    read_panel_user,
+)
 from app.services.panel_sync.db_session import release_transaction, rollback_quietly
 from app.utils.subscription_utils import (
     coerce_panel_device_limit,
@@ -2335,7 +2341,10 @@ class RemnaWaveService:
                 ),
             }
 
-            await create_subscription_no_commit(db, **subscription_data)
+            subscription = await create_subscription_no_commit(db, **subscription_data)
+            # Аккаунт панели — у подписки, а не только у пользователя: мультитариф и
+            # экраны по выбранной подписке (устройства, трафик) читают строго её id.
+            await link_subscription_panel_identity(db, subscription, _normalize_panel_user_id(panel_user.get('id')))
             logger.info('✅ Подготовлена подписка для пользователя', telegram_id=user.telegram_id, expire_at=expire_at)
 
         except Exception as e:
@@ -2371,10 +2380,10 @@ class RemnaWaveService:
         panel_user,
         *,
         open_grace_ids: set[int] | None = None,
+        snapshot_taken_at: datetime | None = None,
     ):
         try:
             from app.database.crud.subscription import get_subscription_by_user_id, is_recently_updated_by_webhook
-            from app.database.models import SubscriptionStatus
 
             # Всегда используем async CRUD запрос для получения подписки
             if settings.is_multi_tariff_enabled():
@@ -2419,123 +2428,19 @@ class RemnaWaveService:
                 )
                 return
 
-            panel_status = panel_user.get('status', 'ACTIVE')
-            expire_at_str = panel_user.get('expireAt', '')
-
-            if expire_at_str and not grace_open:
-                # expire_at приходит в UTC (naive) из _parse_remnawave_date
-                expire_at = self._parse_remnawave_date(expire_at_str)
-
-                # Обновляем end_date только если пользователь ACTIVE в панели.
-                # У EXPIRED/DISABLED в панели может лежать искусственная дата,
-                # проставленная старыми версиями бота («сейчас плюс минута»), —
-                # ей нельзя перезаписывать настоящую дату окончания подписки.
-                if panel_status == 'ACTIVE':
-                    # Конвертируем локальную дату из БД в UTC для корректного сравнения
-                    local_end_date_utc = self._local_to_utc(subscription.end_date)
-
-                    # Панель авторитетна для ACTIVE подписок — обновляем end_date
-                    # в обоих направлениях (как вперёд, так и назад)
-                    time_diff = abs((local_end_date_utc - expire_at).total_seconds())
-                    if time_diff > 60:
-                        # Конвертируем UTC обратно в локальное время для сохранения в БД
-                        new_end_date_local = expire_at.replace(tzinfo=self._utc_timezone).astimezone(
-                            self._panel_timezone
-                        )
-                        direction = '→' if expire_at > local_end_date_utc else '←'
-                        logger.info(
-                            '✅ Sync: обновлена end_date пользователя',
-                            value=getattr(user, 'telegram_id', '?'),
-                            end_date=subscription.end_date,
-                            new_end_date_local=new_end_date_local,
-                            time_diff=round(time_diff, 0),
-                            direction=direction,
-                        )
-                        subscription.end_date = new_end_date_local
-                    else:
-                        logger.debug(
-                            '⏭️ Sync: пропускаем обновление end_date — разница слишком мала (< 60с)',
-                            value=getattr(user, 'telegram_id', '?'),
-                            time_diff=round(time_diff, 0),
-                        )
-                else:
-                    logger.debug(
-                        '⏭️ Sync: пропускаем обновление end_date — статус в панели не ACTIVE',
-                        value=getattr(user, 'telegram_id', '?'),
-                        panel_status=panel_status,
-                    )
-
-            current_time = self._now_utc()
-            # Конвертируем end_date в UTC для корректного сравнения с current_time
-            end_date_utc = self._local_to_utc(subscription.end_date)
-
-            if grace_open:
-                new_status = subscription.status
-            elif panel_status == 'ACTIVE' and end_date_utc > current_time:
-                new_status = SubscriptionStatus.ACTIVE.value
-            elif panel_status == 'LIMITED':
-                new_status = SubscriptionStatus.LIMITED.value
-            elif panel_status == 'DISABLED':
-                new_status = SubscriptionStatus.DISABLED.value
-            elif end_date_utc <= current_time:
-                # КРИТИЧНО: НЕ деактивируем если текущий статус ACTIVE
-                # Это защищает от race condition когда sync использует старую end_date из памяти,
-                # а реальная end_date уже обновлена продлением
-                if subscription.status == SubscriptionStatus.ACTIVE.value:
-                    logger.warning(
-                        '⚠️ Sync: пропускаем деактивацию подписки (статус в панели ACTIVE). Деактивация будет выполнена через middleware с буфером.',
-                        value=getattr(user, 'telegram_id', '?'),
-                        end_date=subscription.end_date,
-                        end_date_utc=end_date_utc,
-                        current_time=current_time,
-                    )
-                    new_status = subscription.status  # Сохраняем текущий статус
-                else:
-                    new_status = SubscriptionStatus.EXPIRED.value
-            else:
-                new_status = subscription.status
-
-            if subscription.status != new_status:
-                subscription.status = new_status
-                if new_status in (
-                    SubscriptionStatus.EXPIRED.value,
-                    SubscriptionStatus.LIMITED.value,
-                ):
-                    subscription.grace_candidate_reason = new_status
-                    subscription.grace_candidate_at = datetime.now(UTC)
-                logger.debug('Обновлен статус подписки', new_status=new_status)
-
-            used_traffic_bytes = _get_user_traffic_bytes(panel_user)
-            traffic_used_gb = used_traffic_bytes / (1024**3)
-
-            if abs(subscription.traffic_used_gb - traffic_used_gb) > 0.01:
-                subscription.traffic_used_gb = traffic_used_gb
-                logger.debug('Обновлен использованный трафик', traffic_used_gb=traffic_used_gb)
-
-            # traffic_limit_gb, device_limit: bot is source of truth, do not overwrite from panel
-
-            # Update connected_squads from panel (panel is source of truth for squad assignments)
-            active_squads = panel_user.get('activeInternalSquads', [])
-            panel_squad_uuids = []
-            if isinstance(active_squads, list):
-                for squad in active_squads:
-                    if isinstance(squad, dict) and 'uuid' in squad:
-                        panel_squad_uuids.append(squad['uuid'])
-                    elif isinstance(squad, str):
-                        panel_squad_uuids.append(squad)
-
-            if (
-                not grace_open
-                and panel_squad_uuids
-                and set(panel_squad_uuids) != set(subscription.connected_squads or [])
-            ):
-                subscription.connected_squads = panel_squad_uuids
-                logger.info(
-                    'Обновлены connected_squads из панели',
-                    user_telegram_id=getattr(user, 'telegram_id', '?'),
-                    new_squads=panel_squad_uuids,
-                )
-
+            # Тот же полный проход, что и в мультитарифе: список панели выгружен
+            # минутами раньше, поэтому снимку нельзя верить на слово, а всё, что
+            # изменилось в боте после снимка, он не трогает.
+            project_onto_subscription(
+                subscription,
+                read_panel_user(panel_user),
+                now=self._now_utc(),
+                grace_open=grace_open,
+                policy=BULK_SNAPSHOT,
+                snapshot_taken_at=snapshot_taken_at,
+            )
+            # Старый импорт оставлял строку без id панели — привязываем при первом проходе.
+            await link_subscription_panel_identity(db, subscription, _normalize_panel_user_id(panel_user.get('id')))
             new_short_uuid = panel_user.get('shortUuid')
             if new_short_uuid and subscription.remnawave_short_uuid != new_short_uuid:
                 old_short_uuid = subscription.remnawave_short_uuid

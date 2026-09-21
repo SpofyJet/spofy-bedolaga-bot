@@ -34,6 +34,8 @@ from app.database.crud.server_squad import (
 )
 from app.database.crud.subscription import (
     add_subscription_servers,
+    get_active_subscriptions_by_user_id,
+    get_subscription_by_user_id,
     create_trial_subscription,
     extend_subscription,
     remove_subscription_servers,
@@ -100,6 +102,7 @@ from app.utils.pricing_utils import (
     format_period_description,
 )
 from app.utils.promo_offer import get_user_active_promo_discount_percent
+from app.utils.subscription_time import days_left_rounded_up
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
 from app.utils.telegram_webapp import (
     TelegramWebAppAuthError,
@@ -3490,8 +3493,7 @@ async def get_subscription_details(
         purchases = purchases_result.scalars().all()
 
         for purchase in purchases:
-            time_remaining = purchase.expires_at - now
-            days_remaining = max(0, int(time_remaining.total_seconds() / 86400))
+            days_remaining = days_left_rounded_up(purchase.expires_at, now)
             total_duration_seconds = (purchase.expires_at - purchase.created_at).total_seconds()
             elapsed_seconds = (now - purchase.created_at).total_seconds()
             progress_percent = min(
@@ -6685,6 +6687,15 @@ async def purchase_tariff_endpoint(
         all_servers, _ = await get_all_server_squads(db, available_only=True)
         squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
+    # Какую подписку продлевать. Разрешение повторяет рабочий путь бота
+    # (app/handlers/subscription/tariff_purchase.py): в мультитарифе берётся
+    # подписка на ЭТОТ тариф, в классическом режиме — единственная подписка.
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        subscription = next((s for s in active_subs if s.tariff_id == tariff.id), None)
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
+
     if subscription:
         # Preserve extra purchased devices when renewing the same tariff
         if subscription.tariff_id == tariff.id:
@@ -7011,6 +7022,10 @@ async def switch_tariff_endpoint(
 
     user = await lock_user_for_pricing(db, user.id)
 
+    # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
+    from app.services.grace_access_echo import undo_grace_overlay_echo
+
+    await undo_grace_overlay_echo(db, subscription)
     remaining_days = remaining_days_for_switch(subscription.end_date)
 
     # Рассчитываем стоимость (PricingEngine обрабатывает все случаи)

@@ -257,6 +257,12 @@ class Settings(BaseSettings):
     GRACE_ACCESS_FREE_ENABLED: bool = False
     GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS: int = 60
     GRACE_ACCESS_RECONCILE_BATCH_SIZE: int = 200
+
+    # Уведомления о выдаче/завершении грейса (апстрим 4.11)
+    GRACE_ACCESS_NOTIFY_ADMINS: bool = True
+    GRACE_ACCESS_NOTIFY_USER: bool = True
+    # Через какие сервисы слать пользователю (зарезервировано; сейчас Telegram)
+    GRACE_ACCESS_ALLOWED_SERVICES: str = 'Telegram'
     GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES: int = 30
 
     # Webhook user notification toggles (what Telegram messages users receive from webhook events)
@@ -619,10 +625,10 @@ class Settings(BaseSettings):
     # Отключает проверку IP-адреса отправителя вебхука (allowlist сетей YooKassa).
     # Нужно для развёртываний за Anti-DDoS/прокси, который НЕ пробрасывает реальный
     # IP клиента: до бота доходит только адрес прокси, и allowlist всегда отклоняет
-    # вебхук как forbidden_ip. Когда флаг включён, IP-гейт снимается, но подлинность
-    # платежа подтверждается обязательным (fail-closed) запросом статуса в API YooKassa
+    # вебхук как forbidden_ip. Флаг снимает только IP-гейт: подлинность платежа в любом
+    # режиме подтверждается обязательным (fail-closed) запросом статуса в API YooKassa
     # внутри process_yookassa_webhook — без подтверждения баланс не начисляется.
-    # По умолчанию выключен: IP-проверка остаётся основным барьером.
+    # По умолчанию выключен: IP-проверка остаётся первым барьером.
     YOOKASSA_SKIP_IP_CHECK: bool = False
     YOOKASSA_MIN_AMOUNT_KOPEKS: int = 5000
     YOOKASSA_MAX_AMOUNT_KOPEKS: int = 1000000

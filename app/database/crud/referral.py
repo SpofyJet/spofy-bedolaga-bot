@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.models import AdvertisingCampaignRegistration, ReferralEarning, Subscription, SubscriptionStatus, User
+from app.utils.timezone import local_day_start
 
 
 logger = structlog.get_logger(__name__)
@@ -182,7 +183,7 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
                 }
             )
 
-    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    today = local_day_start()
 
     today_earnings_result = await db.execute(
         select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(ReferralEarning.created_at >= today)

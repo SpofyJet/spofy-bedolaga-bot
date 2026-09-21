@@ -15,6 +15,11 @@ from Crypto.Cipher import PKCS1_v1_5
 from Crypto.PublicKey import RSA
 
 from app.config import settings
+from app.external.remnawave_errors import (
+    RemnaWaveAPIError,
+    RemnaWaveInvalidUserIdError,
+    coerce_panel_user_id,
+)
 
 
 logger = structlog.get_logger(__name__)
@@ -236,12 +241,6 @@ class RemnaWaveExternalSquad:
     updated_at: datetime | None = None
 
 
-class RemnaWaveAPIError(Exception):
-    def __init__(self, message: str, status_code: int = None, response_data: dict = None):
-        self.message = message
-        self.status_code = status_code
-        self.response_data = response_data
-        super().__init__(self.message)
 
 
 class RemnaWaveTransientError(RemnaWaveAPIError):
@@ -252,46 +251,29 @@ class RemnaWaveTransientError(RemnaWaveAPIError):
     surfaced by the monitoring service, not by per-request error logs."""
 
 
-class RemnaWaveInvalidUserIdError(RemnaWaveAPIError):
-    """Локальный идентификатор панельного пользователя непригоден к запросу.
 
-    Все user-эндпоинты 3.0.0 параметризованы ``numberParamSchema =
-    z.coerce.number().positive()``. Нечисловое значение (протухший UUID, None,
-    пустая строка) коерсится в NaN, и панель отвечает **400 VALIDATION, а не
-    404**. Это опасно: ``is_user_not_found_error`` такой ответ не распознаёт,
-    зато распознал бы, если бы мы ослабили её до «любой 400» — и тогда каждый
-    промах идентификатора уходил бы в ветку «пользователя нет → создать»,
-    плодя дубли в панели.
 
-    Поэтому мусорный идентификатор отсекается на границе клиента и никогда не
-    доходит до сети. Тип отдельный, чтобы вызывающий код мог отличить «у нас
-    битая ссылка в БД» от «панель отвергла запрос».
+
+
+def is_expire_in_past_error(error: RemnaWaveAPIError) -> bool:
+    """Панель отвергла ``expireAt`` как прошедшую дату.
+
+    Ответ 3.x: ``400 {"message": "Validation failed", "errors": [{"path":
+    ["expireAt"], "message": "Expiration date cannot be in the past"}]}``
+    (снято с живой панели 3.4.3). Панель сравнивает дату со СВОИМИ часами, так
+    что «ближайшее будущее» по часам бота для неё бывает прошлым.
     """
-
-
-def coerce_panel_user_id(value: Any) -> int:
-    """Привести локально хранимый идентификатор к числовому id панели.
-
-    Принимает int и строку из цифр (БД отдаёт BigInteger, но JSON/FSM могут
-    донести строку). Всё остальное — ошибка, а не запрос в панель.
-    """
-    if isinstance(value, bool):
-        raise RemnaWaveInvalidUserIdError(f'Invalid panel user id: {value!r}')
-    if isinstance(value, int):
-        candidate = value
-    elif isinstance(value, str) and (stripped := value.strip()).isascii() and stripped.isdigit():
-        # Строго ASCII-цифры. `isdigit()` в одиночку истинен для '²' и '٥',
-        # которые int() либо не принимает вовсе, либо молча переводит в число;
-        # а голый int() вдобавок принимает '4_2' и '+42' и превращает их в 42,
-        # то есть в id ДРУГОГО пользователя. Для граничной проверки расширять
-        # приём нельзя — только сужать.
-        candidate = int(stripped)
-    else:
-        raise RemnaWaveInvalidUserIdError(f'Invalid panel user id: {value!r}')
-    if candidate <= 0:
-        raise RemnaWaveInvalidUserIdError(f'Invalid panel user id: {value!r}')
-    return candidate
-
+    if getattr(error, 'status_code', None) != 400:
+        return False
+    errors = (error.response_data or {}).get('errors') or []
+    for item in errors:
+        if not isinstance(item, dict):
+            continue
+        path = item.get('path') or []
+        message = str(item.get('message') or '').lower()
+        if 'expireAt' in path or 'past' in message:
+            return True
+    return False
 
 def is_user_not_found_error(error: RemnaWaveAPIError) -> bool:
     """Панель не нашла пользователя (удалён/протух идентификатор).
@@ -873,7 +855,7 @@ class RemnaWaveAPI:
         email: str | None = None,
         hwid_device_limit: int | None = None,
         description: str | None = None,
-        tag: str | None = None,
+        tag: str | type(...) | None = ...,
         active_internal_squads: list[str] | None = None,
         external_squad_uuid: str | None | type(...) = ...,
     ) -> RemnaWaveUser:
@@ -899,7 +881,11 @@ class RemnaWaveAPI:
             data['hwidDeviceLimit'] = hwid_device_limit
         if description is not None:
             data['description'] = description
-        if tag is not None:
+        # Как и externalSquadUuid: не передать = не трогать, None = снять (в
+        # контракте поле optional + nullable). Бот владеет тегом аккаунта, и
+        # «тега нет» обязано доезжать до панели — иначе триальный тег
+        # переживает покупку, а тег прежнего тарифа — смену тарифа.
+        if tag is not ...:
             data['tag'] = tag
         if active_internal_squads is not None:
             data['activeInternalSquads'] = active_internal_squads
@@ -1033,6 +1019,15 @@ class RemnaWaveAPI:
             users = [await self.enrich_user_with_happ_link(u) for u in users]
 
         return {'users': users, 'total': response['response']['total']}
+
+    async def get_users_by_last_online(self, start: int = 0, size: int = 1000) -> list[RemnaWaveUser]:
+        params = {
+            'start': max(0, start),
+            'size': max(1, min(size, 1000)),
+            'sorting': json.dumps([{'id': 'userTraffic.onlineAt', 'desc': True}]),
+        }
+        response = await self._make_request('GET', '/api/users', params=params)
+        return [self._parse_user(user) for user in response['response']['users']]
 
     async def get_all_users_page_stream(
         self,

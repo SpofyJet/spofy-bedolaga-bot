@@ -43,6 +43,7 @@ from app.services.payment.jupiter import JupiterPaymentMixin
 from app.services.payment.kassa_ai import KassaAiPaymentMixin
 from app.services.payment.lava import LavaPaymentMixin
 from app.services.payment.overpay import OverpayPaymentMixin
+from app.services.payment.payer_identity import resolve_guest_payer
 from app.services.payment.paypear import PayPearPaymentMixin
 from app.services.payment.riopay import RioPayPaymentMixin
 from app.services.payment.rollypay import RollyPayPaymentMixin
@@ -991,6 +992,7 @@ class PaymentService(
                 user_id=None,
                 amount_kopeks=amount_kopeks,
                 description=description,
+                client=(await resolve_guest_payer(db, purchase_token)).contact,
             )
             if result:
                 await _patch_guest_metadata(result['local_payment_id'], 'mulenpay')
@@ -1055,6 +1057,7 @@ class PaymentService(
                 language=settings.DEFAULT_LANGUAGE,
                 payment_method_code=method_code,
                 return_url=return_url,
+                payer=await resolve_guest_payer(db, purchase_token),
             )
             if result:
                 await _patch_guest_metadata(result['local_payment_id'], 'platega')

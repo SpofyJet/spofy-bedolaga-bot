@@ -440,9 +440,9 @@ class CloudPaymentsPaymentMixin:
                 from app.database.crud.user import get_user_by_id
 
                 # Need a new session for this query since we're outside the main flow
-                from app.database.session import async_session_factory
+                from app.database.database import AsyncSessionLocal
 
-                async with async_session_factory() as session:
+                async with AsyncSessionLocal() as session:
                     user = await get_user_by_id(session, user_id)
                     if user and user.telegram_id:
                         await self._send_cloudpayments_fail_notification(

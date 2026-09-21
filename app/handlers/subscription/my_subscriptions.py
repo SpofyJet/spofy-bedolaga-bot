@@ -21,7 +21,8 @@ from app.database.crud.subscription import (
 from app.database.models import Subscription, SubscriptionStatus, User
 from app.localization.texts import Texts, get_texts
 from app.services.subscription_service import SubscriptionService
-from app.utils.formatters import format_human_date, format_human_datetime
+from app.utils.legacy_subscription import is_legacy_subscription
+from app.utils.timezone import format_local_datetime
 
 
 logger = structlog.get_logger(__name__)
@@ -68,7 +69,7 @@ def _format_subscription_line(sub, idx: int) -> str:
     devices = f'{Texts.format_device_limit(sub.device_limit)} устр.' if sub.device_limit is not None else ''
 
     # End date
-    end_date = format_human_date(sub.end_date) if sub.end_date else '—'
+    end_date = format_local_datetime(sub.end_date, '%d.%m.%Y') if sub.end_date else '—'
 
     parts = [f'{emoji} <b>{idx}. {tariff_name}</b>{label}']
     parts.append(f'   📊 Трафик: {traffic}')
@@ -96,12 +97,17 @@ def _build_subscriptions_keyboard(
             ]
         )
 
-    # n6-П12: «Купить ещё» без сдвоенного эмодзи — готовая подпись из локали
-    buttons.append(
-        [
-            types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy'),
-        ]
-    )
+    # "Buy another tariff" button. Пока у человека есть старая подписка (без
+    # тарифа при включённых тарифах), не предлагаем: сперва переход на тариф —
+    # иначе покупка заведёт вторую подписку рядом с непродлеваемой старой.
+    texts = get_texts(language)
+    if not any(is_legacy_subscription(sub) for sub in subscriptions):
+        buy_text = getattr(texts, 'MENU_BUY_SUBSCRIPTION', 'Купить ещё тариф')
+        buttons.append(
+            [
+                types.InlineKeyboardButton(text=f'➕ {buy_text}', callback_data='menu_buy'),
+            ]
+        )
     if gift_enabled:
         buttons.append(
             [
@@ -253,7 +259,7 @@ async def show_subscription_detail(
         used = f'{subscription.traffic_used_gb:.1f}' if subscription.traffic_used_gb else '0'
         traffic = f'{used} / {subscription.traffic_limit_gb} ГБ'
 
-    end_date = format_human_datetime(subscription.end_date) if subscription.end_date else '—'
+    end_date = format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M') if subscription.end_date else '—'
     status = subscription.status_display
 
     text = (

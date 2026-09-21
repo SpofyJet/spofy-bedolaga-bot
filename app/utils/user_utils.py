@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database.models import ReferralEarning, Subscription, SubscriptionStatus, Transaction, TransactionType, User
+from app.utils.timezone import local_day_start
 
 
 logger = structlog.get_logger(__name__)
@@ -284,7 +285,7 @@ async def get_referral_analytics(db: AsyncSession, user_id: int) -> dict:
     try:
         now = datetime.now(UTC)
         periods = {
-            'today': now.replace(hour=0, minute=0, second=0, microsecond=0),
+            'today': local_day_start(now),
             'week': now - timedelta(days=7),
             'month': now - timedelta(days=30),
             'quarter': now - timedelta(days=90),
