@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.subscription import (
+    apply_trial_conversion_defaults,
     create_paid_subscription,
     create_pending_trial_subscription,
     create_trial_subscription,
@@ -57,8 +58,8 @@ from app.services.trial_activation_service import (
     rollback_trial_subscription_activation,
 )
 from app.services.user_cart_service import user_cart_service
-from app.utils.formatters import format_human_datetime
 from app.utils.decorators import error_handler
+from app.utils.formatters import format_human_datetime
 from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 
 
@@ -124,6 +125,8 @@ from app.utils.timezone import format_local_datetime, to_local_datetime
 
 from .autopay import (
     handle_autopay_menu,
+    handle_cashera_recurring_cancel,
+    handle_cashera_recurring_enable,
     handle_sbp_recurring_cancel,
     handle_sbp_recurring_cancel_confirm,
     handle_sbp_recurring_enable,
@@ -772,41 +775,91 @@ def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = Fals
 
     # Добавляем доступные методы оплаты
     if settings.TELEGRAM_STARS_ENABLED:
-        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars'), callback_data='trial_payment_stars')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars'), callback_data='trial_payment_stars'
+                )
+            ]
+        )
 
     if settings.is_yookassa_enabled():
         yookassa_methods = []
         if settings.YOOKASSA_SBP_ENABLED:
             yookassa_methods.append(
-                types.InlineKeyboardButton(text=texts.t('PAYMENT_SBP_YOOKASSA', '🏦 Оплатить по СБП (YooKassa)'), callback_data='trial_payment_yookassa_sbp')
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_SBP_YOOKASSA', '🏦 Оплатить по СБП (YooKassa)'),
+                    callback_data='trial_payment_yookassa_sbp',
+                )
             )
         yookassa_methods.append(
-            types.InlineKeyboardButton(text=texts.t('PAYMENT_CARD_YOOKASSA', '💳 Банковская карта (YooKassa)'), callback_data='trial_payment_yookassa')
+            types.InlineKeyboardButton(
+                text=texts.t('PAYMENT_CARD_YOOKASSA', '💳 Банковская карта (YooKassa)'),
+                callback_data='trial_payment_yookassa',
+            )
         )
         if yookassa_methods:
             keyboard.append(yookassa_methods)
 
     if settings.is_cryptobot_enabled():
-        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_CRYPTOBOT', '🦋 Криптовалюта (CryptoBot)'), callback_data='trial_payment_cryptobot')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_CRYPTOBOT', '🦋 Криптовалюта (CryptoBot)'),
+                    callback_data='trial_payment_cryptobot',
+                )
+            ]
+        )
 
     if settings.is_heleket_enabled():
-        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_HELEKET', '🪙 Криптовалюта (Heleket)'), callback_data='trial_payment_heleket')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_HELEKET', '🪙 Криптовалюта (Heleket)'), callback_data='trial_payment_heleket'
+                )
+            ]
+        )
 
     if settings.is_mulenpay_enabled():
         mulenpay_name = settings.get_mulenpay_display_name()
         keyboard.append(
-            [types.InlineKeyboardButton(text=texts.t('PAYMENT_CARD_MULENPAY', '💳 Банковская карта ({mulenpay_name})').format(mulenpay_name=mulenpay_name), callback_data='trial_payment_mulenpay')]
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_CARD_MULENPAY', '💳 Банковская карта ({mulenpay_name})').format(
+                        mulenpay_name=mulenpay_name
+                    ),
+                    callback_data='trial_payment_mulenpay',
+                )
+            ]
         )
 
     if settings.is_pal24_enabled():
-        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_CARD_PAL24', '🏦 СБП (PayPalych)'), callback_data='trial_payment_pal24')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_CARD_PAL24', '🏦 СБП (PayPalych)'), callback_data='trial_payment_pal24'
+                )
+            ]
+        )
 
     if settings.is_wata_enabled():
-        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_CARD_WATA', '💳 Банковская карта (WATA)'), callback_data='trial_payment_wata')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_CARD_WATA', '💳 Банковская карта (WATA)'), callback_data='trial_payment_wata'
+                )
+            ]
+        )
 
     if settings.is_platega_enabled():
         platega_name = settings.get_platega_display_name()
-        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_PLATEGA', f'💳 {platega_name}'), callback_data='trial_payment_platega')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_PLATEGA', f'💳 {platega_name}'), callback_data='trial_payment_platega'
+                )
+            ]
+        )
 
     # Кнопка назад
     keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_trial')])
@@ -1197,6 +1250,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 )
 
             trial_success_text += payment_note
+
             connect_mode = settings.CONNECT_BUTTON_MODE
 
             if connect_mode == 'miniapp_subscription':
@@ -1551,8 +1605,6 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
 
     if not settings.is_devices_selection_enabled():
         try:
-            from .pricing import _prepare_subscription_summary
-
             _, recalculated_data = await _prepare_subscription_summary(
                 db_user,
                 prepared_cart_data,
@@ -2557,6 +2609,11 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
             await undo_grace_overlay_echo(db, existing_subscription)
             existing_subscription.is_trial = False
+            if was_trial_conversion:
+                # is_trial сбрасывается и при обычном продлении платной подписки —
+                # дефолт автоплатежа вешаем на флаг конверсии, чтобы не затереть
+                # выбор пользователя.
+                apply_trial_conversion_defaults(existing_subscription)
             existing_subscription.status = SubscriptionStatus.ACTIVE.value
             existing_subscription.traffic_limit_gb = final_traffic_gb
             if should_update_devices:
@@ -3576,6 +3633,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                 )
 
             trial_success_text += payment_note
+
             connect_mode = settings.CONNECT_BUTTON_MODE
             connect_keyboard = _build_trial_success_keyboard(texts, subscription_link, connect_mode)
 
@@ -4335,6 +4393,9 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_sbp_recurring_cancel, F.data == 'sbp_recurring_cancel')
 
     dp.callback_query.register(handle_sbp_recurring_cancel_confirm, F.data == 'sbp_recurring_cancel_confirm')
+    dp.callback_query.register(handle_cashera_recurring_enable, F.data == 'cashera_recurring_enable')
+
+    dp.callback_query.register(handle_cashera_recurring_cancel, F.data == 'cashera_recurring_cancel')
 
     dp.callback_query.register(handle_subscription_config_back, F.data == 'subscription_config_back')
 
@@ -4705,6 +4766,7 @@ async def _extend_existing_subscription(
     if current_subscription.is_trial:
         # При продлении триальной подписки переводим её в обычную
         current_subscription.is_trial = False
+        apply_trial_conversion_defaults(current_subscription)
         current_subscription.status = 'active'
         # Убираем ограничения с триальной подписки
         current_subscription.traffic_limit_gb = traffic_limit_gb

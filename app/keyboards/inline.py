@@ -15,7 +15,6 @@ from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.price_display import PriceInfo, format_price_button
 from app.utils.pricing_utils import (
     apply_percentage_discount,
-    format_period_description,
 )
 from app.utils.subscription_utils import (
     get_display_subscription_link,
@@ -229,7 +228,7 @@ def get_rules_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup
             ],
             [
                 InlineKeyboardButton(text=texts.RULES_DECLINE, callback_data='rules_decline'),
-            ]
+            ],
         ]
     )
 
@@ -243,7 +242,7 @@ def get_privacy_policy_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeybo
             ],
             [
                 InlineKeyboardButton(text=texts.PRIVACY_POLICY_DECLINE, callback_data='privacy_policy_decline'),
-            ]
+            ],
         ]
     )
 
@@ -729,9 +728,7 @@ def get_main_menu_keyboard(
         if subscription and not subscription.is_trial and (subscription.traffic_limit_gb or 0) > 0:
             if settings.is_tariffs_mode() and getattr(subscription, 'tariff_id', None):
                 # n13: скрываем кнопку, если тариф не поддерживает докупку (безлимит/выключено)
-                show_traffic_topup = (
-                    settings.BUY_TRAFFIC_BUTTON_VISIBLE and traffic_topup_tariff_allowed is not False
-                )
+                show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE and traffic_topup_tariff_allowed is not False
             elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
                 # Классический режим - проверяем глобальные настройки
                 show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
@@ -749,7 +746,12 @@ def get_main_menu_keyboard(
     # smart-trial-button: скрываем триал, если он уже использован (не только оплачен)
     if trial_already_used is None:
         trial_already_used = has_had_paid_subscription
-    show_trial = not trial_already_used and not has_active_subscription
+    show_trial = (
+        not trial_already_used
+        and not has_active_subscription
+        and settings.TRIAL_DURATION_DAYS > 0
+        and settings.TRIAL_DISABLED_FOR != 'all'
+    )
 
     show_buy = not has_active_subscription or not subscription_is_active
     current_subscription = subscription
@@ -810,12 +812,13 @@ def get_main_menu_keyboard(
 
     # Рефералы — отдельной строкой (как было)
     if settings.is_referral_program_enabled():
-        keyboard.append([
-            InlineKeyboardButton(
-                text=texts.t('MENU_REFERRALS', 'Пригласить друзей 👥'),
-                callback_data='menu_referrals'
-            )
-        ])
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('MENU_REFERRALS', 'Пригласить друзей 👥'), callback_data='menu_referrals'
+                )
+            ]
+        )
 
     if defer_balance:
         # n6-П1: баланс после социального CTA
@@ -823,17 +826,19 @@ def get_main_menu_keyboard(
 
     # Конкурсы — отдельной строкой
     if settings.CONTESTS_ENABLED and settings.CONTESTS_BUTTON_VISIBLE:
-        keyboard.append([
-            InlineKeyboardButton(text=texts.t('CONTESTS_BUTTON', '🎲 Конкурсы'), callback_data='contests_menu')
-        ])
+        keyboard.append(
+            [InlineKeyboardButton(text=texts.t('CONTESTS_BUTTON', '🎲 Конкурсы'), callback_data='contests_menu')]
+        )
 
     # Инфо
-    keyboard.append([
-        InlineKeyboardButton(
-            text=texts.t('MENU_INFO', 'ℹ️ Инфо'),
-            callback_data='menu_info',
-        )
-    ])
+    keyboard.append(
+        [
+            InlineKeyboardButton(
+                text=texts.t('MENU_INFO', 'ℹ️ Инфо'),
+                callback_data='menu_info',
+            )
+        ]
+    )
 
     # Активация (если включена)
     if settings.ACTIVATE_BUTTON_VISIBLE:
@@ -850,7 +855,9 @@ def get_main_menu_keyboard(
         logger.debug('DEBUG KEYBOARD: Админ кнопка НЕ добавлена')
     # Moderator access (limited support panel)
     if (not is_admin) and is_moderator:
-        keyboard.append([InlineKeyboardButton(text=texts.t('MODERATION_BUTTON', '🧑‍⚖️ Модерация'), callback_data='moderator_panel')])
+        keyboard.append(
+            [InlineKeyboardButton(text=texts.t('MODERATION_BUTTON', '🧑‍⚖️ Модерация'), callback_data='moderator_panel')]
+        )
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -941,6 +948,7 @@ def get_info_menu_keyboard(
     # Spofy: Поддержка и Язык внутри Инфо (как было до обновления)
     try:
         from app.services.support_settings_service import SupportSettingsService
+
         _support_on = SupportSettingsService.is_support_menu_enabled()
     except Exception:
         _support_on = settings.SUPPORT_MENU_ENABLED
@@ -1105,7 +1113,7 @@ def get_insufficient_balance_keyboard(
     language: str = DEFAULT_LANGUAGE,
     resume_callback: str | None = None,
     amount_kopeks: int | None = None,
-    has_saved_cart: bool = False,  # Новый параметр для указания наличия сохраненной корзины
+    has_saved_cart: bool = False,
     resume_text: str | None = None,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
@@ -1124,14 +1132,15 @@ def get_insufficient_balance_keyboard(
             # пользователь сохраняет шаг назад
             back_row_index = len(keyboard.inline_keyboard) - 1
 
-    # Если есть сохраненная корзина, добавляем кнопку возврата к оформлению
+    # Если есть сохраненная корзина или передан resume_callback, добавляем кнопку возврата
+    button_label = resume_text or texts.RETURN_TO_SUBSCRIPTION_CHECKOUT
     if has_saved_cart:
         # Подарочная корзина передаёт resume_text+resume_callback — кнопка ведёт к подарку;
         # у обычных вызовов (без resume_text) поведение прежнее: return_to_saved_cart.
         return_row = [
             InlineKeyboardButton(
-                text=resume_text or texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                callback_data=(resume_callback or 'return_to_saved_cart') if resume_text else 'return_to_saved_cart',
+                text=button_label,
+                callback_data=resume_callback or 'return_to_saved_cart',
             )
         ]
         insert_index = back_row_index if back_row_index is not None else len(keyboard.inline_keyboard)
@@ -1139,7 +1148,7 @@ def get_insufficient_balance_keyboard(
     elif resume_callback:
         return_row = [
             InlineKeyboardButton(
-                text=resume_text or texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                text=button_label,
                 callback_data=resume_callback,
             )
         ]
@@ -1306,11 +1315,7 @@ def get_subscription_keyboard(
             else:
                 # «Продлить подписку» — главная CTA экрана, отдельным рядом на всю ширину
                 keyboard.append(
-                    [
-                        InlineKeyboardButton(
-                            text=texts.MENU_EXTEND_SUBSCRIPTION, callback_data='subscription_extend'
-                        )
-                    ]
+                    [InlineKeyboardButton(text=texts.MENU_EXTEND_SUBSCRIPTION, callback_data='subscription_extend')]
                 )
                 keyboard.append(
                     [
@@ -1325,8 +1330,9 @@ def get_subscription_keyboard(
             # В режиме тарифов проверяем can_topup_traffic() у тарифа, в классическом - глобальные настройки
             show_traffic_topup = False
             if subscription and (subscription.traffic_limit_gb or 0) > 0:
-                if settings.is_tariffs_mode() and tariff:
-                    show_traffic_topup = tariff.can_topup_traffic()
+                if settings.is_tariffs_mode():
+                    # Старая подписка без тарифа классических докупок не получает
+                    show_traffic_topup = bool(tariff and tariff.can_topup_traffic())
                 elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
                     show_traffic_topup = True
 
@@ -1461,12 +1467,16 @@ def get_subscription_confirm_keyboard_with_cart(language: str = 'ru') -> InlineK
 def get_insufficient_balance_keyboard_with_cart(
     language: str = 'ru',
     amount_kopeks: int = 0,
+    resume_callback: str | None = None,
+    resume_text: str | None = None,
 ) -> InlineKeyboardMarkup:
     # Используем обновленную версию с флагом has_saved_cart=True
     keyboard = get_insufficient_balance_keyboard(
         language,
         amount_kopeks=amount_kopeks,
         has_saved_cart=True,
+        resume_callback=resume_callback,
+        resume_text=resume_text,
     )
 
     # n6-П28: очистка корзины — перед последним рядом («Назад»), не в начало
@@ -1494,7 +1504,7 @@ def get_trial_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu'),
-            ]
+            ],
         ]
     )
 
@@ -1741,7 +1751,7 @@ def get_subscription_confirm_keyboard(language: str = DEFAULT_LANGUAGE) -> Inlin
             ],
             [
                 InlineKeyboardButton(text=texts.CANCEL, callback_data='subscription_cancel'),
-            ]
+            ],
         ]
     )
 
@@ -2402,6 +2412,106 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
+    if settings.is_cashera_enabled():
+        cashera_name = settings.get_cashera_display_name()
+        if settings.CASHERA_INLINE_METHODS:
+            for method_code in settings.get_cashera_active_methods():
+                title = settings.get_cashera_method_display_title(method_code)
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            text=f'{title} ({cashera_name})',
+                            callback_data=_build_callback(f'cashera_m_{method_code}'),
+                        )
+                    ]
+                )
+        else:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('PAYMENT_CASHERA', f'💳 {cashera_name}'),
+                        callback_data=_build_callback('cashera'),
+                    )
+                ]
+            )
+        has_direct_payment_methods = True
+
+    if settings.is_tabpay_card_enabled():
+        tabpay_card_name = settings.get_tabpay_card_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_TABPAY_CARD', f'💳 {tabpay_card_name}'),
+                    callback_data=_build_callback('tabpay_card'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_tabpay_sbp_enabled():
+        tabpay_sbp_name = settings.get_tabpay_sbp_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_TABPAY_SBP', f'📱 {tabpay_sbp_name}'),
+                    callback_data=_build_callback('tabpay_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_tabpay_enabled() and not settings.is_tabpay_card_enabled() and not settings.is_tabpay_sbp_enabled():
+        tabpay_name = settings.get_tabpay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_TABPAY', f'💳 {tabpay_name}'),
+                    callback_data=_build_callback('tabpay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_paritypay_card_enabled():
+        paritypay_card_name = settings.get_paritypay_card_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_PARITYPAY_CARD', f'💳 {paritypay_card_name}'),
+                    callback_data=_build_callback('paritypay_card'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_paritypay_sbp_enabled():
+        paritypay_sbp_name = settings.get_paritypay_sbp_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_PARITYPAY_SBP', f'📱 {paritypay_sbp_name}'),
+                    callback_data=_build_callback('paritypay_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if (
+        settings.is_paritypay_enabled()
+        and not settings.is_paritypay_card_enabled()
+        and not settings.is_paritypay_sbp_enabled()
+    ):
+        paritypay_name = settings.get_paritypay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_PARITYPAY', f'💳 {paritypay_name}'),
+                    callback_data=_build_callback('paritypay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
     if settings.is_support_topup_enabled():
         keyboard.append(
             [
@@ -2507,6 +2617,18 @@ def get_referral_keyboard(language: str = DEFAULT_LANGUAGE, share_url: str | Non
             )
         ],
     ]
+
+    # Кнопка появляется, только когда админ разрешил хотя бы одну из настроек:
+    # экран, на котором нечего менять, обещает влияние, которого нет.
+    if settings.is_referral_reward_kind_choice_enabled() or settings.is_referral_days_target_choice_enabled():
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('REFERRAL_REWARD_SETTINGS_BUTTON', '⚙️ Настройки наград'),
+                    callback_data='referral_reward_settings',
+                )
+            ]
+        )
 
     # Добавляем кнопку вывода, если включена
     if settings.is_referral_withdrawal_enabled():
@@ -2691,7 +2813,7 @@ def get_confirm_unlink_keyboard(card_id: int, language: str = DEFAULT_LANGUAGE) 
                     text=texts.t('CANCEL', '❌ Отмена'),
                     callback_data='saved_cards_list',
                 ),
-            ]
+            ],
         ]
     )
 
@@ -2907,10 +3029,8 @@ def get_change_devices_keyboard(
         now = datetime.now(UTC)
         days_left = max(1, math.ceil((subscription_end_date - now).total_seconds() / 86400))
         price_multiplier = days_left / 30
-        period_text = f' (за {days_left} дн.)' if days_left > 1 else ' (за 1 день)'
     else:
         price_multiplier = 1
-        period_text = ''
 
     # «Вечный» тариф: фикс. цена за устройство — без прорейта по остатку дней
     if tariff and getattr(tariff, 'device_price_flat', False):

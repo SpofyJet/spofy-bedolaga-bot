@@ -35,13 +35,16 @@ async def test_create_invite_message_wraps_links_in_code(monkeypatch):
     callback.bot = bot
     callback.answer = AsyncMock()
 
-    await ref.create_invite_message(callback, db_user)
+    await ref.create_invite_message(callback, db_user, None)
 
     html = captured['text']
-    # Both links are wrapped in <code> so tap-to-copy captures them whole.
-    assert '<code>https://t.me/bot?start=ref_X</code>' in html
+    # Spofy (n14): весь текст приглашения — один <code>-блок: на iOS смешанная
+    # разметка при копировании цитаты теряла <code>-части. Ссылки внутри целиком.
+    assert html.count('<code>') == 1
+    body = html.split('<code>', 1)[1].split('</code>', 1)[0]
+    assert 'https://t.me/bot?start=ref_X' in body
     # `&` in the cabinet URL is HTML-escaped, but the <code> tags are NOT escaped.
-    assert '<code>https://cab.example/?ref=X&amp;u=1</code>' in html
+    assert 'https://cab.example/?ref=X&amp;u=1' in body
     assert '&lt;code&gt;' not in html
     # Still rendered inside the copyable quote.
     assert '<blockquote>' in html and '</blockquote>' in html

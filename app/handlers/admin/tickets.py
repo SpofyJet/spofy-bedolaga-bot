@@ -17,9 +17,11 @@ from app.keyboards.inline import (
     get_admin_tickets_keyboard,
 )
 from app.localization.texts import get_texts
+from app.services.notification_delivery_service import notification_delivery_service
 from app.services.support_settings_service import SupportSettingsService
 from app.states import AdminTicketStates
 from app.utils.cache import RateLimitCache
+from app.utils.chat_scope import callback_from_group
 from app.utils.photo_message import safe_edit_or_resend
 from app.utils.ticket_text import (
     TICKET_MESSAGE_MAX_LENGTH,
@@ -126,6 +128,31 @@ async def show_admin_tickets(callback: types.CallbackQuery, db_user: User, db: A
         parse_mode='HTML',
     )
     await callback.answer()
+
+
+def _card_in_group(callback: types.CallbackQuery) -> bool:
+    """Нажатие пришло из группового админ-чата, а не из лички админа."""
+    return callback_from_group(callback)
+
+
+async def _refresh_group_ticket_card(callback: types.CallbackQuery, db: AsyncSession, ticket_id: int) -> None:
+    """Перерисовать карточку в группе групповой клавиатурой по новому состоянию тикета.
+
+    Экран личной админки здесь не годится: «Ответить»/«Блок по времени» — FSM и в
+    группе не работают, а «⬅️ Назад» ведёт в меню админки. Оператор видел в группе
+    «Блок по времени», которая ничего не делает.
+    """
+    from app.handlers.tickets import build_ticket_card_keyboard
+
+    ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_user=True)
+    if not ticket:
+        return
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=build_ticket_card_keyboard(ticket, ticket.user, role='group')
+        )
+    except TelegramBadRequest as error:
+        logger.debug('Не удалось обновить групповую карточку тикета', ticket_id=ticket_id, error=error)
 
 
 async def view_admin_ticket(
@@ -282,10 +309,8 @@ async def view_admin_ticket(
             nav_row.append(
                 types.InlineKeyboardButton(text='➡️', callback_data=f'admin_ticket_page_{ticket_id}_{page + 1}')
             )
-        try:
+        if getattr(keyboard, 'inline_keyboard', None) is not None:
             keyboard.inline_keyboard.insert(0, nav_row)
-        except Exception:
-            pass
 
     page_text = pages[page - 1]
 
@@ -621,10 +646,14 @@ async def close_admin_ticket(callback: types.CallbackQuery, db_user: User, db: A
             except Exception:
                 await callback.answer(texts.t('TICKET_CLOSED', '✅ Тикет закрыт.'), show_alert=True)
 
-            # Обновляем inline-клавиатуру в текущем сообщении без кнопок действий
-            await callback.message.edit_reply_markup(
-                reply_markup=get_admin_ticket_view_keyboard(ticket_id, True, db_user.language)
-            )
+            # Обновляем inline-клавиатуру в текущем сообщении без кнопок действий.
+            # В группе — групповой клавиатурой, а не экраном личной админки.
+            if _card_in_group(callback):
+                await _refresh_group_ticket_card(callback, db, ticket_id)
+            else:
+                await callback.message.edit_reply_markup(
+                    reply_markup=get_admin_ticket_view_keyboard(ticket_id, True, db_user.language)
+                )
         else:
             texts = get_texts(db_user.language)
             await callback.answer(texts.t('TICKET_CLOSE_ERROR', '❌ Ошибка при закрытии тикета.'), show_alert=True)
@@ -937,7 +966,10 @@ async def unblock_user_in_ticket(callback: types.CallbackQuery, db_user: User, d
             )
         except Exception:
             pass
-        await view_admin_ticket(callback, db_user, db, state)
+        if _card_in_group(callback):
+            await _refresh_group_ticket_card(callback, db, ticket_id)
+        else:
+            await view_admin_ticket(callback, db_user, db, state)
     else:
         await callback.answer('❌ Ошибка', show_alert=True)
 
@@ -990,9 +1022,46 @@ async def block_user_permanently(callback: types.CallbackQuery, db_user: User, d
             )
         except Exception:
             pass
-        await view_admin_ticket(callback, db_user, db, state)
+        if _card_in_group(callback):
+            await _refresh_group_ticket_card(callback, db, ticket_id)
+        else:
+            await view_admin_ticket(callback, db_user, db, state)
     else:
         await callback.answer('❌ Ошибка', show_alert=True)
+
+
+async def _notify_ticket_reply_by_email(user: User, ticket: Ticket, reply_text: str, db: AsyncSession) -> None:
+    """Доставить ответ поддержки письмом — для пользователей без ``telegram_id``.
+
+    Тумблер уведомлений общий с Telegram-каналом и уже проверен вызывающей
+    функцией.
+    """
+    if not getattr(user, 'email', None) or not getattr(user, 'email_verified', False):
+        logger.warning(
+            'Cannot notify ticket user: no telegram_id and no verified email',
+            ticket_id=ticket.id,
+            username=getattr(user, 'username', None),
+            auth_type=getattr(user, 'auth_type', None),
+        )
+        return
+
+    try:
+        last_message = await TicketMessageCRUD.get_last_message(db, ticket.id)
+        has_photo = bool(
+            last_message
+            and last_message.has_media
+            and last_message.media_type == 'photo'
+            and last_message.is_from_admin
+        )
+
+        await notification_delivery_service.notify_ticket_reply(
+            user=user,
+            ticket_id=ticket.id,
+            reply_preview=preview_text(reply_text),
+            has_photo=has_photo,
+        )
+    except Exception as error:
+        logger.error('Не удалось отправить email об ответе в тикете', ticket_id=ticket.id, error=error)
 
 
 async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: str, db: AsyncSession):
@@ -1017,12 +1086,9 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
             return
 
         if not getattr(user, 'telegram_id', None):
-            logger.warning(
-                'Cannot notify ticket user without telegram_id',
-                ticket_id=ticket.id,
-                getattr=getattr(user, 'username', None),
-                getattr_2=getattr(user, 'auth_type', None),
-            )
+            # Юзер без Telegram (регистрация по email) иначе узнаёт об ответе
+            # поддержки, только если сам зайдёт в кабинет.
+            await _notify_ticket_reply_by_email(user, ticket, reply_text, db)
             return
 
         chat_id = int(user.telegram_id)

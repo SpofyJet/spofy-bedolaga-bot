@@ -3540,7 +3540,6 @@ async def auto_purchase_saved_cart_after_topup(
 
     # 2. Global cart (backward compat): only add if its subscription_id
     #    is not already covered by a per-subscription cart.
-    global_cart = await user_cart_service.get_user_cart(user.id)
     if global_cart:
         global_sub_id = _safe_int(global_cart.get('subscription_id'))
         if global_sub_id and global_sub_id in seen_subscription_ids:

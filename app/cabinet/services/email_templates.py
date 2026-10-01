@@ -54,9 +54,6 @@ class EmailNotificationTemplates:
         рукописная копия рядом отставала, и письма уходили со стандартным
         шаблоном, который нельзя было поменять.
         """
-        # Import here to avoid circular imports
-        from app.services.notification_delivery_service import NotificationType
-
         template_map: dict[NotificationType, Callable[[str, dict[str, Any]], dict[str, str]]] = {
             NotificationType.BALANCE_TOPUP: self._balance_topup_template,
             NotificationType.BALANCE_CHANGE: self._balance_change_template,
@@ -79,6 +76,7 @@ class EmailNotificationTemplates:
             NotificationType.WARNING_NOTIFICATION: self._warning_template,
             NotificationType.REFERRAL_BONUS: self._referral_bonus_template,
             NotificationType.REFERRAL_REGISTERED: self._referral_registered_template,
+            NotificationType.REFERRAL_WELCOME: self._referral_welcome_template,
             NotificationType.PARTNER_APPLICATION_APPROVED: self._partner_approved_template,
             NotificationType.PARTNER_APPLICATION_REJECTED: self._partner_rejected_template,
             NotificationType.WITHDRAWAL_APPROVED: self._withdrawal_approved_template,
@@ -88,6 +86,7 @@ class EmailNotificationTemplates:
             NotificationType.NALOGO_RECEIPT: self._nalogo_receipt_template,
             NotificationType.PROMO_OFFER: self._promo_offer_template,
             NotificationType.TICKET_REPLY: self._ticket_reply_template,
+            NotificationType.PROMO_GROUP_AUTO_ASSIGNED: self._promo_group_auto_assigned_template,
             NotificationType.EMAIL_VERIFICATION: self._email_verification_template,
             NotificationType.PASSWORD_RESET: self._password_reset_template,
             NotificationType.EMAIL_CHANGE_CODE: self._email_change_code_template,
@@ -1527,6 +1526,53 @@ class EmailNotificationTemplates:
             'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
+    def _referral_welcome_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for the newcomer who registered by a referral link.
+
+        Приглашённому обещают не выплату, а условие («7 дн. подписки», «100 ₽ при
+        первом пополнении от 500 ₽») — оно приходит готовой фразой в
+        ``bonus_promise``; пустая фраза — блок с бонусом не показывается.
+        """
+        referrer_name = html.escape(context.get('referrer_name', '') or '')
+        bonus_promise = html.escape(context.get('bonus_promise', '') or '')
+        by_whom_ru = f' пользователя <strong>{referrer_name}</strong>' if referrer_name else ''
+        by_whom_en = f' of <strong>{referrer_name}</strong>' if referrer_name else ''
+        promise_ru = f'<p>Ваш бонус: <span class="amount">{bonus_promise}</span></p>' if bonus_promise else ''
+        promise_en = f'<p>Your bonus: <span class="amount">{bonus_promise}</span></p>' if bonus_promise else ''
+
+        subjects = {
+            'ru': 'Добро пожаловать по приглашению',
+            'en': 'Welcome by invitation',
+            'zh': '欢迎通过邀请加入',
+            'ua': 'Ласкаво просимо за запрошенням',
+        }
+
+        bodies = {
+            'ru': f"""
+                <h2>Добро пожаловать!</h2>
+                <div class="highlight success">
+                    <p>Вы зарегистрировались по реферальной ссылке{by_whom_ru}.</p>
+                    {promise_ru}
+                </div>
+                <p>Рады видеть вас среди наших пользователей!</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'en': f"""
+                <h2>Welcome!</h2>
+                <div class="highlight success">
+                    <p>You signed up using the referral link{by_whom_en}.</p>
+                    {promise_en}
+                </div>
+                <p>Glad to have you with us!</p>
+                {self._get_cabinet_button(language)}
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
     # ============================================================================
     # Partner Templates
     # ============================================================================
@@ -1832,6 +1878,74 @@ class EmailNotificationTemplates:
         url = f'{self.cabinet_url.rstrip("/")}/support'
 
         return f'<p style="text-align: center;"><a href="{url}" class="button">{text}</a></p>'
+
+    def _promo_group_auto_assigned_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Промогруппа назначена автоматически за траты — какие скидки теперь действуют."""
+        group_name = html.escape(str(context.get('group_name') or ''))
+        total_spent = html.escape(str(context.get('total_spent') or ''))
+        period_discounts = html.escape(str(context.get('period_discounts') or ''))
+
+        def _percent(key: str) -> int:
+            try:
+                return max(0, int(context.get(key) or 0))
+            except (TypeError, ValueError):
+                return 0
+
+        labels = {
+            'ru': ('Серверы', 'Трафик', 'Доп. устройства', 'За длительный период'),
+            'en': ('Servers', 'Traffic', 'Extra devices', 'Long-term periods'),
+            'zh': ('服务器', '流量', '额外设备', '长期订阅'),
+            'ua': ('Сервери', 'Трафік', 'Дод. пристрої', 'За тривалий період'),
+        }
+        servers, traffic, devices, periods = labels.get(language, labels['ru'])
+        items = [
+            f'<li>{label}: <strong>{percent}%</strong></li>'
+            for label, percent in (
+                (servers, _percent('server_discount')),
+                (traffic, _percent('traffic_discount')),
+                (devices, _percent('device_discount')),
+            )
+            if percent
+        ]
+        if period_discounts:
+            items.append(f'<li>{periods}: {period_discounts}</li>')
+        discounts_html = f'<ul>{"".join(items)}</ul>' if items else ''
+
+        subjects = {
+            'ru': f'Новая промогруппа: {group_name}',
+            'en': f'New promo group: {group_name}',
+            'zh': f'新的促销组：{group_name}',
+            'ua': f'Нова промогрупа: {group_name}',
+        }
+        intros = {
+            'ru': (
+                f'Вы потратили у нас {total_spent} — спасибо! Теперь для вас постоянно действуют скидки:'
+                if items
+                else f'Вы потратили у нас {total_spent} — спасибо! Вас перевели в новую промогруппу.'
+            ),
+            'en': (
+                f'You have spent {total_spent} with us — thank you! These discounts now apply to you permanently:'
+                if items
+                else f'You have spent {total_spent} with us — thank you! You have been moved to a new promo group.'
+            ),
+            'zh': (
+                f'您在我们这里已消费 {total_spent}，感谢支持！以下折扣现在对您长期有效：'
+                if items
+                else f'您在我们这里已消费 {total_spent}，感谢支持！您已被转入新的促销组。'
+            ),
+            'ua': (
+                f'Ви витратили у нас {total_spent} — дякуємо! Тепер для вас постійно діють знижки:'
+                if items
+                else f'Ви витратили у нас {total_spent} — дякуємо! Вас переведено до нової промогрупи.'
+            ),
+        }
+        subject = subjects.get(language, subjects['ru'])
+        intro = intros.get(language, intros['ru'])
+        content = (
+            f'<h2>{subject}</h2><div class="highlight"><p>{intro}</p>{discounts_html}</div>'
+            f'{self._get_cabinet_button(language)}'
+        )
+        return {'subject': subject, 'body_html': self._get_base_template(content, language)}
 
     def _ticket_reply_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for a support reply in a ticket."""

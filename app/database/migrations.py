@@ -135,6 +135,54 @@ async def _ensure_runtime_schema_guards() -> None:
             )
 
 
+# Spofy: до v5.0.0 форк жил на своей цепочке ревизий — 0099 (xrocket) и 0100
+# (вечные тарифы) вклинились после 0098, а апстримные 0099–0104 и 0120–0125
+# были перенесены под номерами 0101–0113. Номера совпадают с апстримными, но
+# значат другое: оставь базу на «0113», и Alembic решит, что апстримные
+# 0105–0113 (рефералка по уровням, email-очередь, TabPay…) уже применены.
+# Поэтому базу форка переставляем на последнюю общую точку — апстримную 0104;
+# дальше идемпотентные миграции 0105–0131 докатывают недостающее и пропускают
+# уже сделанное, а 0132/0133 — те же xrocket и вечные тарифы, тоже идемпотентные.
+_SPOFY_FORK_REVISION_MAP = {
+    '0099': '0098',
+    '0100': '0098',
+    '0101': '0099',
+    '0102': '0100',
+    '0103': '0101',
+    '0104': '0102',
+    '0105': '0103',
+    '0106': '0104',
+    '0107': '0104',
+    '0108': '0104',
+    '0109': '0104',
+    '0110': '0104',
+    '0111': '0104',
+    '0112': '0104',
+    '0113': '0104',
+}
+
+
+async def _reconcile_spofy_fork_chain() -> None:
+    """Re-stamp a DB from the pre-v5 Spofy fork chain onto the upstream chain."""
+    from app.database.database import engine
+
+    async with engine.connect() as conn:
+        tables = set(await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_table_names()))
+        if 'xrocket_payments' not in tables or 'tabpay_payments' in tables:
+            return
+        current = (await conn.execute(text('SELECT version_num FROM alembic_version'))).scalar_one_or_none()
+
+    target = _SPOFY_FORK_REVISION_MAP.get(current or '')
+    if target is None:
+        return
+    logger.warning(
+        'База на цепочке миграций старого форка Spofy — переставляю на апстримную',
+        fork_revision=current,
+        upstream_revision=target,
+    )
+    await _stamp_alembic_revision(target)
+
+
 async def run_alembic_upgrade() -> None:
     """Run ``alembic upgrade head``, handling fresh and legacy databases."""
     import asyncio
@@ -153,6 +201,9 @@ async def run_alembic_upgrade() -> None:
             'Обнаружена существующая БД без alembic_version — автоматический stamp 0001 (переход с universal_migration)'
         )
         await _stamp_alembic_revision(_INITIAL_REVISION)
+
+    if db_state == 'managed':
+        await _reconcile_spofy_fork_chain()
 
     cfg = _get_alembic_config()
     loop = asyncio.get_running_loop()

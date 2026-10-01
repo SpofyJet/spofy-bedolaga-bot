@@ -280,6 +280,33 @@ def _get_method_defaults() -> dict:
                 {'id': 'sbp', 'name': 'СБП'},
             ],
         },
+        'paritypay': {
+            'default_display_name': settings.get_paritypay_display_name(),
+            'is_configured': settings.is_paritypay_enabled(),
+            'default_min': settings.PARITYPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.PARITYPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': 'СБП'},
+            ],
+        },
+        'tabpay': {
+            'default_display_name': settings.get_tabpay_display_name(),
+            'is_configured': settings.is_tabpay_enabled(),
+            'default_min': settings.TABPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.TABPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': 'СБП'},
+            ],
+        },
+        'cashera': {
+            'default_display_name': settings.get_cashera_display_name(),
+            'is_configured': settings.is_cashera_enabled(),
+            'default_min': settings.CASHERA_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.CASHERA_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': _get_cashera_sub_options(),
+        },
     }
 
 
@@ -311,6 +338,17 @@ def _get_platega_sub_options() -> list[dict] | None:
                 }
             )
         return options or None
+    except Exception:
+        return None
+
+
+def _get_cashera_sub_options() -> list[dict] | None:
+    """Методы Cashera из CASHERA_ACTIVE_METHODS — как у Platega."""
+    try:
+        return [
+            {'id': code, 'name': settings.get_cashera_method_display_title(code)}
+            for code in settings.get_cashera_active_methods()
+        ] or None
     except Exception:
         return None
 
@@ -354,6 +392,9 @@ DEFAULT_METHOD_ORDER = [
     'donut',
     'lava',
     'cispay',
+    'tabpay',
+    'paritypay',
+    'cashera',
 ]
 
 

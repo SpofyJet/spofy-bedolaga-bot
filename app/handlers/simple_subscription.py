@@ -271,40 +271,83 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
     # Добавляем доступные методы оплаты
     if settings.TELEGRAM_STARS_ENABLED:
         keyboard.append(
-            [types.InlineKeyboardButton(text=texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars'), callback_data='simple_subscription_stars')]
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars'),
+                    callback_data='simple_subscription_stars',
+                )
+            ]
         )
 
     if settings.is_yookassa_enabled():
         yookassa_methods = []
         if settings.YOOKASSA_SBP_ENABLED:
             yookassa_methods.append(
-                types.InlineKeyboardButton(text=texts.t('PAYMENT_SBP_YOOKASSA', '🏦 Оплатить по СБП (YooKassa)'), callback_data='simple_subscription_yookassa_sbp')
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_SBP_YOOKASSA', '🏦 Оплатить по СБП (YooKassa)'),
+                    callback_data='simple_subscription_yookassa_sbp',
+                )
             )
         yookassa_methods.append(
-            types.InlineKeyboardButton(text=texts.t('PAYMENT_CARD_YOOKASSA', '💳 Банковская карта (YooKassa)'), callback_data='simple_subscription_yookassa')
+            types.InlineKeyboardButton(
+                text=texts.t('PAYMENT_CARD_YOOKASSA', '💳 Банковская карта (YooKassa)'),
+                callback_data='simple_subscription_yookassa',
+            )
         )
         if yookassa_methods:
             keyboard.append(yookassa_methods)
 
     if settings.is_cryptobot_enabled():
         keyboard.append(
-            [types.InlineKeyboardButton(text=texts.t('PAYMENT_CRYPTOBOT', '🦋 Криптовалюта (CryptoBot)'), callback_data='simple_subscription_cryptobot')]
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_CRYPTOBOT', '🦋 Криптовалюта (CryptoBot)'),
+                    callback_data='simple_subscription_cryptobot',
+                )
+            ]
         )
 
     if settings.is_heleket_enabled():
-        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_HELEKET', '🪙 Криптовалюта (Heleket)'), callback_data='simple_subscription_heleket')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_HELEKET', '🪙 Криптовалюта (Heleket)'),
+                    callback_data='simple_subscription_heleket',
+                )
+            ]
+        )
 
     if settings.is_mulenpay_enabled():
         mulenpay_name = settings.get_mulenpay_display_name()
         keyboard.append(
-            [types.InlineKeyboardButton(text=texts.t('PAYMENT_CARD_MULENPAY', '💳 Банковская карта ({mulenpay_name})').format(mulenpay_name=mulenpay_name), callback_data='simple_subscription_mulenpay')]
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_CARD_MULENPAY', '💳 Банковская карта ({mulenpay_name})').format(
+                        mulenpay_name=mulenpay_name
+                    ),
+                    callback_data='simple_subscription_mulenpay',
+                )
+            ]
         )
 
     if settings.is_pal24_enabled():
-        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_CARD_PAL24', '🏦 СБП (PayPalych)'), callback_data='simple_subscription_pal24')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_CARD_PAL24', '🏦 СБП (PayPalych)'), callback_data='simple_subscription_pal24'
+                )
+            ]
+        )
 
     if settings.is_wata_enabled():
-        keyboard.append([types.InlineKeyboardButton(text=texts.t('PAYMENT_CARD_WATA', '💳 Банковская карта (WATA)'), callback_data='simple_subscription_wata')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAYMENT_CARD_WATA', '💳 Банковская карта (WATA)'),
+                    callback_data='simple_subscription_wata',
+                )
+            ]
+        )
 
     # Кнопка назад
     keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')])

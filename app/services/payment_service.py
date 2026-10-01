@@ -12,16 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.external.cryptobot import CryptoBotService
-from app.external.xrocket import XRocketService
 from app.external.heleket import HeleketService
 from app.external.telegram_stars import TelegramStarsService
+from app.external.xrocket import XRocketService
 from app.services.cloudpayments_service import CloudPaymentsService
 from app.services.mulenpay_service import MulenPayService
 from app.services.nalogo_service import NaloGoService
 from app.services.pal24_service import Pal24Service
 from app.services.payment import (
     CryptoBotPaymentMixin,
-    XRocketPaymentMixin,
     HeleketPaymentMixin,
     MulenPayPaymentMixin,
     Pal24PaymentMixin,
@@ -30,10 +29,12 @@ from app.services.payment import (
     TelegramStarsMixin,
     TributePaymentMixin,
     WataPaymentMixin,
+    XRocketPaymentMixin,
     YooKassaPaymentMixin,
 )
 from app.services.payment.antilopay import AntilopayPaymentMixin
 from app.services.payment.aurapay import AuraPayPaymentMixin
+from app.services.payment.cashera import CasheraPaymentMixin
 from app.services.payment.cispay import CisPayPaymentMixin
 from app.services.payment.cloudpayments import CloudPaymentsPaymentMixin
 from app.services.payment.donut import DonutPaymentMixin
@@ -43,11 +44,13 @@ from app.services.payment.jupiter import JupiterPaymentMixin
 from app.services.payment.kassa_ai import KassaAiPaymentMixin
 from app.services.payment.lava import LavaPaymentMixin
 from app.services.payment.overpay import OverpayPaymentMixin
+from app.services.payment.paritypay import ParityPayPaymentMixin
 from app.services.payment.payer_identity import resolve_guest_payer
 from app.services.payment.paypear import PayPearPaymentMixin
 from app.services.payment.riopay import RioPayPaymentMixin
 from app.services.payment.rollypay import RollyPayPaymentMixin
 from app.services.payment.severpay import SeverPayPaymentMixin
+from app.services.payment.tabpay import TabPayPaymentMixin
 from app.services.platega_service import PlategaService
 from app.services.wata_service import WataService
 from app.services.yookassa_service import YooKassaService
@@ -721,6 +724,111 @@ async def link_cispay_payment_to_transaction(*args, **kwargs):
     return await cispay_crud.link_cispay_payment_to_transaction(*args, **kwargs)
 
 
+async def create_cashera_payment(*args, **kwargs):
+    cashera_crud = import_module('app.database.crud.cashera')
+    return await cashera_crud.create_cashera_payment(*args, **kwargs)
+
+
+async def get_cashera_payment_by_order_id(*args, **kwargs):
+    cashera_crud = import_module('app.database.crud.cashera')
+    return await cashera_crud.get_cashera_payment_by_order_id(*args, **kwargs)
+
+
+async def get_cashera_payment_by_invoice_id(*args, **kwargs):
+    cashera_crud = import_module('app.database.crud.cashera')
+    return await cashera_crud.get_cashera_payment_by_invoice_id(*args, **kwargs)
+
+
+async def get_cashera_payment_by_id(*args, **kwargs):
+    cashera_crud = import_module('app.database.crud.cashera')
+    return await cashera_crud.get_cashera_payment_by_id(*args, **kwargs)
+
+
+async def get_cashera_payment_by_id_for_update(*args, **kwargs):
+    cashera_crud = import_module('app.database.crud.cashera')
+    return await cashera_crud.get_cashera_payment_by_id_for_update(*args, **kwargs)
+
+
+async def update_cashera_payment_status(*args, **kwargs):
+    cashera_crud = import_module('app.database.crud.cashera')
+    return await cashera_crud.update_cashera_payment_status(*args, **kwargs)
+
+
+async def link_cashera_payment_to_transaction(*args, **kwargs):
+    cashera_crud = import_module('app.database.crud.cashera')
+    return await cashera_crud.link_cashera_payment_to_transaction(*args, **kwargs)
+
+
+async def create_tabpay_payment(*args, **kwargs):
+    tabpay_crud = import_module('app.database.crud.tabpay')
+    return await tabpay_crud.create_tabpay_payment(*args, **kwargs)
+
+
+async def get_tabpay_payment_by_order_id(*args, **kwargs):
+    tabpay_crud = import_module('app.database.crud.tabpay')
+    return await tabpay_crud.get_tabpay_payment_by_order_id(*args, **kwargs)
+
+
+async def get_tabpay_payment_by_invoice_id(*args, **kwargs):
+    tabpay_crud = import_module('app.database.crud.tabpay')
+    return await tabpay_crud.get_tabpay_payment_by_invoice_id(*args, **kwargs)
+
+
+async def get_tabpay_payment_by_id(*args, **kwargs):
+    tabpay_crud = import_module('app.database.crud.tabpay')
+    return await tabpay_crud.get_tabpay_payment_by_id(*args, **kwargs)
+
+
+async def get_tabpay_payment_by_id_for_update(*args, **kwargs):
+    tabpay_crud = import_module('app.database.crud.tabpay')
+    return await tabpay_crud.get_tabpay_payment_by_id_for_update(*args, **kwargs)
+
+
+async def update_tabpay_payment_status(*args, **kwargs):
+    tabpay_crud = import_module('app.database.crud.tabpay')
+    return await tabpay_crud.update_tabpay_payment_status(*args, **kwargs)
+
+
+async def link_tabpay_payment_to_transaction(*args, **kwargs):
+    tabpay_crud = import_module('app.database.crud.tabpay')
+    return await tabpay_crud.link_tabpay_payment_to_transaction(*args, **kwargs)
+
+
+async def create_paritypay_payment(*args, **kwargs):
+    paritypay_crud = import_module('app.database.crud.paritypay')
+    return await paritypay_crud.create_paritypay_payment(*args, **kwargs)
+
+
+async def get_paritypay_payment_by_order_id(*args, **kwargs):
+    paritypay_crud = import_module('app.database.crud.paritypay')
+    return await paritypay_crud.get_paritypay_payment_by_order_id(*args, **kwargs)
+
+
+async def get_paritypay_payment_by_invoice_id(*args, **kwargs):
+    paritypay_crud = import_module('app.database.crud.paritypay')
+    return await paritypay_crud.get_paritypay_payment_by_invoice_id(*args, **kwargs)
+
+
+async def get_paritypay_payment_by_id(*args, **kwargs):
+    paritypay_crud = import_module('app.database.crud.paritypay')
+    return await paritypay_crud.get_paritypay_payment_by_id(*args, **kwargs)
+
+
+async def get_paritypay_payment_by_id_for_update(*args, **kwargs):
+    paritypay_crud = import_module('app.database.crud.paritypay')
+    return await paritypay_crud.get_paritypay_payment_by_id_for_update(*args, **kwargs)
+
+
+async def update_paritypay_payment_status(*args, **kwargs):
+    paritypay_crud = import_module('app.database.crud.paritypay')
+    return await paritypay_crud.update_paritypay_payment_status(*args, **kwargs)
+
+
+async def link_paritypay_payment_to_transaction(*args, **kwargs):
+    paritypay_crud = import_module('app.database.crud.paritypay')
+    return await paritypay_crud.link_paritypay_payment_to_transaction(*args, **kwargs)
+
+
 # Mapping from model_name to getter function name for providers
 # where it differs from the standard get_{model_name}_payment_by_id pattern.
 _GETTER_OVERRIDES: dict[str, str] = {
@@ -777,6 +885,9 @@ class PaymentService(
     DonutPaymentMixin,
     LavaPaymentMixin,
     CisPayPaymentMixin,
+    TabPayPaymentMixin,
+    ParityPayPaymentMixin,
+    CasheraPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 
@@ -1436,6 +1547,77 @@ class PaymentService(
                 }
             return None
 
+        # --- Cashera ----------------------------------------------------------
+        if _base == 'cashera':
+            if not settings.is_cashera_enabled():
+                logger.warning('Cashera is not enabled, cannot create guest payment')
+                return None
+
+            # Под-опция — код метода Cashera; без неё — общая форма, метод выбирает покупатель.
+            method_code = _option if _option in settings.get_cashera_active_methods() else None
+            result = await self.create_cashera_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+                payment_method_code=method_code,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'cashera')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'cashera',
+                }
+            return None
+
+        # --- TabPay -----------------------------------------------------------
+        if _base == 'tabpay':
+            if not settings.is_tabpay_enabled():
+                logger.warning('TabPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_tabpay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+                payment_method_type=_option,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'tabpay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'tabpay',
+                }
+            return None
+
+        # --- ParityPay --------------------------------------------------------
+        if _base == 'paritypay':
+            if not settings.is_paritypay_enabled():
+                logger.warning('ParityPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_paritypay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+                payment_method_type=_option,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'paritypay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'paritypay',
+                }
+            return None
+
         # --- Telegram Stars ---------------------------------------------------
         if payment_method == 'telegram_stars':
             if not settings.TELEGRAM_STARS_ENABLED:
@@ -1471,7 +1653,7 @@ class PaymentService(
                 logger.info(
                     'Created Stars invoice for guest purchase',
                     stars_amount=stars_amount,
-                    purchase_token_prefix=purchase_token[:5],
+                    token_length=len(purchase_token),
                 )
                 return {
                     'payment_url': invoice_url,
@@ -1487,6 +1669,6 @@ class PaymentService(
         logger.warning(
             'Guest payment requested for unsupported provider',
             payment_method=payment_method,
-            purchase_token_prefix=purchase_token[:5],
+            token_length=len(purchase_token),
         )
         return None

@@ -146,7 +146,7 @@ class PlategaPaymentMixin:
         )
 
         logger.info(
-            'Создан Platega платеж для пользователя (метод , сумма ₽)',
+            'Создан Platega платёж',
             transaction_id=transaction_id or payment.id,
             user_id=user_id,
             payment_method_code=payment_method_code,
@@ -189,7 +189,7 @@ class PlategaPaymentMixin:
         # Ленивый импорт: monitoring_service импортирует платёжный слой,
         # прямой импорт на уровне модуля создал бы циклическую зависимость.
         from app.database.crud import platega_subscription as sub_crud
-        from app.services.monitoring_service import resolve_autopay_period_candidate
+        from app.services.autopay_period import resolve_autopay_period_candidate
         from app.services.platega_recurrent import resolve_platega_cadence
 
         is_daily = bool(getattr(tariff, 'is_daily', False))
@@ -272,9 +272,11 @@ class PlategaPaymentMixin:
 
         # Взаимоисключение с рекуррентом Lava: оба движка push-модели, и две
         # живые привязки на одной подписке списывали бы дважды за цикл.
+        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
         from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
 
         await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+        await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
 
         # Сумма — полная цена продления, а не голая цена периода: у подписки
         # могут быть докупленные устройства (в классическом режиме — ещё и
@@ -527,6 +529,7 @@ class PlategaPaymentMixin:
             logger.warning('Platega subscription callback без SubscriptionId', status=status)
             return
 
+        found = await sub_crud.get_platega_subscription_by_platega_id(db, platega_id)
         if not found:
             logger.warning(
                 'Platega subscription callback: подписка не найдена',
@@ -616,9 +619,9 @@ class PlategaPaymentMixin:
             # триал в платную (convert_trial=True), оживляет истёкшую,
             # применяет правила переноса остатка дней. Синк панели ниже
             # прочитает уже новые параметры.
-            from app.database.crud.subscription import extend_subscription as _crud_extend_subscription
+            from app.database.crud.subscription import extend_subscription
 
-            await _crud_extend_subscription(
+            await extend_subscription(
                 db,
                 subscription,
                 record.charge_days,
@@ -1397,7 +1400,9 @@ async def purchase_tariff_with_sbp_recurring(
     if subscription is None:
         subscription = await create_sbp_pending_subscription(db, user.id, tariff)
 
-    result = await enable_platega_sbp_recurring(db, user_id=user.id, subscription=subscription, tariff=tariff, period_days=period_days)
+    result = await enable_platega_sbp_recurring(
+        db, user_id=user.id, subscription=subscription, tariff=tariff, period_days=period_days
+    )
     return {**result, 'subscription_id': subscription.id}
 
 

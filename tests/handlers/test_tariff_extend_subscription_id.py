@@ -22,8 +22,9 @@ def _callbacks(keyboard) -> list[str]:
     return [btn.callback_data for row in keyboard.inline_keyboard for btn in row]
 
 
-def test_confirm_keyboard_puts_subscription_id_first_period_last():
-    kb = get_tariff_extend_confirm_keyboard(subscription_id=22, tariff_id=2, period=30, language='ru')
+async def test_confirm_keyboard_puts_subscription_id_first_period_last():
+    # Spofy: клавиатура асинхронная — смотрит живую СБП-привязку подписки
+    kb = await get_tariff_extend_confirm_keyboard(subscription_id=22, tariff_id=2, period=30, language='ru')
     cbs = _callbacks(kb)
     assert 'tariff_ext_confirm:22:2:30' in cbs
 

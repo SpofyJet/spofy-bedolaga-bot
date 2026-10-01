@@ -18,8 +18,8 @@ from app.database.crud.ticket_notification import TicketNotificationCRUD
 from app.database.models import Ticket, TicketMessage, User
 
 from ..dependencies import get_cabinet_db, require_permission
-from .settings_form import env_locked_fields, form_updates, save_settings_form
 from ..schemas.tickets import TicketMediaItem, TicketMessageResponse, _validate_media_bundle
+from .settings_form import env_locked_fields, form_updates, save_settings_form
 
 
 logger = structlog.get_logger(__name__)
@@ -290,7 +290,7 @@ async def update_ticket_settings(
     # Validate support_system_mode
     if request.support_system_mode is not None:
         mode = request.support_system_mode.strip().lower()
-        if mode not in ('tickets', 'contact', 'both'):
+        if mode not in {'tickets', 'contact', 'both'}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Invalid support_system_mode. Must be: tickets, contact, or both',

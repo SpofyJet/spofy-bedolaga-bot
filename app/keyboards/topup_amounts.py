@@ -34,6 +34,10 @@ METHOD_CONFIG_IDS = {
     'lava_sbp': 'lava',
     'cispay_card': 'cispay',
     'cispay_sbp': 'cispay',
+    'tabpay_card': 'tabpay',
+    'tabpay_sbp': 'tabpay',
+    'paritypay_card': 'paritypay',
+    'paritypay_sbp': 'paritypay',
     'overpay_fps': 'overpay',
     'overpay_card': 'overpay',
     'overpay_int': 'overpay',
@@ -43,6 +47,8 @@ METHOD_CONFIG_IDS = {
 def resolve_config_method_id(method: str) -> str:
     if method.startswith('platega_m'):
         return 'platega'
+    if method.startswith('cashera_m_'):
+        return 'cashera'
     return METHOD_CONFIG_IDS.get(method, method)
 
 

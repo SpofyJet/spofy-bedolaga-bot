@@ -87,11 +87,20 @@ class Settings(BaseSettings):
     ADMIN_IDS: str = ''
     ADMIN_EMAILS: str = ''  # Comma-separated admin emails for email-only users
 
+    # Closed public registration. Existing users keep normal access.
+    INVITE_ONLY_ENABLED: bool = False
+    INVITE_ONLY_ALLOW_GIFT_LINKS: bool = True
+
     # Test email account for development/testing (bypasses email verification and SMTP)
     TEST_EMAIL: str = ''  # e.g., test@example.com
     TEST_EMAIL_PASSWORD: str = ''  # Password for test account
 
     SUPPORT_USERNAME: str = '@support'
+    # Публичные контакты сервиса, которые кабинет отдаёт в GET /info/service.
+    # До этого хендлер читал SUPPORT_EMAIL и WEBSITE_URL через getattr, но таких
+    # полей в Settings никогда не было — эндпоинт всегда возвращал None.
+    SUPPORT_EMAIL: str | None = None
+    SERVICE_WEBSITE_URL: str | None = None
     SUPPORT_MENU_ENABLED: bool = True
     SUPPORT_SYSTEM_MODE: str = 'both'  # one of: tickets, contact, both
     # SLA for support tickets. Дефолты совпадают с .env.example: без него бот
@@ -203,12 +212,26 @@ class Settings(BaseSettings):
     DATABASE_POOL_TIMEOUT: int = 30
 
     REDIS_URL: str = 'redis://localhost:6379/0'
+    # Размер пула соединений КАЖДОГО клиента Redis (FSM aiogram, кэш, корзины…).
+    # redis-py 8 по умолчанию даёт 100, и всплеск параллельных апдейтов его выбирал:
+    # «MaxConnectionsError: Too many connections». Держите ниже maxclients Redis.
+    REDIS_MAX_CONNECTIONS: int = 200
+    # Сколько секунд ждать свободное соединение, когда пул занят, прежде чем
+    # вернуть ошибку. Всплеск переживается ожиданием, а не падением апдейта.
+    REDIS_POOL_TIMEOUT: float = 10.0
     CART_TTL_SECONDS: int = 3600  # Время жизни корзины пользователя в Redis (1 час)
     # «Свежее намерение» пополнить ради сохранённой корзины. Тихая авто-покупка из
     # корзины после пополнения срабатывает ТОЛЬКО если в течение этого окна юзер
     # явно нажал «Корзина сохранена → выбрать оплату» (return_to_cart). Иначе
     # пополнение ради подарка / просто денег не должно молча тратиться на подписку.
     CART_AUTOPURCHASE_INTENT_TTL_SECONDS: int = 1800  # 30 минут (хватает на оплату, но не на «забытую» корзину)
+
+    # Внешний антифрод: бот не видит подключений и сам ничего не считает,
+    # только спрашивает и показывает. Не настроен — вопросов к клиенту нет.
+    ABUSE_API_ENABLED: bool = False
+    ABUSE_API_URL: str | None = None
+    ABUSE_API_KEY: str | None = None
+    ABUSE_API_TIMEOUT: int = 5
 
     REMNAWAVE_API_URL: str | None = None
     REMNAWAVE_API_KEY: str | None = None
@@ -220,6 +243,10 @@ class Settings(BaseSettings):
     # таймауты логируются как WARNING, чтобы не спамить админ-чат ошибками.
     REMNAWAVE_API_CONNECT_TIMEOUT: int = 30
     REMNAWAVE_API_TOTAL_TIMEOUT: int = 60
+    # Свой потолок запросов к панели в минуту (0 — без ограничения). Нужен, когда перед
+    # панелью прокси с лимитом частоты (шаблонный Caddyfile: 100/мин на /api/*), а
+    # исключить адрес бота из него нельзя: иначе массовая синхронизация ловит 429.
+    REMNAWAVE_API_REQUESTS_PER_MINUTE: int = 0
 
     REMNAWAVE_USERNAME: str | None = None
     REMNAWAVE_PASSWORD: str | None = None
@@ -251,18 +278,28 @@ class Settings(BaseSettings):
     GRACE_ACCESS_DURATION_HOURS: int = 72
     GRACE_ACCESS_EXPIRED_SQUAD_UUID: str = ''
     GRACE_ACCESS_LIMITED_SQUAD_UUID: str = ''
+    # Внешний сквад для grace-доступа: пусто = сброс в None, 'keep' = сохранять текущий, либо UUID аварийного внешнего сквада
+    GRACE_ACCESS_EXTERNAL_SQUAD_UUID: str = ''
     GRACE_ACCESS_TRAFFIC_GB: int = 1
+    # Обнулять счётчик трафика при выдаче grace, чтобы панель и клиент показывали
+    # «0 из N ГБ», а не «64.76 из 65.76 GiB». Только истёкшие подписки с безлимитом:
+    # там счётчик чисто информационный. Расход до grace при этом теряется.
+    GRACE_ACCESS_RESET_TRAFFIC_ON_START: bool = False
     GRACE_ACCESS_TRIAL_ENABLED: bool = False
     GRACE_ACCESS_DAILY_ENABLED: bool = False
     GRACE_ACCESS_FREE_ENABLED: bool = False
+    # Уведомления о выдаче и завершении grace: админам в чат уведомлений (категория
+    # «Продления») и самому человеку в бота. Молчаливая выдача — «втухлую» — оставляла
+    # и админа, и человека в неведении, что доступ временный и только к Telegram.
+    GRACE_ACCESS_NOTIFY_ADMINS: bool = True
+    GRACE_ACCESS_NOTIFY_USER: bool = True
+    # Что остаётся доступным во время grace — словами оператора для сообщений
+    # человеку («Telegram», «Telegram и личный кабинет», «сайт проекта»…). Сквад
+    # grace пропускает то, что настроено на нодах; бот об этом только сообщает.
+    GRACE_ACCESS_ALLOWED_SERVICES: str = 'Telegram'
     GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS: int = 60
     GRACE_ACCESS_RECONCILE_BATCH_SIZE: int = 200
 
-    # Уведомления о выдаче/завершении грейса (апстрим 4.11)
-    GRACE_ACCESS_NOTIFY_ADMINS: bool = True
-    GRACE_ACCESS_NOTIFY_USER: bool = True
-    # Через какие сервисы слать пользователю (зарезервировано; сейчас Telegram)
-    GRACE_ACCESS_ALLOWED_SERVICES: str = 'Telegram'
     GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES: int = 30
 
     # Webhook user notification toggles (what Telegram messages users receive from webhook events)
@@ -384,6 +421,9 @@ class Settings(BaseSettings):
 
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED: bool = False
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS: str = ''
+    # Сообщать человеку (в Telegram или на подтверждённую почту), что ему
+    # автоматически назначена промогруппа за траты. Админ узнаёт об этом отдельно.
+    PROMO_GROUP_AUTO_ASSIGN_NOTIFY_USER: bool = True
 
     # Режим выбора трафика:
     # - selectable: пользователь выбирает трафик при покупке и может докупать
@@ -434,6 +474,31 @@ class Settings(BaseSettings):
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
     REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
 
+    # Схема наград: 'legacy' — прежнее поведение на ключах REFERRAL_* выше,
+    # 'levels' — таблица referral_reward_levels (деньги и/или дни, много уровней).
+    # Значение по умолчанию менять нельзя: смена схемы обязана быть осознанным
+    # действием админа, а не побочным эффектом обновления бота.
+    REFERRAL_REWARD_SCHEME: str = 'legacy'
+    # Насколько глубоко подниматься по цепочке пригласивших. Отдельный предохранитель
+    # от обхода длинной цепочки на каждом пополнении, даже если уровней настроено больше.
+    # Действует только в режиме 'chain': в режиме 'tiers' цепочки нет вовсе.
+    REFERRAL_MAX_LEVEL_DEPTH: int = 3
+    # Что означает номер уровня внутри многоуровневой схемы.
+    # 'chain' — глубина в цепочке пригласивших: уровень 1 платит прямому, уровень 2 —
+    #   его пригласившему, и так далее. За одно событие платят несколько уровней.
+    # 'tiers' — ранг самого партнёра: платят ТОЛЬКО прямому пригласившему, и применяется
+    #   ровно один уровень — старший из тех, чей порог required_referrals он набрал.
+    # По умолчанию 'chain' — прежнее поведение схемы, чтобы обновление бота не
+    # перекроило выплаты на установках, где уровни уже включены.
+    REFERRAL_LEVELS_MODE: str = 'chain'
+    # Разрешить пользователю самому выбирать, в какую подписку лягут дни награды.
+    # Пока выключено, подписку подбирает бот — платную с самым поздним сроком.
+    REFERRAL_ALLOW_DAYS_TARGET_CHOICE: bool = False
+    # Разрешить пользователю выбирать, что получать по правилу, платящему и
+    # деньгами, и днями: только деньги или только дни. Пока выключено, выдаётся
+    # и то и другое, как правило и настроено.
+    REFERRAL_ALLOW_REWARD_KIND_CHOICE: bool = False
+
     # Настройки вывода реферального баланса
     REFERRAL_WITHDRAWAL_ENABLED: bool = False  # Включить возможность вывода
     REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS: int = 100000  # Мин. сумма вывода (1000₽)
@@ -441,6 +506,20 @@ class Settings(BaseSettings):
     REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE: bool = True  # Только реф. баланс (False = реф + свой)
     REFERRAL_WITHDRAWAL_REQUISITES_TEXT: str = ''  # Текст-подсказка для реквизитов при выводе
     REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID: int | None = None  # Топик для уведомлений
+    # Напоминания о заявках на вывод без решения — аналог SLA тикетов (SUPPORT_TICKET_SLA_*).
+    # Заявка в статусе pending старше REMINDER_MINUTES получает напоминание в админ-чат, повтор по
+    # той же заявке — не чаще REMINDER_COOLDOWN_MINUTES; любое решение по заявке их останавливает.
+    REFERRAL_WITHDRAWAL_REMINDER_ENABLED: bool = False
+    REFERRAL_WITHDRAWAL_REMINDER_MINUTES: int = 60  # Сколько минут заявка ждёт до первого напоминания
+    REFERRAL_WITHDRAWAL_REMINDER_COOLDOWN_MINUTES: int = 30  # Минимальный интервал между повторами
+    REFERRAL_WITHDRAWAL_REMINDER_CHECK_INTERVAL_SECONDS: int = 300  # Период опроса заявок
+
+    # Напоминания пользователям (раздел «Напоминания» в админке кабинета)
+    USER_REMINDERS_CHECK_INTERVAL_MINUTES: int = 15  # Как часто бот отправляет напоминания в Telegram
+    USER_REMINDERS_QUIET_HOURS_START: int = 21  # С этого часа (TIMEZONE) бот не пишет
+    USER_REMINDERS_QUIET_HOURS_END: int = 10  # До этого часа (TIMEZONE) бот не пишет
+    USER_REMINDERS_DAILY_LIMIT_ENABLED: bool = True  # Не больше одного напоминания в сутки на человека
+    USER_REMINDERS_MAX_PER_PASS: int = 500  # Потолок сообщений за один проход
     REFERRAL_PARTNER_SECTION_VISIBLE: bool = True  # Показывать раздел партнёрки в кабинете
 
     # Настройки анализа на подозрительность
@@ -463,6 +542,9 @@ class Settings(BaseSettings):
     BLACKLIST_IGNORE_ADMINS: bool = True
 
     DISPOSABLE_EMAIL_CHECK_ENABLED: bool = True
+    # Свои одноразовые домены поверх скачиваемого списка (через запятую, пробел или перенос строки).
+    # Совпадение и по поддоменам: x.mail.tm ловится записью mail.tm. Работает и без скачанного списка.
+    DISPOSABLE_EMAIL_EXTRA_DOMAINS: str = ''
 
     # Настройки перевыпуска подписки (revoke + regenerate link)
     SUBSCRIPTION_REVOKE_ENABLED: bool = True
@@ -645,6 +727,8 @@ class Settings(BaseSettings):
     NALOGO_DEVICE_ID: str | None = None
     NALOGO_STORAGE_PATH: str = './nalogo_tokens.json'
     NALOGO_PROXY_URL: str | None = None  # SOCKS proxy for nalog.ru; falls back to PROXY_URL if not set
+    # Имя файла чека (без расширения) во вложении письма и в Telegram; {uuid} — id чека
+    NALOGO_RECEIPT_FILENAME: str = 'receipt_{uuid}'
     # Типы писем, которые не отправлять (через запятую). Управляется переключателем
     # в редакторе email-шаблонов; см. app/cabinet/services/email_type_switch.py
     EMAIL_DISABLED_TYPES: str = ''
@@ -1058,6 +1142,70 @@ class Settings(BaseSettings):
     CISPAY_SBP_ENABLED: bool = False
     CISPAY_SBP_DISPLAY_NAME: str = 'СБП (CisPay)'
 
+    # Cashera (api.cashera.cash, server-to-server; расчёты мерчанту в USDT, приём — только RUB)
+    CASHERA_ENABLED: bool = False
+    CASHERA_API_KEY: str | None = None  # X-Api-Key — публичный ключ (pk_...)
+    CASHERA_API_SECRET: str | None = None  # секрет (sk_...) — сверяется с X-Secret вебхука
+    CASHERA_BASE_URL: str = 'https://api.cashera.cash/api/v1'
+    CASHERA_DISPLAY_NAME: str = 'Cashera'
+    # Коды методов через запятую: sbp, card, mastercard, crypto, cryptobot. Набор должен
+    # совпадать с «Методами приёма» в кабинете Cashera — выключенный там метод даст 422.
+    CASHERA_ACTIVE_METHODS: str = 'sbp,card'
+    # Методы кнопками прямо на экране способов пополнения (иначе — одна кнопка и выбор внутри)
+    CASHERA_INLINE_METHODS: bool = False
+    # Свой экран оплаты (H2H): QR СБП / реквизиты прямо в боте и кабинете вместо перехода
+    # на страницу Cashera. Только для sbp, card и crypto; остальные методы — всегда ссылкой.
+    CASHERA_H2H_ENABLED: bool = False
+    # Автопродление подписки через подписки Cashera (sbp_recurring: клиент один раз
+    # подтверждает, дальше Cashera списывает сама). Метод sbp_recurring должен быть
+    # подключён к мерчанту в кабинете Cashera.
+    CASHERA_RECURRENT_ENABLED: bool = False
+    CASHERA_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽ — минимум Cashera для карт
+    CASHERA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    CASHERA_WEBHOOK_PATH: str = '/cashera-webhook'
+    CASHERA_RETURN_URL: str | None = None
+    CASHERA_FAILED_URL: str | None = None
+
+    # TabPay (tabpay.org, СБП и карты с 3-D Secure)
+    TABPAY_ENABLED: bool = False
+    # X-Api-Key магазина (tp_...). Показывается в кабинете один раз, перевыпуск отзывает старый.
+    TABPAY_API_KEY: str | None = None
+    # «Секрет подписи» из вкладки Webhook — ключ HMAC для X-Signature-V2.
+    TABPAY_WEBHOOK_SECRET: str | None = None
+    TABPAY_BASE_URL: str = 'https://tabpay.org/api'
+    TABPAY_DISPLAY_NAME: str = 'TabPay'
+    TABPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    TABPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    TABPAY_WEBHOOK_PATH: str = '/tabpay-webhook'
+    # Окно свежести X-Timestamp: защищает от переигрывания перехваченного вебхука.
+    # Требует синхронных часов на сервере (NTP), иначе свежие вебхуки не пройдут.
+    TABPAY_WEBHOOK_MAX_AGE_SECONDS: int = 300
+    # Sub-методы TabPay (поле method в запросе создания платежа)
+    TABPAY_CARD_ENABLED: bool = False
+    TABPAY_CARD_DISPLAY_NAME: str = 'Карта (TabPay)'
+    TABPAY_SBP_ENABLED: bool = False
+    TABPAY_SBP_DISPLAY_NAME: str = 'СБП (TabPay)'
+
+    # ParityPay (api.paritypay.net, v2)
+    PARITYPAY_ENABLED: bool = False
+    PARITYPAY_SHOP_ID: str | None = None  # X-ShopId — UUID кассы
+    PARITYPAY_SECRET_KEY: str | None = None  # X-SecretKey — секретный ключ №1, запросы к API
+    # Секретный ключ №2 — только для проверки подписи HTTP-уведомлений (X-SIGNATURE).
+    # Отдельный от ключа запросов: утечка одного не даёт подделать другое.
+    PARITYPAY_CALLBACK_SECRET: str | None = None
+    PARITYPAY_BASE_URL: str = 'https://api.paritypay.net'
+    PARITYPAY_DISPLAY_NAME: str = 'ParityPay'
+    PARITYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    PARITYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    PARITYPAY_WEBHOOK_PATH: str = '/paritypay-webhook'
+    # Время жизни счёта в минутах, поле expire; у провайдера по умолчанию 60
+    PARITYPAY_INVOICE_LIFETIME_MINUTES: int = 60
+    # Sub-методы ParityPay (поле service при создании счёта)
+    PARITYPAY_CARD_ENABLED: bool = False
+    PARITYPAY_CARD_DISPLAY_NAME: str = 'Карта (ParityPay)'
+    PARITYPAY_SBP_ENABLED: bool = False
+    PARITYPAY_SBP_DISPLAY_NAME: str = 'СБП (ParityPay)'
+
     # Lava (Lava Business API, api.lava.ru)
     LAVA_ENABLED: bool = False
     LAVA_BASE_URL: str = 'https://api.lava.ru'
@@ -1110,6 +1258,15 @@ class Settings(BaseSettings):
     # Сворачивать таблицу подписок в раскрываемый details-блок, когда у юзера
     # больше одной подписки (мультитариф) — меню компактнее.
     MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE: bool = True
+    # Bot API 10.3: кнопки живут внутри полотна rich-сообщения (<tg-button-row>),
+    # а не отдельной клавиатурой под ним. Клавиатура при этом не дублируется.
+    MAIN_MENU_RICH_INLINE_BUTTONS: bool = False
+    # Живое меню: фон перерисовывает последнее rich-меню пользователя, когда меняются
+    # трафик (из панели), статус, лимит устройств или баланс. Раз в 15 мин, при нагрузке реже (до 360).
+    MAIN_MENU_LIVE_ENABLED: bool = False
+    # Пользовательские уведомления rich-сообщением. Действует только при
+    # включённом rich-меню: иначе сервер про rich может не знать вовсе.
+    USER_NOTIFICATIONS_RICH_ENABLED: bool = True
     # Публичный HTTPS-URL картинки-логотипа в шапке rich-меню. Пусто — авто-режим:
     # при заданном WEBHOOK_URL и существующем LOGO_FILE логотип отдаётся своим
     # эндпоинтом {origin WEBHOOK_URL}/cabinet/branding/bot-logo. Если Telegram не
@@ -1168,6 +1325,13 @@ class Settings(BaseSettings):
     HAPP_DOWNLOAD_LINK_MACOS: str | None = None
     HAPP_DOWNLOAD_LINK_WINDOWS: str | None = None
     HAPP_DOWNLOAD_LINK_PC: str | None = None
+    # У INCY есть свой формат шифрованных ссылок (incy://crypt1/...) — без него ссылка
+    # подписки уезжает в открытом виде, в отличие от happ-cryptolink. Выключатель на
+    # случай ротации ключа INCY: тогда кнопки вернутся к обычным incy://import/...
+    INCY_CRYPTOLINK_ENABLED: bool = True
+    # Необязательное имя провайдера внутри зашифрованной ссылки (поле "n"): INCY
+    # показывает его пользователю при добавлении подписки.
+    INCY_CRYPTOLINK_PROVIDER_NAME: str | None = None
     HIDE_SUBSCRIPTION_LINK: bool = False
     ENABLE_LOGO_MODE: bool = True
     LOGO_FILE: str = 'vpn_logo.png'
@@ -1228,6 +1392,17 @@ class Settings(BaseSettings):
         '🔄 Доступ восстановится автоматически'
     )
 
+    BAN_MSG_REVOKE: str = (
+        '🔑 <b>КЛЮЧИ ДОСТУПА ОБНОВЛЕНЫ</b>\n'
+        '━━━━━━━━━━━━━━━━━━━━━\n\n'
+        '❌ <b>Причина:</b> Превышен лимит устройств\n'
+        '{node_info}\n'
+        '📊 <b>Детали нарушения:</b>\n'
+        '├ 📱 Устройств подключено: <b>{ip_count}</b>\n'
+        '└ 📋 Разрешено по тарифу: <b>{limit}</b>\n\n'
+        'Отключите лишние устройства и заново получите актуальный ключ подключения в боте.'
+    )
+
     # Сообщение о разблокировке
     BAN_MSG_ENABLED: str = (
         '✅ <b>АККАУНТ РАЗБЛОКИРОВАН</b>\n'
@@ -1277,6 +1452,54 @@ class Settings(BaseSettings):
         '2. Дождитесь окончания блокировки\n'
         '3. Используйте VPN только через WiFi\n\n'
         '🔄 Доступ восстановится автоматически'
+    )
+
+    # Сообщения о типизированных ручных банах BanHammer.
+    # Переменные: {ban_minutes}, {reason}, {node_info}
+    BAN_MSG_TORRENT: str = (
+        '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
+        '━━━━━━━━━━━━━━━━━━━━━\n\n'
+        '❌ <b>Причина:</b> Обнаружена torrent-активность\n'
+        '{node_info}\n'
+        '📝 <b>Детали:</b> {reason}\n'
+        '⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n'
+        '🔄 Доступ восстановится автоматически после окончания блокировки.'
+    )
+    BAN_MSG_HWID_LIMIT: str = (
+        '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
+        '━━━━━━━━━━━━━━━━━━━━━\n\n'
+        '❌ <b>Причина:</b> Превышен лимит устройств\n'
+        '{node_info}\n'
+        '📝 <b>Детали:</b> {reason}\n'
+        '⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n'
+        '🔄 Доступ восстановится автоматически после окончания блокировки.'
+    )
+    BAN_MSG_SUSPICIOUS_DESTINATION: str = (
+        '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
+        '━━━━━━━━━━━━━━━━━━━━━\n\n'
+        '❌ <b>Причина:</b> Подключение к запрещённому ресурсу\n'
+        '{node_info}\n'
+        '📝 <b>Детали:</b> {reason}\n'
+        '⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n'
+        '🔄 Доступ восстановится автоматически после окончания блокировки.'
+    )
+    BAN_MSG_TRAFFIC_LIMIT: str = (
+        '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
+        '━━━━━━━━━━━━━━━━━━━━━\n\n'
+        '❌ <b>Причина:</b> Превышен допустимый объём трафика\n'
+        '{node_info}\n'
+        '📝 <b>Детали:</b> {reason}\n'
+        '⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n'
+        '🔄 Доступ восстановится автоматически после окончания блокировки.'
+    )
+    BAN_MSG_MANUAL: str = (
+        '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
+        '━━━━━━━━━━━━━━━━━━━━━\n\n'
+        '❌ <b>Причина:</b> Нарушение правил сервиса\n'
+        '{node_info}\n'
+        '📝 <b>Детали:</b> {reason}\n'
+        '⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n'
+        '🔄 Доступ восстановится автоматически после окончания блокировки.'
     )
 
     # Сообщение-предупреждение
@@ -1361,6 +1584,17 @@ class Settings(BaseSettings):
     CABINET_PASSWORD_RESET_EXPIRE_HOURS: int = 1
     CABINET_EMAIL_CHANGE_CODE_EXPIRE_MINUTES: int = 15  # Email change verification code expiration
     CABINET_EMAIL_AUTH_ENABLED: bool = True  # Enable email registration/login in cabinet
+    # Регистрация по email с одного IP. Минутное окно ловит всплеск; часовое и суточное —
+    # скрипт, который ждёт минуту и продолжает (волна одноразовых почт за триалами). 0 выключает окно.
+    CABINET_EMAIL_REGISTER_LIMIT_PER_MINUTE: int = 5
+    CABINET_EMAIL_REGISTER_LIMIT_PER_HOUR: int = 10
+    CABINET_EMAIL_REGISTER_LIMIT_PER_DAY: int = 30
+    # Повторная отправка письма подтверждения с экрана «Проверьте почту» (без входа).
+    # Лимит по IP защищает от рассылки чужими руками, лимит по адресу — от заваливания
+    # одного ящика письмами с разных адресов. 0 выключает окно.
+    CABINET_EMAIL_RESEND_LIMIT_PER_MINUTE: int = 2
+    CABINET_EMAIL_RESEND_LIMIT_PER_HOUR: int = 10
+    CABINET_EMAIL_RESEND_PER_ADDRESS_PER_HOUR: int = 5
     # Согласие с офертой и политикой при ПЕРВОЙ авторизации в кабинете (для новых юзеров).
     # False — чекбоксы не показываются и ничего не требуется (прежнее поведение).
     # Гейт сам собой отключается, если ни оферта, ни политика не включены для веба:
@@ -1398,15 +1632,46 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str | None = None
     SMTP_FROM_EMAIL: str | None = None
     SMTP_FROM_NAME: str = 'VPN Service'
+    # Куда должны падать ответы клиентов. Отправитель часто живёт на поддомене
+    # без MX (noreply@mail.example.com у Resend/SES) — ответ на такое письмо
+    # отбивается, и человек, нажавший «Ответить», уходит в никуда.
+    SMTP_REPLY_TO: str = ''
     SMTP_USE_TLS: bool = True
     # Implicit TLS (SMTPS) — required for port 465. Auto-enabled when SMTP_PORT == 465.
     SMTP_USE_SSL: bool = False
+
+    # Отписка от маркетинговых писем (winback, промопредложения, email-рассылки).
+    # Gmail/Yahoo для bulk-отправителей требуют one-click unsubscribe (RFC 8058),
+    # а жалобы «Спам» вместо отписки бьют по репутации домена.
+    EMAIL_UNSUBSCRIBE_ENABLED: bool = True
+    # Публичный URL эндпоинта отписки. Пусто → CABINET_URL + /api/cabinet/public/unsubscribe.
+    # Задавать явно, если API кабинета проксируется не через /api.
+    EMAIL_UNSUBSCRIBE_BASE_URL: str = ''
+    # Необязательный mailto-вариант в List-Unsubscribe для клиентов без HTTP one-click.
+    EMAIL_UNSUBSCRIBE_MAILTO: str = ''
 
     # Ban System Integration (BedolagaBan monitoring)
     BAN_SYSTEM_ENABLED: bool = False
     BAN_SYSTEM_API_URL: str | None = None  # e.g., http://ban-server:8000
     BAN_SYSTEM_API_TOKEN: str | None = None
     BAN_SYSTEM_REQUEST_TIMEOUT: int = 30
+
+    # bschekbot — BSCHEKER: проверка хостов глазами мобильных операторов
+    BSCHEK_ENABLED: bool = False
+    BSCHEK_API_URL: str = 'https://bsbord.com/v1'
+    BSCHEK_API_KEY: str | None = None  # bsk_live_…, выпускается вручную в кабинете bschekbot
+    BSCHEK_REQUEST_TIMEOUT: int = 200  # синхронный probe идёт до нескольких минут
+    BSCHEK_REFERENCE_SUBSCRIPTION: str | None = None  # shortUuid эталонной подписки панели
+    BSCHEK_JOB_COST_LIMIT_KOPEKS: int = 0  # потолок цены одной задачи, 0 — без потолка
+
+    # DPI//CHECKER (dpichecker.st): проверки VPN/IP/MTProto из сетей РФ, Китая, Ирана, Туркменистана — только кабинет
+    DPICHECKER_ENABLED: bool = False
+    DPICHECKER_API_URL: str = 'https://dpichecker.st/api/v1'
+    DPICHECKER_API_KEY: str | None = (
+        None  # X-API-Key; выпускается в боте DPI//CHECKER (Главное меню → API) или на сайте
+    )
+    DPICHECKER_REQUEST_TIMEOUT: int = 30  # обычный запрос; long-poll ожидания результата — свой, длиннее
+    DPICHECKER_REFERENCE_SUBSCRIPTION: str | None = None  # VPN «из панели»: ссылка подписки или shortUuid панели
 
     # SOCKS5 proxy for routing bot traffic to Telegram API
     # Format: socks5://user:password@host:port or socks5://host:port
@@ -1542,6 +1807,26 @@ class Settings(BaseSettings):
         except (TypeError, ValueError):
             return 10
 
+    @field_validator('REDIS_MAX_CONNECTIONS', mode='before')
+    @classmethod
+    def ensure_positive_redis_max_connections(cls, value: int | None) -> int:
+        try:
+            if value is None or value == '':
+                return 200
+            return max(1, int(value))
+        except (TypeError, ValueError):
+            return 200
+
+    @field_validator('REDIS_POOL_TIMEOUT', mode='before')
+    @classmethod
+    def ensure_positive_redis_pool_timeout(cls, value: float | None) -> float:
+        try:
+            if value is None or value == '':
+                return 10.0
+            return max(0.1, float(value))
+        except (TypeError, ValueError):
+            return 10.0
+
     @field_validator('DATABASE_POOL_SIZE', mode='before')
     @classmethod
     def ensure_positive_database_pool_size(cls, value: int | None) -> int:
@@ -1623,11 +1908,11 @@ class Settings(BaseSettings):
 
     def get_proxy_url(self) -> str | None:
         """Return SOCKS5 proxy URL or None."""
-        return self.PROXY_URL if self.PROXY_URL else None
+        return self.PROXY_URL or None
 
     def get_telegram_api_url(self) -> str | None:
         """Return custom Telegram Bot API server URL or None."""
-        return self.TELEGRAM_API_URL if self.TELEGRAM_API_URL else None
+        return self.TELEGRAM_API_URL or None
 
     def get_nalogo_proxy_url(self) -> str | None:
         """Return SOCKS proxy URL for nalogo or None.
@@ -2496,8 +2781,12 @@ class Settings(BaseSettings):
         name = (self.CRYPTOBOT_DISPLAY_NAME or '').strip()
         return name or 'CryptoBot'
 
+    def is_xrocket_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return self.XROCKET_API_TOKEN is not None
+
     def is_xrocket_enabled(self) -> bool:
-        return self.XROCKET_ENABLED and self.XROCKET_API_TOKEN is not None
+        return self.XROCKET_ENABLED and self.is_xrocket_configured()
 
     def get_xrocket_display_name(self) -> str:
         name = (self.XROCKET_DISPLAY_NAME or '').strip()
@@ -2576,13 +2865,11 @@ class Settings(BaseSettings):
         return self.PLATEGA_ENABLED and self.PLATEGA_MERCHANT_ID is not None and self.PLATEGA_SECRET is not None
 
     def is_platega_recurrent_enabled(self) -> bool:
-        # n22: СБП-автопродление через Platega вырезано — списания не работали,
-        # а кнопка обещала цену без скидки (подписка Platega всегда списывала
-        # полную фиксированную сумму). Ответ False скрывает кнопки в боте и
-        # кабинете, блокирует создание новых привязок и pre-bill уведомления.
-        # Отмена существующих привязок и обработка их коллбеков НЕ гейтятся —
-        # это операции безопасности. Баланс-автопродление и Lava не затронуты.
-        return False
+        # Spofy держит СБП-автопродление Platega выключенным флагом
+        # PLATEGA_RECURRENT_ENABLED=false (подписка Platega списывает полную
+        # фиксированную сумму и не повторяет скидку). Отмена существующих привязок
+        # и обработка их коллбеков флагом не гейтятся — это операции безопасности.
+        return self.is_platega_enabled() and self.PLATEGA_RECURRENT_ENABLED
 
     def get_platega_display_name(self) -> str:
         name = (self.PLATEGA_DISPLAY_NAME or '').strip()
@@ -2770,7 +3057,7 @@ class Settings(BaseSettings):
 
     def get_severpay_display_name(self) -> str:
         name = (self.SEVERPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'SeverPay'
+        return name or 'SeverPay'
 
     def get_severpay_display_name_html(self) -> str:
         return html.escape(self.get_severpay_display_name())
@@ -2858,7 +3145,7 @@ class Settings(BaseSettings):
 
     def get_paypear_display_name(self) -> str:
         name = (self.PAYPEAR_DISPLAY_NAME or '').strip()
-        return name if name else 'PayPear'
+        return name or 'PayPear'
 
     def get_paypear_display_name_html(self) -> str:
         return html.escape(self.get_paypear_display_name())
@@ -2872,7 +3159,7 @@ class Settings(BaseSettings):
 
     def get_rollypay_display_name(self) -> str:
         name = (self.ROLLYPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'RollyPay'
+        return name or 'RollyPay'
 
     def get_rollypay_display_name_html(self) -> str:
         return html.escape(self.get_rollypay_display_name())
@@ -2895,7 +3182,7 @@ class Settings(BaseSettings):
 
     def get_overpay_display_name(self) -> str:
         name = (self.OVERPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'Overpay'
+        return name or 'Overpay'
 
     def get_overpay_display_name_html(self) -> str:
         return html.escape(self.get_overpay_display_name())
@@ -2932,7 +3219,7 @@ class Settings(BaseSettings):
 
     def get_aurapay_display_name(self) -> str:
         name = (self.AURAPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'AuraPay'
+        return name or 'AuraPay'
 
     def get_aurapay_display_name_html(self) -> str:
         return html.escape(self.get_aurapay_display_name())
@@ -2977,7 +3264,7 @@ class Settings(BaseSettings):
 
     def get_antilopay_display_name(self) -> str:
         name = (self.ANTILOPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'Antilopay'
+        return name or 'Antilopay'
 
     def get_antilopay_display_name_html(self) -> str:
         return html.escape(self.get_antilopay_display_name())
@@ -3021,7 +3308,7 @@ class Settings(BaseSettings):
 
     def get_jupiter_display_name(self) -> str:
         name = (self.JUPITER_DISPLAY_NAME or '').strip()
-        return name if name else 'Jupiter'
+        return name or 'Jupiter'
 
     def get_jupiter_display_name_html(self) -> str:
         return html.escape(self.get_jupiter_display_name())
@@ -3072,6 +3359,158 @@ class Settings(BaseSettings):
     def get_cispay_sbp_display_name_html(self) -> str:
         return html.escape(self.get_cispay_sbp_display_name())
 
+    def is_cashera_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return bool(self.CASHERA_API_KEY and self.CASHERA_API_SECRET)
+
+    def is_cashera_enabled(self) -> bool:
+        # Секрет обязателен наравне с ключом: вебхук подтверждается сравнением X-Secret,
+        # и с пустым секретом его подделал бы кто угодно.
+        return bool(self.CASHERA_ENABLED and self.CASHERA_API_KEY and self.CASHERA_API_SECRET)
+
+    def get_cashera_display_name(self) -> str:
+        name = (self.CASHERA_DISPLAY_NAME or '').strip()
+        return name or 'Cashera'
+
+    def get_cashera_display_name_html(self) -> str:
+        return html.escape(self.get_cashera_display_name())
+
+    def is_cashera_recurrent_enabled(self) -> bool:
+        return self.is_cashera_enabled() and self.CASHERA_RECURRENT_ENABLED
+
+    @staticmethod
+    def get_cashera_method_definitions() -> dict[str, dict[str, str]]:
+        return {
+            'sbp': {'name': 'СБП', 'title': '🏦 СБП'},
+            'card': {'name': 'Банковская карта', 'title': '💳 Банковская карта'},
+            'mastercard': {'name': 'Зарубежная карта', 'title': '🌍 Зарубежная карта'},
+            'crypto': {'name': 'Криптовалюта', 'title': '🪙 Криптовалюта'},
+            'cryptobot': {'name': 'CryptoBot', 'title': '🤖 CryptoBot'},
+        }
+
+    def get_cashera_active_methods(self) -> list[str]:
+        known = self.get_cashera_method_definitions()
+        methods: list[str] = []
+        for part in str(self.CASHERA_ACTIVE_METHODS or '').replace(';', ',').split(','):
+            code = part.strip().lower()
+            if not code:
+                continue
+            if code not in known:
+                logger.warning('Некорректный код метода Cashera', part=part)
+                continue
+            if code not in methods:
+                methods.append(code)
+        return methods or ['sbp']
+
+    def get_cashera_method_display_name(self, method_code: str) -> str:
+        info = self.get_cashera_method_definitions().get(method_code)
+        return info['name'] if info else method_code
+
+    def get_cashera_method_display_title(self, method_code: str) -> str:
+        info = self.get_cashera_method_definitions().get(method_code)
+        return info['title'] if info else f'Cashera {method_code}'
+
+    def get_cashera_return_url(self) -> str | None:
+        if self.CASHERA_RETURN_URL:
+            return self.CASHERA_RETURN_URL
+        if self.WEBHOOK_URL:
+            return f'{self.WEBHOOK_URL}/payment-success'
+        return None
+
+    def get_cashera_failed_url(self) -> str | None:
+        if self.CASHERA_FAILED_URL:
+            return self.CASHERA_FAILED_URL
+        if self.WEBHOOK_URL:
+            return f'{self.WEBHOOK_URL}/payment-failed'
+        return None
+
+    def get_cashera_callback_url(self) -> str | None:
+        """Адрес вебхука: Cashera требует HTTPS на публичном хосте, иначе 422.
+
+        Без WEBHOOK_URL не передаём ничего — тогда Cashera берёт адрес из настроек
+        мерчанта (если и там пусто, платёж не создастся: 403).
+        """
+        if not self.WEBHOOK_URL:
+            return None
+        return f'{self.WEBHOOK_URL.rstrip("/")}{self.CASHERA_WEBHOOK_PATH}'
+
+    def is_tabpay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return bool(self.TABPAY_API_KEY and self.TABPAY_WEBHOOK_SECRET)
+
+    def is_tabpay_enabled(self) -> bool:
+        # Секрет вебхука обязателен наравне с API-ключом: без него подпись
+        # X-Signature-V2 не проверить, и вебхук пришлось бы принимать вслепую.
+        return bool(self.TABPAY_ENABLED and self.TABPAY_API_KEY and self.TABPAY_WEBHOOK_SECRET)
+
+    def get_tabpay_display_name(self) -> str:
+        name = (self.TABPAY_DISPLAY_NAME or '').strip()
+        return name or 'TabPay'
+
+    def get_tabpay_display_name_html(self) -> str:
+        return html.escape(self.get_tabpay_display_name())
+
+    def is_tabpay_card_enabled(self) -> bool:
+        return self.TABPAY_CARD_ENABLED and self.is_tabpay_enabled()
+
+    def get_tabpay_card_display_name(self) -> str:
+        name = (self.TABPAY_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (TabPay)'
+
+    def get_tabpay_card_display_name_html(self) -> str:
+        return html.escape(self.get_tabpay_card_display_name())
+
+    def is_tabpay_sbp_enabled(self) -> bool:
+        return self.TABPAY_SBP_ENABLED and self.is_tabpay_enabled()
+
+    def get_tabpay_sbp_display_name(self) -> str:
+        name = (self.TABPAY_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (TabPay)'
+
+    def get_tabpay_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_tabpay_sbp_display_name())
+
+    def is_paritypay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return bool(self.PARITYPAY_SHOP_ID and self.PARITYPAY_SECRET_KEY and self.PARITYPAY_CALLBACK_SECRET)
+
+    def is_paritypay_enabled(self) -> bool:
+        # Ключ уведомлений обязателен наравне с ключом запросов: без него подпись
+        # X-SIGNATURE не проверить, и уведомление пришлось бы принимать вслепую.
+        return bool(
+            self.PARITYPAY_ENABLED
+            and self.PARITYPAY_SHOP_ID
+            and self.PARITYPAY_SECRET_KEY
+            and self.PARITYPAY_CALLBACK_SECRET
+        )
+
+    def get_paritypay_display_name(self) -> str:
+        name = (self.PARITYPAY_DISPLAY_NAME or '').strip()
+        return name or 'ParityPay'
+
+    def get_paritypay_display_name_html(self) -> str:
+        return html.escape(self.get_paritypay_display_name())
+
+    def is_paritypay_card_enabled(self) -> bool:
+        return self.PARITYPAY_CARD_ENABLED and self.is_paritypay_enabled()
+
+    def get_paritypay_card_display_name(self) -> str:
+        name = (self.PARITYPAY_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (ParityPay)'
+
+    def get_paritypay_card_display_name_html(self) -> str:
+        return html.escape(self.get_paritypay_card_display_name())
+
+    def is_paritypay_sbp_enabled(self) -> bool:
+        return self.PARITYPAY_SBP_ENABLED and self.is_paritypay_enabled()
+
+    def get_paritypay_sbp_display_name(self) -> str:
+        name = (self.PARITYPAY_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (ParityPay)'
+
+    def get_paritypay_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_paritypay_sbp_display_name())
+
     def is_donut_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""
         return self.DONUT_TOKEN is not None and self.DONUT_SECRET is not None
@@ -3081,7 +3520,7 @@ class Settings(BaseSettings):
 
     def get_donut_display_name(self) -> str:
         name = (self.DONUT_DISPLAY_NAME or '').strip()
-        return name if name else 'Donut'
+        return name or 'Donut'
 
     def get_donut_display_name_html(self) -> str:
         return html.escape(self.get_donut_display_name())
@@ -3132,7 +3571,7 @@ class Settings(BaseSettings):
 
     def get_lava_display_name(self) -> str:
         name = (self.LAVA_DISPLAY_NAME or '').strip()
-        return name if name else 'Lava'
+        return name or 'Lava'
 
     def get_lava_display_name_html(self) -> str:
         return html.escape(self.get_lava_display_name())
@@ -3173,7 +3612,7 @@ class Settings(BaseSettings):
 
     def get_etoplatezhi_display_name(self) -> str:
         name = (self.ETOPLATEZHI_DISPLAY_NAME or '').strip()
-        return name if name else 'Etoplatezhi'
+        return name or 'Etoplatezhi'
 
     def get_etoplatezhi_display_name_html(self) -> str:
         return html.escape(self.get_etoplatezhi_display_name())
@@ -3203,7 +3642,7 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_sbp_display_name(self) -> str:
         name = (self.KASSA_AI_SBP_DISPLAY_NAME or '').strip()
-        return name if name else 'СБП (KassaAI)'
+        return name or 'СБП (KassaAI)'
 
     def get_kassa_ai_sbp_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_sbp_display_name())
@@ -3213,7 +3652,7 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_card_display_name(self) -> str:
         name = (self.KASSA_AI_CARD_DISPLAY_NAME or '').strip()
-        return name if name else 'Карта (KassaAI)'
+        return name or 'Карта (KassaAI)'
 
     def get_kassa_ai_card_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_card_display_name())
@@ -3223,7 +3662,7 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_sberpay_display_name(self) -> str:
         name = (self.KASSA_AI_SBERPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'SberPay (KassaAI)'
+        return name or 'SberPay (KassaAI)'
 
     def get_kassa_ai_sberpay_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_sberpay_display_name())
@@ -3334,6 +3773,10 @@ class Settings(BaseSettings):
     def get_happ_cryptolink_redirect_template(self) -> str | None:
         template = (self.HAPP_CRYPTOLINK_REDIRECT_TEMPLATE or '').strip()
         return template or None
+
+    def get_incy_provider_name(self) -> str | None:
+        name = (self.INCY_CRYPTOLINK_PROVIDER_NAME or '').strip()
+        return name or None
 
     def get_happ_download_link(self, platform: str) -> str | None:
         platform_key = platform.lower()
@@ -3609,6 +4052,14 @@ class Settings(BaseSettings):
             'first_payment_commission_percent': self.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT,
             'recurring_commission_tiers': self.REFERRAL_RECURRING_COMMISSION_TIERS,
             'notifications_enabled': self.REFERRAL_NOTIFICATIONS_ENABLED,
+            'reward_scheme': self.REFERRAL_REWARD_SCHEME,
+            'levels_mode': self.get_referral_levels_mode(),
+            'allow_days_target_choice': self.is_referral_days_target_choice_enabled(),
+            'allow_reward_kind_choice': self.is_referral_reward_kind_choice_enabled(),
+            # Через геттер, а не сырым полем: сырое отдавало бы 999 или 0 —
+            # значения, которые расчёт всё равно приводит к границам, так что
+            # потребители видели бы не ту глубину, по которой бот платит.
+            'max_level_depth': self.get_referral_max_level_depth(),
             'withdrawal_enabled': self.REFERRAL_WITHDRAWAL_ENABLED,
             'withdrawal_min_amount_kopeks': self.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS,
             'withdrawal_cooldown_days': self.REFERRAL_WITHDRAWAL_COOLDOWN_DAYS,
@@ -3617,6 +4068,76 @@ class Settings(BaseSettings):
     def is_referral_withdrawal_enabled(self) -> bool:
         """Проверяет, включена ли функция вывода реферального баланса."""
         return self.is_referral_program_enabled() and self.REFERRAL_WITHDRAWAL_ENABLED
+
+    def is_referral_levels_scheme(self) -> bool:
+        """Включена ли многоуровневая схема наград."""
+        return str(self.REFERRAL_REWARD_SCHEME or '').strip().lower() == 'levels'
+
+    def get_referral_levels_mode(self) -> str:
+        """Что означает номер уровня: глубина цепочки ('chain') или ранг ('tiers').
+
+        Неизвестное значение трактуется как 'chain', а не как ошибка: опечатка в
+        .env не должна менять схему выплат на ту, которую админ не выбирал.
+        """
+        from app.referral_levels import LEVELS_MODE_CHAIN, LEVELS_MODE_TIERS
+
+        value = str(self.REFERRAL_LEVELS_MODE or '').strip().lower()
+        return LEVELS_MODE_TIERS if value == LEVELS_MODE_TIERS else LEVELS_MODE_CHAIN
+
+    def is_referral_days_target_choice_enabled(self) -> bool:
+        """Может ли пользователь сам выбрать подписку для дней награды.
+
+        Смысл есть только под уровневой схемой: в классической дни наградой не
+        выдаются вовсе, и выбирать было бы нечего.
+        """
+        return self.is_referral_levels_scheme() and bool(self.REFERRAL_ALLOW_DAYS_TARGET_CHOICE)
+
+    def is_referral_reward_kind_choice_enabled(self) -> bool:
+        """Может ли пользователь выбрать, деньги или дни, когда правило даёт оба."""
+        return self.is_referral_levels_scheme() and bool(self.REFERRAL_ALLOW_REWARD_KIND_CHOICE)
+
+    def is_referral_tier_levels(self) -> bool:
+        """Включён ли режим рангов: один уровень, только прямому пригласившему.
+
+        Проверяется вместе со схемой: режим — это уточнение внутри 'levels', и
+        сам по себе, при классической схеме, он ничего не значит.
+        """
+        from app.referral_levels import LEVELS_MODE_TIERS
+
+        return self.is_referral_levels_scheme() and self.get_referral_levels_mode() == LEVELS_MODE_TIERS
+
+    def get_referral_max_level_depth(self) -> int:
+        """Глубина обхода цепочки, ограниченная числом поддерживаемых уровней.
+
+        Верхняя граница обязательна: значение выше числа заводимых уровней ничего
+        не добавляет, зато заставляет обходить цепочку вхолостую на каждом
+        пополнении — по одному запросу пользователя на пустое звено.
+
+        Значение здесь — всегда настроенная глубина ЦЕПОЧКИ, даже в режиме рангов,
+        где она не применяется. Это намеренно: тот же вызов используется как фильтр
+        «какие уровни вообще способны заплатить», и подмена его на 1 в режиме рангов
+        молча спрятала бы все ранги выше первого. Для фильтра есть отдельный
+        get_referral_effective_max_level(), а показывать глубину пользователю в
+        режиме рангов не нужно вовсе — там её нет.
+        """
+        from app.referral_levels import MAX_SUPPORTED_LEVEL
+
+        return max(1, min(MAX_SUPPORTED_LEVEL, int(self.REFERRAL_MAX_LEVEL_DEPTH or 1)))
+
+    def get_referral_effective_max_level(self) -> int:
+        """Наибольший номер уровня, который вообще способен что-то начислить.
+
+        В режиме цепочки это глубина обхода: уровень глубже неё не встречается, и
+        описывать его пользователю значит обещать награду, которая не придёт.
+        В режиме рангов ограничения нет — ранг не обходится, а выбирается по числу
+        рефералов, поэтому работают все заведённые уровни.
+        """
+        from app.referral_levels import MAX_SUPPORTED_LEVEL
+
+        if self.is_referral_tier_levels():
+            return MAX_SUPPORTED_LEVEL
+
+        return self.get_referral_max_level_depth()
 
     def is_referral_program_enabled(self) -> bool:
         return bool(self.REFERRAL_PROGRAM_ENABLED)
@@ -4083,6 +4604,28 @@ class Settings(BaseSettings):
 
     def get_ban_system_request_timeout(self) -> int:
         return max(1, self.BAN_SYSTEM_REQUEST_TIMEOUT)
+
+    # bschekbot helpers
+    def is_bschek_enabled(self) -> bool:
+        return bool(self.BSCHEK_ENABLED)
+
+    def is_bschek_configured(self) -> bool:
+        return bool(self.BSCHEK_API_KEY)
+
+    def is_dpichecker_enabled(self) -> bool:
+        return bool(self.DPICHECKER_ENABLED)
+
+    def is_dpichecker_configured(self) -> bool:
+        return bool(self.DPICHECKER_API_KEY)
+
+    def get_dpichecker_webhook_url(self) -> str | None:
+        """Куда DPI//CHECKER шлёт события; без внешнего адреса бота — никуда."""
+        if not self.WEBHOOK_URL:
+            return None
+        return f'{self.WEBHOOK_URL.rstrip("/")}/dpichecker/webhook'
+
+    def get_bschek_api_url(self) -> str:
+        return (self.BSCHEK_API_URL or 'https://bsbord.com/v1').rstrip('/')
 
     model_config = {'env_file': '.env', 'env_file_encoding': 'utf-8', 'extra': 'ignore'}
 

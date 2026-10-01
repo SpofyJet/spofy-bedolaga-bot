@@ -4,39 +4,62 @@ redis-py ≥ 8 по умолчанию (``maint_notifications_config.enabled="au
 новом соединении шлёт ``CLIENT MAINT_NOTIFICATIONS`` — уведомления о плановых
 работах Redis Enterprise. Обычный Redis команду не знает, и библиотека на каждое
 соединение пишет в лог «Failed to enable maintenance notifications». Бот с Redis
-Enterprise не работает, поэтому механизм выключен явно — но только там, где он
-вообще существует.
+Enterprise не работает, поэтому механизм выключен явно.
 
-Важно: в redis-py 7.x async-стек (redis.asyncio) параметр
-``maint_notifications_config`` НЕ принимает — передача приводит к TypeError
-на первом же запросе (клиент конструируется лениво, импорты этого не ловят).
-Поэтому поддержка определяется интроспекцией сигнатуры соединения,
-а не номером версии пакета.
+Аргумент принимает только асинхронное соединение redis-py ≥ 8.1.0 — отсюда
+нижняя граница в pyproject. На 7.1.1–8.0.1 ``from_url`` его молча складывает в
+параметры пула, а падает уже первое создание соединения, то есть Redis у бота
+не работает вообще.
+
+Пул — ожидающий (``BlockingConnectionPool``): у обычного пула redis-py 8 предел 100
+соединений, и при его исчерпании команда сразу падала с «MaxConnectionsError: Too
+many connections» — так терялись апдейты при всплеске (FSM aiogram читает состояние
+на каждый апдейт). Теперь размер задаёт ``REDIS_MAX_CONNECTIONS``, а при занятом пуле
+команда ждёт свободное соединение до ``REDIS_POOL_TIMEOUT`` секунд.
+
+Повторы подключения задаются здесь же: по умолчанию у redis-py их ноль
+(``Retry(NoBackoff(), 0)``), и разовая заминка на старте контейнера — гонка за
+резолвером имён, пока поднимается всё остальное — сразу становится ошибкой в
+логе и пропущенным тактом фоновых сервисов. Повтор охватывает только
+установку соединения (``AbstractConnection.connect``), уже отправленные
+команды заново не выполняются.
 """
 
 from __future__ import annotations
 
-import inspect
 from typing import Any
 
 import redis.asyncio as redis
-from redis.asyncio.connection import AbstractConnection
+
+# Именно асинхронный Retry: у redis-py их два, и синхронный здесь не срабатывает —
+# ``AbstractConnection.connect`` ждёт корутину, повтор молча не происходит.
+from redis.asyncio.retry import Retry
+from redis.backoff import ExponentialWithJitterBackoff
 
 from app.config import settings
 
 
 try:
     from redis.maint_notifications import MaintNotificationsConfig
-except ImportError:  # redis-py без механизма maint_notifications: выключать нечего
+except ImportError:  # redis-py < 6.x: механизма нет, выключать нечего
     MaintNotificationsConfig = None  # type: ignore[assignment,misc]
 
-_SUPPORTS_MAINT_NOTIFICATIONS = MaintNotificationsConfig is not None and (
-    'maint_notifications_config' in inspect.signature(AbstractConnection.__init__).parameters
-)
+
+# Три попытки с быстрым нарастанием: заминка на старте занимает доли секунды,
+# а недоступный Redis не должен задерживать вызывающего надолго.
+_CONNECT_RETRY = Retry(ExponentialWithJitterBackoff(base=0.05, cap=1.0), retries=3)
 
 
 def create_redis(url: str | None = None, **kwargs: Any) -> redis.Redis:
     """Клиент с пулом соединений к ``url`` (по умолчанию ``settings.REDIS_URL``)."""
-    if _SUPPORTS_MAINT_NOTIFICATIONS:
+    if MaintNotificationsConfig is not None:
         kwargs.setdefault('maint_notifications_config', MaintNotificationsConfig(enabled=False))
-    return redis.from_url(url or settings.REDIS_URL, **kwargs)
+    kwargs.setdefault('retry', _CONNECT_RETRY)
+    kwargs.setdefault('max_connections', settings.REDIS_MAX_CONNECTIONS)
+    kwargs.setdefault('timeout', settings.REDIS_POOL_TIMEOUT)
+    # redis.from_url всегда строит обычный ConnectionPool — ожидающий собираем сами.
+    pool = redis.BlockingConnectionPool.from_url(url or settings.REDIS_URL, **kwargs)
+    client = redis.Redis(connection_pool=pool)
+    # Как у from_url: aclose() клиента закрывает и его собственный пул.
+    client.auto_close_connection_pool = True
+    return client

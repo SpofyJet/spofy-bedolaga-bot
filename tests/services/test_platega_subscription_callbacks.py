@@ -12,7 +12,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.database.crud import platega_subscription as sub_crud
-from app.database.models import Base, PlategaSubscription, Subscription, Transaction
+from app.database.models import (
+    Base,
+    GraceAccessSessionModel,
+    PlategaSubscription,
+    PromoGroup,
+    Subscription,
+    Tariff,
+    TrafficPurchase,
+    Transaction,
+    tariff_promo_groups,
+)
 
 
 def _ensure_real_aiosqlite(monkeypatch) -> None:
@@ -48,7 +58,17 @@ async def _memory_session(monkeypatch):
     async with engine.begin() as conn:
         await conn.run_sync(
             lambda c: Base.metadata.create_all(
-                c, tables=[PlategaSubscription.__table__, Subscription.__table__, Transaction.__table__]
+                c,
+                tables=[
+                    PlategaSubscription.__table__,
+                    Subscription.__table__,
+                    Transaction.__table__,
+                    Tariff.__table__,
+                    TrafficPurchase.__table__,
+                    PromoGroup.__table__,
+                    tariff_promo_groups,
+                    GraceAccessSessionModel.__table__,
+                ],
             )
         )
     maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -79,7 +99,11 @@ async def test_create_sbp_subscription_persists_and_disables_autopay(monkeypatch
         def __init__(self):
             self.platega_service = SimpleNamespace(
                 create_subscription=AsyncMock(
-                    return_value={'transactionId': 'tx-9', 'redirect': 'https://pay/9', 'status': 'PENDING'}
+                    return_value={
+                        'transactionId': 'tx-9',
+                        'redirect': 'https://pay.platega.io/subscription/9',
+                        'status': 'PENDING',
+                    }
                 )
             )
 
@@ -87,7 +111,7 @@ async def test_create_sbp_subscription_persists_and_disables_autopay(monkeypatch
         result = await Svc().create_platega_sbp_subscription(db, user_id=777, subscription=subscription, tariff=tariff)
 
         assert result['platega_subscription_id'] == 'tx-9'
-        assert result['redirect_url'] == 'https://pay/9'
+        assert result['redirect_url'] == 'https://pay.platega.io/subscription/9'
         assert result['status'] == 'PENDING'
         assert subscription.autopay_enabled is False
 
@@ -121,7 +145,11 @@ async def test_create_sbp_subscription_is_idempotent_on_repeat_call(monkeypatch)
         def __init__(self):
             self.platega_service = SimpleNamespace(
                 create_subscription=AsyncMock(
-                    return_value={'transactionId': 'tx-9', 'redirect': 'https://pay/9', 'status': 'PENDING'}
+                    return_value={
+                        'transactionId': 'tx-9',
+                        'redirect': 'https://pay.platega.io/subscription/9',
+                        'status': 'PENDING',
+                    }
                 )
             )
 
@@ -830,7 +858,11 @@ async def test_create_sbp_short_circuit_reenforces_autopay_off(monkeypatch):
         def __init__(self):
             self.platega_service = SimpleNamespace(
                 create_subscription=AsyncMock(
-                    return_value={'transactionId': 'tx-re', 'redirect': 'https://pay/re', 'status': 'PENDING'}
+                    return_value={
+                        'transactionId': 'tx-re',
+                        'redirect': 'https://pay.platega.io/subscription/re',
+                        'status': 'PENDING',
+                    }
                 )
             )
 
@@ -917,7 +949,7 @@ async def test_sbp_purchase_creates_expired_stub_for_new_tariff(monkeypatch):
 
     assert result['subscription_id'] == 91
     assert result['redirect_url'] == 'https://pay/x'
-    mock_enable.assert_awaited_once_with(db, user_id=777, subscription=created['stub'], tariff=tariff)
+    mock_enable.assert_awaited_once_with(db, user_id=777, subscription=created['stub'], tariff=tariff, period_days=None)
 
 
 async def test_sbp_purchase_binds_to_existing_expired_subscription(monkeypatch):
@@ -956,9 +988,12 @@ async def test_sbp_purchase_binds_to_existing_expired_subscription(monkeypatch):
     mock_create_stub.assert_not_awaited()
 
 
-async def test_sbp_purchase_refuses_trial_disabled_and_foreign_tariff(monkeypatch):
-    """Отказы: триал (конверсию делает только balance-покупка), disabled/pending
-    (чардж не активирует), в single-режиме — подписка другого тарифа."""
+async def test_sbp_purchase_refuses_disabled_and_pending(monkeypatch):
+    """Отказы: disabled/pending (чардж не активирует — деньги ушли бы без доступа).
+
+    Spofy: триал и подписка другого тарифа НЕ отказ — привязка встаёт на эту же
+    строку, а первое успешное списание конвертирует триал и переключает тариф.
+    """
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
 
@@ -979,12 +1014,11 @@ async def test_sbp_purchase_refuses_trial_disabled_and_foreign_tariff(monkeypatc
     user = SimpleNamespace(id=777)
 
     cases = [
-        (SimpleNamespace(id=1, is_trial=True, status='active', tariff_id=5), 'триал'),
-        (SimpleNamespace(id=2, is_trial=False, status='disabled', tariff_id=5), 'этой подписки'),
-        (SimpleNamespace(id=3, is_trial=False, status='pending', tariff_id=5), 'этой подписки'),
+        SimpleNamespace(id=2, is_trial=False, status='disabled', tariff_id=5),
+        SimpleNamespace(id=3, is_trial=False, status='pending', tariff_id=5),
     ]
     monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-    for sub, _label in cases:
+    for sub in cases:
         monkeypatch.setattr(
             'app.database.crud.subscription.get_subscription_by_user_and_tariff', AsyncMock(return_value=sub)
         )
@@ -992,13 +1026,43 @@ async def test_sbp_purchase_refuses_trial_disabled_and_foreign_tariff(monkeypatc
             with pytest.raises(ValueError):
                 await platega_module.purchase_tariff_with_sbp_recurring(db, user=user, tariff=tariff)
 
-    # single-sub режим: подписка другого тарифа
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+
+async def test_sbp_purchase_binds_trial_and_foreign_tariff_to_same_row(monkeypatch):
+    """Spofy: триал и подписка другого тарифа получают привязку на свою же строку."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from app.config import settings
+    from app.services.payment import platega as platega_module
+
+    for key, value in {
+        'PLATEGA_ENABLED': True,
+        'PLATEGA_MERCHANT_ID': 'm',
+        'PLATEGA_SECRET': 's',
+        'PLATEGA_RECURRENT_ENABLED': True,
+    }.items():
+        monkeypatch.setattr(settings, key, value, raising=False)
+
+    tariff = _purchase_tariff()
+    user = SimpleNamespace(id=777)
+    mock_enable = AsyncMock(return_value={'status': 'PENDING', 'redirect_url': 'https://pay/t', 'local_id': 3})
+    monkeypatch.setattr(platega_module, 'enable_platega_sbp_recurring', mock_enable)
+
+    trial = SimpleNamespace(id=1, is_trial=True, status='active', tariff_id=5)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(
+        'app.database.crud.subscription.get_subscription_by_user_and_tariff', AsyncMock(return_value=trial)
+    )
+    async with _memory_session(monkeypatch) as db:
+        result = await platega_module.purchase_tariff_with_sbp_recurring(db, user=user, tariff=tariff)
+    assert result['subscription_id'] == 1
+
     foreign = SimpleNamespace(id=4, is_trial=False, status='active', tariff_id=99)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr('app.database.crud.subscription.get_subscription_by_user_id', AsyncMock(return_value=foreign))
     async with _memory_session(monkeypatch) as db:
-        with pytest.raises(ValueError):
-            await platega_module.purchase_tariff_with_sbp_recurring(db, user=user, tariff=tariff)
+        result = await platega_module.purchase_tariff_with_sbp_recurring(db, user=user, tariff=tariff)
+    assert result['subscription_id'] == 4
 
 
 async def test_sbp_purchase_gate_off_raises(monkeypatch):
@@ -1286,3 +1350,58 @@ async def test_lowercase_confirmed_status_extends_subscription(monkeypatch):
         await db.refresh(rec)
         assert subscription.end_date >= end0 + timedelta(days=29)
         assert rec.charges_success == 1
+
+
+async def test_confirmed_charge_returns_a_zeroed_tariff_subscription_to_the_tariff_limit(monkeypatch):
+    """Продление Platega идёт мимо extend_subscription — условия тарифа обязаны примениться и здесь.
+
+    Подписка, которой прежняя ошибка продления выдала безлимит (ноль в базе при
+    тарифе с лимитом), на СБП-списании возвращается к лимиту тарифа.
+    """
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    async with _memory_session(monkeypatch) as db:
+        db.add(
+            Tariff(id=1, name='Тариф', is_active=True, traffic_limit_gb=50, device_limit=1, period_prices={'30': 19900})
+        )
+        subscription = Subscription(
+            id=1,
+            user_id=1,
+            tariff_id=1,
+            status='active',
+            end_date=datetime.now(UTC) + timedelta(days=2),
+            traffic_limit_gb=0,
+        )
+        db.add(subscription)
+        await db.commit()
+        await sub_crud.create_platega_subscription(
+            db,
+            user_id=1,
+            subscription_id=1,
+            tariff_id=1,
+            interval=3,
+            charge_days=30,
+            amount_kopeks=19900,
+            redirect_url=None,
+            platega_subscription_id='ps-heal',
+            status='ACTIVE',
+        )
+
+        await Svc().process_platega_subscription_callback(
+            db,
+            {
+                'Status': 'CONFIRMED',
+                'Id': 'charge-heal',
+                'Amount': 199,
+                'Currency': 'RUB',
+                'PaymentMethod': 6,
+                'SubscriptionId': 'ps-heal',
+                'NextChargeAt': '2026-09-01T00:00:00Z',
+            },
+        )
+
+        await db.refresh(subscription)
+        assert subscription.traffic_limit_gb == 50

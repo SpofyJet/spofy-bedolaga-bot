@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
+from app.database.auth_methods import OAUTH_PROVIDER_COLUMNS
 from app.database.constants import POSTGRES_INT4_MAX, POSTGRES_INT4_MIN
 from app.database.crud.discount_offer import get_latest_claimed_offer_for_user
 from app.database.crud.promo_group import get_default_promo_group
@@ -23,8 +24,8 @@ from app.database.models import (
     PromoGroup,
     Subscription,
     SubscriptionStatus,
-    Transaction,
     Tariff,
+    Transaction,
     TransactionType,
     User,
     UserPromoGroup,
@@ -379,6 +380,28 @@ async def create_user_no_commit(
     return user
 
 
+async def emit_user_created_event(db: AsyncSession, user: User) -> None:
+    """Emit the best-effort post-commit user.created event for a persisted user."""
+    try:
+        from app.services.event_emitter import event_emitter
+
+        await event_emitter.emit(
+            'user.created',
+            {
+                'user_id': user.id,
+                'telegram_id': user.telegram_id,
+                'username': user.username,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'referral_code': user.referral_code,
+                'referred_by_id': user.referred_by_id,
+            },
+            db=db,
+        )
+    except Exception as error:
+        logger.warning('Failed to emit user.created event', error=error)
+
+
 def _violated_constraint(exc: IntegrityError) -> str:
     """Return the violated DB constraint name for an IntegrityError.
 
@@ -458,26 +481,7 @@ async def create_user(
                 '✅ Создан пользователь с реферальным кодом', telegram_id=telegram_id, referral_code=referral_code
             )
 
-            # Отправляем событие о создании пользователя
-            try:
-                from app.services.event_emitter import event_emitter
-
-                await event_emitter.emit(
-                    'user.created',
-                    {
-                        'user_id': user.id,
-                        'telegram_id': user.telegram_id,
-                        'username': user.username,
-                        'first_name': user.first_name,
-                        'last_name': user.last_name,
-                        'referral_code': user.referral_code,
-                        'referred_by_id': user.referred_by_id,
-                    },
-                    db=db,
-                )
-            except Exception as error:
-                logger.warning('Failed to emit user.created event', error=error)
-
+            await emit_user_created_event(db, user)
             return user
 
         except IntegrityError as exc:
@@ -1757,8 +1761,6 @@ async def get_user_by_email_alias(
     return result.scalar_one_or_none()
 
 
-
-
 async def is_email_taken(db: AsyncSession, email: str, exclude_user_id: int | None = None) -> bool:
     """
     Check if email is already taken by another user.
@@ -1778,7 +1780,12 @@ async def is_email_taken(db: AsyncSession, email: str, exclude_user_id: int | No
     if exclude_user_id:
         query = query.where(User.id != exclude_user_id)
     result = await db.execute(query)
-    return result.scalar_one_or_none() is not None
+    if result.scalar_one_or_none() is not None:
+        return True
+
+    # Другая запись того же ящика занимает его не меньше, чем точное совпадение
+    alias_owner = await get_user_by_email_alias(db, email, exclude_user_id=exclude_user_id)
+    return alias_owner is not None
 
 
 async def set_email_change_pending(
@@ -1890,12 +1897,6 @@ async def clear_email_change_pending(db: AsyncSession, user: User) -> None:
 
 # Single source of truth: provider name → User model column name.
 # Imported by account_linking.py and account_merge_service.py.
-OAUTH_PROVIDER_COLUMNS: dict[str, str] = {
-    'google': 'google_id',
-    'yandex': 'yandex_id',
-    'discord': 'discord_id',
-    'vk': 'vk_id',
-}
 
 
 async def get_user_by_oauth_provider(db: AsyncSession, provider: str, provider_id: str) -> User | None:

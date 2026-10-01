@@ -24,18 +24,19 @@
 import asyncio
 import html
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
 from aiogram import Bot
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import Subscription, User
 from app.external.remnawave_api import RemnaWaveUser, UserStatus
 from app.services.remnawave_service import remnawave_service
+
 
 logger = structlog.get_logger(__name__)
 
@@ -158,12 +159,11 @@ class TrialAbuseService:
                 except Exception as error:
                     logger.error(f'Антиабуз триалов: ошибка проверки: {error}', exc_info=True)
                     await self._notify_admin(
-                        f'🛡 Антиабуз триалов: ошибка проверки: '
-                        f'<code>{html.escape(str(error))}</code>'
+                        f'🛡 Антиабуз триалов: ошибка проверки: <code>{html.escape(str(error))}</code>'
                     )
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=interval)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
         except asyncio.CancelledError:
             logger.info('Антиабуз триалов: сервис остановлен')
@@ -179,7 +179,7 @@ class TrialAbuseService:
     # Основная проверка
     # ------------------------------------------------------------------ #
     async def run_check(self) -> dict[str, int]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stats: dict[str, int] = defaultdict(int)
 
         async with remnawave_service.get_api_client() as api:
@@ -220,11 +220,7 @@ class TrialAbuseService:
                 if len(uids) < min_accounts:
                     continue
                 stats['hwid_groups'] += 1
-                tg_ids = {
-                    users_by_id[uid].telegram_id
-                    for uid in uids
-                    if users_by_id[uid].telegram_id
-                }
+                tg_ids = {users_by_id[uid].telegram_id for uid in uids if users_by_id[uid].telegram_id}
                 # Все аккаунты привязаны к одному Telegram — это один человек
                 # (например, пересоздание подписки), не наказываем.
                 if len(tg_ids) == 1:
@@ -248,9 +244,7 @@ class TrialAbuseService:
                     verdict = self._account_verdict(panel_user, bot_index, now)
                     stats[f'verdict_{verdict}'] += 1
                     if verdict == 'candidate':
-                        candidates[panel_id] = (
-                            f'{record["trial_count"]} триальных подписок в боте'
-                        )
+                        candidates[panel_id] = f'{record["trial_count"]} триальных подписок в боте'
 
             # --- фильтры: белый список и антиспам ---
             excluded = self.get_excluded_telegram_ids()
@@ -290,9 +284,7 @@ class TrialAbuseService:
                 await asyncio.sleep(0.3)  # не долбим API панели
 
         report_mode = self.get_report_mode()
-        should_report = report_mode == 'always' or (
-            report_mode == 'changes' and (punished_ok or punished_fail)
-        )
+        should_report = report_mode == 'always' or (report_mode == 'changes' and (punished_ok or punished_fail))
         if should_report:
             await self._send_admin_summary(stats, punished_ok, punished_fail)
 
@@ -332,8 +324,8 @@ class TrialAbuseService:
         if value is None:
             return None
         if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
     @staticmethod
     def _is_valid_hwid(hwid: str) -> bool:
@@ -433,17 +425,51 @@ class TrialAbuseService:
     # Действия
     # ------------------------------------------------------------------ #
     async def _apply_action(self, api, panel_user: RemnaWaveUser) -> tuple[bool, str]:
+        """Гасит триал в БД бота и отправляет новое состояние в панель общим путём.
+
+        Раньше дата/статус менялись только в панели: бот продолжал считать триал
+        живым, и любой следующий пуш подписки (сброс устройств, перевыпуск,
+        синхронизация) возвращал доступ. Теперь источник истины — БД бота, а в
+        панель уходит то же, что при обычном истечении подписки (panel_sync).
+        """
+        from app.database.crud.subscription import deactivate_subscription, expire_subscription
+        from app.services.subscription_service import SubscriptionService
+
         try:
-            if self.get_action() == 'disable':
-                await api.disable_user(panel_user.id)
-                return True, 'disabled'
-            # expire: панель 3.x отклоняет expireAt в прошлом (zod-валидация),
-            # поэтому «обнуление» = истечение через 30 секунд.
-            expire_at = datetime.now(timezone.utc) + timedelta(seconds=30)
-            await api.update_user(panel_user.id, expire_at=expire_at)
-            return True, 'expired'
+            async with AsyncSessionLocal() as db:
+                trials = await self._find_bot_trials(db, panel_user)
+                if not trials:
+                    return False, 'триал в БД бота не найден'
+                service = SubscriptionService()
+                now = datetime.now(UTC)
+                for subscription in trials:
+                    if self.get_action() == 'disable':
+                        await deactivate_subscription(db, subscription)
+                    else:
+                        if subscription.end_date is None or self._as_utc(subscription.end_date) > now:
+                            subscription.end_date = now
+                        await expire_subscription(db, subscription)
+                    await service.update_remnawave_user(db, subscription)
+                return True, 'disabled' if self.get_action() == 'disable' else 'expired'
         except Exception as error:
             return False, str(error)
+
+    @staticmethod
+    async def _find_bot_trials(db, panel_user: RemnaWaveUser) -> list[Subscription]:
+        """Живые триальные подписки бота, за которыми стоит этот аккаунт панели."""
+        links = [Subscription.remnawave_id == panel_user.id, User.remnawave_id == panel_user.id]
+        if panel_user.short_uuid:
+            links.append(Subscription.remnawave_short_uuid == panel_user.short_uuid)
+        result = await db.execute(
+            select(Subscription)
+            .join(User, Subscription.user_id == User.id)
+            .where(
+                Subscription.is_trial.is_(True),
+                Subscription.status.in_(('active', 'trial', 'limited')),
+                or_(*links),
+            )
+        )
+        return list(result.scalars().all())
 
     async def _send_warning(self, telegram_id: int) -> bool:
         if not self.bot:
@@ -452,10 +478,7 @@ class TrialAbuseService:
             await self.bot.send_message(chat_id=telegram_id, text=self.get_warning_text())
             return True
         except Exception as error:
-            logger.warning(
-                f'Антиабуз триалов: не удалось отправить предупреждение '
-                f'tg={telegram_id}: {error}'
-            )
+            logger.warning(f'Антиабуз триалов: не удалось отправить предупреждение tg={telegram_id}: {error}')
             return False
 
     # ------------------------------------------------------------------ #
@@ -469,13 +492,12 @@ class TrialAbuseService:
     ) -> None:
         lines = [
             '🛡 <b>Антиабуз триалов: отчёт</b>',
-            f'Пользователей в панели: {stats.get("panel_users", 0)}, '
-            f'устройств: {stats.get("devices", 0)}',
-            f'HWID-групп 2+: {stats.get("hwid_groups", 0)}, '
-            f'мультитриалов: {stats.get("multi_trial_users", 0)}',
-            f'Пропущено платных: {stats.get("verdict_paid", 0)}, '
-            f'уже наказанных/истёкших: '
-            f'{stats.get("verdict_already_disabled", 0) + stats.get("verdict_already_expired", 0)}',
+            f'Пользователей в панели: {stats.get("panel_users", 0)}, устройств: {stats.get("devices", 0)}',
+            f'HWID-групп 2+: {stats.get("hwid_groups", 0)}, мультитриалов: {stats.get("multi_trial_users", 0)}',
+            (
+                f'Пропущено платных: {stats.get("verdict_paid", 0)}, уже наказанных/истёкших: '
+                f'{stats.get("verdict_already_disabled", 0) + stats.get("verdict_already_expired", 0)}'
+            ),
         ]
         if punished_ok:
             lines.append(f'\n✅ Наказано ({self.get_action()}): {len(punished_ok)}')

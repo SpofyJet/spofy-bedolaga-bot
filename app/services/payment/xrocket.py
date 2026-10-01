@@ -104,9 +104,7 @@ class XRocketPaymentMixin:
                 return None
 
             # 1 asset = rate RUB  ->  amount_asset = rubles / rate
-            amount_asset = (amount_rubles / Decimal(str(rate))).quantize(
-                Decimal('0.000000001'), rounding=ROUND_HALF_UP
-            )
+            amount_asset = (amount_rubles / Decimal(str(rate))).quantize(Decimal('0.000000001'), rounding=ROUND_HALF_UP)
 
             min_invoice = await self.xrocket_service.get_min_invoice(asset)
             if min_invoice and float(amount_asset) < min_invoice:
@@ -586,7 +584,7 @@ class XRocketPaymentMixin:
         current_balance = getattr(user, 'balance_kopeks', 0)
         if current_balance < required_balance:
             logger.warning(
-                'Недостаточно средств на балансе пользователя для завершения продления: нужно , доступно',
+                'Недостаточно средств на балансе пользователя для завершения продления',
                 user_id=user.id,
                 required_balance=required_balance,
                 current_balance=current_balance,
@@ -638,7 +636,7 @@ class XRocketPaymentMixin:
         balance_amount_label = settings.format_price(required_balance)
 
         logger.info(
-            'Подписка продлена через xRocket invoice (внешний платеж , списано с баланса)',
+            'Подписка продлена через xRocket invoice с доплатой с баланса',
             subscription_id=subscription.id,
             invoice_id=payment.invoice_id,
             external_amount_label=external_amount_label,
@@ -657,9 +655,7 @@ class XRocketPaymentMixin:
                 return
             except Exception as error:
                 if attempt == 1:
-                    logger.warning(
-                        'Админ-уведомление xRocket не доставлено, повтор через 5 сек', error=str(error)
-                    )
+                    logger.warning('Админ-уведомление xRocket не доставлено, повтор через 5 сек', error=str(error))
                     await _asyncio.sleep(5)
                 else:
                     logger.error(

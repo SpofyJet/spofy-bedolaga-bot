@@ -115,6 +115,7 @@ async def list_recently_cancelled_platega_subscriptions(
     )
     return list(result.scalars().all())
 
+
 async def get_latest_platega_subscription_by_subscription(
     db: AsyncSession, subscription_id: int
 ) -> PlategaSubscription | None:

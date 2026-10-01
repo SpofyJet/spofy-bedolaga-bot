@@ -14,13 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.subscription import (
-    decrement_subscription_server_counts,
     get_all_subscriptions_by_user_id,
     get_subscription_by_id_for_user,
 )
 from app.database.models import Subscription, SubscriptionStatus, User
 from app.localization.texts import Texts, get_texts
-from app.services.subscription_service import SubscriptionService
 from app.utils.legacy_subscription import is_legacy_subscription
 from app.utils.timezone import format_local_datetime
 
@@ -84,7 +82,6 @@ def _build_subscriptions_keyboard(
     subscriptions: list, language: str, gift_enabled: bool = False
 ) -> types.InlineKeyboardMarkup:
     """Build inline keyboard with per-subscription management buttons."""
-    texts = get_texts(language)
     buttons = []
     for idx, sub in enumerate(subscriptions, 1):
         tariff_name = sub.tariff.name if sub.tariff else f'Подписка #{sub.id}'
@@ -127,9 +124,7 @@ def _build_subscriptions_keyboard(
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def _build_subscription_detail_keyboard(
-    sub_id: int, sub=None, language: str = 'ru'
-) -> types.InlineKeyboardMarkup:
+def _build_subscription_detail_keyboard(sub_id: int, sub=None, language: str = 'ru') -> types.InlineKeyboardMarkup:
     """Build keyboard for single subscription management.
 
     For expired/disabled subscriptions, only 'Renew' and 'Back' are shown —
@@ -198,8 +193,9 @@ async def show_my_subscriptions(
         # Fallback to legacy single subscription view
         return
 
-    subscriptions = await get_all_subscriptions_by_user_id(db, db_user.id)
     texts = get_texts(db_user.language)
+    gift_enabled = True
+    subscriptions = await get_all_subscriptions_by_user_id(db, db_user.id)
 
     if not subscriptions:
         text = '📋 <b>Мои подписки</b>\n\nУ вас нет подписок.'
@@ -213,6 +209,16 @@ async def show_my_subscriptions(
             ],
             [types.InlineKeyboardButton(text='⬅️ Назад', callback_data='back_to_menu')],
         ]
+        if gift_enabled:
+            buttons.append(
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('GIFT_SUBSCRIPTION_BUTTON', '🎁 Подарить подписку'),
+                        callback_data='subscription_gift',
+                    )
+                ]
+            )
+        buttons.append([types.InlineKeyboardButton(text='◀️ Назад', callback_data='back_to_menu')])
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=buttons)
     else:
         lines = ['📋 <b>Мои подписки</b>\n']
@@ -490,74 +496,21 @@ async def handle_subscription_delete_execute(
         await callback.answer('Можно удалить только истекшую или отключённую подписку', show_alert=True)
         return
 
-    from app.services.grace_access_runtime import (
-        GraceAccessDeletionBlocked,
-        ensure_no_open_grace_for_subscriptions,
-    )
+    # Порядок удаления (грейс-гард → автоплатежи → панель → строка) живёт в общем
+    # сервисе: своя копия здесь расходилась с ним — звала delete_user напрямую,
+    # мимо REMNAWAVE_USER_DELETE_MODE и мимо правил адресации общего аккаунта
+    # однотарифного режима.
+    from app.services.grace_access_runtime import GraceAccessDeletionBlocked
+    from app.services.subscription_deletion_service import delete_subscription_record
 
     try:
-        await ensure_no_open_grace_for_subscriptions(db, (subscription.id,))
+        await delete_subscription_record(db, subscription, deleted_by=f'user:{db_user.id}')
     except GraceAccessDeletionBlocked:
         await callback.answer(
             'Подписку нельзя удалить, пока действует временный доступ для продления.',
             show_alert=True,
         )
         return
-
-    # Best-effort: stop Platega SBP autopay before the row disappears — the
-    # platega_subscriptions record CASCADE-deletes with it, so cancelling
-    # after the delete would find nothing to cancel on Platega's side.
-    # NOTE: this commits its own transaction internally, which releases the
-    # grace-guard's Postgres advisory lock acquired just above. It therefore
-    # runs BEFORE any irreversible panel/DB step, and the guard is
-    # re-acquired immediately below — closing that window before anything
-    # that can't be undone happens.
-    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
-    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
-
-    await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-
-    await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-    try:
-        await ensure_no_open_grace_for_subscriptions(db, (subscription.id,))
-    except GraceAccessDeletionBlocked:
-        await callback.answer(
-            'Подписку нельзя удалить, пока действует временный доступ для продления.',
-            show_alert=True,
-        )
-        return
-
-    # Delete from RemnaWave panel (stops webhooks / phantom notifications)
-    if subscription.remnawave_id:
-        try:
-            from app.services.remnawave_webhook_service import RemnaWaveWebhookService
-
-            # Suppress the self-inflicted user.deleted webhook so its sibling-expiry
-            # sweep never touches the user's other (still-active) subscriptions.
-            # Только по панельному id: `id` — обязательное поле UsersSchema в
-            # 3.0.0, поэтому этот уровень guard'а срабатывает всегда. Добавить
-            # сюда telegram_id значило бы на 5 минут заглушить user.deleted для
-            # ВСЕХ панельных аккаунтов этого пользователя — включая законное
-            # удаление соседней подписки оператором.
-            service = SubscriptionService()
-            if settings.get_remnawave_user_delete_mode() == 'delete':
-                RemnaWaveWebhookService.mark_intentional_panel_deletion(
-                    panel_user_ids=[subscription.remnawave_id],
-                )
-                await service.delete_remnawave_user(subscription.remnawave_id)
-            else:
-                # Режим disable: аккаунт панели не сносим, только отключаем —
-                # следующая покупка включит его же, а не заведёт дубль.
-                await service.disable_remnawave_user(subscription.remnawave_id, db=db)
-        except Exception as e:
-            logger.warning('Failed to delete RemnaWave user on subscription delete', error=e)
-
-    # Decrement server counts
-    await decrement_subscription_server_counts(db, subscription)
-
-    # Hard delete from DB
-    await db.delete(subscription)
-    await db.commit()
 
     logger.info(
         'Subscription deleted by user via bot',

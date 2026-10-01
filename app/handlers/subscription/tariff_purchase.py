@@ -239,15 +239,42 @@ def get_tariffs_keyboard(
         purchased_tariff_ids = set()
     buttons = []
 
+    badge = texts.t('TARIFF_BEST_VALUE_BADGE', '⭐ выгодно')
     for tariff in tariffs:
         if tariff.id in purchased_tariff_ids:
-            buttons.append([InlineKeyboardButton(text=f'✅ {tariff.name}', callback_data=f'tariff_select:{tariff.id}')])
+            # Уже купленный тариф важнее подсказки: галочка отвечает на вопрос
+            # «а этот у меня есть?», отметка выгоды тут уже ничего не решает.
+            title = f'✅ {tariff.name}'
+        elif getattr(tariff, 'is_highlighted', False):
+            title = f'{badge} · {tariff.name}'
         else:
-            buttons.append([InlineKeyboardButton(text=tariff.name, callback_data=f'tariff_select:{tariff.id}')])
+            title = tariff.name
+        buttons.append([InlineKeyboardButton(text=title, callback_data=f'tariff_select:{tariff.id}')])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def _period_button_text(tariff: Tariff, period: int, price: int, price_text: str, prices: dict, texts) -> str:
+    """Единый текст кнопки периода: срок, цена, экономия к месячной цене и отметка выгодного периода.
+
+    Экономия показывается только для длинных периодов (от 60 дней) и только
+    заметная (от 5%): «−3%» на кнопке больше путает, чем помогает. Выгодный
+    период оператор отмечает в тарифе — в инлайн-кнопке рамку не нарисовать,
+    поэтому отметка идёт подписью в начале текста.
+    """
+    if period >= 60 and price > 0:
+        base_30 = prices.get('30') if prices else None
+        if base_30 and base_30 > 0:
+            per_month = int(round(price * 30 / period))
+            saving = 100 - (per_month * 100 // base_30)
+            if saving >= 5:
+                price_text = f'{price_text} (−{saving}%)'
+    label = f'📅 {format_period(period)} — {price_text}'
+    if tariff.highlight_period_days is not None and int(tariff.highlight_period_days) == period:
+        return f'{texts.t("TARIFF_PERIOD_BEST_VALUE_BADGE", "⭐ выгодно")} · {label}'
+    return label
 
 
 def get_tariff_periods_keyboard(
@@ -276,15 +303,7 @@ def get_tariff_periods_keyboard(
         else:
             price_text = format_price_kopeks(price)
 
-        # Spofy: компактная экономия для длинных периодов
-        if period >= 60 and price > 0:
-            _base_30 = prices.get('30')
-            if _base_30 and _base_30 > 0:
-                _per_month = int(round(price * 30 / period))
-                _saving = 100 - (_per_month * 100 // _base_30)
-                if _saving >= 5:
-                    price_text = f'{price_text} (-{_saving}%)'
-        button_text = f'📅 {format_period(period)} — {price_text}'
+        button_text = _period_button_text(tariff, period, price, price_text, prices, texts)
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_period:{tariff.id}:{period}')])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
@@ -318,15 +337,7 @@ def get_tariff_periods_keyboard_with_traffic(
         else:
             price_text = format_price_kopeks(price)
 
-        # Spofy: компактная экономия для длинных периодов
-        if period >= 60 and price > 0:
-            _base_30 = prices.get('30')
-            if _base_30 and _base_30 > 0:
-                _per_month = int(round(price * 30 / period))
-                _saving = 100 - (_per_month * 100 // _base_30)
-                if _saving >= 5:
-                    price_text = f'{price_text} (-{_saving}%)'
-        button_text = f'📅 {format_period(period)} — {price_text}'
+        button_text = _period_button_text(tariff, period, price, price_text, prices, texts)
         # Используем другой callback для перехода к настройке трафика
         buttons.append(
             [InlineKeyboardButton(text=button_text, callback_data=f'tariff_period_traffic:{tariff.id}:{period}')]
@@ -361,9 +372,9 @@ def get_tariff_confirm_keyboard(
         # Цена на кнопке — всегда ПОЛНАЯ (без скидок): подписка Platega спишет
         # базовую цену периода, поэтому при активной скидке кнопка скрыта.
         if sbp_price_kopeks:
-            sbp_label = texts.t(
-                'SBP_PURCHASE_BUTTON_PRICED', '⚡ Оплатить {price} — дальше каждые {period}'
-            ).format(price=format_price_kopeks(sbp_price_kopeks), period=format_period(period))
+            sbp_label = texts.t('SBP_PURCHASE_BUTTON_PRICED', '⚡ Оплатить {price} — дальше каждые {period}').format(
+                price=format_price_kopeks(sbp_price_kopeks), period=format_period(period)
+            )
         else:
             sbp_label = texts.t('SBP_PURCHASE_BUTTON', '⚡ Оплатить с автопродлением (СБП)')
         buttons.append(
@@ -380,6 +391,15 @@ def get_tariff_confirm_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('LAVA_PURCHASE_BUTTON', '💳 Автооплата картой (Lava)'),
                     callback_data=f'tariff_lava:{tariff_id}',
+                )
+            ]
+        )
+    if settings.is_cashera_recurrent_enabled():
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('CASHERA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Cashera'),
+                    callback_data=f'tariff_cashera:{tariff_id}',
                 )
             ]
         )
@@ -543,6 +563,15 @@ def _sbp_purchase_rows(tariff_id: int, texts, period_days: int | None = None) ->
                 )
             ]
         )
+    if settings.is_cashera_recurrent_enabled():
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('CASHERA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Cashera'),
+                    callback_data=f'tariff_cashera:{tariff_id}',
+                )
+            ]
+        )
     return rows
 
 
@@ -567,7 +596,7 @@ async def _append_sbp_recurring_offer(db, subscription, tariff, texts, rows: lis
             return rows
         # Не показываем оффер, если каденс невыразим в Platega (например,
         # «вечный» тариф на 2222 дня): клик завершился бы ошибкой.
-        from app.services.monitoring_service import resolve_autopay_period_candidate
+        from app.services.autopay_period import resolve_autopay_period_candidate
         from app.services.platega_recurrent import resolve_platega_cadence
 
         _offer_period = (
@@ -652,6 +681,15 @@ def get_daily_tariff_confirm_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('LAVA_PURCHASE_BUTTON', '💳 Автооплата картой (Lava)'),
                     callback_data=f'tariff_lava:{tariff_id}',
+                )
+            ]
+        )
+    if settings.is_cashera_recurrent_enabled():
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('CASHERA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Cashera'),
+                    callback_data=f'tariff_cashera:{tariff_id}',
                 )
             ]
         )
@@ -747,7 +785,9 @@ def get_custom_tariff_keyboard(
                     InlineKeyboardButton(text='-100', callback_data=f'custom_traffic:{tariff_id}:-100')
                 )
             if traffic_gb - 10 >= min_traffic:
-                traffic_minus_row.append(InlineKeyboardButton(text='-10', callback_data=f'custom_traffic:{tariff_id}:-10'))
+                traffic_minus_row.append(
+                    InlineKeyboardButton(text='-10', callback_data=f'custom_traffic:{tariff_id}:-10')
+                )
             traffic_minus_row.append(InlineKeyboardButton(text='-1', callback_data=f'custom_traffic:{tariff_id}:-1'))
         if traffic_minus_row:
             buttons.append(traffic_minus_row)
@@ -757,9 +797,13 @@ def get_custom_tariff_keyboard(
         if traffic_gb < max_traffic:
             traffic_plus_row.append(InlineKeyboardButton(text='+1', callback_data=f'custom_traffic:{tariff_id}:1'))
             if traffic_gb + 10 <= max_traffic:
-                traffic_plus_row.append(InlineKeyboardButton(text='+10', callback_data=f'custom_traffic:{tariff_id}:10'))
+                traffic_plus_row.append(
+                    InlineKeyboardButton(text='+10', callback_data=f'custom_traffic:{tariff_id}:10')
+                )
             if traffic_gb + 100 <= max_traffic:
-                traffic_plus_row.append(InlineKeyboardButton(text='+100', callback_data=f'custom_traffic:{tariff_id}:100'))
+                traffic_plus_row.append(
+                    InlineKeyboardButton(text='+100', callback_data=f'custom_traffic:{tariff_id}:100')
+                )
         if traffic_plus_row:
             buttons.append(traffic_plus_row)
 
@@ -1825,7 +1869,9 @@ async def select_tariff_period(
             ),
             # Скидка на экране («Итого: 216 ₽») — кнопку автооплаты прячем:
             # подписка Platega спишет полную цену, а не скидочную.
-            reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language, show_sbp=total_discount <= 0, sbp_price_kopeks=original_price),
+            reply_markup=get_tariff_confirm_keyboard(
+                tariff_id, period, db_user.language, show_sbp=total_discount <= 0, sbp_price_kopeks=original_price
+            ),
             parse_mode='HTML',
         )
     else:
@@ -2705,24 +2751,10 @@ def get_tariff_extend_keyboard(
         subtotal = discounted_base + discounted_devices
         price = PricingEngine.apply_discount(subtotal, offer_pct)
 
-        # Combined display discount
-        total_original = base_price + devices_cost
-        has_discount = price < total_original and total_original > 0
-        if has_discount:
-            combined_pct = round((1 - price / total_original) * 100)
-            price_text = format_price_kopeks(price)  # Spofy: компактная цена периода
-        else:
-            price_text = format_price_kopeks(price)
+        # Spofy: компактная цена периода — размер скидки показан в шапке экрана
+        price_text = format_price_kopeks(price)
 
-        # Spofy: компактная экономия для длинных периодов
-        if period >= 60 and price > 0:
-            _base_30 = prices.get('30')
-            if _base_30 and _base_30 > 0:
-                _per_month = int(round(price * 30 / period))
-                _saving = 100 - (_per_month * 100 // _base_30)
-                if _saving >= 5:
-                    price_text = f'{price_text} (-{_saving}%)'
-        button_text = f'📅 {format_period(period)} — {price_text}'
+        button_text = _period_button_text(tariff, period, price, price_text, prices, texts)
         # subscription_id ОБЯЗАН быть первым сегментом: иначе резолвер по callback
         # принял бы хвостовой {period} за subscription_id (см. issue #3012 —
         # период совпадал с id чужой подписки и продлевалась не та подписка).
@@ -2740,7 +2772,9 @@ def get_tariff_extend_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-async def _sbp_renew_recurring_rows(db, subscription, tariff, period, texts, price_kopeks) -> list[list[InlineKeyboardButton]]:
+async def _sbp_renew_recurring_rows(
+    db, subscription, tariff, period, texts, price_kopeks
+) -> list[list[InlineKeyboardButton]]:
     """Ряд «⚡ Оплатить N — дальше каждые P» для продления существующей подписки.
 
     Первое списание Platega = подтверждение привязки в банке (= оплата этого
@@ -3085,7 +3119,17 @@ async def select_tariff_extend_period(
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - final_price),
             ),
-            reply_markup=await get_tariff_extend_confirm_keyboard(subscription.id, tariff_id, period, db_user.language, db=db, subscription=subscription, tariff=tariff, sbp_price_kopeks=original_price, show_sbp=total_discount <= 0),
+            reply_markup=await get_tariff_extend_confirm_keyboard(
+                subscription.id,
+                tariff_id,
+                period,
+                db_user.language,
+                db=db,
+                subscription=subscription,
+                tariff=tariff,
+                sbp_price_kopeks=original_price,
+                show_sbp=total_discount <= 0,
+            ),
             parse_mode='HTML',
         )
     else:
@@ -3513,15 +3557,7 @@ def get_tariff_switch_periods_keyboard(
         else:
             price_text = format_price_kopeks(price)
 
-        # Spofy: компактная экономия для длинных периодов
-        if period >= 60 and price > 0:
-            _base_30 = prices.get('30')
-            if _base_30 and _base_30 > 0:
-                _per_month = int(round(price * 30 / period))
-                _saving = 100 - (_per_month * 100 // _base_30)
-                if _saving >= 5:
-                    price_text = f'{price_text} (-{_saving}%)'
-        button_text = f'📅 {format_period(period)} — {price_text}'
+        button_text = _period_button_text(tariff, period, price, price_text, prices, texts)
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_sw_period:{tariff.id}:{period}')])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_switch')])
@@ -4256,7 +4292,8 @@ async def confirm_tariff_switch(
                 devices=tariff.device_limit,
                 price=format_price_kopeks(final_price),
                 time_info=time_info,
-            ) + _sw_recurring_note,
+            )
+            + _sw_recurring_note,
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=await _append_sbp_recurring_offer(
                     db,
@@ -4569,7 +4606,8 @@ async def confirm_daily_tariff_switch(
                 traffic=traffic,
                 devices=tariff.device_limit,
                 price=format_price_kopeks(final_daily_price),
-            ) + _sw_recurring_note,
+            )
+            + _sw_recurring_note,
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=await _append_sbp_recurring_offer(
                     db,
@@ -4986,9 +5024,7 @@ async def preview_instant_switch(
     # Эффективные значения: у пользователя могут быть докупленные устройства
     # и трафик — показываем их, а не голую базу тарифа (баг «у меня 4
     # устройства, а в превью 3»).
-    current_traffic = format_traffic(
-        subscription.traffic_limit_gb if subscription else current_tariff.traffic_limit_gb
-    )
+    current_traffic = format_traffic(subscription.traffic_limit_gb if subscription else current_tariff.traffic_limit_gb)
     from app.database.crud.subscription import calc_device_limit_on_tariff_switch as _calc_sw_devices
 
     effective_new_devices = _calc_sw_devices(
@@ -5071,7 +5107,8 @@ async def preview_instant_switch(
                     discount=discount_text,
                     balance=format_price_kopeks(user_balance),
                     warning=daily_warning,
-                ) + addons_note,
+                )
+                + addons_note,
                 reply_markup=get_instant_switch_confirm_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
             )
@@ -5146,7 +5183,9 @@ async def preview_instant_switch(
                     cost=format_price_kopeks(upgrade_cost),
                     balance=format_price_kopeks(user_balance),
                     after=format_price_kopeks(user_balance - upgrade_cost),
-                ) + full_price_note + addons_note,
+                )
+                + full_price_note
+                + addons_note,
                 reply_markup=get_instant_switch_confirm_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
             )
@@ -5165,7 +5204,8 @@ async def preview_instant_switch(
                     cost=format_price_kopeks(upgrade_cost),
                     balance=format_price_kopeks(user_balance),
                     missing=format_price_kopeks(missing),
-                ) + full_price_note,
+                )
+                + full_price_note,
                 reply_markup=get_instant_switch_insufficient_balance_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
             )
@@ -5191,7 +5231,8 @@ async def preview_instant_switch(
                 traffic=traffic,
                 devices=effective_new_devices,
                 days=remaining_days,
-            ) + addons_note,
+            )
+            + addons_note,
             reply_markup=get_instant_switch_confirm_keyboard(tariff_id, db_user.language),
             parse_mode='HTML',
         )
@@ -5274,6 +5315,59 @@ async def purchase_tariff_with_lava(
     if redirect_url:
         buttons.append(
             [InlineKeyboardButton(text=texts.t('LAVA_RECURRING_PAY_BUTTON', '💳 Оплатить'), url=redirect_url)]
+        )
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
+
+    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
+
+@error_handler
+async def purchase_tariff_with_cashera(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    """Оформление подписки на тариф через автопродление Cashera.
+
+    Зеркало ``purchase_tariff_with_lava``: клиент подтверждает подписку по ссылке
+    Cashera, первое списание оживляет подписку (для нового тарифа — заготовка).
+    Каденс — по периоду тарифа, как у Platega.
+    """
+    texts = get_texts(db_user.language)
+    tariff_id = int(callback.data.split(':')[1])
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not tariff.is_active:
+        await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
+        return
+
+    from app.services.payment.cashera import purchase_tariff_with_cashera_recurring
+
+    try:
+        result = await purchase_tariff_with_cashera_recurring(db, user=db_user, tariff=tariff)
+    except ValueError as error:
+        await callback.answer(str(error), show_alert=True)
+        return
+    except Exception:
+        await callback.answer(
+            texts.t(
+                'CASHERA_RECURRING_ENABLE_ERROR', '❌ Не удалось подключить автопродление Cashera. Попробуйте позже.'
+            ),
+            show_alert=True,
+        )
+        return
+
+    redirect_url = result.get('redirect_url')
+    text = texts.t(
+        'CASHERA_RECURRING_ENABLE_SUCCESS',
+        '⚡ <b>Автопродление Cashera</b>\n\nПодтвердите автосписания по кнопке ниже.\n'
+        'После подтверждения и первого списания подписка продлится автоматически.',
+    )
+
+    buttons = []
+    if redirect_url:
+        buttons.append(
+            [InlineKeyboardButton(text=texts.t('CASHERA_RECURRING_PAY_BUTTON', '💳 Подтвердить'), url=redirect_url)]
         )
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
 
@@ -5925,7 +6019,13 @@ async def return_to_saved_tariff_cart(
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - total_price),
             ),
-            reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language, show_sbp=discount_percent <= 0, sbp_price_kopeks=original_price if discount_percent > 0 else total_price),
+            reply_markup=get_tariff_confirm_keyboard(
+                tariff_id,
+                period,
+                db_user.language,
+                show_sbp=discount_percent <= 0,
+                sbp_price_kopeks=original_price if discount_percent > 0 else total_price,
+            ),
             parse_mode='HTML',
         )
 
@@ -6046,6 +6146,7 @@ def register_tariff_purchase_handlers(dp: Dispatcher):
     # Оформление через СБП-автопродление Platega (альтернатива балансу)
     dp.callback_query.register(purchase_tariff_with_sbp, F.data.startswith('tariff_sbp:'))
     dp.callback_query.register(purchase_tariff_with_lava, F.data.startswith('tariff_lava:'))
+    dp.callback_query.register(purchase_tariff_with_cashera, F.data.startswith('tariff_cashera:'))
 
     # Подтверждение покупки суточного тарифа
     dp.callback_query.register(confirm_daily_tariff_purchase, F.data.startswith('daily_tariff_confirm:'))

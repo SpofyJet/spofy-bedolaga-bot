@@ -75,9 +75,7 @@ _TRIAL_HOURS_TOTAL = int(getattr(settings, 'TRIAL_DURATION_DAYS', 3)) * 24
 _FUNNEL_COOLDOWN_H = int(getattr(settings, 'FUNNEL_GLOBAL_COOLDOWN_HOURS', 20))
 _ENDING_LEAD_H = int(getattr(settings, 'FUNNEL_TRIAL_ENDING_LEAD_HOURS', 24))
 _LATEST_OK_HOURS = _TRIAL_HOURS_TOTAL - _ENDING_LEAD_H - _FUNNEL_COOLDOWN_H
-_ACTIVE_TRIAL_HOURS_DEFAULT = (
-    min(round(_TRIAL_HOURS_TOTAL * 0.6), _LATEST_OK_HOURS) if _LATEST_OK_HOURS >= 12 else 0
-)
+_ACTIVE_TRIAL_HOURS_DEFAULT = min(round(_TRIAL_HOURS_TOTAL * 0.6), _LATEST_OK_HOURS) if _LATEST_OK_HOURS >= 12 else 0
 ACTIVE_TRIAL_NUDGE_HOURS = int(getattr(settings, 'FUNNEL_ACTIVE_TRIAL_HOURS', _ACTIVE_TRIAL_HOURS_DEFAULT))
 ACTIVE_TRIAL_NUDGE_WINDOW_HOURS = int(
     getattr(settings, 'FUNNEL_ACTIVE_TRIAL_WINDOW_HOURS', ACTIVE_TRIAL_NUDGE_HOURS + 24)
@@ -148,7 +146,7 @@ async def _resolve_trial_days(db: AsyncSession) -> int:
                     trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
             if trial_tariff and getattr(trial_tariff, 'trial_duration_days', None):
                 days = trial_tariff.trial_duration_days
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             logger.debug('Не удалось получить триальный тариф для funnel', error=str(error))
     return days
 
@@ -176,19 +174,19 @@ class ActivationFunnelService:
             await self._nudge_abandoned_topup(db)
             await self._nudge_expired_trial(db, EVENT_TRIAL_EXP_1, TRIAL_EXP1_HOURS, TRIAL_EXP1_PERCENT, wave=1)
             await self._nudge_expired_trial(db, EVENT_TRIAL_EXP_2, TRIAL_EXP2_HOURS, TRIAL_EXP2_PERCENT, wave=2)
-        except Exception as error:  # noqa: BLE001 — funnel must never break the cycle
+        except Exception as error:
             logger.error('Ошибка activation funnel', error=error, exc_info=True)
 
     # --- nudge 1 & 2: registered, never had any subscription -------------
 
-    async def _nudge_no_trial(self, db: AsyncSession, event_type: str, after_hours: int, window_hours: int, wave: int) -> None:
+    async def _nudge_no_trial(
+        self, db: AsyncSession, event_type: str, after_hours: int, window_hours: int, wave: int
+    ) -> None:
         now = datetime.now(UTC)
-        upper = now - timedelta(hours=after_hours)        # registered at least N hours ago
-        lower = now - timedelta(hours=window_hours)       # but within the lookback window
+        upper = now - timedelta(hours=after_hours)  # registered at least N hours ago
+        lower = now - timedelta(hours=window_hours)  # but within the lookback window
 
-        has_any_subscription = exists(
-            select(Subscription.id).where(Subscription.user_id == User.id)
-        )
+        has_any_subscription = exists(select(Subscription.id).where(Subscription.user_id == User.id))
 
         result = await db.execute(
             select(User)
@@ -198,11 +196,13 @@ class ActivationFunnelService:
                     User.telegram_id.isnot(None),
                     User.created_at <= upper,
                     User.created_at >= lower,
-                    User.has_had_paid_subscription == False,  # noqa: E712
+                    User.has_had_paid_subscription == False,
                     ~has_any_subscription,
                     ~_event_sent_clause(event_type),
                     # wave 2 only after wave 1 actually went out
-                    _event_sent_clause(EVENT_NO_TRIAL_1, min_age_hours=max(1, NUDGE2_HOURS - NUDGE1_HOURS - 2)) if wave == 2 else True,
+                    _event_sent_clause(EVENT_NO_TRIAL_1, min_age_hours=max(1, NUDGE2_HOURS - NUDGE1_HOURS - 2))
+                    if wave == 2
+                    else True,
                 )
             )
             .limit(BATCH_LIMIT)
@@ -245,7 +245,7 @@ class ActivationFunnelService:
                 sent = await self._send(user.telegram_id, text, reply_markup=keyboard, user=user)
                 if sent is not None:
                     await _record_event(db, user.id, event_type)
-            except Exception as error:  # noqa: BLE001
+            except Exception as error:
                 # Forbidden/blocked etc. — record anyway, do not retry forever
                 logger.debug('Funnel nudge не доставлен', user_id=user.id, error=str(error))
                 await _record_event(db, user.id, event_type)
@@ -265,7 +265,7 @@ class ActivationFunnelService:
             .options(selectinload(Subscription.user))
             .where(
                 and_(
-                    Subscription.is_trial == True,  # noqa: E712
+                    Subscription.is_trial == True,
                     Subscription.status == SubscriptionStatus.ACTIVE.value,
                     func.coalesce(Subscription.traffic_used_gb, 0.0) == 0.0,
                     Subscription.created_at <= activated_before,
@@ -299,7 +299,11 @@ class ActivationFunnelService:
             )
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), callback_data='subscription_connect')],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), callback_data='subscription_connect'
+                        )
+                    ],
                     [InlineKeyboardButton(text=texts.t('MENU_SUPPORT', '🆘 Поддержка'), callback_data='menu_support')],
                 ]
             )
@@ -307,7 +311,7 @@ class ActivationFunnelService:
                 sent = await self._send(user.telegram_id, text, reply_markup=keyboard, user=user)
                 if sent is not None:
                     await _record_event(db, user.id, EVENT_TRIAL_IDLE, subscription.id)
-            except Exception as error:  # noqa: BLE001
+            except Exception as error:
                 logger.debug('Funnel idle-trial nudge не доставлен', user_id=user.id, error=str(error))
                 await _record_event(db, user.id, EVENT_TRIAL_IDLE, subscription.id)
 
@@ -316,7 +320,9 @@ class ActivationFunnelService:
 
     # --- nudge 4 & 5: trial expired, never paid -> discount offer ---------
 
-    async def _nudge_expired_trial(self, db: AsyncSession, event_type: str, after_hours: int, percent: int, wave: int) -> None:
+    async def _nudge_expired_trial(
+        self, db: AsyncSession, event_type: str, after_hours: int, percent: int, wave: int
+    ) -> None:
         now = datetime.now(UTC)
         upper = now - timedelta(hours=after_hours)
         lower = now - timedelta(hours=TRIAL_EXP_WINDOW_HOURS)
@@ -335,16 +341,18 @@ class ActivationFunnelService:
             .options(selectinload(Subscription.user))
             .where(
                 and_(
-                    Subscription.is_trial == True,  # noqa: E712
+                    Subscription.is_trial == True,
                     Subscription.status == SubscriptionStatus.EXPIRED.value,
                     Subscription.end_date <= upper,
                     Subscription.end_date >= lower,
                     User.status == UserStatus.ACTIVE.value,
                     User.telegram_id.isnot(None),
-                    User.has_had_paid_subscription == False,  # noqa: E712
+                    User.has_had_paid_subscription == False,
                     ~has_active_subscription,
                     ~_event_sent_clause(event_type),
-                    _event_sent_clause(EVENT_TRIAL_EXP_1, min_age_hours=max(1, TRIAL_EXP2_HOURS - TRIAL_EXP1_HOURS - 2)) if wave == 2 else True,
+                    _event_sent_clause(EVENT_TRIAL_EXP_1, min_age_hours=max(1, TRIAL_EXP2_HOURS - TRIAL_EXP1_HOURS - 2))
+                    if wave == 2
+                    else True,
                 )
             )
             .limit(BATCH_LIMIT)
@@ -392,10 +400,17 @@ class ActivationFunnelService:
                     ),
                 )
 
-            text = template.format(percent=percent, expires_at=format_local_datetime(offer.expires_at, '%d.%m.%Y %H:%M'))
+            text = template.format(
+                percent=percent, expires_at=format_local_datetime(offer.expires_at, '%d.%m.%Y %H:%M')
+            )
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text=texts.t('CLAIM_DISCOUNT_BUTTON', '🎁 Забрать скидку'), callback_data=f'claim_discount_{offer.id}')],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('CLAIM_DISCOUNT_BUTTON', '🎁 Забрать скидку'),
+                            callback_data=f'claim_discount_{offer.id}',
+                        )
+                    ],
                     [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
                 ]
             )
@@ -403,13 +418,14 @@ class ActivationFunnelService:
                 sent = await self._send(user.telegram_id, text, reply_markup=keyboard, user=user)
                 if sent is not None:
                     await _record_event(db, user.id, event_type, subscription.id)
-            except Exception as error:  # noqa: BLE001
+            except Exception as error:
                 logger.debug('Funnel trial-expired nudge не доставлен', user_id=user.id, error=str(error))
                 await _record_event(db, user.id, event_type, subscription.id)
 
         if subscriptions:
-            logger.info('🪝 Funnel: отправлены офферы по истёкшему триалу', wave=wave, percent=percent, count=len(subscriptions))
-
+            logger.info(
+                '🪝 Funnel: отправлены офферы по истёкшему триалу', wave=wave, percent=percent, count=len(subscriptions)
+            )
 
     # --- Spofy: last-day in-trial nudge (24h before trial end) ------------
 
@@ -520,10 +536,22 @@ class ActivationFunnelService:
             buttons = []
             if pay_url:
                 buttons.append(
-                    [InlineKeyboardButton(text=texts.t('FUNNEL_ABANDONED_TOPUP_PAY', '💳 Оплатить {amount}₽').format(amount=amount_rub), url=pay_url)]
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('FUNNEL_ABANDONED_TOPUP_PAY', '💳 Оплатить {amount}₽').format(
+                                amount=amount_rub
+                            ),
+                            url=pay_url,
+                        )
+                    ]
                 )
             buttons.append(
-                [InlineKeyboardButton(text=texts.t('FUNNEL_ABANDONED_TOPUP_OTHER', '🔄 Другой способ оплаты'), callback_data='balance_topup')]
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('FUNNEL_ABANDONED_TOPUP_OTHER', '🔄 Другой способ оплаты'),
+                        callback_data='balance_topup',
+                    )
+                ]
             )
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -532,7 +560,7 @@ class ActivationFunnelService:
                 if sent is not None:
                     await _record_event(db, user.id, EVENT_ABANDONED_TOPUP)
                     sent_count += 1
-            except Exception as error:  # noqa: BLE001
+            except Exception as error:
                 logger.debug('Funnel abandoned-topup не доставлен', user_id=user.id, error=str(error))
                 await _record_event(db, user.id, EVENT_ABANDONED_TOPUP)
 
@@ -549,13 +577,13 @@ class ActivationFunnelService:
             .options(selectinload(Subscription.user))
             .where(
                 and_(
-                    Subscription.is_trial == True,  # noqa: E712
+                    Subscription.is_trial == True,
                     Subscription.status == SubscriptionStatus.ACTIVE.value,
                     Subscription.end_date <= soon,
                     Subscription.end_date > floor,
                     User.status == UserStatus.ACTIVE.value,
                     User.telegram_id.isnot(None),
-                    User.has_had_paid_subscription == False,  # noqa: E712
+                    User.has_had_paid_subscription == False,
                     ~_event_sent_clause(EVENT_TRIAL_ENDING),
                 )
             )
@@ -590,7 +618,7 @@ class ActivationFunnelService:
                 sent = await self._send(user.telegram_id, text, reply_markup=keyboard, user=user)
                 if sent is not None:
                     await _record_event(db, user.id, EVENT_TRIAL_ENDING, subscription.id)
-            except Exception as error:  # noqa: BLE001
+            except Exception as error:
                 logger.debug('Funnel trial-ending nudge не доставлен', user_id=user.id, error=str(error))
                 await _record_event(db, user.id, EVENT_TRIAL_ENDING, subscription.id)
 
@@ -608,7 +636,7 @@ class ActivationFunnelService:
             .options(selectinload(Subscription.user))
             .where(
                 and_(
-                    Subscription.is_trial == True,  # noqa: E712
+                    Subscription.is_trial == True,
                     Subscription.status == SubscriptionStatus.ACTIVE.value,
                     func.coalesce(Subscription.traffic_used_gb, 0.0) == 0.0,
                     Subscription.created_at <= activated_before,
@@ -640,7 +668,11 @@ class ActivationFunnelService:
             )
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), callback_data='subscription_connect')],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), callback_data='subscription_connect'
+                        )
+                    ],
                     [InlineKeyboardButton(text=texts.t('MENU_SUPPORT', '🆘 Поддержка'), callback_data='menu_support')],
                 ]
             )
@@ -648,7 +680,7 @@ class ActivationFunnelService:
                 sent = await self._send(user.telegram_id, text, reply_markup=keyboard, user=user)
                 if sent is not None:
                     await _record_event(db, user.id, EVENT_TRIAL_IDLE_2, subscription.id)
-            except Exception as error:  # noqa: BLE001
+            except Exception as error:
                 logger.debug('Funnel idle-trial-2 nudge не доставлен', user_id=user.id, error=str(error))
                 await _record_event(db, user.id, EVENT_TRIAL_IDLE_2, subscription.id)
 
@@ -671,7 +703,7 @@ class ActivationFunnelService:
             .options(selectinload(Subscription.user))
             .where(
                 and_(
-                    Subscription.is_trial == True,  # noqa: E712
+                    Subscription.is_trial == True,
                     Subscription.status == SubscriptionStatus.ACTIVE.value,
                     or_(
                         Subscription.traffic_used_gb > 0.0,
@@ -682,7 +714,7 @@ class ActivationFunnelService:
                     Subscription.end_date > now,
                     User.status == UserStatus.ACTIVE.value,
                     User.telegram_id.isnot(None),
-                    User.has_had_paid_subscription == False,  # noqa: E712
+                    User.has_had_paid_subscription == False,
                     ~_event_sent_clause(EVENT_ACTIVE_TRIAL),
                 )
             )
@@ -722,7 +754,7 @@ class ActivationFunnelService:
                 sent = await self._send(user.telegram_id, text, reply_markup=keyboard, user=user)
                 if sent is not None:
                     await _record_event(db, user.id, EVENT_ACTIVE_TRIAL, subscription.id)
-            except Exception as error:  # noqa: BLE001
+            except Exception as error:
                 logger.debug('Funnel active-trial nudge не доставлен', user_id=user.id, error=str(error))
                 await _record_event(db, user.id, EVENT_ACTIVE_TRIAL, subscription.id)
 

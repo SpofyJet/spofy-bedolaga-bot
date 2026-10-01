@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:15-alpine@sha256:09e4f20b14ddb3dfe3a0c825b206032aaf8f28300ba2070c0b60fc1c10c6abc7
+    image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     container_name: remnawave_bot_db
     restart: unless-stopped
     environment:
@@ -8,8 +8,18 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-remnawave_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_123}
       POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    # Сторож: при пустом томе 18 и данных 15 в старом томе PostgreSQL не стартует
+    # и просит выполнить `make pg-upgrade` — вместо молчаливой пустой базы.
+    entrypoint: ['/bin/sh', '/usr/local/bin/pg-upgrade-guard.sh']
+    command: ['postgres']
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # С PostgreSQL 18 образ хранит данные в /var/lib/postgresql/18/docker —
+      # том монтируется в /var/lib/postgresql, а не в .../data, как раньше.
+      - postgres18_data:/var/lib/postgresql
+      # Том PostgreSQL 15 — только на чтение и только для сторожа. После переноса
+      # (make pg-upgrade) его можно удалить; см. docs/postgresql-18-upgrade.md.
+      - postgres_data:/mnt/pg-legacy-data:ro
+      - ./docker/postgres/pg-upgrade-guard.sh:/usr/local/bin/pg-upgrade-guard.sh:ro
     networks:
       - bot_network
     healthcheck:
@@ -24,7 +34,7 @@ services:
       start_period: 30s
 
   redis:
-    image: redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     container_name: remnawave_bot_redis
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
@@ -92,6 +102,8 @@ services:
       start_period: 30s
 
 volumes:
+  postgres18_data:
+    driver: local
   postgres_data:
     driver: local
   redis_data:

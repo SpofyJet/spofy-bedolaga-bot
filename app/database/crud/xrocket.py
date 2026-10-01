@@ -53,9 +53,7 @@ async def create_xrocket_payment(
 
 async def get_xrocket_payment_by_invoice_id(db: AsyncSession, invoice_id: str) -> XRocketPayment | None:
     result = await db.execute(
-        select(XRocketPayment)
-        .options(selectinload(XRocketPayment.user))
-        .where(XRocketPayment.invoice_id == invoice_id)
+        select(XRocketPayment).options(selectinload(XRocketPayment.user)).where(XRocketPayment.invoice_id == invoice_id)
     )
     return result.scalar_one_or_none()
 

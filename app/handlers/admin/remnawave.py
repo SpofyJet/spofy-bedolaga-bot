@@ -15,6 +15,11 @@ from app.database.crud.server_squad import (
     get_server_squad_by_uuid,
 )
 from app.database.models import User
+from app.external.remnawave_api import (
+    INTERNAL_SQUAD_NAME_MAX_LENGTH,
+    INTERNAL_SQUAD_NAME_MIN_LENGTH,
+    is_valid_internal_squad_name,
+)
 from app.keyboards.admin import (
     get_admin_remnawave_keyboard,
     get_node_management_keyboard,
@@ -1715,15 +1720,11 @@ async def process_squad_new_name(message: types.Message, db_user: User, db: Asyn
         await message.answer('❌ Название не может быть пустым. Попробуйте еще раз:')
         return
 
-    if len(new_name) < 2 or len(new_name) > 20:
-        await message.answer('❌ Название должно быть от 2 до 20 символов. Попробуйте еще раз:')
-        return
-
-    import re
-
-    if not re.match(r'^[A-Za-z0-9_-]+$', new_name):
+    # Правила панели (POST/PATCH /api/internal-squads): иначе она ответит 400.
+    if not is_valid_internal_squad_name(new_name):
         await message.answer(
-            '❌ Название может содержать только буквы, цифры, дефисы и подчеркивания. Попробуйте еще раз:'
+            f'❌ Название: от {INTERNAL_SQUAD_NAME_MIN_LENGTH} до {INTERNAL_SQUAD_NAME_MAX_LENGTH} символов, '
+            'только латиница, цифры, пробел, дефис и подчёркивание. Попробуйте еще раз:'
         )
         return
 
@@ -1947,15 +1948,11 @@ async def process_squad_name(message: types.Message, db_user: User, db: AsyncSes
         await message.answer('❌ Название не может быть пустым. Попробуйте еще раз:')
         return
 
-    if len(squad_name) < 2 or len(squad_name) > 20:
-        await message.answer('❌ Название должно быть от 2 до 20 символов. Попробуйте еще раз:')
-        return
-
-    import re
-
-    if not re.match(r'^[A-Za-z0-9_-]+$', squad_name):
+    # Правила панели (POST/PATCH /api/internal-squads): иначе она ответит 400.
+    if not is_valid_internal_squad_name(squad_name):
         await message.answer(
-            '❌ Название может содержать только буквы, цифры, дефисы и подчеркивания. Попробуйте еще раз:'
+            f'❌ Название: от {INTERNAL_SQUAD_NAME_MIN_LENGTH} до {INTERNAL_SQUAD_NAME_MAX_LENGTH} символов, '
+            'только латиница, цифры, пробел, дефис и подчёркивание. Попробуйте еще раз:'
         )
         return
 
@@ -2482,28 +2479,28 @@ async def save_auto_sync_schedule(
 async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     """Выполняет полную синхронизацию всех пользователей"""
 
-    progress_text = """
-🔄 <b>Выполняется полная синхронизация...</b>
-
-📋 Этапы:
-• Загрузка ВСЕХ пользователей из панели Remnawave
-• Создание новых пользователей в боте
-• Обновление существующих пользователей
-• Деактивация подписок отсутствующих пользователей
-• Сохранение балансов
-
-⏳ Пожалуйста, подождите...
-"""
-
     # Проход идёт десятки минут; повторное нажатие не должно запускать второй
     # проход параллельно первому (двойная нагрузка на панель и её лимит частоты).
     if is_full_sync_running():
         await callback.answer('⏳ Полная синхронизация уже выполняется — дождитесь её окончания', show_alert=True)
         return
 
+    progress_text = """
+🔄 <b>Выполняется полная синхронизация...</b>
+
+📋 Этапы:
+• Из панели в бота: загрузка ВСЕХ пользователей панели, создание и обновление,
+  деактивация подписок отсутствующих (балансы сохраняются)
+• Из бота в панель: статусы, даты, сквады и теги тарифов всех подписок
+• Серверы: сквады панели → серверы бота
+
+⏳ Пожалуйста, подождите...
+"""
+
     await callback.message.edit_text(progress_text, reply_markup=None)
 
     remnawave_service = RemnaWaveService()
+    # Одна функция на бота, кабинет и расписание: из панели в бота → серверы.
     try:
         stats, server_stats = await perform_full_sync(db, remnawave_service)
     except FullSyncAlreadyRunning:
@@ -2515,13 +2512,13 @@ async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: Async
         )
         await callback.answer()
         return
-
+    errors_total = stats['errors']
     total_operations = stats['created'] + stats['updated'] + stats.get('deleted', 0)
 
-    if stats['errors'] == 0:
+    if errors_total == 0:
         status_emoji = '✅'
         status_text = 'успешно завершена'
-    elif stats['errors'] < total_operations:
+    elif errors_total < total_operations:
         status_emoji = '⚠️'
         status_text = 'завершена с предупреждениями'
     else:
@@ -2531,11 +2528,14 @@ async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: Async
     text = f"""
 {status_emoji} <b>Полная синхронизация {status_text}</b>
 
-📊 <b>Результат:</b>
+⬇️ <b>Из панели в бота:</b>
 • 🆕 Создано: {stats['created']}
 • 🔄 Обновлено: {stats['updated']}
 • 🗑️ Деактивировано: {stats.get('deleted', 0)}
 • ❌ Ошибок: {stats['errors']}
+
+🌐 <b>Серверы:</b> создано {server_stats.get('created', 0)}, обновлено {server_stats.get('updated', 0)}, \
+удалено {server_stats.get('removed', 0)} из {server_stats.get('total', 0)}
 """
 
     if stats.get('deleted', 0) > 0:
@@ -2547,7 +2547,7 @@ async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: Async
 💰 Балансы пользователей сохранены.
 """
 
-    if stats['errors'] > 0:
+    if errors_total > 0:
         text += """
 
 ⚠️ <b>Внимание:</b>
@@ -2557,15 +2557,15 @@ async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: Async
 
     text += """
 
-💡 <b>Рекомендации:</b>
-• Полная синхронизация выполнена
-• Рекомендуется запускать раз в день
-• Все пользователи из панели синхронизированы
+💡 <b>Как это работает:</b>
+• Панель — источник истины: бот забрал из неё сроки, статусы и лимиты
+• В панель бот пишет только при покупке, продлении и действиях админа
+• По расписанию выполняется эта же синхронизация
 """
 
     keyboard = []
 
-    if stats['errors'] > 0:
+    if errors_total > 0:
         keyboard.append([types.InlineKeyboardButton(text='🔄 Повторить синхронизацию', callback_data='sync_all_users')])
 
     keyboard.extend(

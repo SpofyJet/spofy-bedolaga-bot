@@ -22,10 +22,24 @@ logger = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
+class RemnaWaveAutoSyncStatus:
+    enabled: bool
+    times: list[time]
+    next_run: datetime | None
+    last_run_started_at: datetime | None
+    last_run_finished_at: datetime | None
+    last_run_success: bool | None
+    last_run_reason: str | None
+    last_run_error: str | None
+    last_user_stats: dict[str, Any] | None
+    last_server_stats: dict[str, Any] | None
+    is_running: bool
+
+
 class FullSyncAlreadyRunning(RuntimeError):
     """Полная синхронизация уже идёт — второй проход параллельно не запускаем.
 
-    Проход по тысячам подписок идёт десятки минут; запрос из кабинета
+    Проход «в панель» по тысячам подписок идёт десятки минут; запрос из кабинета
     отваливается по таймауту и показывает ошибку, оператор жмёт ещё раз — и второй
     проход удваивал нагрузку на панель и ловил её лимит частоты. Замок один на
     все поверхности: бот, кабинет, расписание.
@@ -40,21 +54,6 @@ _full_sync_lock = asyncio.Lock()
 
 def is_full_sync_running() -> bool:
     return _full_sync_lock.locked()
-
-
-@dataclass(frozen=True)
-class RemnaWaveAutoSyncStatus:
-    enabled: bool
-    times: list[time]
-    next_run: datetime | None
-    last_run_started_at: datetime | None
-    last_run_finished_at: datetime | None
-    last_run_success: bool | None
-    last_run_reason: str | None
-    last_run_error: str | None
-    last_user_stats: dict[str, Any] | None
-    last_server_stats: dict[str, Any] | None
-    is_running: bool
 
 
 class RemnaWaveAutoSyncService:
@@ -247,40 +246,8 @@ class RemnaWaveAutoSyncService:
         if not service.is_configured:
             raise RemnaWaveConfigurationError(service.configuration_error or 'RemnaWave API не настроен')
 
-        # Расписание делит замок с ручными запусками из бота/кабинета.
-        if _full_sync_lock.locked():
-            raise FullSyncAlreadyRunning
-        async with _full_sync_lock:
-            async with AsyncSessionLocal() as session:
-                user_stats = await service.sync_users_from_panel(session, 'all')
-                server_stats = await self._sync_servers(session, service)
-
-        return user_stats, server_stats
-
-    async def _sync_servers(
-        self,
-        session: AsyncSession,
-        service: RemnaWaveService,
-    ) -> dict[str, Any]:
-        squads = await service.get_all_squads()
-
-        if not squads:
-            logger.warning('⚠️ Не удалось получить сквады из RemnaWave для автосинхронизации')
-            return {'created': 0, 'updated': 0, 'removed': 0, 'total': 0}
-
-        created, updated, removed = await sync_with_remnawave(session, squads)
-
-        try:
-            await cache.delete_pattern('available_countries*')
-        except Exception as error:
-            logger.warning('⚠️ Не удалось очистить кеш стран после автосинхронизации', error=error)
-
-        return {
-            'created': created,
-            'updated': updated,
-            'removed': removed,
-            'total': len(squads),
-        }
+        async with AsyncSessionLocal() as session:
+            return await perform_full_sync(session, service)
 
     @staticmethod
     def _calculate_next_run(times: list[time], reference: datetime | None = None) -> datetime:
@@ -288,18 +255,45 @@ class RemnaWaveAutoSyncService:
         return next_local_wall_clock(times, reference)
 
 
-async def perform_full_sync(session: AsyncSession, service: 'RemnaWaveService') -> tuple[dict[str, Any], dict[str, Any]]:
-    """Полная синхронизация из бота и кабинета: импорт из панели + серверы.
+async def perform_full_sync(session: AsyncSession, service: RemnaWaveService) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Полная синхронизация — одна для бота, кабинета и расписания.
 
-    Экспорт «в панель» остаётся отдельным действием (своя кнопка и роут) — как и
-    было в проде; здесь только замок против параллельного второго прохода.
+    Панель — истина (решение владельца 2026-09-11): «синхронизация = из панели в
+    бота». Два шага: пользователи из панели в бота, серверы из панели. В панель
+    отсюда не уезжает ничего — туда бот пишет только при покупке, продлении и
+    явных действиях админа; кнопка «из бота в панель» остаётся отдельной ручной
+    командой на крайний случай. До этого «полная» после чтения ещё и переписывала
+    панель состоянием бота, и правка руками в панели жила до ближайшего прохода.
     """
     if _full_sync_lock.locked():
         raise FullSyncAlreadyRunning
     async with _full_sync_lock:
         user_stats = dict(await service.sync_users_from_panel(session, 'all'))
-        server_stats = await remnawave_sync_service._sync_servers(session, service)
-    return user_stats, server_stats
+        server_stats = await sync_servers_from_panel(session, service)
+        return user_stats, server_stats
+
+
+async def sync_servers_from_panel(session: AsyncSession, service: RemnaWaveService) -> dict[str, Any]:
+    """Сквады панели → серверы бота; кеш стран сбрасывается."""
+    squads = await service.get_all_squads()
+
+    if not squads:
+        logger.warning('⚠️ Не удалось получить сквады из RemnaWave для синхронизации серверов')
+        return {'created': 0, 'updated': 0, 'removed': 0, 'total': 0}
+
+    created, updated, removed = await sync_with_remnawave(session, squads)
+
+    try:
+        await cache.delete_pattern('available_countries*')
+    except Exception as error:
+        logger.warning('⚠️ Не удалось очистить кеш стран после синхронизации серверов', error=error)
+
+    return {
+        'created': created,
+        'updated': updated,
+        'removed': removed,
+        'total': len(squads),
+    }
 
 
 def _create_service() -> RemnaWaveAutoSyncService:

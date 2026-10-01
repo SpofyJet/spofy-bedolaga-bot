@@ -1,6 +1,7 @@
 """Admin routes for managing email notification templates."""
 
 import asyncio
+import re
 from typing import Any
 
 import structlog
@@ -22,6 +23,8 @@ from ..services.email_layout import (
 )
 from ..services.email_template_overrides import (
     COMMON_CONTEXT_VARS,
+    LEGACY_PLACEHOLDER_ALIASES,
+    apply_legacy_aliases,
     build_common_context,
     delete_template_override,
     get_all_overrides,
@@ -109,6 +112,29 @@ def _webhook_sample_contexts() -> dict[str, dict[str, Any]]:
 
 
 TEMPLATE_TYPES = [
+    {
+        'type': 'promo_group_auto_assigned',
+        'label': {
+            'ru': 'Назначена промогруппа',
+            'en': 'Promo group assigned',
+            'zh': '已分配促销组',
+            'ua': 'Призначено промогрупу',
+        },
+        'description': {
+            'ru': 'Промогруппа назначена автоматически за сумму трат — какие скидки теперь действуют',
+            'en': 'A promo group was assigned automatically for total spending — which discounts now apply',
+            'zh': '根据消费总额自动分配了促销组——现在适用哪些折扣',
+            'ua': 'Промогрупу призначено автоматично за суму витрат — які знижки тепер діють',
+        },
+        'context_vars': [
+            'group_name',
+            'total_spent',
+            'period_discounts',
+            'server_discount',
+            'traffic_discount',
+            'device_discount',
+        ],
+    },
     {
         'type': 'grace_access_granted',
         'label': {
@@ -420,6 +446,22 @@ TEMPLATE_TYPES = [
         'context_vars': ['referral_name'],
     },
     {
+        'type': 'referral_welcome',
+        'label': {
+            'ru': 'Приветствие приглашённого',
+            'en': 'Referral Welcome',
+            'zh': '推荐用户欢迎',
+            'ua': 'Привітання запрошеного',
+        },
+        'description': {
+            'ru': 'Письмо новому пользователю, зарегистрировавшемуся по реферальной ссылке',
+            'en': 'Welcome email to a user who signed up via a referral link',
+            'zh': '通过推荐链接注册的新用户的欢迎邮件',
+            'ua': 'Лист новому користувачу, який зареєструвався за реферальним посиланням',
+        },
+        'context_vars': ['referrer_name', 'bonus_promise'],
+    },
+    {
         'type': 'traffic_reset',
         'label': {'ru': 'Сброс трафика', 'en': 'Traffic Reset', 'zh': '流量重置', 'ua': 'Скидання трафіку'},
         'description': {
@@ -691,6 +733,19 @@ REQUIRED_PLACEHOLDERS: dict[str, list[str]] = {
 }
 
 
+_PLACEHOLDER_RE = re.compile(r'\{([a-z_]+)\}')
+
+
+def _unknown_placeholders(notification_type: str, subject: str, body_html: str) -> list[str]:
+    """Плейсхолдеры, которых бот не подставит: опечатка ушла бы в письмо литералом."""
+    type_meta = _get_type_meta(notification_type) or {}
+    known = set(type_meta.get('context_vars', [])) | set(COMMON_CONTEXT_VARS) | set(LEGACY_PLACEHOLDER_ALIASES)
+    if notification_type == EMAIL_LAYOUT_TYPE:
+        known |= set(LAYOUT_CONTEXT_VARS)
+    used = set(_PLACEHOLDER_RE.findall(subject)) | set(_PLACEHOLDER_RE.findall(body_html))
+    return sorted(used - known)
+
+
 def _missing_required_placeholders(notification_type: str, subject: str, body_html: str) -> list[str]:
     return [
         var
@@ -711,6 +766,14 @@ SAMPLE_LAYOUT_CONTENT = (
 )
 
 SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
+    'promo_group_auto_assigned': {
+        'group_name': 'Продвинутый',
+        'total_spent': '5 000 ₽',
+        'period_discounts': '90 дней — 10%, 180 дней — 15%',
+        'server_discount': 10,
+        'traffic_discount': 5,
+        'device_discount': 0,
+    },
     'grace_access_granted': {
         'allowed': 'Telegram и личный кабинет',
         'hours': 72,
@@ -782,6 +845,7 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
         'level': 2,
     },
     'referral_registered': {'referral_name': 'John'},
+    'referral_welcome': {'referrer_name': 'John', 'bonus_promise': '100.00 ₽ при первом пополнении от 500.00 ₽'},
     'traffic_reset': {'reset_gb': 50, 'current_limit_gb': 100},
     'payment_received': {'formatted_amount': '500.00 ₽', 'amount_rubles': 500, 'payment_method': 'YooKassa'},
     'ticket_reply': {'ticket_id': 42, 'reply_preview': 'Проверьте настройки подключения', 'has_photo': False},
@@ -854,12 +918,18 @@ COMMON_SAMPLE_CONTEXT = {'username': 'John', 'email': 'user@example.com'}
 
 
 def _build_sample_context(notification_type: str) -> dict[str, Any]:
-    """Common (real instance values) + recipient samples + per-type samples."""
-    return {
-        **build_common_context(),
-        **COMMON_SAMPLE_CONTEXT,
-        **SAMPLE_CONTEXTS.get(notification_type, {}),
-    }
+    """Common (real instance values) + recipient samples + per-type samples.
+
+    Старые имена плейсхолдеров подставляются так же, как при отправке, — иначе
+    тестовое письмо показывало «{amount}» литералом там, где боевое работало.
+    """
+    return apply_legacy_aliases(
+        {
+            **build_common_context(),
+            **COMMON_SAMPLE_CONTEXT,
+            **SAMPLE_CONTEXTS.get(notification_type, {}),
+        }
+    )
 
 
 def _get_type_meta(notification_type: str) -> dict[str, Any] | None:
@@ -1089,6 +1159,13 @@ async def update_template(
             detail=f'Invalid language: {language}. Available: {AVAILABLE_LANGUAGES}',
         )
 
+    unknown = _unknown_placeholders(notification_type, data.subject, data.body_html)
+    if unknown:
+        listed = ', '.join(f'{{{var}}}' for var in unknown)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Неизвестные плейсхолдеры: {listed} — бот их не подставит, и они уйдут в письмо как есть',
+        )
     missing = _missing_required_placeholders(notification_type, data.subject, data.body_html)
     if missing:
         listed = ', '.join(f'{{{var}}}' for var in missing)

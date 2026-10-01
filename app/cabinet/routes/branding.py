@@ -18,6 +18,7 @@ from app.cabinet.auth.email_auth_gate import EMAIL_AUTH_ENABLED_KEY, is_email_au
 from app.config import settings
 from app.database.crud.system_setting import get_setting_value
 from app.database.models import SystemSetting, User
+from app.services.gift_purchase_service import GIFT_ENABLED_KEY, is_gift_enabled
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user, require_permission
 from ..utils import app_icon, brand_monogram, favicon_tile
@@ -43,7 +44,6 @@ YANDEX_METRIKA_ID_KEY = 'CABINET_YANDEX_METRIKA_ID'  # Stores counter ID (numeri
 GOOGLE_ADS_ID_KEY = 'CABINET_GOOGLE_ADS_ID'  # Stores conversion ID (e.g. "AW-123456789")
 GOOGLE_ADS_LABEL_KEY = 'CABINET_GOOGLE_ADS_LABEL'  # Stores conversion label (alphanumeric)
 LITE_MODE_ENABLED_KEY = 'CABINET_LITE_MODE_ENABLED'  # Stores "true" or "false"
-GIFT_ENABLED_KEY = 'CABINET_GIFT_ENABLED'  # Stores "true" or "false"
 ANIMATION_CONFIG_KEY = 'CABINET_ANIMATION_CONFIG'  # Stores JSON with animation config
 TELEGRAM_WIDGET_SIZE_KEY = 'TELEGRAM_WIDGET_SIZE'
 TELEGRAM_WIDGET_RADIUS_KEY = 'TELEGRAM_WIDGET_RADIUS'
@@ -448,8 +448,6 @@ async def get_branding(
     This is a public endpoint - no authentication required.
     """
     name = await _resolve_branding_name(db)
-
-    # Check for custom logo
     custom_logo = has_custom_logo()
 
     return BrandingResponse(
@@ -599,7 +597,9 @@ async def get_web_manifest(
     logo_path = await asyncio.to_thread(_existing_logo_path)
     letter = monogram_letter(name)
     fingerprint = await asyncio.to_thread(app_icon.logo_fingerprint, logo_path)
-    version = hashlib.sha256(f'{fingerprint}|{letter}|{background}|{accent}'.encode()).hexdigest()[:12]
+    version = hashlib.sha256(
+        f'{app_icon.RENDER_REVISION}|{fingerprint}|{letter}|{background}|{accent}'.encode()
+    ).hexdigest()[:12]
 
     icons = [
         {
@@ -1459,11 +1459,8 @@ async def get_gift_enabled(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get gift feature enabled setting. Public endpoint."""
-    value = await get_setting_value(db, GIFT_ENABLED_KEY)
-    if value is not None:
-        enabled = value.lower() == 'true'
-        return GiftEnabledResponse(enabled=enabled)
-    return GiftEnabledResponse(enabled=False)
+    enabled = await is_gift_enabled(db)
+    return GiftEnabledResponse(enabled=enabled)
 
 
 @router.patch('/gift-enabled', response_model=GiftEnabledResponse)

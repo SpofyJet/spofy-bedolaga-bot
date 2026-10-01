@@ -272,7 +272,13 @@ class BlockedUsersService:
         return result
 
     async def delete_user_from_remnawave(self, remnawave_id: int) -> bool:
-        """Удаляет пользователя из панели Remnawave."""
+        """Удаляет пользователя из панели Remnawave.
+
+        ``REMNAWAVE_USER_DELETE_MODE`` здесь намеренно не спрашивается: это не
+        побочная уборка, а явно выбранное админом действие «удалить из Remnawave»
+        в разделе заблокированных — как ``force_panel_delete`` при полном удалении
+        пользователя. Кому нужна только деактивация, выбирает соседнее действие.
+        """
         if not remnawave_id:
             return False
 
@@ -325,6 +331,7 @@ class BlockedUsersService:
             # user keeps getting charged for a deleted account. This path has
             # no grace-access guard (unlike UserService.delete_user_account), so
             # a plain best-effort cancel loop is enough — no lock to re-acquire.
+            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
             from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
@@ -332,6 +339,7 @@ class BlockedUsersService:
                 await cancel_platega_recurring_for_subscription_safe(db, sub.id)
 
                 await cancel_lava_recurring_for_subscription_safe(db, sub.id)
+                await cancel_cashera_recurring_for_subscription_safe(db, sub.id)
             # Удаляем связанные записи (порядок важен из-за foreign keys)
 
             # 1. Платежные системы (до транзакций, т.к. ссылаются на них)

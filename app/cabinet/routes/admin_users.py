@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Integer, and_, delete as sa_delete, func, literal, or_, select
+from sqlalchemy import Integer, delete as sa_delete, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -38,42 +38,34 @@ from app.database.crud.user_device_alias import (
 )
 from app.database.crud.user_promo_group import sync_user_primary_promo_group
 from app.database.models import (
-    ButtonClickLog,
-    CabinetRefreshToken,
-    Coupon,
     GuestPurchase,
     PaymentMethod,
-    PollResponse,
-    PromoCode,
-    PromoCodeUse,
     PromoGroup,
     ReferralEarning,
     Subscription,
-    SubscriptionEvent,
     SubscriptionServer,
     SubscriptionStatus,
-    Ticket,
     TrafficPurchase,
     Transaction,
     TransactionType,
     User,
     UserPromoGroup,
     UserStatus,
-    WheelSpin,
-    WithdrawalRequest,
 )
-from app.services.panel_expiry import panel_expire_at
 from app.services.panel_sync import (
     ADMIN_PULL,
     GRACE_MARKER_FIELDS,
     ROUTINE,
     PanelAccountOwnedByAnotherUser,
     find_foreign_panel_owner,
+    is_subscription_live,
     link_subscription_panel_identity,
     project_onto_subscription,
     read_panel_user,
 )
+from app.services.panel_sync.fields import narrow_push_fields
 from app.services.permission_service import PermissionService
+from app.services.user_activity_service import UnknownActivityTypes, UserActivityResponse, collect_user_activity
 from app.utils.subscription_time import local_days_until
 from app.utils.subscription_utils import coerce_panel_device_limit
 from app.utils.timezone import local_day_start, panel_datetime_to_utc
@@ -126,8 +118,6 @@ from ..schemas.users import (
     UpdateSubscriptionResponse,
     UpdateUserStatusRequest,
     UpdateUserStatusResponse,
-    UserActivityItem,
-    UserActivityResponse,
     UserAvailableTariffItem,
     UserAvailableTariffsResponse,
     UserByRemnawaveResponse,
@@ -392,39 +382,6 @@ async def _build_subscription_info_async(db: AsyncSession, subscription: Subscri
     return info
 
 
-async def _record_panel_identity(
-    db: AsyncSession,
-    subscription: Subscription,
-    panel_user_id: int,
-    changes: dict,
-) -> None:
-    """Записать id найденного аккаунта панели на строку подписки, если она его не знает.
-
-    В одиночном режиме аккаунт панели общий и известен через ``users.remnawave_id``,
-    но экраны админки по выбранной подписке (panel-info, устройства, трафик) читают
-    строго ``subscriptions.remnawave_id``: новая строка без него — «пользователь не
-    найден в панели». Так оставалась подписка, созданная админом после удаления
-    старой: помощник обновлял аккаунт, а id на строку не писал.
-
-    Колонка частично уникальна: если id уже держит соседняя строка того же
-    человека, не пишем — адресация остаётся через пользователя, а IntegrityError
-    после успешного PATCH в панель откатил бы всё сделанное.
-    """
-    if subscription.remnawave_id:
-        return
-    from app.services.subscription_service import link_subscription_panel_identity
-
-    if await link_subscription_panel_identity(db, subscription, panel_user_id):
-        changes['panel_user_id'] = panel_user_id
-        changes['subscription_linked'] = True
-        return
-    logger.warning(
-        'Panel id is held by another subscription row; leaving this row unlinked',
-        subscription_id=subscription.id,
-        panel_user_id=panel_user_id,
-    )
-
-
 async def _sync_subscription_to_panel(
     db: AsyncSession,
     user: User,
@@ -433,11 +390,12 @@ async def _sync_subscription_to_panel(
     reset_traffic_reason: str | None = None,
     pinned_subscription_identity: bool = False,
 ) -> dict:
-    """
-    Sync user subscription to Remnawave panel.
-    Creates user if not exists, updates if exists.
-    Optionally resets traffic after sync.
-    Returns dict with changes/errors.
+    """Отправить подписку пользователя в панель Remnawave.
+
+    Сборка запроса, поиск аккаунта, создание/обновление и запись связи живут в
+    ``app/services/panel_sync`` — здесь остаётся только то, что специфично для
+    кабинета: грейс-безопасные обёртки записи, сброс трафика по требованию
+    админа и словарь изменений для ответа ручки.
     """
     if pinned_subscription_identity and not subscription.remnawave_id:
         # Fail-closed по задумке: подменять личность выбранной подписки пользовательским
@@ -453,210 +411,53 @@ async def _sync_subscription_to_panel(
 
     try:
         from app.config import settings
-        from app.external.remnawave_api import (
-            RemnaWaveAPIError,
-            UserStatus as PanelUserStatus,
-            is_user_not_found_error,
-        )
         from app.services.grace_access_runtime import (
             create_panel_user_grace_safe,
             update_panel_user_grace_safe,
         )
+        from app.services.panel_sync import push_subscription
         from app.services.remnawave_service import RemnaWaveService
-        from app.services.subscription_service import get_traffic_reset_strategy
-        from app.utils.subscription_utils import resolve_hwid_device_limit_for_payload
 
         service = RemnaWaveService()
         if not service.is_configured:
             logger.warning('Remnawave not configured, skipping panel sync for user', user_id=user.id)
             return {'skipped': True, 'reason': 'Remnawave not configured'}
 
-        is_active = (
-            subscription.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
-            and subscription.end_date
-            and subscription.end_date > datetime.now(UTC)
-        )
-        panel_status = PanelUserStatus.ACTIVE if is_active else PanelUserStatus.DISABLED
-
-        # Живой подписке — её дата; истёкшей при обновлении дату в панели не
-        # трогаем (см. panel_expire_at), при создании ставим допустимый минимум.
-        expire_at_update = panel_expire_at(subscription.end_date, is_active=is_active, creating=False)
-        expire_at_create = panel_expire_at(subscription.end_date, is_active=is_active, creating=True)
-
-        # При multi-tariff create-path ниже приклеивается `_<remnawave_short_id>`.
-        # build_remnawave_subscription_username гарантирует, что итоговая строка
-        # ≤ REMNAWAVE_USERNAME_MAX_LENGTH (исторический баг 38-chars username).
-        username_suffix = (
-            f'_{subscription.remnawave_short_id}'
-            if (settings.is_multi_tariff_enabled() and subscription.remnawave_short_id)
-            else ''
-        )
-        username = settings.build_remnawave_subscription_username(
-            full_name=user.full_name,
-            username=user.username,
-            telegram_id=user.telegram_id,
-            email=user.email,
-            user_id=user.id,
-            suffix=username_suffix,
-        )
-
-        description = settings.format_remnawave_user_description(
-            full_name=user.full_name,
-            username=user.username,
-            telegram_id=user.telegram_id,
-            email=user.email,
-            user_id=user.id,
-        )
-
-        hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
-        traffic_limit_bytes = subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0
-
-        # Загружаем tariff для определения внешнего сквада
+        # Тариф нужен для стратегии сброса трафика и внешнего сквада; без
+        # предзагрузки обращение к нему в async-контексте роняет запрос.
         try:
             await db.refresh(subscription, ['tariff'])
         except Exception:
             pass
-        ext_squad_uuid = subscription.tariff.external_squad_uuid if subscription.tariff else None
 
-        changes = {}
+        changes: dict = {}
         async with service.get_api_client() as api:
-            # Multi-tariff: each subscription has its own panel user
-            if pinned_subscription_identity or settings.is_multi_tariff_enabled():
-                panel_user_id = subscription.remnawave_id
-            else:
-                panel_user_id = user.remnawave_id
-
-            # Try to find existing user by panel id first.
-            # None здесь означает ровно одно — явный 404, то есть пользователя в панели
-            # действительно нет. Непригодный локальный идентификатор и транспортная
-            # ошибка приходят исключением и уходят в общий except, НЕ обнуляя связь:
-            # её обнуление необратимо, а в панели после него остаётся дубль.
-            if panel_user_id:
-                existing_user = await api.get_user_by_id(panel_user_id)
-                if not existing_user:
-                    logger.warning('Stale remnawave_id, clearing', user_id=user.id, panel_user_id=panel_user_id)
-                    panel_user_id = None
-                    if pinned_subscription_identity or settings.is_multi_tariff_enabled():
-                        subscription.remnawave_id = None
-                    else:
-                        user.remnawave_id = None
-
-            # Fallback: search by telegram_id (single-tariff only)
-            if (
-                not panel_user_id
-                and not pinned_subscription_identity
-                and not settings.is_multi_tariff_enabled()
-                and user.telegram_id
-            ):
-                existing_users = await api.find_users_by_telegram_id(user.telegram_id)
-                if existing_users:
-                    panel_user_id = existing_users[0].id
-                    user.remnawave_id = panel_user_id
-                    changes['remnawave_id_discovered'] = panel_user_id
-
-            # Fallback: search by email (single-tariff, OAuth users)
-            if (
-                not panel_user_id
-                and not pinned_subscription_identity
-                and not settings.is_multi_tariff_enabled()
-                and user.email
-            ):
-                existing_users = await api.find_users_by_email(user.email)
-                if existing_users:
-                    panel_user_id = existing_users[0].id
-                    user.remnawave_id = panel_user_id
-                    changes['remnawave_id_discovered'] = panel_user_id
-
-            if panel_user_id:
-                # Update existing user
-                update_kwargs = {
-                    'user_id': panel_user_id,
-                    'status': panel_status,
-                    'traffic_limit_bytes': traffic_limit_bytes,
-                    'traffic_limit_strategy': get_traffic_reset_strategy(subscription.tariff),
-                    'description': description,
-                }
-                if expire_at_update:
-                    update_kwargs['expire_at'] = expire_at_update
-                if subscription.connected_squads:
-                    update_kwargs['active_internal_squads'] = subscription.connected_squads
-                if hwid_limit is not None:
-                    update_kwargs['hwid_device_limit'] = hwid_limit
-
-                # Внешний сквад: синхронизируем из тарифа (если задан)
-                # Не отправляем null — RemnaWave API не принимает null для externalSquadUuid (A039)
-                if ext_squad_uuid is not None:
-                    update_kwargs['external_squad_uuid'] = ext_squad_uuid
-
-                try:
-                    updated_panel_user = await update_panel_user_grace_safe(
-                        api,
-                        subscription.id,
-                        **update_kwargs,
-                    )
-                    subscription.subscription_url = updated_panel_user.subscription_url
-                    subscription.subscription_crypto_link = updated_panel_user.happ_crypto_link
-                    subscription.remnawave_short_uuid = updated_panel_user.short_uuid
-                    await _record_panel_identity(db, subscription, panel_user_id, changes)
-                    changes['action'] = 'updated'
-                    logger.info('Updated user in Remnawave panel', user_id=user.id)
-                except Exception as update_error:
-                    # «Пользователя нет» = только явный признак этого (404/A018/A063).
-                    # Непригодный локальный идентификатор даёт RemnaWaveInvalidUserIdError,
-                    # который is_user_not_found_error намеренно не признаёт: иначе каждый
-                    # промах идентификатора уходил бы в ветку создания и плодил дубли.
-                    if isinstance(update_error, RemnaWaveAPIError) and is_user_not_found_error(update_error):
-                        panel_user_id = None  # Will create new
-                    else:
-                        raise
-
-            if not panel_user_id and not pinned_subscription_identity:
-                # Create new user
-                create_kwargs = {
-                    'username': username,
-                    'expire_at': expire_at_create or (datetime.now(UTC) + timedelta(days=30)),
-                    'status': panel_status,
-                    'traffic_limit_bytes': traffic_limit_bytes,
-                    'traffic_limit_strategy': get_traffic_reset_strategy(subscription.tariff),
-                    'telegram_id': user.telegram_id,
-                    'email': user.email,
-                    'description': description,
-                    'active_internal_squads': subscription.connected_squads or [],
-                }
-                if hwid_limit is not None:
-                    create_kwargs['hwid_device_limit'] = hwid_limit
-                if ext_squad_uuid is not None:
-                    create_kwargs['external_squad_uuid'] = ext_squad_uuid
-
-                # multi-tariff suffix уже встроен в `username` через
-                # build_remnawave_subscription_username — больше ничего не клеим.
-
-                new_panel_user = await create_panel_user_grace_safe(
+            result = await push_subscription(
+                api,
+                user,
+                subscription,
+                db=db,
+                multi_tariff=pinned_subscription_identity or settings.is_multi_tariff_enabled(),
+                pinned=pinned_subscription_identity,
+                update_call=lambda **kwargs: update_panel_user_grace_safe(api, subscription.id, **kwargs),
+                create_call=lambda **kwargs: create_panel_user_grace_safe(
                     api,
                     subscription.id,
                     adopt_short_uuid=subscription.remnawave_short_uuid,
-                    **create_kwargs,
-                )
-                subscription.remnawave_id = new_panel_user.id
-                subscription.remnawave_short_uuid = new_panel_user.short_uuid
-                subscription.subscription_url = new_panel_user.subscription_url
-                subscription.subscription_crypto_link = new_panel_user.happ_crypto_link
-                # Legacy: also set user-level panel id in single mode
-                if not settings.is_multi_tariff_enabled():
-                    user.remnawave_id = new_panel_user.id
-                changes['action'] = 'created'
-                changes['panel_user_id'] = new_panel_user.id
-                logger.info('Created user in Remnawave panel', user_id=user.id, panel_user_id=new_panel_user.id)
-
-            # Reset traffic on panel if requested
-            _reset_panel_user_id = (
-                subscription.remnawave_id
-                if pinned_subscription_identity or settings.is_multi_tariff_enabled()
-                else user.remnawave_id
+                    **kwargs,
+                ),
             )
-            if reset_traffic and _reset_panel_user_id:
+
+            changes['action'] = result.action
+            changes['panel_user_id'] = result.panel_user_id
+            if result.action == 'created':
+                logger.info('Created user in Remnawave panel', user_id=user.id, panel_user_id=result.panel_user_id)
+            else:
+                logger.info('Updated user in Remnawave panel', user_id=user.id)
+
+            if reset_traffic and result.panel_user_id:
                 try:
-                    await api.reset_user_traffic(_reset_panel_user_id)
+                    await api.reset_user_traffic(result.panel_user_id)
                     changes['traffic_reset'] = True
                     reason_text = f' ({reset_traffic_reason})' if reset_traffic_reason else ''
                     logger.info('Reset RemnaWave traffic for user', user_id=user.id, reason=reason_text)
@@ -670,10 +471,7 @@ async def _sync_subscription_to_panel(
 
     except Exception as e:
         logger.error('Error syncing user to panel', user_id=user.id, error=e)
-        return {'error': 'Ошибка синхронизации пользователя с панелью'}
-
-
-# === List & Search ===
+        return {'error': str(e)}
 
 
 @router.get('', response_model=UsersListResponse)
@@ -897,15 +695,11 @@ async def get_users_stats(
     active_week = (await db.execute(active_week_q)).scalar() or 0
     active_month = (await db.execute(active_month_q)).scalar() or 0
 
-    # Count deleted users
-    deleted_q = select(func.count(User.id)).where(User.status == UserStatus.DELETED.value)
-    deleted_count = (await db.execute(deleted_q)).scalar() or 0
-
     return UsersStatsResponse(
         total_users=stats['total_users'],
         active_users=stats['active_users'],
         blocked_users=stats['blocked_users'],
-        deleted_users=deleted_count,
+        deleted_users=stats['deleted_users'],
         new_today=stats['new_today'],
         new_week=stats['new_week'],
         new_month=stats['new_month'],
@@ -1674,12 +1468,14 @@ async def update_user_subscription(
         # переподключит СБП-автопродление под новый тариф (нужна новая
         # банковская авторизация, молча пересоздать нельзя).
         if request.tariff_id != subscription.tariff_id:
+            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
             from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
             await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
             await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+            await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
         tariff = await get_tariff_by_id(db, request.tariff_id)
         if not tariff:
             raise HTTPException(
@@ -1805,12 +1601,14 @@ async def update_user_subscription(
         if request.autopay_enabled:
             # Взаимоисключение движков продления: включение balance-autopay
             # отменяет активное СБП-автопродление Platega (иначе двойное списание).
+            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
             from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
             await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
             await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+            await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
         state = 'enabled' if request.autopay_enabled else 'disabled'
         logger.info('Admin autopay for user', admin_id=admin.id, state=state, user_id=user_id)
 
@@ -1824,12 +1622,14 @@ async def update_user_subscription(
         # Подписку убивают — СБП-автопродление Platega обязано умереть вместе с
         # ней, иначе следующий коллбек продлит и воскресит её, а банк продолжит
         # списывать.
+        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
         from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
         await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
         await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+        await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
         subscription.status = SubscriptionStatus.EXPIRED.value
         subscription.end_date = datetime.now(UTC)
         subscription.grace_suppressed_until = subscription.end_date
@@ -1862,6 +1662,7 @@ async def update_user_subscription(
             # legacy user panel id, and preserve the selected row for an exact
             # retry when panel deactivation fails.
             from app.database.crud.subscription import reset_subscription
+            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
             from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
             from app.services.subscription_service import SubscriptionService
@@ -1870,6 +1671,7 @@ async def update_user_subscription(
             # спишет деньги и воскресит только что сброшенную подписку.
             await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
             await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+            await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
             panel_user_id = subscription.remnawave_id
             panel_disabled = False
             if panel_user_id:
@@ -2109,6 +1911,57 @@ async def cancel_user_sbp_recurring(
     )
 
     return {'status': 'cancelled'}
+
+
+@router.delete('/{user_id}/subscriptions/{sub_id}')
+async def delete_user_subscription(
+    user_id: int,
+    sub_id: int,
+    force: bool = Query(False, description='Allow deleting an active paid subscription'),
+    admin: User = Depends(require_permission('users:subscription')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Удалить конкретную подписку пользователя из его карточки.
+
+    В мультитарифном режиме у пользователя несколько подписок, и убрать
+    лишнюю (например, отработавший триал) можно было только через
+    «Массовые действия». Проверка принадлежности — та же, что у соседних
+    эндпоинтов по ``sub_id`` (защита от IDOR).
+
+    Активная платная подписка защищена от случайного удаления: чтобы
+    снести именно её, нужен явный ``force`` — иначе одним промахом
+    сносится оплаченный доступ.
+    """
+    from app.database.crud.subscription import get_subscription_by_id_for_user
+    from app.services.grace_access_runtime import GraceAccessDeletionBlocked
+    from app.services.subscription_deletion_service import delete_subscription_record
+
+    subscription = await get_subscription_by_id_for_user(db, sub_id, user_id)
+    if not subscription:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
+
+    if subscription.is_active and not subscription.is_trial and not force:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Subscription is active and paid; pass force=true to delete it anyway',
+        )
+
+    try:
+        await delete_subscription_record(db, subscription, deleted_by=f'admin:{admin.id}')
+    except GraceAccessDeletionBlocked as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Temporary renewal access is still active. Finish or restore grace access before deletion.',
+        ) from error
+
+    logger.info(
+        'Admin deleted user subscription',
+        admin_id=admin.id,
+        user_id=user_id,
+        subscription_id=sub_id,
+        forced=force,
+    )
+    return {'status': 'deleted'}
 
 
 # === Available Tariffs ===
@@ -3260,6 +3113,7 @@ async def reset_user_subscription(
     # It therefore runs BEFORE panel deactivation and the DB deletes, and the
     # guard is re-acquired immediately below — closing that window before
     # anything that can't be undone happens.
+    from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
     from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
@@ -3267,6 +3121,7 @@ async def reset_user_subscription(
         await cancel_platega_recurring_for_subscription_safe(db, sub.id)
 
         await cancel_lava_recurring_for_subscription_safe(db, sub.id)
+        await cancel_cashera_recurring_for_subscription_safe(db, sub.id)
     try:
         await ensure_no_open_grace_for_subscriptions(db, tuple(sub.id for sub in subs))
     except GraceAccessDeletionBlocked as error:
@@ -3356,6 +3211,15 @@ async def disable_user(
             detail='User not found',
         )
 
+    from app.services.rbac_bootstrap_service import is_protected_from_blocking
+
+    if is_protected_from_blocking(user):
+        logger.warning('Refused to block an env-configured admin', admin_id=admin.id, user_id=user_id)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='This account is listed in ADMIN_IDS/ADMIN_EMAILS and cannot be blocked',
+        )
+
     subscription_deactivated = False
     panel_deactivated = False
     panel_error: str | None = None
@@ -3382,8 +3246,12 @@ async def disable_user(
                     if sub.remnawave_id:
                         try:
                             await subscription_service.disable_remnawave_user(sub.remnawave_id, db=db)
-                        except Exception:
-                            pass
+                        except Exception as error:
+                            logger.warning(
+                                'Не удалось отключить пользователя панели при деактивации',
+                                remnawave_id=sub.remnawave_id,
+                                error=str(error),
+                            )
                 panel_deactivated = True
             elif user.remnawave_id:
                 panel_deactivated = await subscription_service.disable_remnawave_user(user.remnawave_id, db=db)
@@ -3527,252 +3395,6 @@ async def get_user_transactions(
     }
 
 
-def _activity_sources(user_id: int) -> dict[str, tuple]:
-    """Источники таймлайна активности: type -> (select, count_select, mapper).
-
-    Дедупликация пересечений:
-    - транзакции, на которые ссылается SubscriptionEvent.transaction_id или
-      ReferralEarning.referral_transaction_id, исключаются (событие/начисление
-      богаче: message/reason);
-    - события promocode_activation исключаются — PromoCodeUse полнее (события
-      пишутся только вместе с админ-уведомлениями).
-    """
-    event_referenced = select(SubscriptionEvent.transaction_id).where(
-        SubscriptionEvent.user_id == user_id,
-        SubscriptionEvent.transaction_id.is_not(None),
-    )
-    earning_referenced = select(ReferralEarning.referral_transaction_id).where(
-        ReferralEarning.user_id == user_id,
-        ReferralEarning.referral_transaction_id.is_not(None),
-    )
-    transactions_where = and_(
-        Transaction.user_id == user_id,
-        Transaction.id.not_in(event_referenced),
-        Transaction.id.not_in(earning_referenced),
-    )
-    events_where = and_(
-        SubscriptionEvent.user_id == user_id,
-        SubscriptionEvent.event_type != 'promocode_activation',
-    )
-
-    def _map_transaction(t: Transaction) -> UserActivityItem:
-        return UserActivityItem(
-            type='transaction',
-            subtype=t.type,
-            title=t.description,
-            amount_kopeks=t.amount_kopeks,
-            timestamp=t.created_at,
-            meta={'payment_method': t.payment_method, 'is_completed': t.is_completed},
-        )
-
-    def _map_event(e: SubscriptionEvent) -> UserActivityItem:
-        return UserActivityItem(
-            type='event',
-            subtype=e.event_type,
-            title=e.message,
-            amount_kopeks=e.amount_kopeks,
-            timestamp=e.occurred_at,
-            meta=e.extra if isinstance(e.extra, dict) else None,
-        )
-
-    def _map_promocode(row) -> UserActivityItem:
-        use, code = row
-        return UserActivityItem(type='promocode', source='bot', title=code, timestamp=use.used_at)
-
-    def _map_coupon(c: Coupon) -> UserActivityItem:
-        return UserActivityItem(type='coupon', subtype=c.status, title=c.token, timestamp=c.redeemed_at)
-
-    def _map_ticket(t: Ticket) -> UserActivityItem:
-        return UserActivityItem(
-            type='ticket',
-            subtype=t.status,
-            title=t.title,
-            timestamp=t.created_at,
-            meta={'ticket_id': t.id},
-        )
-
-    def _map_wheel(w: WheelSpin) -> UserActivityItem:
-        return UserActivityItem(
-            type='wheel_spin',
-            subtype=w.prize_type,
-            source='bot',
-            title=w.prize_display_name,
-            amount_kopeks=w.prize_value_kopeks,
-            timestamp=w.created_at,
-        )
-
-    def _map_poll(p: PollResponse) -> UserActivityItem:
-        return UserActivityItem(
-            type='poll',
-            source='bot',
-            amount_kopeks=p.reward_amount_kopeks if p.reward_given else None,
-            timestamp=p.completed_at,
-        )
-
-    def _map_gift_sent(g: GuestPurchase) -> UserActivityItem:
-        return UserActivityItem(
-            type='gift_sent',
-            subtype=g.status,
-            title=g.gift_recipient_value,
-            amount_kopeks=g.amount_kopeks,
-            timestamp=g.paid_at or g.created_at,
-        )
-
-    def _map_gift_received(g: GuestPurchase) -> UserActivityItem:
-        return UserActivityItem(
-            type='gift_received',
-            subtype=g.status,
-            amount_kopeks=g.amount_kopeks,
-            timestamp=g.delivered_at or g.created_at,
-        )
-
-    def _map_earning(e: ReferralEarning) -> UserActivityItem:
-        return UserActivityItem(
-            type='referral_earning',
-            subtype=e.reason,
-            amount_kopeks=e.amount_kopeks,
-            timestamp=e.created_at,
-        )
-
-    def _map_login(token: CabinetRefreshToken) -> UserActivityItem:
-        return UserActivityItem(
-            type='cabinet_login',
-            source='cabinet',
-            title=token.device_info,
-            timestamp=token.created_at,
-        )
-
-    def _map_withdrawal(w: WithdrawalRequest) -> UserActivityItem:
-        return UserActivityItem(
-            type='withdrawal',
-            subtype=w.status,
-            amount_kopeks=w.amount_kopeks,
-            timestamp=w.created_at,
-        )
-
-    def _map_button_click(c: ButtonClickLog) -> UserActivityItem:
-        return UserActivityItem(
-            type='button_click',
-            subtype='command' if c.button_type == 'command' else None,
-            source='bot',
-            title=c.button_text or c.callback_data or c.button_id,
-            timestamp=c.clicked_at,
-            meta={'callback_data': c.callback_data} if c.callback_data else None,
-        )
-
-    def _map_cabinet_action(c: ButtonClickLog) -> UserActivityItem:
-        return UserActivityItem(
-            type='cabinet_action',
-            source='cabinet',
-            title=c.button_id,
-            timestamp=c.clicked_at,
-            meta={'path': c.callback_data} if c.callback_data else None,
-        )
-
-    # button_click_logs делится на нажатия кнопок бота (пишет ButtonStatsMiddleware)
-    # и действия в кабинете (button_type='cabinet', пишет user_action_log_service).
-    bot_clicks_where = and_(
-        ButtonClickLog.user_id == user_id,
-        or_(ButtonClickLog.button_type.is_(None), ButtonClickLog.button_type != 'cabinet'),
-    )
-    cabinet_actions_where = and_(ButtonClickLog.user_id == user_id, ButtonClickLog.button_type == 'cabinet')
-
-    return {
-        'transaction': (
-            select(Transaction).where(transactions_where),
-            select(func.count(Transaction.id)).where(transactions_where),
-            Transaction.created_at,
-            _map_transaction,
-        ),
-        'event': (
-            select(SubscriptionEvent).where(events_where),
-            select(func.count(SubscriptionEvent.id)).where(events_where),
-            SubscriptionEvent.occurred_at,
-            _map_event,
-        ),
-        'promocode': (
-            select(PromoCodeUse, PromoCode.code)
-            .join(PromoCode, PromoCode.id == PromoCodeUse.promocode_id)
-            .where(PromoCodeUse.user_id == user_id),
-            select(func.count(PromoCodeUse.id)).where(PromoCodeUse.user_id == user_id),
-            PromoCodeUse.used_at,
-            _map_promocode,
-        ),
-        'coupon': (
-            select(Coupon).where(Coupon.redeemed_by == user_id, Coupon.redeemed_at.is_not(None)),
-            select(func.count(Coupon.id)).where(Coupon.redeemed_by == user_id, Coupon.redeemed_at.is_not(None)),
-            Coupon.redeemed_at,
-            _map_coupon,
-        ),
-        'ticket': (
-            select(Ticket).where(Ticket.user_id == user_id),
-            select(func.count(Ticket.id)).where(Ticket.user_id == user_id),
-            Ticket.created_at,
-            _map_ticket,
-        ),
-        'wheel_spin': (
-            select(WheelSpin).where(WheelSpin.user_id == user_id),
-            select(func.count(WheelSpin.id)).where(WheelSpin.user_id == user_id),
-            WheelSpin.created_at,
-            _map_wheel,
-        ),
-        'poll': (
-            select(PollResponse).where(PollResponse.user_id == user_id, PollResponse.completed_at.is_not(None)),
-            select(func.count(PollResponse.id)).where(
-                PollResponse.user_id == user_id, PollResponse.completed_at.is_not(None)
-            ),
-            PollResponse.completed_at,
-            _map_poll,
-        ),
-        'gift_sent': (
-            select(GuestPurchase).where(GuestPurchase.buyer_user_id == user_id, GuestPurchase.is_gift.is_(True)),
-            select(func.count(GuestPurchase.id)).where(
-                GuestPurchase.buyer_user_id == user_id, GuestPurchase.is_gift.is_(True)
-            ),
-            GuestPurchase.created_at,
-            _map_gift_sent,
-        ),
-        'gift_received': (
-            select(GuestPurchase).where(GuestPurchase.user_id == user_id, GuestPurchase.is_gift.is_(True)),
-            select(func.count(GuestPurchase.id)).where(
-                GuestPurchase.user_id == user_id, GuestPurchase.is_gift.is_(True)
-            ),
-            GuestPurchase.created_at,
-            _map_gift_received,
-        ),
-        'referral_earning': (
-            select(ReferralEarning).where(ReferralEarning.user_id == user_id),
-            select(func.count(ReferralEarning.id)).where(ReferralEarning.user_id == user_id),
-            ReferralEarning.created_at,
-            _map_earning,
-        ),
-        'cabinet_login': (
-            select(CabinetRefreshToken).where(CabinetRefreshToken.user_id == user_id),
-            select(func.count(CabinetRefreshToken.id)).where(CabinetRefreshToken.user_id == user_id),
-            CabinetRefreshToken.created_at,
-            _map_login,
-        ),
-        'withdrawal': (
-            select(WithdrawalRequest).where(WithdrawalRequest.user_id == user_id),
-            select(func.count(WithdrawalRequest.id)).where(WithdrawalRequest.user_id == user_id),
-            WithdrawalRequest.created_at,
-            _map_withdrawal,
-        ),
-        'button_click': (
-            select(ButtonClickLog).where(bot_clicks_where),
-            select(func.count(ButtonClickLog.id)).where(bot_clicks_where),
-            ButtonClickLog.clicked_at,
-            _map_button_click,
-        ),
-        'cabinet_action': (
-            select(ButtonClickLog).where(cabinet_actions_where),
-            select(func.count(ButtonClickLog.id)).where(cabinet_actions_where),
-            ButtonClickLog.clicked_at,
-            _map_cabinet_action,
-        ),
-    }
-
-
 @router.get('/{user_id}/activity', response_model=UserActivityResponse)
 async def get_user_activity(
     user_id: int,
@@ -3795,37 +3417,13 @@ async def get_user_activity(
             detail='User not found',
         )
 
-    sources = _activity_sources(user.id)
-    if types:
-        requested = {t.strip() for t in types.split(',') if t.strip()}
-        unknown = requested - sources.keys()
-        if unknown:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Unknown activity types: {", ".join(sorted(unknown))}',
-            )
-        sources = {key: value for key, value in sources.items() if key in requested}
-
-    window = offset + limit
-    merged: list[UserActivityItem] = []
-    total = 0
-    for query, count_query, ts_column, mapper in sources.values():
-        total += (await db.execute(count_query)).scalar() or 0
-        rows = (await db.execute(query.order_by(ts_column.desc()).limit(window))).all()
-        for row in rows:
-            value = row[0] if len(row) == 1 else row
-            item = mapper(value)
-            if item.timestamp is not None:
-                merged.append(item)
-
-    merged.sort(key=lambda item: item.timestamp, reverse=True)
-
-    return UserActivityResponse(
-        items=merged[offset : offset + limit],
-        total=total,
-        offset=offset,
-        limit=limit,
-    )
+    try:
+        return await collect_user_activity(db, user.id, offset=offset, limit=limit, types=types)
+    except UnknownActivityTypes as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
 
 
 # === Panel Sync ===
@@ -3900,6 +3498,10 @@ async def get_user_sync_status(
     panel_device_limit = 0
     panel_squads: list[str] = []
     differences = []
+    # Панель прочитана без ошибок. Отличать «прочитали и аккаунта нет» от «не
+    # смогли прочитать» обязательно: первое зовёт оператора заводить учётку,
+    # второе значит лишь обрыв связи, и заводить нечего.
+    panel_read_ok = False
 
     try:
         from app.services.remnawave_service import RemnaWaveService
@@ -3986,9 +3588,17 @@ async def get_user_sync_status(
                             squad_diff_parts.append(f'only in panel: {len(only_in_panel)}')
                         differences.append(f'Squads mismatch ({", ".join(squad_diff_parts)})')
 
+            panel_read_ok = True
+
     except Exception as e:
         logger.warning('Failed to get panel data for user', user_id=user_id, error=e)
         differences.append(f'Error fetching panel data: {e!s}')
+
+    # Подписка есть, а аккаунта в панели нет — это расхождение, и самое
+    # серьёзное: у человека нет доступа. Без этой строки карточка с пустой
+    # панельной стороной показывалась «синхронизированной» (issue #3277).
+    if active_sub is not None and panel_read_ok and not panel_found:
+        differences.append('В панели аккаунт не найден')
 
     # Resolve tariff name for context
     sub_tariff_name: str | None = None
@@ -4320,11 +3930,11 @@ async def sync_user_to_panel(
     admin: User = Depends(require_permission('users:sync')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """
-    Sync user data FROM bot TO panel.
+    """Отправить данные пользователя из бота в панель.
 
-    Sends user/subscription data to Remnawave panel, creating or updating as needed.
-    When subscription_id is provided, syncs that specific subscription instead of first-active.
+    Флажки запроса выбирают, какие поля уедут: остальное сервис синхронизации
+    в панель не отправляет. Сборка запроса, поиск аккаунта и запись связи —
+    в ``app/services/panel_sync``.
     """
     user = await get_user_by_id(db, user_id)
     if not user:
@@ -4350,19 +3960,12 @@ async def sync_user_to_panel(
         )
 
     try:
-        from app.config import settings
-        from app.external.remnawave_api import (
-            RemnaWaveAPIError,
-            UserStatus as PanelUserStatus,
-            is_user_not_found_error,
-        )
         from app.services.grace_access_runtime import (
             create_panel_user_grace_safe,
             update_panel_user_grace_safe,
         )
+        from app.services.panel_sync import push_subscription
         from app.services.remnawave_service import RemnaWaveService
-        from app.services.subscription_service import get_traffic_reset_strategy
-        from app.utils.subscription_utils import resolve_hwid_device_limit_for_payload
 
         service = RemnaWaveService()
         if not service.is_configured:
@@ -4371,185 +3974,71 @@ async def sync_user_to_panel(
                 detail=service.configuration_error or 'Remnawave API not configured',
             )
 
-        sub = push_sub
-        changes = {}
-        errors = []
-        action = 'no_changes'
-        panel_user_id = (
-            sub.remnawave_id if settings.is_multi_tariff_enabled() and sub.remnawave_id else user.remnawave_id
+        # Что именно админ разрешил отправить; поля аккаунта (описание, лимит
+        # устройств, внешний сквад, тег панели) уезжают всегда — набор общий с ботом.
+        only_fields = narrow_push_fields(
+            status=request.update_status,
+            expire_date=request.update_expire_date,
+            traffic_limit=request.update_traffic_limit,
+            squads=request.update_squads,
         )
 
-        # Prepare data for panel
-        is_active = (
-            sub.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
-            and sub.end_date
-            and sub.end_date > datetime.now(UTC)
-        )
-        panel_status = PanelUserStatus.ACTIVE if is_active else PanelUserStatus.DISABLED
-
-        expire_at_update = panel_expire_at(sub.end_date, is_active=is_active, creating=False)
-        expire_at_create = panel_expire_at(sub.end_date, is_active=is_active, creating=True)
-
-        # Same precaution as the per-user sync above: multi-tariff create-path
-        # appends `_<remnawave_short_id>`. Helper resрвирует место.
-        username_suffix = (
-            f'_{sub.remnawave_short_id}'
-            if (settings.is_multi_tariff_enabled() and getattr(sub, 'remnawave_short_id', None))
-            else ''
-        )
-        username = settings.build_remnawave_subscription_username(
-            full_name=user.full_name,
-            username=user.username,
-            telegram_id=user.telegram_id,
-            email=user.email,
-            user_id=user.id,
-            suffix=username_suffix,
-        )
-
-        description = settings.format_remnawave_user_description(
-            full_name=user.full_name,
-            username=user.username,
-            telegram_id=user.telegram_id,
-            email=user.email,
-            user_id=user.id,
-        )
-
-        hwid_limit = resolve_hwid_device_limit_for_payload(sub)
-        traffic_limit_bytes = sub.traffic_limit_gb * (1024**3) if sub.traffic_limit_gb > 0 else 0
-
-        # Загружаем tariff для внешнего сквада
         try:
-            await db.refresh(sub, ['tariff'])
+            await db.refresh(push_sub, ['tariff'])
         except Exception:
             pass
-        ext_squad_uuid = sub.tariff.external_squad_uuid if sub.tariff else None
 
+        changes: dict = {}
+        errors: list[str] = []
         async with service.get_api_client() as api:
-            # Validate existing panel id.
-            # None здесь = явный 404, то есть пользователя в панели действительно нет.
-            # Непригодный локальный идентификатор и транспортная ошибка приходят
-            # исключением и уходят в общий except, НЕ обнуляя связь: её обнуление
-            # необратимо, а в панели после него остаётся дубль.
-            if panel_user_id:
-                existing_user = await api.get_user_by_id(panel_user_id)
-                if not existing_user:
-                    logger.warning('Stale remnawave_id, clearing', user_id=user.id, panel_user_id=panel_user_id)
-                    panel_user_id = None
-                    if settings.is_multi_tariff_enabled():
-                        sub.remnawave_id = None
-                    else:
-                        user.remnawave_id = None
-
-            # Fallback: search by telegram_id (single-tariff only)
-            if not panel_user_id and not settings.is_multi_tariff_enabled() and user.telegram_id:
-                existing_users = await api.find_users_by_telegram_id(user.telegram_id)
-                if existing_users:
-                    panel_user_id = existing_users[0].id
-                    user.remnawave_id = panel_user_id
-                    changes['remnawave_id_discovered'] = panel_user_id
-
-            # Fallback: search by email (single-tariff, OAuth users)
-            if not panel_user_id and not settings.is_multi_tariff_enabled() and user.email:
-                existing_users = await api.find_users_by_email(user.email)
-                if existing_users:
-                    panel_user_id = existing_users[0].id
-                    user.remnawave_id = panel_user_id
-                    changes['remnawave_id_discovered'] = panel_user_id
-
-            if panel_user_id:
-                # Update existing user
-                update_kwargs = {'user_id': panel_user_id}
-
-                if request.update_status:
-                    update_kwargs['status'] = panel_status
-                    changes['status'] = panel_status.value
-
-                if request.update_expire_date and expire_at_update:
-                    update_kwargs['expire_at'] = expire_at_update
-                    changes['expire_at'] = expire_at_update.isoformat()
-
-                if request.update_traffic_limit:
-                    update_kwargs['traffic_limit_bytes'] = traffic_limit_bytes
-                    update_kwargs['traffic_limit_strategy'] = get_traffic_reset_strategy(sub.tariff)
-                    changes['traffic_limit_gb'] = sub.traffic_limit_gb
-
-                if request.update_squads and sub.connected_squads:
-                    update_kwargs['active_internal_squads'] = sub.connected_squads
-                    changes['connected_squads'] = sub.connected_squads
-
-                update_kwargs['description'] = description
-                if hwid_limit is not None:
-                    update_kwargs['hwid_device_limit'] = hwid_limit
-                    changes['device_limit'] = hwid_limit
-
-                # Внешний сквад: синхронизируем из тарифа (если задан)
-                # Не отправляем null — RemnaWave API не принимает null для externalSquadUuid (A039)
-                if ext_squad_uuid is not None:
-                    update_kwargs['external_squad_uuid'] = ext_squad_uuid
-
-                try:
-                    await update_panel_user_grace_safe(
-                        api,
-                        sub.id,
-                        **update_kwargs,
-                    )
-                    await _record_panel_identity(db, sub, panel_user_id, changes)
-                    action = 'updated'
-                except Exception as update_error:
-                    # «Пользователя нет» = только явный признак этого (404/A018/A063).
-                    # RemnaWaveInvalidUserIdError (битый локальный идентификатор) сюда
-                    # намеренно не попадает: иначе промах идентификатора уходил бы в
-                    # ветку создания и плодил дубли в панели.
-                    if isinstance(update_error, RemnaWaveAPIError) and is_user_not_found_error(update_error):
-                        # User not found in panel, create new
-                        panel_user_id = None
-                    else:
-                        raise
-
-            if not panel_user_id and request.create_if_missing:
-                # Create new user in panel
-                create_kwargs = {
-                    'username': username,
-                    'expire_at': expire_at_create or (datetime.now(UTC) + timedelta(days=30)),
-                    'status': panel_status,
-                    'traffic_limit_bytes': traffic_limit_bytes,
-                    'traffic_limit_strategy': get_traffic_reset_strategy(sub.tariff),
-                    'telegram_id': user.telegram_id,
-                    'email': user.email,
-                    'description': description,
-                    'active_internal_squads': sub.connected_squads or [],
-                }
-
-                if hwid_limit is not None:
-                    create_kwargs['hwid_device_limit'] = hwid_limit
-                if ext_squad_uuid is not None:
-                    create_kwargs['external_squad_uuid'] = ext_squad_uuid
-
-                # multi-tariff suffix уже встроен в `username` через
-                # build_remnawave_subscription_username — больше ничего не клеим.
-
-                new_panel_user = await create_panel_user_grace_safe(
+            result = await push_subscription(
+                api,
+                user,
+                push_sub,
+                db=db,
+                only_fields=only_fields,
+                reset_devices=False,
+                create_if_missing=request.create_if_missing,
+                update_call=lambda **kwargs: update_panel_user_grace_safe(api, push_sub.id, **kwargs),
+                create_call=lambda **kwargs: create_panel_user_grace_safe(
                     api,
-                    sub.id,
-                    adopt_short_uuid=sub.remnawave_short_uuid,
-                    **create_kwargs,
-                )
-                panel_user_id = new_panel_user.id
-                sub.remnawave_id = new_panel_user.id
-                sub.remnawave_short_uuid = new_panel_user.short_uuid
-                sub.subscription_url = new_panel_user.subscription_url
-                if not settings.is_multi_tariff_enabled():
-                    user.remnawave_id = new_panel_user.id
+                    push_sub.id,
+                    adopt_short_uuid=push_sub.remnawave_short_uuid,
+                    **kwargs,
+                ),
+            )
 
+            action = result.action
+            panel_user_id = result.panel_user_id
+            changes['panel_user_id'] = panel_user_id
+            if request.update_status:
+                changes['status'] = 'ACTIVE' if is_subscription_live(user, push_sub) else 'DISABLED'
+            if request.update_traffic_limit:
+                changes['traffic_limit_gb'] = push_sub.traffic_limit_gb
+            if request.update_squads and push_sub.connected_squads:
+                changes['connected_squads'] = push_sub.connected_squads
+            if action == 'created':
                 changes['created_in_panel'] = True
-                changes['panel_user_id'] = panel_user_id
-                changes['short_uuid'] = new_panel_user.short_uuid
-                action = 'created'
+                changes['short_uuid'] = getattr(result.panel_user, 'short_uuid', None)
 
-            # Update last sync time
-            user.last_remnawave_sync = datetime.now(UTC)
-            user.updated_at = datetime.now(UTC)
-
+            # Отметку времени ставим, только если связь действительно указывает
+            # на тот аккаунт, в который мы писали. Иначе карточка выглядела бы
+            # свежесинхронизированной поверх старой привязки (issue #3277).
+            linked = panel_user_id is None or getattr(push_sub, 'remnawave_id', None) == panel_user_id
+            if linked:
+                user.last_remnawave_sync = datetime.now(UTC)
+                user.updated_at = datetime.now(UTC)
+            else:
+                errors.append(
+                    f'Панельный аккаунт {panel_user_id} не записан подписке {push_sub.id}: адрес занят другой подпиской'
+                )
+                logger.warning(
+                    'Синхронизация в панель прошла, но связь не обновилась',
+                    user_id=user_id,
+                    subscription_id=push_sub.id,
+                    panel_user_id=panel_user_id,
+                    recorded_panel_user_id=getattr(push_sub, 'remnawave_id', None),
+                )
             await db.commit()
 
         logger.info('Admin synced user to panel. Action', admin_id=admin.id, user_id=user_id, action=action)

@@ -20,10 +20,10 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import (
     AntilopayPayment,
     AuraPayPayment,
+    CasheraPayment,
     CisPayPayment,
     CloudPaymentsPayment,
     CryptoBotPayment,
-    XRocketPayment,
     DonutPayment,
     EtoplatezhiPayment,
     FreekassaPayment,
@@ -33,16 +33,19 @@ from app.database.models import (
     LavaPayment,
     MulenPayPayment,
     Pal24Payment,
+    ParityPayPayment,
     PaymentMethod,
     PayPearPayment,
     PlategaPayment,
     RioPayPayment,
     RollyPayPayment,
     SeverPayPayment,
+    TabPayPayment,
     Transaction,
     TransactionType,
     User,
     WataPayment,
+    XRocketPayment,
     YooKassaPayment,
 )
 
@@ -91,6 +94,9 @@ SUPPORTED_MANUAL_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.ROLLYPAY,
         PaymentMethod.AURAPAY,
         PaymentMethod.CISPAY,
+        PaymentMethod.TABPAY,
+        PaymentMethod.PARITYPAY,
+        PaymentMethod.CASHERA,
         # ETOPLATEZHI / ANTILOPAY / JUPITER / DONUT / LAVA — webhook-driven,
         # без API-метода синхронизации БД, manual check не реализован.
     }
@@ -118,6 +124,9 @@ SUPPORTED_AUTO_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.ROLLYPAY,
         PaymentMethod.AURAPAY,
         PaymentMethod.CISPAY,
+        PaymentMethod.TABPAY,
+        PaymentMethod.PARITYPAY,
+        PaymentMethod.CASHERA,
     }
 )
 
@@ -133,6 +142,8 @@ def method_display_name(method: PaymentMethod) -> str:
         return 'WATA'
     if method == PaymentMethod.PLATEGA:
         return settings.get_platega_display_name()
+    if method == PaymentMethod.PLATEGA_RECURRENT:
+        return f'{settings.get_platega_display_name()} СБП'
     if method == PaymentMethod.CRYPTOBOT:
         return 'CryptoBot'
     if method == PaymentMethod.HELEKET:
@@ -167,6 +178,12 @@ def method_display_name(method: PaymentMethod) -> str:
         return settings.get_lava_display_name()
     if method == PaymentMethod.CISPAY:
         return settings.get_cispay_display_name()
+    if method == PaymentMethod.CASHERA:
+        return settings.get_cashera_display_name()
+    if method == PaymentMethod.TABPAY:
+        return settings.get_tabpay_display_name()
+    if method == PaymentMethod.PARITYPAY:
+        return settings.get_paritypay_display_name()
     if method == PaymentMethod.TELEGRAM_STARS:
         return 'Telegram Stars'
     return method.value
@@ -219,6 +236,12 @@ def _method_is_enabled(method: PaymentMethod) -> bool:
         return settings.is_lava_enabled()
     if method == PaymentMethod.CISPAY:
         return settings.is_cispay_enabled()
+    if method == PaymentMethod.CASHERA:
+        return settings.is_cashera_enabled()
+    if method == PaymentMethod.TABPAY:
+        return settings.is_tabpay_enabled()
+    if method == PaymentMethod.PARITYPAY:
+        return settings.is_paritypay_enabled()
     return False
 
 
@@ -470,7 +493,7 @@ def _is_riopay_pending(payment: RioPayPayment) -> bool:
     if payment.is_paid:
         return False
     status = (payment.status or '').lower()
-    return status in {'pending'}
+    return status == 'pending'
 
 
 def _is_paypear_pending(payment: PayPearPayment) -> bool:
@@ -534,6 +557,28 @@ def _is_cispay_pending(payment: CisPayPayment) -> bool:
         return False
     status = (payment.status or '').lower()
     return status == 'pending'
+
+
+def _is_cashera_pending(payment: CasheraPayment) -> bool:
+    if payment.is_paid:
+        return False
+    return (payment.status or '').lower() == 'pending'
+
+
+def _is_paritypay_pending(payment: ParityPayPayment) -> bool:
+    if payment.is_paid:
+        return False
+    from app.services.payment.paritypay import PARITYPAY_PENDING_STATUSES
+
+    return (payment.status or '').lower() in PARITYPAY_PENDING_STATUSES
+
+
+def _is_tabpay_pending(payment: TabPayPayment) -> bool:
+    if payment.is_paid:
+        return False
+    from app.services.payment.tabpay import TABPAY_PENDING_STATUSES
+
+    return (payment.status or '').lower() in TABPAY_PENDING_STATUSES
 
 
 def _parse_cryptobot_amount_kopeks(payment: CryptoBotPayment) -> int:
@@ -1155,6 +1200,84 @@ async def _fetch_lava_payments(db: AsyncSession, cutoff: datetime) -> list[Pendi
     return records
 
 
+async def _fetch_paritypay_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
+    stmt = (
+        select(ParityPayPayment)
+        .options(selectinload(ParityPayPayment.user))
+        .where(ParityPayPayment.created_at >= cutoff)
+        .order_by(desc(ParityPayPayment.created_at))
+    )
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        if not _is_paritypay_pending(payment):
+            continue
+        record = _build_record(
+            PaymentMethod.PARITYPAY,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
+async def _fetch_tabpay_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
+    stmt = (
+        select(TabPayPayment)
+        .options(selectinload(TabPayPayment.user))
+        .where(TabPayPayment.created_at >= cutoff)
+        .order_by(desc(TabPayPayment.created_at))
+    )
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        if not _is_tabpay_pending(payment):
+            continue
+        record = _build_record(
+            PaymentMethod.TABPAY,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
+async def _fetch_cashera_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
+    stmt = (
+        select(CasheraPayment)
+        .options(selectinload(CasheraPayment.user))
+        .where(CasheraPayment.created_at >= cutoff)
+        .order_by(desc(CasheraPayment.created_at))
+    )
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        if not _is_cashera_pending(payment):
+            continue
+        record = _build_record(
+            PaymentMethod.CASHERA,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
 async def _fetch_cispay_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(CisPayPayment)
@@ -1208,6 +1331,45 @@ async def _fetch_stars_transactions(db: AsyncSession, cutoff: datetime) -> list[
     return records
 
 
+async def _fetch_platega_recurring_charges(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
+    """Успешные СБП-автопродления Platega (issue #3279).
+
+    Рекуррентное списание не заводит строку в ``platega_payments``: коллбек
+    пишет только транзакцию SUBSCRIPTION_PAYMENT с методом ``platega``, и в
+    админке такие платежи не показывались вовсе. Фиктивных pending-записей
+    ради отображения здесь не создаётся — читаем транзакции напрямую, ровно
+    как это уже сделано для Telegram Stars.
+
+    Пара «тип + метод» однозначна: обычные пополнения через Platega имеют тип
+    DEPOSIT и свою строку у провайдера, а списания с баланса идут с методом
+    ``balance``.
+    """
+    stmt = (
+        select(Transaction)
+        .options(selectinload(Transaction.user))
+        .where(
+            Transaction.created_at >= cutoff,
+            Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+            Transaction.payment_method == PaymentMethod.PLATEGA.value,
+        )
+        .order_by(desc(Transaction.created_at))
+    )
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for transaction in result.scalars().all():
+        record = _build_record(
+            PaymentMethod.PLATEGA_RECURRENT,
+            transaction,
+            identifier=transaction.external_id or str(transaction.id),
+            amount_kopeks=transaction.amount_kopeks,
+            status='paid' if transaction.is_completed else 'pending',
+            is_paid=bool(transaction.is_completed),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
 async def list_recent_pending_payments(
     db: AsyncSession,
     *,
@@ -1240,7 +1402,11 @@ async def list_recent_pending_payments(
         await _fetch_donut_payments(db, cutoff),
         await _fetch_lava_payments(db, cutoff),
         await _fetch_cispay_payments(db, cutoff),
+        await _fetch_cashera_payments(db, cutoff),
+        await _fetch_tabpay_payments(db, cutoff),
+        await _fetch_paritypay_payments(db, cutoff),
         await _fetch_stars_transactions(db, cutoff),
+        await _fetch_platega_recurring_charges(db, cutoff),
     )
 
     records: list[PendingPayment] = []
@@ -1573,6 +1739,51 @@ async def get_payment_record(
             expires_at=getattr(payment, 'expires_at', None),
         )
 
+    if method == PaymentMethod.PARITYPAY:
+        payment = await db.get(ParityPayPayment, local_payment_id)
+        if not payment:
+            return None
+        await db.refresh(payment, attribute_names=['user'])
+        return _build_record(
+            method,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+
+    if method == PaymentMethod.TABPAY:
+        payment = await db.get(TabPayPayment, local_payment_id)
+        if not payment:
+            return None
+        await db.refresh(payment, attribute_names=['user'])
+        return _build_record(
+            method,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+
+    if method == PaymentMethod.CASHERA:
+        payment = await db.get(CasheraPayment, local_payment_id)
+        if not payment:
+            return None
+        await db.refresh(payment, attribute_names=['user'])
+        return _build_record(
+            method,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+
     if method == PaymentMethod.CISPAY:
         payment = await db.get(CisPayPayment, local_payment_id)
         if not payment:
@@ -1594,6 +1805,27 @@ async def get_payment_record(
             return None
         await db.refresh(transaction, attribute_names=['user'])
         if transaction.payment_method != PaymentMethod.TELEGRAM_STARS.value:
+            return None
+        return _build_record(
+            method,
+            transaction,
+            identifier=transaction.external_id or str(transaction.id),
+            amount_kopeks=transaction.amount_kopeks,
+            status='paid' if transaction.is_completed else 'pending',
+            is_paid=bool(transaction.is_completed),
+        )
+
+    if method == PaymentMethod.PLATEGA_RECURRENT:
+        transaction = await db.get(Transaction, local_payment_id)
+        if not transaction:
+            return None
+        await db.refresh(transaction, attribute_names=['user'])
+        # Номер приходит из другой таблицы, поэтому сверяем, что это
+        # действительно списание по СБП-подписке, а не совпадение id.
+        if (
+            transaction.type != TransactionType.SUBSCRIPTION_PAYMENT.value
+            or transaction.payment_method != PaymentMethod.PLATEGA.value
+        ):
             return None
         return _build_record(
             method,
@@ -1684,10 +1916,31 @@ async def run_manual_check(
                 payment = result.get('payment') if result else None
             else:
                 payment = None
+        elif method == PaymentMethod.CASHERA:
+            cashera_payment = await db.get(CasheraPayment, local_payment_id)
+            if cashera_payment:
+                result = await payment_service.check_cashera_payment_status(db, cashera_payment.order_id)
+                payment = result.get('payment') if result else None
+            else:
+                payment = None
         elif method == PaymentMethod.CISPAY:
             cispay_payment = await db.get(CisPayPayment, local_payment_id)
             if cispay_payment:
                 result = await payment_service.check_cispay_payment_status(db, cispay_payment.order_id)
+                payment = result.get('payment') if result else None
+            else:
+                payment = None
+        elif method == PaymentMethod.TABPAY:
+            tabpay_payment = await db.get(TabPayPayment, local_payment_id)
+            if tabpay_payment:
+                result = await payment_service.check_tabpay_payment_status(db, tabpay_payment.order_id)
+                payment = result.get('payment') if result else None
+            else:
+                payment = None
+        elif method == PaymentMethod.PARITYPAY:
+            paritypay_payment = await db.get(ParityPayPayment, local_payment_id)
+            if paritypay_payment:
+                result = await payment_service.check_paritypay_payment_status(db, paritypay_payment.order_id)
                 payment = result.get('payment') if result else None
             else:
                 payment = None

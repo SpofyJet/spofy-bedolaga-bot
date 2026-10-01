@@ -173,8 +173,8 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
             # Удаляем лишние части длинного сообщения
             try:
                 asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug('Антиспам тикетов: сообщение не поставлено на удаление', error=str(exc))
             return
     except Exception:
         pass
@@ -185,8 +185,8 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         if last_ts and (now_ts - float(last_ts)) < 2:
             try:
                 asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug('Антиспам тикетов: сообщение не поставлено на удаление', error=str(exc))
             return
         await state.update_data(rl_ts_create=now_ts)
     except Exception:
@@ -560,11 +560,9 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             nav_row.append(
                 types.InlineKeyboardButton(text='➡️', callback_data=f'ticket_view_page_{ticket_id}_{page + 1}')
             )
-        try:
-            # n6-П14: пагинация — после действий, перед «Назад»
+        if getattr(keyboard, 'inline_keyboard', None) is not None:
+            # Пагинация — после действий, прямо над «Назад»
             keyboard.inline_keyboard.insert(max(0, len(keyboard.inline_keyboard) - 1), nav_row)
-        except Exception:
-            pass
     # Показываем как текст (чтобы не упереться в caption лимит)
     page_text = pages[page - 1]
     await safe_edit_or_resend(callback.message, page_text, keyboard)
@@ -720,8 +718,8 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         if limited:
             try:
                 asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug('Антиспам тикетов: сообщение не поставлено на удаление', error=str(exc))
             return
     except Exception:
         pass
@@ -732,12 +730,13 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         if last_ts and (now_ts - float(last_ts)) < 2:
             try:
                 asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug('Антиспам тикетов: сообщение не поставлено на удаление', error=str(exc))
             return
         await state.update_data(rl_ts_reply=now_ts)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Антиспам — вспомогательный механизм: без состояния ответ всё равно обрабатывается.
+        logger.debug('Антиспам ответа на тикет: состояние не обновлено', error=str(exc))
 
     """Обработать ответ на тикет"""
     # Поддержка фото для ответа пользователя
@@ -961,19 +960,17 @@ async def close_ticket_notification(callback: types.CallbackQuery, db_user: User
     await callback.answer(texts.t('NOTIFICATION_CLOSED', 'Уведомление закрыто.'))
 
 
-def _build_ticket_notification_keyboard(service: AdminNotificationService, ticket: Ticket, user: User | None):
-    """Собирает клавиатуру действий для уведомления о тикете по роли получателя.
+def build_ticket_card_keyboard(ticket: Ticket, user: User | None, *, role: str):
+    """Клавиатура карточки тикета по роли получателя ('admin' / 'moderator' / 'group').
 
-    Возвращает None только для роли 'none' (посторонний в личке / строковый
-    chat_id). Для группового/супергруппа админ-чата ('group') показываем урезанный
-    набор без FSM-кнопок — «Ответить»/«Блок по времени» в общем чате не работают
-    из-за privacy mode бота, остаются надёжные URL/callback-кнопки.
+    Для группового/супергруппа админ-чата ('group') — урезанный набор без
+    FSM-кнопок: «Ответить»/«Блок по времени» в общем чате не работают из-за
+    privacy mode бота, остаются надёжные URL/callback-кнопки. Той же клавиатурой
+    карточка перерисовывается после действий в группе (закрыть, блок, разблок) —
+    иначе туда попадал экран личной админки с мёртвыми кнопками и «⬅️ Назад».
     """
     from app.config import settings
 
-    role = service.resolve_recipient_role()
-    if role == 'none':
-        return None
     # В cabinet-режиме добавляем кнопку «открыть тикет в кабинете»: web_app в личке,
     # t.me Mini App диплинк в группе (где web_app недоступен). None — если не
     # cabinet-режим / кабинет не настроен / в группе нет зарегистрированного Mini App.
@@ -994,6 +991,15 @@ def _build_ticket_notification_keyboard(service: AdminNotificationService, ticke
         cabinet_button=cabinet_button,
         language=settings.DEFAULT_LANGUAGE,
     )
+
+
+def _build_ticket_notification_keyboard(service: AdminNotificationService, ticket: Ticket, user: User | None):
+    """Клавиатура уведомления о тикете; None только для роли 'none'
+    (посторонний в личке / строковый chat_id)."""
+    role = service.resolve_recipient_role()
+    if role == 'none':
+        return None
+    return build_ticket_card_keyboard(ticket, user, role=role)
 
 
 async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):

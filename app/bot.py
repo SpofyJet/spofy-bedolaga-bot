@@ -12,6 +12,7 @@ from app.handlers import (
     polls as user_polls,
     promocode,
     referral,
+    referral_settings,
     server_status,
     simple_subscription,
     start,
@@ -44,6 +45,7 @@ from app.handlers.admin import (
     promocodes as admin_promocodes,
     public_offer as admin_public_offer,
     quick_amounts as admin_quick_amounts,
+    referral_levels as admin_referral_levels,
     referrals as admin_referrals,
     remnawave as admin_remnawave,
     reports as admin_reports,
@@ -80,6 +82,7 @@ from app.services.maintenance_service import maintenance_service
 from app.utils.cache import cache
 from app.utils.message_patch import patch_message_methods
 from app.utils.redis_client import create_redis
+from app.utils.rich_menu import forget_live_menu_on_callback
 
 
 patch_message_methods()
@@ -139,6 +142,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
 
     dp.message.middleware(ContextVarsMiddleware())
     dp.callback_query.middleware(ContextVarsMiddleware())
+    dp.callback_query.middleware(forget_live_menu_on_callback)
     dp.pre_checkout_query.middleware(ContextVarsMiddleware())
     chat_type_filter = ChatTypeFilterMiddleware()
     dp.message.middleware(chat_type_filter)
@@ -188,6 +192,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     balance.register_balance_handlers(dp)
     promocode.register_handlers(dp)
     referral.register_handlers(dp)
+    referral_settings.register_handlers(dp)
     support.register_handlers(dp)
     server_status.register_handlers(dp)
     tickets.register_handlers(dp)
@@ -199,6 +204,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_messages.register_handlers(dp)
     admin_monitoring.register_handlers(dp)
     admin_referrals.register_handlers(dp)
+    admin_referral_levels.register_handlers(dp)
     admin_rules.register_handlers(dp)
     admin_remnawave.register_handlers(dp)
     admin_statistics.register_handlers(dp)

@@ -5,14 +5,15 @@ def _callbacks(markup):
     return [button.callback_data for row in markup.inline_keyboard for button in row if button.callback_data]
 
 
-def test_rules_button_shown_by_default():
+def test_legal_entry_shown_by_default():
+    # Spofy: правила, оферта и политика собраны в один вход «Правила и документы»
     markup = get_info_menu_keyboard()
-    assert 'menu_rules' in _callbacks(markup)
+    assert 'menu_legal' in _callbacks(markup)
 
 
-def test_rules_button_hidden_when_disabled():
-    markup = get_info_menu_keyboard(show_rules=False)
-    assert 'menu_rules' not in _callbacks(markup)
+def test_legal_entry_hidden_when_all_documents_disabled():
+    markup = get_info_menu_keyboard(show_rules=False, show_privacy_policy=False, show_public_offer=False)
+    assert 'menu_legal' not in _callbacks(markup)
 
 
 def test_custom_page_buttons_added():

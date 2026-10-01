@@ -67,7 +67,7 @@ CATEGORY_GROUP_METADATA: dict[str, dict[str, object]] = {
         'description': (
             'YooKassa, CryptoBot, Heleket, CloudPayments, Freekassa, MulenPay, PAL24, Wata, '
             'Platega, Tribute, Kassa AI, RioPay, SeverPay, PayPear, RollyPay, Overpay, AuraPay, '
-            'Etoplatezhi, Antilopay, Jupiter, CisPay, Donut, Lava и Telegram Stars.'
+            'Etoplatezhi, Antilopay, Jupiter, CisPay, TabPay, ParityPay, Donut, Lava, Cashera и Telegram Stars.'
         ),
         'icon': '💳',
         'categories': (
@@ -89,6 +89,9 @@ CATEGORY_GROUP_METADATA: dict[str, dict[str, object]] = {
             'ANTILOPAY',
             'JUPITER',
             'CISPAY',
+            'CASHERA',
+            'TABPAY',
+            'PARITYPAY',
             'DONUT',
             'LAVA',
             'MULENPAY',

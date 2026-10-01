@@ -188,6 +188,7 @@ def read_callback_fields(payload: Mapping[str, Any]) -> CallbackFields:
         next_charge_at=fields.get('nextchargeat'),
     )
 
+
 def read_callback_payload(payload: Mapping[str, Any]) -> str | None:
     """Payload-токен из коллбека Platega (регистр ключа не важен). n5."""
     return _text(_lower_keys(payload).get('payload'))

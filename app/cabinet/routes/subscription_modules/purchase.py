@@ -47,6 +47,7 @@ from app.services.subscription_purchase_service import (
     PurchaseValidationError,
 )
 from app.services.subscription_service import SubscriptionService
+from app.services.traffic_reset_policy import should_reset_traffic_on_tariff_purchase
 from app.services.user_cart_service import user_cart_service
 from app.utils.pricing_utils import calculate_price_per_month, format_period_description
 from app.utils.timezone import format_local_datetime
@@ -225,6 +226,9 @@ async def _build_tariff_response(
                 'price_label': settings.format_price(final_price),
                 'price_per_month_kopeks': per_month,
                 'price_per_month_label': settings.format_price(per_month),
+                # Период, отмеченный оператором как самый выгодный: кабинет
+                # обводит его рамкой, бот ставит подпись в кнопке.
+                'is_highlighted': tariff.highlight_period_days == period_days,
             }
 
             # Информация о доп. устройствах в цене
@@ -281,6 +285,9 @@ async def _build_tariff_response(
         'id': tariff.id,
         'name': tariff.name,
         'description': tariff.description,
+        # Тариф отмечен оператором как выгодный: кабинет обводит карточку рамкой,
+        # бот ставит подпись в кнопке списка.
+        'is_highlighted': bool(tariff.is_highlighted),
         'tier_level': tariff.tier_level,
         'traffic_limit_gb': tariff.traffic_limit_gb,
         'traffic_limit_label': traffic_label,
@@ -429,12 +436,19 @@ async def get_purchase_options(
                 # Автопродление Lava: фронт показывает переключатель на странице
                 # подписки, если фича включена.
                 'lava_recurrent_enabled': settings.is_lava_recurrent_enabled(),
+                'cashera_recurrent_enabled': settings.is_cashera_recurrent_enabled(),
             }
 
         # Classic mode - return periods
         context = await purchase_service.build_options(db, user, subscription_id=subscription_id)
         payload = context.payload
         payload['sales_mode'] = 'classic'
+        # Автооплата — свойство системы, а не режима продаж. Без этих признаков
+        # кабинет спрашивал состояние автооплаты у каждой подписки и узнавал об
+        # отключённой фиче из ответа 403 — по красной строке в консоли на запрос.
+        payload['platega_recurrent_enabled'] = settings.is_platega_recurrent_enabled()
+        payload['lava_recurrent_enabled'] = settings.is_lava_recurrent_enabled()
+        payload['cashera_recurrent_enabled'] = settings.is_cashera_recurrent_enabled()
         return payload
 
     except PurchaseValidationError as e:
@@ -819,10 +833,20 @@ async def purchase_tariff(
         promo_offer_discount_value = result.promo_offer_discount
         price_before_promo_offer = price_kopeks + promo_offer_discount_value
 
-        # Safety guard: reject zero-price purchases for non-daily tariffs (defense in depth).
-        # Use original_total (pre-discount price) — base_price is already discounted,
-        # so a 100% group discount legitimately makes it 0.
-        if price_kopeks <= 0 and result.original_total <= 0 and not is_daily_tariff:
+        # Safety guard: reject purchases whose price is zero because nothing is
+        # configured. Use original_total (pre-discount price) — base_price is
+        # already discounted, so a 100% group discount legitimately makes it 0.
+        #
+        # Нулевая цена сама по себе поломкой НЕ является: бесплатный тариф в
+        # проекте штатный, и бот его продаёт. Признак настроенности — наличие
+        # цены периода, а не её величина; раньше здесь стояла проверка «> 0», и
+        # тариф, показанный кабинетом как «Бесплатно», купить было нельзя.
+        if (
+            price_kopeks <= 0
+            and result.original_total <= 0
+            and not is_daily_tariff
+            and not tariff.has_configured_price_for_period(period_days)
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Invalid tariff period or pricing configuration',
@@ -999,6 +1023,11 @@ async def purchase_tariff(
         # нет). Пост-persist шаги (bonus_seconds, daily-маркер, синк с панелью)
         # остаются снаружи guard'а: их сбой не должен возвращать деньги за уже
         # выданную подписку.
+        # Новая подписка (и конверсия триала на месте) — квота новая, счётчик панели
+        # обнуляем; для продления/смены тарифа решение пересчитывается ниже по настройкам.
+        reset_used_traffic = True
+        # До чистки триалов: защитная ветка ниже и extend_subscription снимают флаг.
+        _purchase_converts_trial = bool(subscription and subscription.is_trial)
         try:
             # --- Trial cleanup: find and kill all trials BEFORE creating/extending ---
             from app.database.crud.subscription import deactivate_user_trial_subscriptions
@@ -1046,6 +1075,13 @@ async def purchase_tariff(
                 await db.flush()
 
             if subscription:
+                # Решаем ДО extend_subscription: он записывает в объект новый tariff_id и
+                # снимает триальный флаг — после вызова «тариф не менялся, триала не было».
+                reset_used_traffic = should_reset_traffic_on_tariff_purchase(
+                    is_tariff_change=subscription.tariff_id != tariff.id,
+                    was_trial=_purchase_converts_trial,
+                    paid_kopeks=price_kopeks,
+                )
                 # Extend/change tariff — сохраняем докупленные устройства при продлении того же тарифа
                 subscription = await extend_subscription(
                     db=db,
@@ -1055,6 +1091,7 @@ async def purchase_tariff(
                     traffic_limit_gb=traffic_limit_gb,
                     device_limit=effective_device_limit,
                     connected_squads=squads,
+                    reset_used_traffic=reset_used_traffic,
                 )
             else:
                 # Create new subscription (или конверсия исключённого выше триала)
@@ -1145,10 +1182,12 @@ async def purchase_tariff(
             # past the budget the sync is deferred to remnawave_retry_queue below.
             async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
                 if not _should_create:
+                    # Тем же решением, что и счётчик в базе (GitHub #3227: здесь стоял
+                    # литерал True — трафик в панели слетал при любой оплате).
                     await service.update_remnawave_user(
                         db,
                         subscription,
-                        reset_traffic=True,
+                        reset_traffic=reset_used_traffic,
                         reset_reason='покупка тарифа (cabinet)',
                         sync_squads=True,
                     )
@@ -1187,6 +1226,11 @@ async def purchase_tariff(
 
         await db.refresh(user)
         await db.refresh(subscription)
+        # refresh обнуляет загруженные связи, а ответ читает тариф подписки
+        # (суточность, цена дня, режим сброса трафика). Дочитывать его лениво
+        # в async-роуте нельзя: получится MissingGreenlet и HTTP 500 уже ПОСЛЕ
+        # списания и создания подписки — человек заплатил и увидел ошибку.
+        await db.refresh(subscription, ['tariff'])
 
         # Yandex.Metrika offline conversion — see /purchase endpoint for context (#558449).
         try:

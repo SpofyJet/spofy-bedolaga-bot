@@ -27,9 +27,11 @@ from app.handlers.admin.messages import (
     get_custom_users,
     get_target_users,
 )
+from app.services.broadcast_audience import select_audience_users
 
 
 if TYPE_CHECKING:
+    from app.cabinet.schemas.broadcasts import BroadcastAudience
     from app.cabinet.services.email_service import EmailService
 
 
@@ -55,6 +57,41 @@ EMAIL_RATE_LIMIT = 8
 EMAIL_BATCH_SIZE = 50
 
 
+# Текст отказа Telegram в логе: хватает, чтобы отличить MEDIA_CAPTION_TOO_LONG от
+# can't parse entities и wrong file identifier, и не хватает, чтобы залить журнал.
+_BAD_REQUEST_TEXT_LIMIT = 300
+
+
+def _note_bad_request(
+    causes: dict[str, int],
+    *,
+    broadcast_id: int,
+    telegram_id: int,
+    config: BroadcastConfig,
+    error: TelegramBadRequest,
+) -> None:
+    """Первый отказ по каждой причине — error (уходит админу и в журнал системных
+    ошибок), повторы только считаем: у 10 000 получателей причина одна и та же."""
+    text = str(error)[:_BAD_REQUEST_TEXT_LIMIT]
+    causes[text] = causes.get(text, 0) + 1
+    if causes[text] > 1:
+        return
+    caption = (config.media.caption or config.message_text) if config.media else config.message_text
+    logger.error(
+        'Telegram отклонил сообщение рассылки',
+        broadcast_id=broadcast_id,
+        telegram_id=telegram_id,
+        error=text,
+        media_type=config.media.type if config.media else None,
+        caption_length=len(caption or ''),
+    )
+
+
+def _log_bad_request_summary(causes: dict[str, int], *, broadcast_id: int) -> None:
+    if causes:
+        logger.warning('Рассылка: отказы Telegram по причинам', broadcast_id=broadcast_id, failed_by_error=dict(causes))
+
+
 @dataclass(slots=True)
 class BroadcastMediaConfig:
     type: str
@@ -71,6 +108,7 @@ class BroadcastConfig:
     initiator_name: str | None = None
     custom_buttons: list[dict] | None = None
     category: str = 'system'  # system|news|promo
+    audience: BroadcastAudience | None = None
     # Явный список telegram_id вместо резолва target'а. Нужен отправкам, где получатели
     # уже посчитаны вызывающим кодом (промопредложения создают оффер на каждого).
     recipient_ids: list[int] | None = None
@@ -88,6 +126,30 @@ class EmailBroadcastConfig:
     email_html_content: str
     initiator_name: str | None = None
     category: str = 'system'  # system|news|promo — как у Telegram-рассылки
+    audience: BroadcastAudience | None = None
+
+
+EMAIL_TARGET_PROMO_GROUP_PREFIX = 'promo_group_'
+EMAIL_TARGET_USER_PREFIX = 'user_'
+
+
+def parse_email_scoped_target(target: str) -> tuple[str, int] | None:
+    """Email-таргет с идентификатором: ``promo_group_{id}`` или ``user_{id}``.
+
+    Возвращает ``('promo_group', id)`` / ``('user', id)``, для остальных — None.
+    Промогруппа — основная группа человека (``users.promo_group_id``), как в
+    списке участников группы в админке.
+    """
+    for prefix, kind in (
+        (EMAIL_TARGET_PROMO_GROUP_PREFIX, 'promo_group'),
+        (EMAIL_TARGET_USER_PREFIX, 'user'),
+    ):
+        if target.startswith(prefix):
+            raw = target[len(prefix) :]
+            if raw.isdigit() and int(raw) > 0:
+                return kind, int(raw)
+            return None
+    return None
 
 
 @dataclass(slots=True)
@@ -181,7 +243,7 @@ class BroadcastService:
             if config.recipient_ids is not None:
                 recipient_ids: list[int] = list(config.recipient_ids)
             else:
-                recipient_ids = await self._fetch_recipients(config.target, config.category)
+                recipient_ids = await self._fetch_recipients(config.target, config.category, config.audience)
 
             async with AsyncSessionLocal() as session:
                 broadcast = await session.get(BroadcastHistory, broadcast_id)
@@ -251,7 +313,9 @@ class BroadcastService:
             logger.exception('Критическая ошибка при выполнении рассылки', broadcast_id=broadcast_id, exc=exc)
             await self._mark_failed(broadcast_id, sent_count, failed_count, blocked_count)
 
-    async def _fetch_recipients(self, target: str, category: str = 'system') -> list[int]:
+    async def _fetch_recipients(
+        self, target: str, category: str = 'system', audience: BroadcastAudience | None = None
+    ) -> list[int]:
         """Загружает получателей и возвращает список telegram_id (скаляры, не ORM-объекты).
 
         Filters out users who disabled the given broadcast category in their
@@ -259,6 +323,9 @@ class BroadcastService:
         Category 'system' is never filtered — system notifications reach everyone.
         """
         async with AsyncSessionLocal() as session:
+            if audience is not None:
+                users_orm = await select_audience_users(session, audience, 'telegram', category)
+                return [u.telegram_id for u in users_orm if u.telegram_id is not None]
             if target.startswith('custom_'):
                 criteria = target[len('custom_') :]
                 users_orm = await get_custom_users(session, criteria)
@@ -301,6 +368,8 @@ class BroadcastService:
         flood_wait_until: float = 0.0
         last_progress_update: float = 0.0
         last_progress_count: int = 0
+        # Отказы Telegram (BadRequest) по тексту причины — для лога и сводки.
+        bad_request_causes: dict[str, int] = {}
 
         async def send_single(telegram_id: int) -> str:
             """Returns 'sent', 'blocked', or 'failed'."""
@@ -343,6 +412,16 @@ class BroadcastService:
                     err = str(e).lower()
                     if 'bot was blocked' in err or 'user is deactivated' in err or 'chat not found' in err:
                         return 'blocked'
+                    # Не ретраим: Telegram отверг само сообщение (подпись, разметка,
+                    # file_id), и у следующей попытки будет тот же ответ. Но и молчать
+                    # нельзя — иначе админ видит только failed = total.
+                    _note_bad_request(
+                        bad_request_causes,
+                        broadcast_id=broadcast_id,
+                        telegram_id=telegram_id,
+                        config=config,
+                        error=e,
+                    )
                     return 'failed'
 
                 except (TelegramNetworkError, TelegramServerError) as exc:
@@ -377,6 +456,7 @@ class BroadcastService:
         for i in range(0, len(recipient_ids), _TG_BATCH_SIZE):
             if cancel_event.is_set():
                 await self._mark_cancelled(broadcast_id, sent_count, failed_count, blocked_count)
+                _log_bad_request_summary(bad_request_causes, broadcast_id=broadcast_id)
                 return sent_count, failed_count, blocked_count, True
 
             batch = recipient_ids[i : i + _TG_BATCH_SIZE]
@@ -412,6 +492,7 @@ class BroadcastService:
             # Задержка между батчами для rate limiting
             await asyncio.sleep(_TG_BATCH_DELAY)
 
+        _log_bad_request_summary(bad_request_causes, broadcast_id=broadcast_id)
         return sent_count, failed_count, blocked_count, False
 
     def _build_keyboard(
@@ -453,6 +534,21 @@ class BroadcastService:
                 parse_mode='HTML',
                 reply_markup=keyboard,
             )
+            return
+
+        # Медиа-ветка выше уходит как есть: rich-сообщение не несёт загруженный
+        # по file_id файл. Текстовую рассылку показываем в том же виде, что меню и
+        # остальные уведомления; при отказе ниже отрабатывает обычная отправка.
+        from app.config import settings
+        from app.utils.rich_notify import try_send_rich_notification
+
+        if await try_send_rich_notification(
+            self._bot,
+            telegram_id,
+            config.message_text,
+            keyboard=keyboard,
+            with_logo=settings.ENABLE_LOGO_MODE,
+        ):
             return
 
         await self._bot.send_message(
@@ -591,6 +687,13 @@ async def cleanup_blocked_broadcast_users(blocked_telegram_ids: list[int]) -> No
                 result = await session.execute(select(User).where(User.telegram_id == telegram_id))
                 user = result.scalar_one_or_none()
                 if not user or user.status == UserStatus.BLOCKED.value:
+                    continue
+
+                from app.services.rbac_bootstrap_service import is_protected_from_blocking
+
+                if is_protected_from_blocking(user):
+                    # An admin who muted the bot must not lose access to it.
+                    logger.info('Пропуск авто-блокировки: аккаунт админа из env', telegram_id=telegram_id)
                     continue
 
                 user.status = UserStatus.BLOCKED.value
@@ -738,7 +841,7 @@ class EmailBroadcastService:
                 await session.commit()
 
             # Fetch email recipients
-            recipients = await self._fetch_email_recipients(config.target, config.category)
+            recipients = await self._fetch_email_recipients(config.target, config.category, config.audience)
 
             # Update total count
             async with AsyncSessionLocal() as session:
@@ -780,7 +883,9 @@ class EmailBroadcastService:
             logger.exception('Critical error in email broadcast', broadcast_id=broadcast_id, exc=exc)
             await self._mark_failed(broadcast_id, sent_count, failed_count)
 
-    async def _fetch_email_recipients(self, target: str, category: str = 'system') -> list[_EmailRecipient]:
+    async def _fetch_email_recipients(
+        self, target: str, category: str = 'system', audience: BroadcastAudience | None = None
+    ) -> list[_EmailRecipient]:
         """
         Загружает получателей email-рассылки.
 
@@ -797,6 +902,24 @@ class EmailBroadcastService:
         from app.utils.notification_prefs import filter_users_by_broadcast_category
 
         async with AsyncSessionLocal() as session:
+            if audience is not None:
+                users = await select_audience_users(session, audience, 'email', category)
+                recipients = []
+                for user in users:
+                    email = user.email
+                    if not email:
+                        continue
+                    user_name = user.username or ' '.join(filter(None, (user.first_name, user.last_name)))
+                    recipients.append(
+                        _EmailRecipient(
+                            email=email,
+                            user_name=user_name or email.split('@')[0],
+                            user_id=user.id,
+                            language=user.language or 'ru',
+                        )
+                    )
+                return recipients
+
             # Base query: verified email users with active status
             base_conditions = [
                 User.email.isnot(None),
@@ -820,34 +943,45 @@ class EmailBroadcastService:
                     User.telegram_id.isnot(None),
                 )
 
+            # Подписки — подзапросом, а не JOIN: в мультитарифе JOIN давал строку
+            # человека на каждую подходящую подписку, и одно письмо уходило
+            # столько раз, сколько у него подписок. DISTINCT по User на Postgres
+            # не сработает — у пользователя есть JSON-колонки без оператора равенства.
             elif target == 'active_email':
-                query = (
-                    select(User)
-                    .join(Subscription, User.id == Subscription.user_id)
-                    .where(
-                        *base_conditions,
-                        Subscription.status == SubscriptionStatus.ACTIVE.value,
-                    )
+                query = select(User).where(
+                    *base_conditions,
+                    User.id.in_(
+                        select(Subscription.user_id).where(Subscription.status == SubscriptionStatus.ACTIVE.value)
+                    ),
                 )
 
             elif target == 'expired_email':
-                query = (
-                    select(User)
-                    .join(Subscription, User.id == Subscription.user_id)
-                    .where(
-                        *base_conditions,
-                        Subscription.status.in_(
-                            [
-                                SubscriptionStatus.EXPIRED.value,
-                                SubscriptionStatus.DISABLED.value,
-                            ]
-                        ),
-                    )
+                query = select(User).where(
+                    *base_conditions,
+                    User.id.in_(
+                        select(Subscription.user_id).where(
+                            Subscription.status.in_(
+                                [
+                                    SubscriptionStatus.EXPIRED.value,
+                                    SubscriptionStatus.DISABLED.value,
+                                ]
+                            )
+                        )
+                    ),
                 )
+
+            elif scoped := parse_email_scoped_target(target):
+                kind, target_id = scoped
+                column = User.promo_group_id if kind == 'promo_group' else User.id
+                query = select(User).where(*base_conditions, column == target_id)
 
             else:
                 logger.warning('Unknown email target filter', target=target)
                 return []
+
+            # Батчи по OFFSET без сортировки нестабильны: строка могла попасть в
+            # два батча или ни в один.
+            query = query.order_by(User.id)
 
             # Загружаем батчами и извлекаем скаляры сразу
             recipients: list[_EmailRecipient] = []
@@ -903,6 +1037,8 @@ class EmailBroadcastService:
         last_progress_count = 0
         last_progress_time: float = 0.0
 
+        from app.cabinet.services.email_unsubscribe import build_unsubscribe_url
+
         semaphore = asyncio.Semaphore(EMAIL_RATE_LIMIT)
 
         async def send_single_email(recipient: _EmailRecipient) -> bool | None:
@@ -911,9 +1047,12 @@ class EmailBroadcastService:
                 if cancel_event.is_set():
                     return None
 
-                # Отписка (RFC 8058) в этой сборке не перенесена — URL пустой,
-                # плейсхолдер {{unsubscribe_url}} в шаблоне рассылки резолвится в ''.
-                unsubscribe_url = ''
+                # Системные рассылки отписке не подлежат — заголовок им не ставим.
+                unsubscribe_url = (
+                    build_unsubscribe_url(recipient.user_id, recipient.email)
+                    if config.category in ('news', 'promo')
+                    else ''
+                )
                 subject, html_content = self.render_email(
                     config.email_subject, config.email_html_content, recipient, unsubscribe_url
                 )
@@ -927,6 +1066,11 @@ class EmailBroadcastService:
                             to_email=recipient.email,
                             subject=subject,
                             body_html=html_content,
+                            unsubscribe_url=unsubscribe_url or None,
+                            # Рассылки не ставим в очередь повторов: обрыв SMTP
+                            # посреди рассылки забил бы её тысячами писем,
+                            # которые потом сутки долбились бы повторами.
+                            queue_on_failure=False,
                         ),
                     )
                     return success

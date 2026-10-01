@@ -34,10 +34,10 @@ from app.database.crud.server_squad import (
 )
 from app.database.crud.subscription import (
     add_subscription_servers,
-    get_active_subscriptions_by_user_id,
-    get_subscription_by_user_id,
     create_trial_subscription,
     extend_subscription,
+    get_active_subscriptions_by_user_id,
+    get_subscription_by_user_id,
     remove_subscription_servers,
     update_subscription_autopay,
 )
@@ -65,6 +65,7 @@ from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.promo_offer_service import promo_offer_service
 from app.services.promocode_service import PromoCodeService
 from app.services.public_offer_service import PublicOfferService
+from app.services.referral_reward_service import format_reward_total
 from app.services.remnawave_service import (
     RemnaWaveConfigurationError,
     RemnaWaveService,
@@ -94,6 +95,7 @@ from app.services.trial_activation_service import (
     rollback_trial_subscription_activation,
 )
 from app.services.tribute_service import TributeService
+from app.services.user_action_log_service import mark_user_seen, schedule_miniapp_action_log
 from app.utils.currency_converter import currency_converter
 from app.utils.pricing_utils import (
     apply_percentage_discount,
@@ -2935,6 +2937,39 @@ async def _build_referral_info(
         get_effective_referral_commission_percent(user) if user else referral_settings.get('commission_percent') or 0
     )
 
+    # Под многоуровневой схемой плоские поля выше не управляют ни одним начислением.
+    # Описание берётся из того же источника, что и расчёт, — иначе миниапп обещает
+    # проценты и бонусы, которых бот не платит.
+    level_descriptions: list[str] = []
+    referee_bonus: str | None = None
+    tier_progress = None
+    if settings.is_referral_levels_scheme():
+        # Без имён тарифов строка «7 дн. подписки» умалчивает, в какой тариф эти
+        # дни лягут, — в боте и кабинете тариф называется, а миниапп его терял.
+        from app.database.models import Tariff
+        from app.services.referral_reward_service import (
+            ReferralRewardLevelService,
+            describe_active_levels,
+            describe_referee_bonus,
+            resolve_tier_progress,
+        )
+
+        configs = await ReferralRewardLevelService.get_all(db)
+        tariff_ids = {cfg.referrer_tariff_id for cfg in configs.values() if cfg.referrer_tariff_id}
+        tariff_ids |= {cfg.referee_tariff_id for cfg in configs.values() if cfg.referee_tariff_id}
+        tariff_names: dict[int, str] = {}
+        if tariff_ids:
+            rows = await db.execute(select(Tariff.id, Tariff.name).where(Tariff.id.in_(tariff_ids)))
+            tariff_names = {row.id: row.name for row in rows.all()}
+
+        level_descriptions = await describe_active_levels(
+            db, tariff_names=tariff_names, language=user.language, viewer=user
+        )
+        referee_bonus = await describe_referee_bonus(
+            db, tariff_names=tariff_names, language=user.language, referrer=user
+        )
+        tier_progress = await resolve_tier_progress(db, user)
+
     terms = MiniAppReferralTerms(
         minimum_topup_kopeks=minimum_topup_kopeks,
         minimum_topup_label=settings.format_price(minimum_topup_kopeks),
@@ -2943,6 +2978,13 @@ async def _build_referral_info(
         inviter_bonus_kopeks=inviter_bonus_kopeks,
         inviter_bonus_label=settings.format_price(inviter_bonus_kopeks),
         commission_percent=commission_percent,
+        scheme='levels' if settings.is_referral_levels_scheme() else 'legacy',
+        level_descriptions=level_descriptions,
+        referee_bonus_description=referee_bonus,
+        levels_mode=settings.get_referral_levels_mode() if settings.is_referral_levels_scheme() else 'chain',
+        tier_current_level=tier_progress.current_level if tier_progress else None,
+        tier_next_level=tier_progress.next_level if tier_progress else None,
+        tier_next_remaining=tier_progress.next_remaining if tier_progress else 0,
     )
 
     summary = await get_user_referral_summary(db, user.id)
@@ -2958,18 +3000,28 @@ async def _build_referral_info(
             paid_referrals_count=int(summary.get('paid_referrals_count') or 0),
             active_referrals_count=int(summary.get('active_referrals_count') or 0),
             total_earned_kopeks=total_earned_kopeks,
-            total_earned_label=settings.format_price(total_earned_kopeks),
+            total_earned_label=format_reward_total(
+                total_earned_kopeks, int(summary.get('total_earned_days') or 0), user.language
+            ),
+            total_earned_days=int(summary.get('total_earned_days') or 0),
             month_earned_kopeks=month_earned_kopeks,
-            month_earned_label=settings.format_price(month_earned_kopeks),
+            month_earned_label=format_reward_total(
+                month_earned_kopeks, int(summary.get('month_earned_days') or 0), user.language
+            ),
+            month_earned_days=int(summary.get('month_earned_days') or 0),
             conversion_rate=float(summary.get('conversion_rate') or 0.0),
         )
 
         for earning in summary.get('recent_earnings', []) or []:
             amount = int(earning.get('amount_kopeks') or 0)
+            earned_days = int(earning.get('days_granted') or 0)
             recent_earnings.append(
                 MiniAppReferralRecentEarning(
                     amount_kopeks=amount,
-                    amount_label=settings.format_price(amount),
+                    amount_label=format_reward_total(amount, earned_days, user.language),
+                    days_granted=earned_days,
+                    reward_type=str(earning.get('reward_type') or 'money'),
+                    level=int(earning.get('level') or 1),
                     reason=earning.get('reason'),
                     referral_name=earning.get('referral_name'),
                     created_at=earning.get('created_at'),
@@ -2981,6 +3033,7 @@ async def _build_referral_info(
     if detailed:
         for item in detailed.get('referrals', []) or []:
             total_earned = int(item.get('total_earned_kopeks') or 0)
+            item_days = int(item.get('days_earned') or 0)
             balance = int(item.get('balance_kopeks') or 0)
             referral_items.append(
                 MiniAppReferralItem(
@@ -2994,7 +3047,8 @@ async def _build_referral_info(
                     balance_kopeks=balance,
                     balance_label=settings.format_price(balance),
                     total_earned_kopeks=total_earned,
-                    total_earned_label=settings.format_price(total_earned),
+                    total_earned_days=item_days,
+                    total_earned_label=format_reward_total(total_earned, item_days, user.language),
                     topups_count=int(item.get('topups_count') or 0),
                     days_since_registration=item.get('days_since_registration'),
                     days_since_activity=item.get('days_since_activity'),
@@ -3269,7 +3323,7 @@ async def get_subscription_details(
                 raw_content = (page.content or '').strip()
                 if not raw_content:
                     continue
-                if not re.sub(r'<[^>]+>', '', raw_content).strip():
+                if not re.sub(r'<[^<>]+>', '', raw_content).strip():
                     continue
                 faq_items.append(
                     MiniAppFaqItem(
@@ -4168,6 +4222,7 @@ async def activate_promo_code(
         'daily_limit': status.HTTP_429_TOO_MANY_REQUESTS,
         'trial_subscription_exists': status.HTTP_409_CONFLICT,
         'trial_provisioning_failed': status.HTTP_503_SERVICE_UNAVAILABLE,
+        'traffic_not_applicable': status.HTTP_409_CONFLICT,
         'server_error': status.HTTP_500_INTERNAL_SERVER_ERROR,
     }
     message_map = {
@@ -4185,6 +4240,7 @@ async def activate_promo_code(
         'daily_limit': 'Too many promo code activations today',
         'trial_subscription_exists': 'You already have a subscription, so this trial code cannot be applied',
         'trial_provisioning_failed': 'Could not provision the trial right now, please try again later',
+        'traffic_not_applicable': 'This promo code only grants traffic, and your subscription is already unlimited',
         'user_not_found': 'User not found',
         'server_error': 'Failed to activate promo code',
     }
@@ -4810,6 +4866,20 @@ async def _authorize_miniapp_user(
             status.HTTP_403_FORBIDDEN,
             detail={'code': 'account_blocked', 'message': 'Account is blocked or deleted'},
         )
+
+    # Mini App — тоже активность: по метке карточка показывает «последнюю
+    # активность», а сторож неактивных решает, кого удалять.
+    if mark_user_seen(user):
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
+
+    # Единственное место, где запрос Mini App знает пользователя: init_data
+    # приходит телом, поэтому общей зависимости с Request здесь нет. Путь
+    # берётся из контекста запроса; действие пишется как действие, просмотр
+    # экрана — как экран, гейты — внутри планировщика.
+    schedule_miniapp_action_log(user.id)
 
     return user
 
@@ -6687,9 +6757,11 @@ async def purchase_tariff_endpoint(
         all_servers, _ = await get_all_server_squads(db, available_only=True)
         squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
-    # Какую подписку продлевать. Разрешение повторяет рабочий путь бота
-    # (app/handlers/subscription/tariff_purchase.py): в мультитарифе берётся
-    # подписка на ЭТОТ тариф, в классическом режиме — единственная подписка.
+    # Какую подписку продлевать. Переменной здесь не было вовсе: `if subscription:`
+    # падало NameError на КАЖДОЙ покупке тарифа через этот эндпоинт. Разрешение
+    # повторяет рабочий путь бота (app/handlers/subscription/tariff_purchase.py):
+    # в мультитарифе берётся подписка на ЭТОТ тариф, в классическом режиме —
+    # единственная подписка пользователя.
     if settings.is_multi_tariff_enabled():
         active_subs = await get_active_subscriptions_by_user_id(db, user.id)
         subscription = next((s for s in active_subs if s.tariff_id == tariff.id), None)
@@ -6736,15 +6808,14 @@ async def purchase_tariff_endpoint(
         await db.commit()
         await db.refresh(subscription)
 
-    # Синхронизируем с RemnaWave
-    # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
+    # Синхронизируем с RemnaWave: новая подписка панели ещё не известна — sync
+    # выберет create; существующая — update. При покупке тарифа ВСЕГДА сбрасываем трафик.
     service = SubscriptionService()
-    await service.update_remnawave_user(
+    await service.sync_remnawave_user(
         db,
         subscription,
         reset_traffic=True,
         reset_reason='покупка тарифа (miniapp)',
-        sync_squads=True,
     )
 
     # Сохраняем корзину для автопродления

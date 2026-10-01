@@ -12,11 +12,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cabinet.auth.email_auth_gate import require_email_auth_enabled
-from app.config import settings
-from app.database.crud.campaign import (
-    get_campaign_by_start_parameter,
-    get_campaign_registration_by_user,
+from app.cabinet.auth.registration_access import (
+    evaluate_public_registration,
+    is_env_admin_recovery,
+    raise_for_registration_decision,
 )
+from app.cabinet.auth.registration_throttle import (
+    enforce_email_registration_throttle,
+    enforce_verification_resend_throttle,
+)
+from app.config import settings
 from app.database.crud.rbac import UserRoleCRUD
 from app.database.crud.system_setting import get_setting_value
 from app.database.crud.user import (
@@ -49,6 +54,10 @@ from app.services.rbac_bootstrap_service import (
     is_user_admin_by_env,
 )
 from app.services.referral_service import process_referral_registration
+from app.services.registration_access_service import (
+    RegistrationAccessDecision,
+    RegistrationChannel,
+)
 from app.services.web_auth_service import (
     WEB_AUTH_TOKEN_TTL,
     consume_web_auth_token,
@@ -57,7 +66,6 @@ from app.services.web_auth_service import (
 )
 from app.utils.cache import RateLimitCache, TokenReplayCache
 from app.utils.subscription_utils import coerce_panel_device_limit
-from app.utils.timezone import panel_datetime_to_utc
 
 from ..auth import (
     create_access_token,
@@ -111,6 +119,7 @@ from ..schemas.auth import (
     TokenResponse,
     UserAvatarResponse,
     UserResponse,
+    VerificationResendRequest,
 )
 from ..services.email_service import email_service
 from ..services.email_template_overrides import get_rendered_override
@@ -186,6 +195,62 @@ async def _create_or_claim_telegram_user(
     )
     logger.info('User created successfully', user_id=user.id, telegram_id=user.telegram_id, source=source)
     return user
+
+
+async def _gate_cabinet_identity(
+    db: AsyncSession,
+    *,
+    channel: RegistrationChannel,
+    user: User | None,
+    telegram_id: int | None = None,
+    email: str | None = None,
+    email_verified: bool = False,
+    verified_admin: bool = False,
+) -> RegistrationAccessDecision | None:
+    if user is not None and user.status == UserStatus.ACTIVE.value:
+        return None
+    decision = await evaluate_public_registration(
+        db,
+        channel=channel,
+        existing_user=user,
+        telegram_id=telegram_id,
+        email=email,
+        email_verified=email_verified,
+        verified_admin=verified_admin,
+    )
+    raise_for_registration_decision(decision)
+    return decision
+
+
+async def _recover_cabinet_user_after_gate(
+    db: AsyncSession,
+    user: User,
+    decision: RegistrationAccessDecision | None,
+    *,
+    source: str,
+) -> None:
+    """Restore the account the caller just proved they own, after the gate admitted them.
+
+    All three Telegram arms reach this helper — initData, login widget and OIDC — and a
+    DELETED account is revived on each. That is deliberate: every arm verifies a Telegram
+    signature (initData and widget by HMAC over the bot token, OIDC by the provider's
+    signature), so all three are the same proof of identity as a fresh ``/start``, and the
+    account they revive is the caller's own. Only initData revived before invite-only; the
+    widget and OIDC endpoints answered 403 and left the user with a cabinet they could log
+    into but never use. BLOCKED never reaches revival — the gate denies it upstream.
+    """
+    if user.status == UserStatus.ACTIVE.value:
+        return
+    if user.status == UserStatus.DELETED.value:
+        from app.services.user_revival_service import revive_deleted_user
+
+        await revive_deleted_user(db, user, source=source)
+        return
+    if is_env_admin_recovery(user, decision):
+        user.status = UserStatus.ACTIVE.value
+        user.updated_at = datetime.now(UTC)
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='User account is not active')
 
 
 def _user_to_response(user: User) -> UserResponse:
@@ -381,70 +446,20 @@ async def _process_campaign_bonus(
     if not campaign_slug:
         return None
     try:
-        try:
-            campaign = await get_campaign_by_start_parameter(db, campaign_slug, only_active=True)
-            if not campaign:
-                return None
-
-            # Skip if user IS the campaign partner — prevent self-referral
-            if campaign.partner_user_id and campaign.partner_user_id == user.id:
-                logger.debug(
-                    'Skipping campaign attribution: user is the campaign partner',
-                    user_id=user.id,
-                    campaign_id=campaign.id,
-                )
-                return None
-
-            # Lock user row to prevent concurrent bonus application (race condition)
-            await db.execute(select(User).where(User.id == user.id).with_for_update())
-
-            existing = await get_campaign_registration_by_user(db, user.id)
-            if existing:
-                logger.debug('User already has campaign registration', user_id=user.id)
-                return None
-
-            # Привязать реферала к партнёру кампании (если партнёр назначен и юзер ещё не привязан)
-            if campaign.partner_user_id and not user.referred_by_id:
-                user.referred_by_id = campaign.partner_user_id
-                await db.flush()
-                try:
-                    from app.bot_factory import create_bot
-
-                    async with create_bot() as bot:
-                        await process_referral_registration(db, user.id, campaign.partner_user_id, bot=bot)
-                    logger.info(
-                        'Referral set from campaign partner',
-                        user_id=user.id,
-                        partner_user_id=campaign.partner_user_id,
-                        campaign_id=campaign.id,
-                    )
-                except Exception as e:
-                    logger.error('Failed to process referral from campaign partner', error=e)
-
-            service = AdvertisingCampaignService()
-            result = await service.apply_campaign_bonus(db, user, campaign)
-            if not result.success:
-                return None
-
-            # Refresh user to get updated balance after bonus
-            await db.refresh(user)
-
-            return CampaignBonusInfo(
-                campaign_name=campaign.name,
-                bonus_type=result.bonus_type or campaign.bonus_type,
-                balance_kopeks=result.balance_kopeks,
-                subscription_days=result.subscription_days,
-                tariff_name=result.tariff_name,
-            )
-        except Exception:
-            logger.exception('Failed to process campaign bonus', user_id=user.id, campaign_slug=campaign_slug)
-            try:
-                await db.rollback()
-                # Re-fetch user so session stays usable for the caller
-                await db.refresh(user)
-            except Exception:
-                logger.exception('Failed to rollback after campaign bonus error', user_id=user.id)
+        # Вся логика привязки живёт в сервисе — она общая с ботовым /start и
+        # с гостевой покупкой на лендинге. Сервис не бросает исключений.
+        service = AdvertisingCampaignService()
+        result = await service.attribute_campaign(db, user, campaign_slug)
+        if result is None:
             return None
+
+        return CampaignBonusInfo(
+            campaign_name=result.campaign_name or campaign_slug,
+            bonus_type=result.bonus_type or 'none',
+            balance_kopeks=result.balance_kopeks,
+            subscription_days=result.subscription_days,
+            tariff_name=result.tariff_name,
+        )
     finally:
         # Clear Redis pending_campaign whenever we consumed it. Done regardless
         # of success — if processing failed (already applied, race, exception),
@@ -510,6 +525,58 @@ async def _process_referral_code(
         logger.info('Referral applied from code', user_id=user.id, referrer_id=referrer.id, referral_code=referral_code)
     except Exception as e:
         logger.error('Failed to process referral code', error=e, referral_code=referral_code)
+
+
+async def _issue_verification_email(
+    db: AsyncSession,
+    user: User,
+    *,
+    language: str,
+    username: str | None,
+) -> bool:
+    """Выдаёт новый токен подтверждения и отправляет письмо со ссылкой.
+
+    Токен записывается всегда — даже когда письмо отправить нечем: иначе старая
+    ссылка продолжала бы работать после запроса новой. Возвращает False, если
+    письмо не ушло (верификация выключена или SMTP не настроен); решать, что при
+    этом ответить пользователю, — дело вызывающей ручки: одна вправе сказать
+    прямо, другая обязана молчать, чтобы не выдать чужой адрес.
+    """
+    user.email_verification_token = generate_verification_token()
+    user.email_verification_expires = get_verification_expires_at()
+    await db.commit()
+
+    if not settings.is_cabinet_email_verification_enabled() or not email_service.is_configured():
+        return False
+
+    verification_url = f'{settings.CABINET_URL}/verify-email'
+    expire_hours = settings.get_cabinet_email_verification_expire_hours()
+    override = await get_rendered_override(
+        'email_verification',
+        language,
+        context={
+            'username': username or '',
+            'email': user.email,
+            'verification_url': f'{verification_url}?token={user.email_verification_token}',
+            'expire_hours': str(expire_hours),
+        },
+        db=db,
+        required_vars=['verification_url'],
+    )
+    custom_subject, custom_body = override or (None, None)
+
+    # smtplib блокирующий — уводим в поток, иначе встаёт весь event loop.
+    await asyncio.to_thread(
+        email_service.send_verification_email,
+        to_email=user.email,
+        verification_token=user.email_verification_token,
+        verification_url=verification_url,
+        username=username,
+        language=language,
+        custom_subject=custom_subject,
+        custom_body_html=custom_body,
+    )
+    return True
 
 
 async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -> None:
@@ -581,19 +648,13 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 else:
                     existing_sub = await get_subscription_by_user_id(db, user.id)
 
-                # Parse panel data
-                expire_at = panel_datetime_to_utc(panel_user.expire_at)
-                traffic_limit_gb = (
-                    panel_user.traffic_limit_bytes // (1024**3) if panel_user.traffic_limit_bytes > 0 else 0
-                )
-                traffic_used_gb = panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes > 0 else 0
-                connected_squads = [
-                    s.get('uuid', '') for s in (panel_user.active_internal_squads or []) if s.get('uuid')
-                ]
-                device_limit = coerce_panel_device_limit(panel_user.hwid_device_limit, default=0)
                 snapshot = read_panel_user(panel_user)
-
                 current_time = datetime.now(UTC)
+                expire_at = snapshot.expire_at or current_time
+                connected_squads = list(snapshot.squads)
+                traffic_limit_gb = snapshot.traffic_limit_gb or 0
+                traffic_used_gb = snapshot.traffic_used_gb or 0
+                device_limit = coerce_panel_device_limit(panel_user.hwid_device_limit, default=0)
 
                 if existing_sub:
                     # Признак грейса — из базы после снимка панели: объект мог
@@ -692,6 +753,13 @@ async def auth_telegram(
         )
 
     user = await get_user_by_telegram_id(db, telegram_id)
+    access_decision = await _gate_cabinet_identity(
+        db,
+        channel=RegistrationChannel.CABINET_TELEGRAM_INIT_DATA,
+        user=user,
+        telegram_id=telegram_id,
+        verified_admin=settings.is_admin(telegram_id),
+    )
 
     # Get user data from initData
     tg_username = user_data.get('username')
@@ -770,23 +838,7 @@ async def auth_telegram(
         if updated:
             logger.info('User profile updated from initData', user_id=user.id)
 
-    if user.status != UserStatus.ACTIVE.value:
-        # DELETED users authenticating via initData (cryptographically
-        # signed by Telegram) get auto-revived inline — the signature on
-        # initData is the moral equivalent of a fresh /start. BLOCKED
-        # users still get the hard 403.
-        # revive_deleted_user does NOT commit — the endpoint's commit
-        # at the end of the function persists this together with
-        # cabinet_last_login in one round-trip.
-        if user.status == UserStatus.DELETED.value:
-            from app.services.user_revival_service import revive_deleted_user
-
-            await revive_deleted_user(db, user, source='cabinet_telegram_login')
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail='User account is not active',
-            )
+    await _recover_cabinet_user_after_gate(db, user, access_decision, source='cabinet_telegram_login')
 
     # Update last login
     user.cabinet_last_login = datetime.now(UTC)
@@ -880,6 +932,13 @@ async def auth_telegram_widget(
     # Одноразовость payload гасится ниже, после гейта согласия — см. _consume_widget_payload.
 
     user = await get_user_by_telegram_id(db, request.id)
+    access_decision = await _gate_cabinet_identity(
+        db,
+        channel=RegistrationChannel.CABINET_TELEGRAM_WIDGET,
+        user=user,
+        telegram_id=request.id,
+        verified_admin=settings.is_admin(request.id),
+    )
 
     # Resolve referral code to referrer ID for new users.
     # Order: explicit request.referral_code, then Redis pending_referral
@@ -945,11 +1004,7 @@ async def auth_telegram_widget(
             db, user, consent_documents, source='cabinet_telegram_widget', ip_address=client_ip
         )
 
-    if user.status != UserStatus.ACTIVE.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='User account is not active',
-        )
+    await _recover_cabinet_user_after_gate(db, user, access_decision, source='cabinet_telegram_widget_login')
 
     # Update user info from widget data
     if request.username and request.username != user.username:
@@ -1067,6 +1122,13 @@ async def auth_telegram_oidc(
     language = claims.get('locale', 'ru')[:2] if claims.get('locale') else 'ru'
 
     user = await get_user_by_telegram_id(db, telegram_id)
+    access_decision = await _gate_cabinet_identity(
+        db,
+        channel=RegistrationChannel.CABINET_TELEGRAM_OIDC,
+        user=user,
+        telegram_id=telegram_id,
+        verified_admin=settings.is_admin(telegram_id),
+    )
 
     # Resolve referral code for new users.
     # Order: explicit request.referral_code, then Redis pending_referral
@@ -1109,7 +1171,7 @@ async def auth_telegram_oidc(
     is_new_user = not user
     consent_documents: list[str] = []
     if is_new_user:
-        # Согласие проверяем ДО того, как погасить токен: 428 просит повторить запрос с ним же.
+        # Согласие проверяем ДО того, как погасить id_token: 428 просит повторить запрос с ним же.
         consent_documents = await _require_legal_consent(
             db, accepted=request.accepted_legal_documents, language=language or 'ru'
         )
@@ -1130,11 +1192,7 @@ async def auth_telegram_oidc(
             db, user, consent_documents, source='cabinet_telegram_oidc', ip_address=client_ip
         )
 
-    if user.status != UserStatus.ACTIVE.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='User account is not active',
-        )
+    await _recover_cabinet_user_after_gate(db, user, access_decision, source='cabinet_telegram_oidc_login')
 
     # Update user info from OIDC claims
     if username and username != user.username:
@@ -1455,12 +1513,18 @@ async def register_email_standalone(
     """
     await require_email_auth_enabled(db)
     client_ip = get_client_ip(raw_request)
-    if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_register', limit=5, window=60, fail_closed=True):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
-            headers={'Retry-After': '60'},
-        )
+    await enforce_email_registration_throttle(client_ip)
+    email_access = await evaluate_public_registration(
+        db,
+        channel=RegistrationChannel.CABINET_EMAIL,
+        existing_user=None,
+        email=request.email,
+        email_verified=False,
+        verified_admin=False,
+        start_parameter=request.referral_code or request.campaign_slug,
+    )
+    raise_for_registration_decision(email_access)
+
     # Check if this is a test email registration
     is_test_email = settings.is_test_email(request.email)
 
@@ -1575,46 +1639,12 @@ async def register_email_standalone(
             user.pending_campaign_slug = None
             await db.commit()
     else:
-        # Сгенерировать токен верификации
-        verification_token = generate_verification_token()
-        verification_expires = get_verification_expires_at()
-
-        user.email_verification_token = verification_token
-        user.email_verification_expires = verification_expires
-        await db.commit()
-
-        # Отправить email верификации
-        if settings.is_cabinet_email_verification_enabled() and email_service.is_configured():
-            cabinet_url = settings.CABINET_URL
-            verification_url = f'{cabinet_url}/verify-email'
-            lang = user.language or request.language or 'ru'
-            full_url = f'{verification_url}?token={verification_token}'
-            expire_hours = settings.get_cabinet_email_verification_expire_hours()
-
-            override = await get_rendered_override(
-                'email_verification',
-                lang,
-                context={
-                    'username': user.first_name or 'User',
-                    'email': request.email,
-                    'verification_url': full_url,
-                    'expire_hours': str(expire_hours),
-                },
-                db=db,
-                required_vars=['verification_url'],
-            )
-            custom_subject, custom_body = override or (None, None)
-
-            await asyncio.to_thread(
-                email_service.send_verification_email,
-                to_email=request.email,
-                verification_token=verification_token,
-                verification_url=verification_url,
-                username=user.first_name or 'User',
-                language=lang,
-                custom_subject=custom_subject,
-                custom_body_html=custom_body,
-            )
+        await _issue_verification_email(
+            db,
+            user,
+            language=user.language or request.language or 'ru',
+            username=user.first_name or 'User',
+        )
 
     # Обработать реферальную регистрацию (если есть реферер)
     if referrer:
@@ -1720,59 +1750,51 @@ async def resend_verification(
             detail='Email is already verified',
         )
 
-    # Generate new token
-    verification_token = generate_verification_token()
-    verification_expires = get_verification_expires_at()
-
-    user.email_verification_token = verification_token
-    user.email_verification_expires = verification_expires
-
-    await db.commit()
-
-    # Send verification email asynchronously (smtplib is blocking)
-    if settings.is_cabinet_email_verification_enabled() and email_service.is_configured():
-        cabinet_url = settings.CABINET_URL
-        verification_url = f'{cabinet_url}/verify-email'
-        lang = user.language or 'ru'
-        full_url = f'{verification_url}?token={verification_token}'
-        expire_hours = settings.get_cabinet_email_verification_expire_hours()
-
-        override = await get_rendered_override(
-            'email_verification',
-            lang,
-            context={
-                'username': user.first_name or '',
-                'email': user.email,
-                'verification_url': full_url,
-                'expire_hours': str(expire_hours),
-            },
-            db=db,
-            required_vars=['verification_url'],
-        )
-        custom_subject, custom_body = override or (None, None)
-
-        await asyncio.to_thread(
-            email_service.send_verification_email,
-            to_email=user.email,
-            verification_token=verification_token,
-            verification_url=verification_url,
-            username=user.first_name,
-            language=lang,
-            custom_subject=custom_subject,
-            custom_body_html=custom_body,
-        )
-    elif not settings.is_cabinet_email_verification_enabled():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Email verification is disabled',
-        )
-    elif not email_service.is_configured():
+    sent = await _issue_verification_email(db, user, language=user.language or 'ru', username=user.first_name)
+    if not sent:
+        if not settings.is_cabinet_email_verification_enabled():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Email verification is disabled',
+            )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail='Email service is not configured',
         )
 
     return {'message': 'Verification email sent'}
+
+
+@router.post('/email/register/resend')
+async def resend_verification_public(
+    request: VerificationResendRequest,
+    raw_request: Request,
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Повторно отправить письмо подтверждения с экрана «Проверьте почту».
+
+    Экран показывается сразу после регистрации, когда войти ещё нельзя, поэтому
+    ручка неаутентифицированная — в отличие от `/email/resend`. Из этого следуют
+    два ограничения:
+
+    * ответ всегда одинаковый. Разная реакция на «адрес не найден», «уже
+      подтверждён» и «письмо ушло» превратила бы ручку в проверялку чужих
+      адресов;
+    * дроссель по IP и по самому адресу — иначе кнопкой можно заваливать чужой
+      ящик письмами от нашего имени.
+    """
+    await require_email_auth_enabled(db)
+    client_ip = get_client_ip(raw_request)
+    await enforce_verification_resend_throttle(client_ip, request.email)
+
+    email_lower = (request.email or '').strip().lower()
+    result = await db.execute(select(User).where(func.lower(User.email) == email_lower))
+    user = result.scalar_one_or_none()
+
+    if user and not user.email_verified:
+        await _issue_verification_email(db, user, language=user.language or 'ru', username=user.first_name)
+
+    return {'message': 'If the email is awaiting confirmation, the verification link has been sent'}
 
 
 @router.post('/email/login', response_model=AuthResponse)
@@ -1805,6 +1827,19 @@ async def login_email(
     if not user:
         # For test email - auto-create user if not exists
         if is_test_email and settings.validate_test_email_password(request.email, request.password):
+            access = await evaluate_public_registration(
+                db,
+                channel=RegistrationChannel.CABINET_EMAIL,
+                existing_user=None,
+                email=request.email,
+                email_verified=False,
+                verified_admin=False,
+            )
+            if not access.allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail='Invalid email or password',
+                )
             logger.info('Test email login creating new user', email=request.email)
             password_hash = hash_password(request.password)
             user = await create_user_by_email(

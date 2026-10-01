@@ -14,8 +14,21 @@ resolution), following the same style as
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 import app.handlers.subscription.autopay as autopay_mod
 from app.config import settings
+
+
+@pytest.fixture(autouse=True)
+def _route_photo_edits_to_edit_text(monkeypatch):
+    """Spofy: экраны СБП рисуются через edit_or_answer_photo (вход бывает из
+    медиа-рассылки). Для проверок клавиатур сводим его к edit_text."""
+
+    async def _edit(callback, text, keyboard, parse_mode='HTML', **_):
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=parse_mode)
+
+    monkeypatch.setattr(autopay_mod, 'edit_or_answer_photo', _edit)
 
 
 def _configure_gate(monkeypatch, enabled: bool) -> None:
@@ -106,7 +119,16 @@ async def test_menu_gate_off_shows_alert_and_does_not_render(monkeypatch):
 async def test_menu_no_active_record_shows_enable_button(monkeypatch):
     _configure_gate(monkeypatch, True)
     cb, user, db = _make_callback(), _make_user(), AsyncMock()
-    subscription = SimpleNamespace(id=10)
+    subscription = SimpleNamespace(
+        id=10,
+        autopay_period_days=None,
+        tariff=SimpleNamespace(
+            is_daily=False,
+            get_shortest_period=lambda: 30,
+            get_available_periods=lambda: [30],
+            get_purchasable_price_for_period=lambda days: 19900,
+        ),
+    )
 
     monkeypatch.setattr(autopay_mod, '_resolve_subscription', AsyncMock(return_value=(subscription, 10)))
     monkeypatch.setattr(
@@ -322,7 +344,7 @@ async def test_cancel_works_even_when_gate_off(monkeypatch):
     mock_cancel = AsyncMock()
     monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', mock_cancel)
 
-    await autopay_mod.handle_sbp_recurring_cancel(cb, user, db)
+    await autopay_mod.handle_sbp_recurring_cancel_confirm(cb, user, db)
 
     mock_cancel.assert_awaited_once_with(db, 10)
     cb.answer.assert_awaited_once()
@@ -332,7 +354,16 @@ async def test_cancel_works_even_when_gate_off(monkeypatch):
 async def test_cancel_gate_on_calls_helper_and_refreshes_menu(monkeypatch):
     _configure_gate(monkeypatch, True)
     cb, user, db = _make_callback(), _make_user(), AsyncMock()
-    subscription = SimpleNamespace(id=10)
+    subscription = SimpleNamespace(
+        id=10,
+        autopay_period_days=None,
+        tariff=SimpleNamespace(
+            is_daily=False,
+            get_shortest_period=lambda: 30,
+            get_available_periods=lambda: [30],
+            get_purchasable_price_for_period=lambda days: 19900,
+        ),
+    )
 
     monkeypatch.setattr(autopay_mod, '_resolve_subscription', AsyncMock(return_value=(subscription, 10)))
     mock_cancel = AsyncMock()
@@ -342,10 +373,10 @@ async def test_cancel_gate_on_calls_helper_and_refreshes_menu(monkeypatch):
         AsyncMock(return_value=None),
     )
 
-    await autopay_mod.handle_sbp_recurring_cancel(cb, user, db)
+    await autopay_mod.handle_sbp_recurring_cancel_confirm(cb, user, db)
 
     mock_cancel.assert_awaited_once_with(db, 10)
-    # handle_sbp_recurring_cancel re-invokes handle_sbp_recurring_menu, which
+    # handle_sbp_recurring_cancel_confirm re-invokes handle_sbp_recurring_menu, which
     # re-renders the (now inactive) status view.
     cb.message.edit_text.assert_awaited_once()
     _, kwargs = cb.message.edit_text.call_args
@@ -443,7 +474,8 @@ def test_tariff_confirm_keyboard_shows_sbp_button_when_gate_on(monkeypatch):
 
     _gate(monkeypatch, True)
     callbacks = _keyboard_callbacks(get_tariff_confirm_keyboard(5, 30, 'ru'))
-    assert 'tariff_sbp:5' in callbacks
+    # Spofy: период едет в callback — каденс привязки = выбранный период
+    assert 'tariff_sbp:5:30' in callbacks
     assert 'tariff_confirm:5:30' in callbacks
 
 
@@ -464,3 +496,17 @@ def test_daily_tariff_confirm_keyboard_gates_sbp_button(monkeypatch):
     assert not any(
         cb.startswith('tariff_sbp:') for cb in _keyboard_callbacks(get_daily_tariff_confirm_keyboard(7, 'ru'))
     )
+
+
+async def test_cancel_first_asks_for_confirmation(monkeypatch):
+    """Spofy: «Отменить» сначала спрашивает подтверждение и первой предлагает оставить."""
+    _configure_gate(monkeypatch, True)
+    cb, user, db = _make_callback(), _make_user(), AsyncMock()
+    mock_cancel = AsyncMock()
+    monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', mock_cancel)
+
+    await autopay_mod.handle_sbp_recurring_cancel(cb, user, db)
+
+    mock_cancel.assert_not_awaited()
+    _, kwargs = cb.message.edit_text.call_args
+    assert _keyboard_callbacks(kwargs['reply_markup']) == ['sbp_recurring_menu', 'sbp_recurring_cancel_confirm']

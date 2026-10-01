@@ -131,9 +131,7 @@ async def process_xrocket_payment_amount(
             for i in range(0, len(assets), 2):
                 rows.append(
                     [
-                        types.InlineKeyboardButton(
-                            text=a, callback_data=f'xrocket_asset_{a}_{amount_kopeks}'
-                        )
+                        types.InlineKeyboardButton(text=a, callback_data=f'xrocket_asset_{a}_{amount_kopeks}')
                         for a in assets[i : i + 2]
                     ]
                 )
