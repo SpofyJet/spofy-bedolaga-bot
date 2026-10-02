@@ -34,6 +34,7 @@ from app.external.remnawave_api import (
     RemnaWaveInvalidUserIdError,
     coerce_panel_user_id,
 )
+from app.services.bypass_downgrade import panel_squads_for
 from app.services.panel_sync import (
     BULK_SNAPSHOT,
     link_subscription_panel_identity,
@@ -1286,7 +1287,8 @@ class RemnaWaveService:
                             api,
                             subscription.id,
                             user_id=_panel_user_id,
-                            active_internal_squads=new_squads,
+                            # Обходы отключены за трафик — панель остаётся в Bypass-Off.
+                            active_internal_squads=panel_squads_for(subscription, new_squads),
                         )
                         panel_updated += 1
                     except Exception as error:

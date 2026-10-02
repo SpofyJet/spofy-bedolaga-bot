@@ -2380,5 +2380,11 @@
   "DEVICES_FREE_SUFFIX": " (free)",
   "DEVICES_NO_REFUND_SUFFIX": " (no refund)",
   "FOR_DAYS_SUFFIX": " (for {days} d.)",
-  "WEB_ADMIN_BUTTON": "🖥 Web Admin"
+  "WEB_ADMIN_BUTTON": "🖥 Web Admin",
+  "BYPASS_SUSPENDED": "🏴‍☠️ <b>Bypass servers are off — their traffic is used up</b>\n\nRegular servers keep working, your VPN is still on. Servers marked «Обход» (bypass) come back as soon as you buy more traffic or renew your subscription.",
+  "BYPASS_RESTORED": "✅ <b>Bypass servers are back</b>\n\nServers marked «Обход» (bypass) are back in your subscription. If you don't see them in the app yet, refresh the subscription.",
+  "BYPASS_BUY_TRAFFIC_BUTTON": "📈 Buy more traffic",
+  "BYPASS_RENEW_BUTTON": "⏰ Renew subscription",
+  "DEEPLINK_RENEW_TEXT": "⏰ <b>Renew your subscription</b>\n\nTap the button below to choose a period.",
+  "DEEPLINK_TRAFFIC_TEXT": "📈 <b>Buy more traffic</b>\n\nTap the button below to choose a package."
 }

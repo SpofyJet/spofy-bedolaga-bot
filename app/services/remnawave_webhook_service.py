@@ -40,6 +40,7 @@ from app.external.remnawave_api import RemnaWaveAPIError, RemnaWaveInvalidUserId
 from app.localization.texts import get_texts
 from app.services.activation_funnel_service import EVENT_TRIAL_FIRST_CONNECTED, _record_event
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.bypass_downgrade_service import bypass_downgrade_service
 from app.services.grace_access_runtime import get_open_grace_subscription_ids, grace_access_runtime
 from app.services.grace_access_service import GraceReason
 from app.services.notification_delivery_service import NotificationType, notification_delivery_service
@@ -1256,6 +1257,13 @@ class RemnaWaveWebhookService:
             logger.info('Webhook user.limited: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
             return
 
+        # Spofy: на тарифе с обходами лимит — это квота на обходы. Отключаем только
+        # их (сквад Bypass-Off), обычные серверы остаются; без LIMITED и грейса.
+        if await bypass_downgrade_service.handle_limited_webhook(db, user, subscription, data):
+            self._stamp_webhook_update(subscription)
+            await db.commit()
+            return
+
         candidate_at = datetime.now(UTC)
         subscription.grace_candidate_reason = GraceReason.LIMITED.value
         subscription.grace_candidate_at = candidate_at
@@ -1301,6 +1309,11 @@ class RemnaWaveWebhookService:
         if subscription.status == SubscriptionStatus.EXPIRED.value and subscription.id in (
             await get_open_grace_subscription_ids(db)
         ):
+            return
+
+        # Spofy: обходы были отключены за трафик — вернуть их; человеку вместо
+        # «трафик сброшен» уходит «обходы снова работают».
+        if await bypass_downgrade_service.handle_traffic_reset_webhook(db, user, subscription):
             return
 
         await self._notify_user(

@@ -49,6 +49,8 @@ class SubscriptionData(BaseModel):
     is_active: bool
     is_expired: bool
     is_limited: bool = False
+    # Spofy: обходы отключены за исчерпанный трафик, обычные серверы работают.
+    bypass_suspended: bool = False
     traffic_purchases: list[TrafficPurchaseInfo] = []
     # Daily tariff fields
     is_daily: bool = False

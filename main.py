@@ -21,6 +21,7 @@ from app.logging_config import _resolve_log_level, setup_logging
 from app.services.backup_service import backup_service
 from app.services.ban_notification_service import ban_notification_service
 from app.services.broadcast_service import broadcast_service
+from app.services.bypass_downgrade_service import bypass_downgrade_service
 from app.services.contest_rotation_service import contest_rotation_service
 from app.services.daily_subscription_service import daily_subscription_service
 from app.services.dpichecker.service import dpichecker_service
@@ -366,6 +367,8 @@ async def main():
         traffic_monitoring_scheduler.set_bot(bot)
         trial_abuse_service.set_bot(bot)
         trial_abuse_service.start_task()
+        bypass_downgrade_service.set_bot(bot)
+        bypass_downgrade_service.start_task()
         daily_subscription_service.set_bot(bot)
         telegram_notifier.set_bot(bot)
 
@@ -1029,6 +1032,7 @@ async def main():
 
         logger.info('ℹ️ Остановка антиабуза триалов...')
         trial_abuse_service.stop()
+        bypass_downgrade_service.stop()
 
         if daily_subscription_task and not daily_subscription_task.done():
             logger.info('ℹ️ Остановка сервиса суточных подписок...')

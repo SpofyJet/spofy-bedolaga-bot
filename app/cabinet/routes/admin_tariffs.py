@@ -748,6 +748,7 @@ async def sync_tariff_squads(
                         squads=new_squads,
                         external_squad_uuid=ext_squad_uuid,
                         update_call=lambda **kwargs: update_panel_user_grace_safe(api, sub.id, **kwargs),
+                        subscription=sub,
                     )
                     # Update local DB only on successful API call
                     sub.connected_squads = new_squads

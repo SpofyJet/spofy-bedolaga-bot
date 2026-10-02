@@ -206,6 +206,7 @@ class BotConfigurationService:
         'BAN_NOTIFICATIONS': '🚫 Тексты уведомлений о блокировках',
         'INFO_PAGES': '📄 Инфо-страницы',
         'GRACE_ACCESS': '🛟 Grace-доступ',
+        'BYPASS_DOWNGRADE': '🏴‍☠️ Обходы при исчерпании трафика',
         'BSCHEK': '📶 BSCHEKER (bschekbot)',
         'DPICHECKER': '🧱 DPI//CHECKER',
     }
@@ -286,6 +287,11 @@ class BotConfigurationService:
         'MODERATION': 'Настройки фильтров отображаемых имен и защиты от фишинга.',
         'BAN_NOTIFICATIONS': 'Тексты уведомлений о блокировках, которые отправляются пользователям.',
         'INFO_PAGES': 'Видимость встроенных страниц (правила, политика, оферта, FAQ) в боте и веб-кабинете.',
+        'BYPASS_DOWNGRADE': (
+            'Тариф с обходами: когда лимит трафика исчерпан, подписка переходит в сквад Bypass-Off — '
+            'обходы недоступны, обычные серверы работают. Обходы возвращаются после докупки трафика, '
+            'продления или сброса трафика.'
+        ),
         'GRACE_ACCESS': (
             'Временный ограниченный доступ для истёкших и лимитных подписок. '
             'Здесь ключи лежат по отдельности; связанный экран с проверкой конфигурации и состоянием '
@@ -542,11 +548,17 @@ class BotConfigurationService:
         'DISPLAY_NAME_': 'MODERATION',
         'BAN_MSG_': 'BAN_NOTIFICATIONS',
         'GRACE_ACCESS_': 'GRACE_ACCESS',
+        'BYPASS_': 'BYPASS_DOWNGRADE',
         'BSCHEK_': 'BSCHEK',
         'DPICHECKER_': 'DPICHECKER',
     }
 
     CHOICES: dict[str, list[ChoiceOption]] = {
+        'BYPASS_DOWNGRADE_MODE': [
+            ChoiceOption('false', '⛔️ Выключен', 'На лимите панель отключает все серверы, как раньше'),
+            ChoiceOption('observe', '👀 Наблюдение', 'Кандидаты только логируются, панель не меняется'),
+            ChoiceOption('true', '🏴‍☠️ Включён', 'На лимите отключаются только обходы, обычные серверы работают'),
+        ],
         'GRACE_ACCESS_MODE': [
             ChoiceOption('false', '⛔️ Выключен', 'Grace-сессии не выдаются и не завершаются'),
             ChoiceOption('observe', '👀 Наблюдение', 'Кандидаты только логируются, панель не меняется'),

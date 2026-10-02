@@ -24,6 +24,7 @@ from app.external.remnawave_api import (
     is_expire_in_past_error,
     is_user_not_found_error,
 )
+from app.services.bypass_downgrade import panel_squads_for
 from app.services.panel_sync.expiry import SKEW_RETRY_MARGIN, stale_panel_expire_at
 from app.services.panel_sync.identity import (
     PanelIdentity,
@@ -435,6 +436,7 @@ async def patch_panel_squads(
     squads: list[str],
     external_squad_uuid: str | None,
     update_call=None,
+    subscription=None,
 ) -> RemnaWaveUser:
     """Переназначить аккаунту сквады тарифа.
 
@@ -443,10 +445,17 @@ async def patch_panel_squads(
     после успешного ответа панели. Собирать ради этого состояние подписки нельзя
     — уехали бы старые сквады.
 
+    ``subscription`` — строка подписки, если она под рукой: по ней решается,
+    не отключены ли у аккаунта обходы (тогда в панель уходит Bypass-Off).
+
     ``external_squad_uuid=None`` отправляется как null намеренно: у тарифа сняли
     внешний сквад, и в панели он тоже должен исчезнуть.
     """
     update = update_call or api.update_user
+    if subscription is not None:
+        # Обходы отключены за трафик: новые сквады тарифа запишутся в подписку,
+        # а панель останется в Bypass-Off до докупки или продления.
+        squads = panel_squads_for(subscription, squads)
     return await update(
         user_id=user_id,
         active_internal_squads=squads,

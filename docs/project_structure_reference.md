@@ -90,7 +90,7 @@
   Функции: `create_bot` — Create a Bot instance with SOCKS5 proxy and/or custom Telegram API server.
 - `app/cabinet/`
 - `app/config.py` — Python-модуль
-  Классы: `Settings` (420 методов)
+  Классы: `Settings` (421 методов)
   Функции: `transliterate_cyrillic` — Заменяет кириллические буквы латинскими, сохраняя регистр («Шмель» → «Shmel»)., `set_period_prices_from_db` — Устанавливает периоды/цены из БД., `get_db_period_prices` — Возвращает периоды/цены из БД если они загружены., `clear_db_period_prices` — Очищает кеш цен из тарифов (при переключении в classic mode)., `refresh_period_prices` — Rebuild cached period price mapping., `refresh_classic_period_prices` — Rebuild CLASSIC_PERIOD_PRICES from current settings., `get_traffic_prices`, `refresh_traffic_prices`
 - `app/database/`
 - `app/external/`
@@ -993,6 +993,9 @@
   Классы: нет
   Функции: `answer_menu_with_media` — Отвечает меню с медиа-шапкой на входящее сообщение (например, /start)., `send_menu_with_media` — Отправляет меню с медиа-шапкой: видео → фото-логотип → обычный текст., `handle_potential_referral_code`, `cmd_start`, `process_language_selection`, `process_rules_accept` — Обрабатывает принятие или отклонение правил пользователем., `process_privacy_policy_accept`, `process_referral_code_input`, `process_referral_code_skip`, `complete_registration_from_callback`, `complete_registration`, `get_referral_code_keyboard`, `get_main_menu_text`, `get_main_menu_text_simple`, `required_sub_channel_check`, `process_webauth_confirm` — Handle web auth confirmation or denial., `register_handlers`
 - `app/handlers/subscription/`
+- `app/handlers/subscription_deeplinks.py` — Python-модуль
+  Классы: нет
+  Функции: `open_subscription_deeplink` — Ответить на диплинк. False — подписки нет: пусть отработает обычный /start.
 - `app/handlers/support.py` — Python-модуль
   Классы: нет
   Функции: `show_support_info`, `register_handlers`
@@ -1507,6 +1510,12 @@
   Функции: `parse_email_scoped_target` — Email-таргет с идентификатором: ``promo_group_{id}`` или ``user_{id}``., `cleanup_blocked_broadcast_users` — Фоновая очистка пользователей, заблокировавших бота (обнаруженных при рассылке).
 - `app/services/bulk_ban_service.py` — Python-модуль
   Классы: `BulkBanService` (3 методов)
+  Функции: нет
+- `app/services/bypass_downgrade.py` — Python-модуль
+  Классы: нет
+  Функции: `mode`, `is_configured`, `is_enforcing` — Режим true и оба сквада заданы: подписки реально переводятся., `is_observing`, `quota_exhausted`, `is_suspension_effective` — Отдавать ли панели «обходы отключены» для этой подписки прямо сейчас., `panel_squads_for` — Сквады, которые уходят в панель: сквады тарифа или ``[Bypass-Off]``., `panel_traffic_limit_bytes_for` — Лимит для панели: в Bypass-Off — безлимит (обычные ноды считают ×0)., `ineligibility_reason` — Почему подписку НЕЛЬЗЯ перевести в Bypass-Off; ``None`` — можно., `is_suspended_snapshot` — Сквады из панели — это форма «обходы отключены», а не смена тарифа.
+- `app/services/bypass_downgrade_service.py` — Python-модуль
+  Классы: `BypassDowngradeService` (15 методов)
   Функции: нет
 - `app/services/campaign_service.py` — Python-модуль
   Классы: `CampaignBonusResult`, `AdvertisingCampaignService` (8 методов)
@@ -3114,6 +3123,9 @@
 - `migrations/alembic/versions/0133_tariff_lifetime_pricing.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0134_subscription_bypass_suspended.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
 
 ## scripts
 
@@ -4451,6 +4463,9 @@
 - `tests/services/test_broadcast_per_recipient_keyboard.py` — Python-модуль
   Классы: нет
   Функции: `test_keyboard_factory_builds_personal_keyboard_per_recipient` — Каждому получателю уходит своя клавиатура, а не одна общая., `test_blocked_recipients_counted_separately` — Заблокировавшие бота идут в blocked, а не в общую кучу ошибок., `test_without_factory_shared_keyboard_is_used` — Обычные рассылки не затронуты: без фабрики уходит общая клавиатура.
+- `tests/services/test_bypass_downgrade.py` — Python-модуль
+  Классы: нет
+  Функции: `enforcing`, `test_paid_bypass_subscription_with_exhausted_quota_is_eligible`, `test_ineligible`, `test_limited_status_is_still_eligible`, `test_without_squads_configured_nothing_is_eligible`, `test_suspended_subscription_goes_to_bypass_off_unlimited_and_active`, `test_not_suspended_subscription_keeps_tariff_squads_and_limit`, `test_bypass_returns_once_quota_is_no_longer_exhausted`, `test_mode_false_ignores_leftover_marks`, `test_tariff_squad_sync_keeps_suspended_account_in_bypass_off`, `test_import_does_not_take_bypass_off_as_a_tariff_change`, `test_suspended_snapshot_recognition`, `test_limited_webhook_suspends_instead_of_limiting`, `test_limited_webhook_for_ineligible_subscription_falls_through`, `test_observe_mode_only_logs`, `test_traffic_reset_webhook_restores_and_says_bypass_is_back`, `test_traffic_reset_without_mark_keeps_the_usual_message`, `test_reconcile_suspends_missed_webhook_and_restores_after_purchase`, `test_reconcile_is_idempotent`, `test_reconcile_repushes_when_panel_limited_the_account_anyway`, `test_rollback_mode_false_clears_marks_silently`, `test_deeplinks_answer_with_one_button`, `test_deeplink_without_subscription_falls_through`
 - `tests/services/test_campaign_attribution.py` — Python-модуль
   Классы: нет
   Функции: `test_returns_none_for_empty_slug`, `test_returns_none_when_campaign_not_found`, `test_partner_cannot_be_attributed_to_own_campaign` — Иначе партнёр накрутит себе регистрацию по собственной ссылке., `test_partner_own_campaign_stops_before_any_write` — Отказ обязан случиться ДО привязки реферала, а не только в бонусе., `test_existing_registration_blocks_second_bonus`, `test_successful_attribution_applies_bonus`, `test_unsuccessful_bonus_returns_none`, `test_partner_is_attached_as_referrer` — Кампания партнёра должна проставить его реферером — иначе он не, `test_link_partner_referral_writes_the_referrer` — Сам факт вызова ничего не гарантирует — проверяем результат., `test_existing_referrer_is_not_overwritten_by_campaign_partner` — Кто привёл первым, тот и получает комиссию — перебивать нельзя., `test_errors_are_swallowed_and_rolled_back` — Привязка кампании — побочный эффект: она не имеет права уронить

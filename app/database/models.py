@@ -2738,6 +2738,8 @@ class Subscription(Base):
     # expired subscriptions when the feature is enabled.
     grace_candidate_reason = Column(String(16), nullable=True)
     grace_candidate_at = Column(AwareDateTime(), nullable=True)
+    # Spofy: обходы отключены из-за исчерпанного трафика (сквад Bypass-Off); NULL — работают.
+    bypass_suspended_at = Column(AwareDateTime(), nullable=True)
     # Administrative cancellation/shortening suppresses only the current
     # incident. A later renewal has a newer end_date and becomes eligible again.
     grace_suppressed_until = Column(AwareDateTime(), nullable=True)

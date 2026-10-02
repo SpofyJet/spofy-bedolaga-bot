@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from app.config import settings
 from app.database.models import SubscriptionStatus, UserStatus as OwnerStatus
 from app.external.remnawave_api import TrafficLimitStrategy, UserStatus
+from app.services.bypass_downgrade import panel_squads_for, panel_traffic_limit_bytes_for
 from app.services.panel_sync.expiry import panel_expire_at
 from app.services.panel_sync.liveness import is_subscription_expired, is_subscription_live
 from app.services.panel_sync.tags import resolve_panel_user_tag
@@ -199,7 +200,11 @@ def build_panel_payload(
     return PanelPayload(
         username=username,
         status=resolve_panel_status(user, subscription, is_live=is_live, now=moment),
-        traffic_limit_bytes=traffic_limit_gb * _BYTES_IN_GB if traffic_limit_gb > 0 else 0,
+        # Обходы отключены за исчерпанный трафик — в панель уходят Bypass-Off и
+        # безлимит; сквады и лимит в самой подписке остаются тарифными.
+        traffic_limit_bytes=panel_traffic_limit_bytes_for(
+            subscription, traffic_limit_gb * _BYTES_IN_GB if traffic_limit_gb > 0 else 0
+        ),
         traffic_limit_strategy=get_traffic_reset_strategy(tariff),
         telegram_id=getattr(user, 'telegram_id', None),
         email=getattr(user, 'email', None),
@@ -210,7 +215,9 @@ def build_panel_payload(
             email=user.email,
             user_id=user.id,
         ),
-        active_internal_squads=tuple(getattr(subscription, 'connected_squads', None) or ()),
+        active_internal_squads=tuple(
+            panel_squads_for(subscription, getattr(subscription, 'connected_squads', None) or ())
+        ),
         hwid_device_limit=resolve_hwid_device_limit_for_payload(subscription),
         external_squad_uuid=getattr(tariff, 'external_squad_uuid', None),
         # Вызывающий мог посчитать тег сам (тем же правилом); иначе берём его здесь —

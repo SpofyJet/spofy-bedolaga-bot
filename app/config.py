@@ -298,6 +298,20 @@ class Settings(BaseSettings):
     # grace пропускает то, что настроено на нодах; бот об этом только сообщает.
     GRACE_ACCESS_ALLOWED_SERVICES: str = 'Telegram'
     GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS: int = 60
+
+    # Spofy: исчерпан лимит трафика на тарифе с обходами — отключаются только
+    # обходы, обычные серверы работают (app/services/bypass_downgrade.py).
+    # Режимы: false (как раньше: панель выключает всё), observe (только журнал),
+    # true (вместо LIMITED подписка уходит в сквад Bypass-Off).
+    BYPASS_DOWNGRADE_MODE: Literal['false', 'observe', 'true'] = 'false'
+    # Сквад тарифа с обходами (Anti-Zaglush): по нему узнаём, кому положен даунгрейд.
+    BYPASS_SQUAD_UUID: str = ''
+    # Сквад, в который уходит подписка: обычные инбаунды + инбаунд с заметками.
+    BYPASS_OFF_SQUAD_UUID: str = ''
+    # Необязательно. Сквад обычных серверов (Default-Squad): только для сверки
+    # набора инбаундов с Bypass-Off и распознавания снимков панели; в панель не уходит.
+    BYPASS_FALLBACK_SQUAD_UUID: str = ''
+    BYPASS_RECONCILE_INTERVAL_MINUTES: int = 5
     GRACE_ACCESS_RECONCILE_BATCH_SIZE: int = 200
 
     GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES: int = 30
@@ -1721,6 +1735,14 @@ class Settings(BaseSettings):
         if mode not in {'default', 'cabinet'}:
             raise ValueError('MAIN_MENU_MODE must be one of: default, cabinet')
         return mode
+
+    @field_validator('BYPASS_DOWNGRADE_MODE', mode='before')
+    @classmethod
+    def normalize_bypass_downgrade_mode(cls, value: str | None) -> str:
+        normalized = str(value or 'false').strip().lower()
+        if normalized not in {'false', 'observe', 'true'}:
+            raise ValueError('BYPASS_DOWNGRADE_MODE must be one of: false, observe, true')
+        return normalized
 
     @field_validator('GRACE_ACCESS_MODE', mode='before')
     @classmethod

@@ -44,6 +44,7 @@ from datetime import UTC, datetime, timedelta
 import structlog
 
 from app.database.models import SubscriptionStatus
+from app.services.bypass_downgrade import is_suspended_snapshot
 from app.utils.subscription_utils import coerce_panel_device_limit
 from app.utils.timezone import panel_datetime_to_utc
 
@@ -461,10 +462,15 @@ def project_onto_subscription(
             subscription.grace_candidate_at = moment
         changed.add('status')
 
+    # Bypass-Off в панели — форма «обходы отключены за трафик», а не смена тарифа:
+    # сквады и лимит в подписке остаются тарифными (см. app/services/bypass_downgrade.py).
+    bypass_suspended_form = is_suspended_snapshot(snapshot.squads)
+
     # Лимиты — тоже истина панели (правка там приезжает в бота); вебхук берёт
     # только лимит трафика, как и раньше.
     if (
         policy.takes_traffic_limit
+        and not bypass_suspended_form
         and snapshot.traffic_limit_gb is not None
         and subscription.traffic_limit_gb != snapshot.traffic_limit_gb
     ):
@@ -479,7 +485,12 @@ def project_onto_subscription(
         changed.add('device_limit')
 
     # Пустой список сквадов значит «панель ещё не знает», а не «отобрать все».
-    if policy.takes_squads and snapshot.squads and set(snapshot.squads) != set(subscription.connected_squads or []):
+    if (
+        policy.takes_squads
+        and snapshot.squads
+        and not bypass_suspended_form
+        and set(snapshot.squads) != set(subscription.connected_squads or [])
+    ):
         subscription.connected_squads = list(snapshot.squads)
         changed.add('connected_squads')
 

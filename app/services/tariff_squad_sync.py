@@ -93,6 +93,7 @@ async def sync_tariff_squads_in_background(tariff_id: int, admin_id: int) -> Non
                                 squads=new_squads,
                                 external_squad_uuid=ext_squad_uuid,
                                 update_call=lambda **kwargs: update_panel_user_grace_safe(api, sub.id, **kwargs),
+                                subscription=sub,
                             )
                             sub.connected_squads = new_squads
                             updated += 1

@@ -28,6 +28,7 @@ from app.database.crud.user import (
 )
 from app.database.crud.user_message import get_random_active_message
 from app.database.models import GuestPurchase, PinnedMessage, SubscriptionStatus, UserStatus
+from app.handlers.subscription_deeplinks import SUBSCRIPTION_DEEPLINKS, open_subscription_deeplink
 from app.keyboards.inline import (
     get_back_keyboard,
     get_language_selection_keyboard,
@@ -1377,6 +1378,15 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             await open_contests_menu_message(message, user, db)
             return
         # Unregistered → fall through to normal /start (contests need a subscription anyway).
+        start_parameter = None
+
+    # Spofy: /start renew | /start traffic — со страницы подписки и из уведомления
+    # «обходы отключены». Без подписки или без аккаунта — обычный /start.
+    if start_parameter in SUBSCRIPTION_DEEPLINKS:
+        user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
+        if user and user.status != UserStatus.DELETED.value:
+            if await open_subscription_deeplink(message, user, db, start_parameter):
+                return
         start_parameter = None
 
     # Диплинк «активировать триал» из rich-меню: /start trial.

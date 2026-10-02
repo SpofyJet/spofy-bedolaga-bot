@@ -2380,5 +2380,11 @@
   "TARIFF_SWITCH_ADDONS_KEPT": "\n\n🔗 已购附加服务：{addons} — 切换后将保留。",
   "SBP_RECURRING_NOTIFY_MENU_BUTTON": "⚡ 自动续费（SBP）",
   "SBP_RECURRING_PRICE_LINE": "\n\n💰 每 {days} 天 <b>{amount}</b> — 确认后立即进行首次扣款。",
-  "TRIAL_FIRST_CONNECTED_TIP": "VPN 已连接，访问已开通。试用期进行中。请在试用结束前订阅，以免断开。"
+  "TRIAL_FIRST_CONNECTED_TIP": "VPN 已连接，访问已开通。试用期进行中。请在试用结束前订阅，以免断开。",
+  "BYPASS_SUSPENDED": "🏴‍☠️ <b>绕行服务器已关闭——其流量已用完</b>\n\n普通服务器仍可正常使用，VPN 没有断开。购买更多流量或续订后，标有「Обход」的服务器会恢复。",
+  "BYPASS_RESTORED": "✅ <b>绕行服务器已恢复</b>\n\n标有「Обход」的服务器已回到您的订阅中。如果应用中还没有显示，请刷新订阅。",
+  "BYPASS_BUY_TRAFFIC_BUTTON": "📈 购买流量",
+  "BYPASS_RENEW_BUTTON": "⏰ 续订",
+  "DEEPLINK_RENEW_TEXT": "⏰ <b>续订</b>\n\n点击下方按钮选择期限。",
+  "DEEPLINK_TRAFFIC_TEXT": "📈 <b>购买流量</b>\n\n点击下方按钮选择流量包。"
 }
