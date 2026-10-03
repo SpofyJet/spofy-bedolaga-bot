@@ -202,3 +202,38 @@ async def test_device_webhook_schedules_the_check_even_on_the_first_day(monkeypa
     )
 
     schedule.assert_called_once_with(2, HWID)
+
+
+# ==================== кто это: имена из бота, а не служебные из панели ====================
+
+
+def _named_index():
+    index = _index((10, [1], 111, False), (20, [2], None, False))
+    index['records'][10].update(name='Иван Петров', username='ivan_p', email=None)
+    index['records'][20].update(name='', username=None, email='farm@example.com')
+    return index
+
+
+def test_who_shows_real_name_username_and_telegram():
+    who = TrialAbuseService()._who(_panel(1, days_ago=30, tg=111), _named_index())
+    assert who == 'Иван Петров (@ivan_p, tg 111)'
+
+
+def test_who_for_email_only_account_and_for_unknown_account():
+    svc = TrialAbuseService()
+    assert svc._who(_panel(2, days_ago=1), _named_index()) == 'farm@example.com'
+    assert svc._who(_panel(99, days_ago=1), _named_index()) == 'аккаунт панели 99'
+
+
+def test_who_html_links_to_the_telegram_profile_and_escapes():
+    index = _named_index()
+    index['records'][10]['name'] = 'Иван <b>'
+    who = TrialAbuseService()._who(_panel(1, days_ago=30, tg=111), index, html_link=True)
+    assert who.startswith('<a href="tg://user?id=111">Иван &lt;b&gt;</a>')
+
+
+def test_reason_names_the_first_account_on_the_device():
+    users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=1)]
+    reason = _abusers(users, _named_index())[2]
+    assert 'первый — Иван Петров (@ivan_p, tg 111)' in reason
+    assert 'id=1' not in reason

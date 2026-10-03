@@ -273,19 +273,17 @@ class TrialAbuseService:
                     stats['notified' if notified else 'notify_failed'] += 1
 
                 ok, detail = await self._apply_action(api, panel_user)
-                label = (
-                    f'id={panel_id} @{html.escape(str(panel_user.username or "-"))} '
-                    f'tg={panel_user.telegram_id or "-"} ({html.escape(reason)})'
-                )
+                label = f'{self._who(panel_user, bot_index, html_link=True)} — {html.escape(reason)}'
+                plain = f'{self._who(panel_user, bot_index)} — {reason} [панель id={panel_id}]'
                 if ok:
                     self._punished.add(panel_id)
                     punished_ok.append(label + (' 📨' if notified else ''))
                     stats['punished'] += 1
-                    logger.warning(f'Антиабуз триалов: наказан {label} -> {detail}')
+                    logger.warning(f'Антиабуз триалов: наказан {plain} -> {detail}')
                 else:
                     punished_fail.append(f'{label}: {html.escape(str(detail))}')
                     stats['errors'] += 1
-                    logger.error(f'Антиабуз триалов: ошибка наказания {label}: {detail}')
+                    logger.error(f'Антиабуз триалов: ошибка наказания {plain}: {detail}')
                 await asyncio.sleep(0.3)  # не долбим API панели
 
         report_mode = self.get_report_mode()
@@ -333,23 +331,54 @@ class TrialAbuseService:
             stats[f'verdict_{verdict}'] += 1
             if verdict == 'candidate':
                 abusers[panel_user.id] = (
-                    f'HWID …{hwid[-6:]}: {len(members)}-й аккаунт на устройстве после id={owner.id}'
+                    f'{len(members)}-й аккаунт на устройстве …{hwid[-6:]}, первый — {self._who(owner, bot_index)}'
                 )
         return abusers
 
     @staticmethod
     def _person_key(panel_user: RemnaWaveUser, bot_index: dict[str, Any]) -> tuple:
         """Кто стоит за аккаунтом панели: пользователь бота, иначе Telegram, иначе сам аккаунт."""
-        record = bot_index['by_id'].get(panel_user.id)
-        if record is None and panel_user.short_uuid:
-            record = bot_index['by_short'].get(panel_user.short_uuid)
-        if record is None and panel_user.telegram_id is not None:
-            record = bot_index['by_tg'].get(panel_user.telegram_id)
+        record = TrialAbuseService._bot_record(panel_user, bot_index)
         if record is not None:
             return ('bot', record['bot_user_id'])
         if panel_user.telegram_id:
             return ('tg', panel_user.telegram_id)
         return ('panel', panel_user.id)
+
+    @staticmethod
+    def _bot_record(panel_user: RemnaWaveUser, bot_index: dict[str, Any]) -> dict[str, Any] | None:
+        record = bot_index['by_id'].get(panel_user.id)
+        if record is None and panel_user.short_uuid:
+            record = bot_index['by_short'].get(panel_user.short_uuid)
+        if record is None and panel_user.telegram_id is not None:
+            record = bot_index['by_tg'].get(panel_user.telegram_id)
+        return record
+
+    def _who(self, panel_user: RemnaWaveUser, bot_index: dict[str, Any], *, html_link: bool = False) -> str:
+        """Кто это — по данным бота: «Имя Фамилия (@username, tg 123)» или email.
+
+        Имя в панели — служебное (user_id_123), админу оно ничего не говорит.
+        """
+        record = self._bot_record(panel_user, bot_index) or {}
+        tg_id = record.get('telegram_id') or panel_user.telegram_id
+        name = (record.get('name') or '').strip()
+        username = (record.get('username') or '').strip()
+        email = (record.get('email') or '').strip()
+
+        title = name or (f'@{username}' if username else '') or email or f'аккаунт панели {panel_user.id}'
+        extras = []
+        if username and title != f'@{username}':
+            extras.append(f'@{username}')
+        if tg_id:
+            extras.append(f'tg {tg_id}')
+        elif email and title != email:
+            extras.append(email)
+        if not html_link:
+            return title + (f' ({", ".join(extras)})' if extras else '')
+        shown = html.escape(title)
+        if tg_id:
+            shown = f'<a href="tg://user?id={int(tg_id)}">{shown}</a>'
+        return shown + (f' ({html.escape(", ".join(extras))})' if extras else '')
 
     # ------------------------------------------------------------------ #
     # Проверка в момент подключения устройства
@@ -418,20 +447,18 @@ class TrialAbuseService:
             )
             return False
 
-        label = (
-            f'id={panel_user_id} @{html.escape(str(panel_user.username or "-"))} '
-            f'tg={panel_user.telegram_id or "-"} ({html.escape(reason)})'
-        )
+        label = f'{self._who(panel_user, bot_index, html_link=True)} — {html.escape(reason)}'
+        plain = f'{self._who(panel_user, bot_index)} — {reason} [панель id={panel_user_id}]'
         if ok:
             self._punished.add(panel_user_id)
-            logger.warning(f'Антиабуз триалов: наказан при подключении {label} -> {detail}')
+            logger.warning(f'Антиабуз триалов: наказан при подключении {plain} -> {detail}')
             if self.get_report_mode() != 'never':
                 await self._notify_admin(
                     f'🛡 <b>Антиабуз триалов: сразу при подключении</b>\n'
                     f'✅ {html.escape(self.get_action())}: {label}' + (' 📨' if notified else '')
                 )
         else:
-            logger.error(f'Антиабуз триалов: ошибка наказания при подключении {label}: {detail}')
+            logger.error(f'Антиабуз триалов: ошибка наказания при подключении {plain}: {detail}')
         return ok
 
     # ------------------------------------------------------------------ #
@@ -488,6 +515,10 @@ class TrialAbuseService:
                         User.telegram_id,
                         User.remnawave_id,
                         User.has_had_paid_subscription,
+                        User.username,
+                        User.first_name,
+                        User.last_name,
+                        User.email,
                     )
                 )
             ).all()
@@ -505,7 +536,7 @@ class TrialAbuseService:
             ).all()
 
         records: dict[int, dict[str, Any]] = {}
-        for user_id, telegram_id, remnawave_id, has_had_paid in user_rows:
+        for user_id, telegram_id, remnawave_id, has_had_paid, username, first_name, last_name, email in user_rows:
             panel_ids: set[int] = set()
             if remnawave_id is not None:
                 try:
@@ -515,6 +546,9 @@ class TrialAbuseService:
             records[user_id] = {
                 'bot_user_id': user_id,
                 'telegram_id': telegram_id,
+                'username': username,
+                'name': ' '.join(part for part in (first_name, last_name) if part),
+                'email': email,
                 'panel_ids': panel_ids,
                 'shorts': set(),
                 'paid_ever': bool(has_had_paid),
