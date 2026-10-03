@@ -1370,7 +1370,7 @@
   "PAYMENT_METHODS_FOOTER": "Выберите способ пополнения:",
   "PAYMENT_METHODS_ONLY_SUPPORT": "💳 <b>Пополнение баланса</b>\n\n⚠️ Автоматическая оплата временно недоступна.\n\nНапишите в поддержку — пополним вручную за пару минут.",
   "PAYMENT_METHODS_PROMPT": "Выберите удобный для вас способ оплаты:",
-  "PAYMENT_METHODS_TITLE": "💳 <b>Способы пополнения баланса</b>",
+  "PAYMENT_METHODS_TITLE": "<b>Способы пополнения баланса</b>",
   "PAYMENT_METHODS_UNAVAILABLE_ALERT": "⚠️ В данный момент автоматические способы оплаты временно недоступны. Для пополнения баланса обратитесь в техподдержку.",
   "PAYMENT_METHOD_CRYPTOBOT_DESCRIPTION": "через CryptoBot",
   "PAYMENT_METHOD_CRYPTOBOT_NAME": "<b>Криптовалюта (CryptoBot)</b>",

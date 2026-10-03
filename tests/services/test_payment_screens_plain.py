@@ -28,3 +28,9 @@ def test_method_keys_have_no_leading_emoji(lang):
     for key in KEYS:
         if key in data:
             assert not re.match(EMOJI, data[key]), key
+
+
+@pytest.mark.parametrize('lang', ['ru', 'en', 'ua', 'zh', 'fa'])
+def test_methods_screen_title_has_no_emoji(lang):
+    data = json.loads(Path(f'app/localization/locales/{lang}.json').read_text(encoding='utf-8'))
+    assert not re.search(EMOJI, data['PAYMENT_METHODS_TITLE'])

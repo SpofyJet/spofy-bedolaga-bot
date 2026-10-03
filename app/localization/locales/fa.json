@@ -1370,7 +1370,7 @@
   "PAYMENT_METHODS_FOOTER": "روش مورد نظر:",
   "PAYMENT_METHODS_ONLY_SUPPORT": "💳 <b>روش‌های شارژ</b>\n\n⚠️ روش‌های خودکار موقتاً در دسترس نیست.\nبرای شارژ با پشتیبانی تماس بگیرید.\n\nروش شارژ:",
   "PAYMENT_METHODS_PROMPT": "روش پرداخت:",
-  "PAYMENT_METHODS_TITLE": "💳 <b>روش‌های پرداخت</b>",
+  "PAYMENT_METHODS_TITLE": "<b>روش‌های پرداخت</b>",
   "PAYMENT_METHODS_UNAVAILABLE_ALERT": "⚠️ روش‌های خودکار موقتاً در دسترس نیست. برای شارژ با پشتیبانی تماس بگیرید.",
   "PAYMENT_METHOD_CRYPTOBOT_DESCRIPTION": "از طریق CryptoBot",
   "PAYMENT_METHOD_CRYPTOBOT_NAME": "<b>رمزارز</b>",

@@ -1243,7 +1243,7 @@
   "PAYMENT_METHODS_FOOTER": "Choose a top-up method:",
   "PAYMENT_METHODS_ONLY_SUPPORT": "💳 <b>Balance top-up</b>\n\n⚠️ Automatic payments are temporarily unavailable.\n\nContact support — we will top you up manually in a couple of minutes.",
   "PAYMENT_METHODS_PROMPT": "Choose the payment method that suits you:",
-  "PAYMENT_METHODS_TITLE": "💳 <b>Balance top-up methods</b>",
+  "PAYMENT_METHODS_TITLE": "<b>Balance top-up methods</b>",
   "PAYMENT_METHODS_UNAVAILABLE_ALERT": "⚠️ Automated payment methods are temporarily unavailable. Contact support to top up your balance.",
   "PAYMENT_METHOD_CRYPTOBOT_DESCRIPTION": "via CryptoBot",
   "PAYMENT_METHOD_CRYPTOBOT_NAME": "<b>Crypto (CryptoBot)</b>",

@@ -1179,7 +1179,7 @@
   "PAYMENT_METHODS_FOOTER": "请选择充值方式：",
   "PAYMENT_METHODS_ONLY_SUPPORT": "💳<b>余额充值方式</b>\n\n⚠️目前自动支付方式暂时不可用。\n请联系技术支持进行余额充值。\n\n请选择充值方式：",
   "PAYMENT_METHODS_PROMPT": "请选择您方便的支付方式：",
-  "PAYMENT_METHODS_TITLE": "💳<b>余额充值方式</b>",
+  "PAYMENT_METHODS_TITLE": "<b>余额充值方式</b>",
   "PAYMENT_METHODS_UNAVAILABLE_ALERT": "⚠️目前自动支付方式暂时不可用。如需充值余额，请联系技术支持。",
   "PAYMENT_METHOD_CRYPTOBOT_DESCRIPTION": "通过CryptoBot",
   "PAYMENT_METHOD_CRYPTOBOT_NAME": "<b>加密货币</b>",
