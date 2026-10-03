@@ -1884,7 +1884,7 @@
   Классы: нет
   Функции: `should_reset_traffic_on_daily_charge` — Обнулять ли израсходованный трафик после успешного суточного списания., `should_reset_traffic_on_tariff_purchase` — Обнулять ли израсходованный трафик при покупке тарифа из кабинета., `lift_panel_traffic_limit` — Снять с аккаунта в панели статус «трафик исчерпан» после оплаты новых суток.
 - `app/services/trial_abuse_service.py` — Python-модуль
-  Классы: `TrialAbuseService` (28 методов)
+  Классы: `TrialAbuseService` (30 методов)
   Функции: нет
 - `app/services/trial_activation_service.py` — Python-модуль
   Классы: `TrialPaymentError`, `TrialPaymentInsufficientFunds` (1 методов), `TrialPaymentChargeFailed`, `TrialActivationReversionResult`
@@ -3558,6 +3558,9 @@
 - `tests/cabinet/test_panel_user_id_single_mode_fallback.py` — Python-модуль
   Классы: нет
   Функции: `test_single_mode_falls_back_to_subscription_account`, `test_single_mode_prefers_user_account_when_present`, `test_multi_mode_never_falls_back_to_user_account`
+- `tests/cabinet/test_payment_method_names_plain.py` — Python-модуль
+  Классы: нет
+  Функции: `test_method_names_have_no_emoji`, `test_api_helper_strips_the_leading_emoji`
 - `tests/cabinet/test_platega_recurrent_admin.py` — Python-модуль
   Классы: нет
   Функции: `test_async_builder_populates_sbp_status_when_gate_on`, `test_async_builder_leaves_sbp_status_none_without_active_record` — Gate on, but no active Platega subscription for this subscription_id., `test_async_builder_skips_query_when_gate_off`, `test_sync_builder_never_sets_sbp_fields` — The sync builder has no DB access and must leave both fields at their, `test_route_registered`, `test_cancel_sbp_recurring_owned_subscription_cancels_and_awaits_helper`, `test_cancel_sbp_recurring_wrong_owner_404_and_helper_not_called`, `test_cancel_sbp_recurring_missing_subscription_404` — Same 404 path for a subscription_id that doesn't exist at all.
@@ -5005,7 +5008,7 @@
   Функции: `service`, `test_disabled_and_expired_are_filtered_out` — DISABLED/EXPIRED отсекаются, ACTIVE/LIMITED остаются., `test_all_active_pass_through` — Когда все активны — ничего не теряется., `test_all_inactive_returns_empty` — Сплошь DISABLED/EXPIRED → пустой список (никого не проверяем)., `test_filter_applies_across_paginated_batches` — Фильтр работает на каждом батче; пагинация — по сырому размеру страницы.
 - `tests/services/test_trial_abuse_rule.py` — Python-модуль
   Классы: нет
-  Функции: `test_second_account_on_a_device_is_the_abuser_not_the_first`, `test_two_accounts_are_enough`, `test_same_bot_user_is_one_person`, `test_account_without_telegram_no_longer_hides_behind_one_telegram`, `test_paid_and_expired_accounts_are_never_punished`, `test_unknown_accounts_are_not_touched`, `test_new_device_of_a_second_account_is_punished_at_once`, `test_owner_connecting_again_is_not_punished`, `test_non_trial_accounts_skip_the_panel_lookup`, `test_bogus_hwid_is_not_checked`, `test_realtime_switch`, `test_device_webhook_schedules_the_check_even_on_the_first_day`
+  Функции: `test_second_account_on_a_device_is_the_abuser_not_the_first`, `test_two_accounts_are_enough`, `test_same_bot_user_is_one_person`, `test_account_without_telegram_no_longer_hides_behind_one_telegram`, `test_paid_and_expired_accounts_are_never_punished`, `test_unknown_accounts_are_not_touched`, `test_new_device_of_a_second_account_is_punished_at_once`, `test_owner_connecting_again_is_not_punished`, `test_non_trial_accounts_skip_the_panel_lookup`, `test_bogus_hwid_is_not_checked`, `test_realtime_switch`, `test_device_webhook_schedules_the_check_even_on_the_first_day`, `test_who_shows_real_name_username_and_telegram`, `test_who_for_email_only_account_and_for_unknown_account`, `test_who_html_links_to_the_telegram_profile_and_escapes`, `test_reason_names_the_first_account_on_the_device`
 - `tests/services/test_tribute_payment_not_lost.py` — Python-модуль
   Классы: нет
   Функции: `service_on` — TributeService над тестовой сессией; уведомления и рефералка заглушены., `test_failure_before_commit_leaves_nothing_and_retry_credits_once`, `test_unknown_user_raises_alert_and_writes_nothing`, `test_alert_logger_is_not_silenced_as_payment_logger` — Логгеры tribute_service отрезаны от админ-чата, журнала ошибок и файлов — тревога идёт мимо этих фильтров., `test_failure_after_commit_answers_ok_and_is_not_credited_twice` — Деньги уже на балансе — 5xx тут опасен: повтор Tribute с синтетическим ключом, пришедший, `test_event_without_money_does_not_raise_payment_alert`

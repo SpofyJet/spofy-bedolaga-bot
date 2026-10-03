@@ -28,6 +28,7 @@ from app.services.payment_verification_service import (
     run_manual_check,
 )
 from app.utils.currency_converter import currency_converter
+from app.utils.miniapp_buttons import strip_leading_emoji
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.balance import (
@@ -183,10 +184,8 @@ async def get_payment_methods(
                 # Add descriptions based on method and option
                 if method_id in ('yookassa', 'pal24', 'cloudpayments', 'freekassa'):
                     if opt_id == 'card':
-                        opt_name = f'💳 {opt_name}'
                         description = 'Банковская карта'
                     elif opt_id == 'sbp':
-                        opt_name = f'🏦 {opt_name}'
                         description = 'Система быстрых платежей'
                 elif method_id == 'platega':
                     # Platega options already have descriptions from config
@@ -199,7 +198,7 @@ async def get_payment_methods(
                 formatted_options.append(
                     {
                         'id': opt_id,
-                        'name': opt_name,
+                        'name': strip_leading_emoji(opt_name),
                         'description': description,
                     }
                 )
@@ -214,9 +213,11 @@ async def get_payment_methods(
                 methods.append(
                     PaymentMethodResponse(
                         id=f'platega_m{_code}',
-                        name=_texts.t(
-                            f'PAYMENT_PLATEGA_M{_code}',
-                            settings.get_platega_method_display_title(_code),
+                        name=strip_leading_emoji(
+                            _texts.t(
+                                f'PAYMENT_PLATEGA_M{_code}',
+                                settings.get_platega_method_display_title(_code),
+                            )
                         ),
                         description=method_data.get('description'),
                         min_amount_kopeks=method_data['min_amount_kopeks'],
@@ -232,7 +233,7 @@ async def get_payment_methods(
         methods.append(
             PaymentMethodResponse(
                 id=method_id,
-                name=method_data['name'],
+                name=strip_leading_emoji(method_data['name']),
                 description=method_data.get('description'),
                 min_amount_kopeks=method_data['min_amount_kopeks'],
                 max_amount_kopeks=method_data['max_amount_kopeks'],
