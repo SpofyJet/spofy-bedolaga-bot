@@ -141,6 +141,8 @@ class Settings(BaseSettings):
 
     # Раздельные топики для уведомлений (если не задано — fallback на ADMIN_NOTIFICATIONS_TOPIC_ID)
     ADMIN_NOTIFICATIONS_PURCHASES_TOPIC_ID: int | None = None  # Покупки подписок
+    # Spofy: покупки со страницы подписки (sub.spofyltd.ru) — отдельный топик; пусто — как обычно
+    ADMIN_NOTIFICATIONS_SUBPAGE_TOPIC_ID: int | None = None
     ADMIN_NOTIFICATIONS_RENEWALS_TOPIC_ID: int | None = None  # Продления
     ADMIN_NOTIFICATIONS_TRIALS_TOPIC_ID: int | None = None  # Триалы
     ADMIN_NOTIFICATIONS_BALANCE_TOPIC_ID: int | None = None  # Пополнение баланса

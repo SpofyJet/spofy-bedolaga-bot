@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.services.spofy_subpage_context import subpage_purchase_context
 from app.services.user_cart_service import user_cart_service
 
 
@@ -70,7 +71,10 @@ async def complete_subpage_carts_after_topup(db: AsyncSession, user: User, *, bo
     completed = False
     for cart in carts:
         try:
-            if await _process_single_cart(db, user, cart, bot=bot):
+            # Пометка для админ-уведомлений: покупка со страницы подписки.
+            with subpage_purchase_context():
+                processed = await _process_single_cart(db, user, cart, bot=bot)
+            if processed:
                 completed = True
         except Exception as error:  # one cart must not block the others
             logger.error('spofy subpage: cart completion failed', user_id=user.id, error=error, exc_info=True)

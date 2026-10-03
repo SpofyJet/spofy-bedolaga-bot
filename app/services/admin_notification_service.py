@@ -921,7 +921,19 @@ class AdminNotificationService:
             or 'missinggreenlet' in message
         )
 
-    async def send_balance_topup_notification(
+    async def send_balance_topup_notification(self, user: User, *args, **kwargs) -> bool:
+        """Пополнение под покупку со страницы подписки помечается так же, как сама покупка."""
+        from app.services.spofy_subpage_context import (
+            subpage_purchase_context,
+            user_has_pending_subpage_purchase,
+        )
+
+        user_id = getattr(user, 'id', None)
+        is_subpage = bool(user_id) and await user_has_pending_subpage_purchase(user_id)
+        with subpage_purchase_context(is_subpage):
+            return await self._send_balance_topup_notification(user, *args, **kwargs)
+
+    async def _send_balance_topup_notification(
         self,
         user: User,
         transaction: Transaction,
@@ -1621,6 +1633,14 @@ class AdminNotificationService:
         if category and not self.category_enabled.get(category, True):
             logger.debug('Уведомление подавлено (категория отключена)', category=category.value)
             return False
+
+        # Spofy: покупка со страницы подписки — пометка в заголовке и (если задан) свой топик.
+        from app.services.spofy_subpage_context import is_subpage_purchase_context, mark_subpage_text
+
+        if is_subpage_purchase_context():
+            text = mark_subpage_text(text)
+            if settings.ADMIN_NOTIFICATIONS_SUBPAGE_TOPIC_ID:
+                thread_id = settings.ADMIN_NOTIFICATIONS_SUBPAGE_TOPIC_ID
 
         # Явный thread_id (например, топик заявок на вывод) важнее топика категории
         if thread_id is None:

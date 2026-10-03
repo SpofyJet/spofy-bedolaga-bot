@@ -1476,7 +1476,7 @@
   Классы: `ActivationFunnelService` (9 методов)
   Функции: нет
 - `app/services/admin_notification_service.py` — Python-модуль
-  Классы: `NotificationCategory`, `AdminNotificationService` (50 методов)
+  Классы: `NotificationCategory`, `AdminNotificationService` (51 методов)
   Функции: нет
 - `app/services/antilopay_service.py` — Python-модуль
   Классы: `AntilopayAPIError` (1 методов), `AntilopayService` (12 методов)
@@ -1820,6 +1820,9 @@
 - `app/services/severpay_service.py` — Python-модуль
   Классы: `SeverPayAPIError` (1 методов), `SeverPayService` (9 методов)
   Функции: нет
+- `app/services/spofy_subpage_context.py` — Python-модуль
+  Классы: нет
+  Функции: `is_subpage_purchase_context`, `subpage_purchase_context`, `mark_subpage_text` — Дописать пометку к первой строке — заголовку уведомления (в rich-виде это h6)., `user_has_pending_subpage_purchase` — Есть корзина страницы подписки и свежая метка пополнения под неё —
 - `app/services/spofy_subpage_service.py` — Python-модуль
   Классы: нет
   Функции: `is_subpage_cart`, `tag_current_cart_as_subpage` — Re-tag the cart the cabinet helpers just saved (devices / traffic carry source='cabinet')., `complete_subpage_carts_after_topup` — Complete only subscription-page carts. Returns True when a purchase went through.
@@ -4910,6 +4913,9 @@
 - `tests/services/test_shutdown_notification.py` — Python-модуль
   Классы: нет
   Функции: `test_docker_stop_is_a_planned_shutdown_with_a_hint`, `test_ctrl_c_is_named`, `test_unknown_signal_is_named_by_its_name`, `test_polling_crash_is_a_failure_with_the_error_and_advice`, `test_long_error_is_cut`, `test_without_start_time_there_is_no_uptime`, `test_uptime_format`, `admin_chat`, `test_planned_stop_goes_to_the_infrastructure_topic`, `test_crash_goes_to_the_errors_topic_with_a_contact_button`, `test_disabled_notifications_send_nothing`, `test_send_failure_does_not_raise`, `test_main_does_not_shadow_datetime_locally` — Локальный ``from datetime import datetime`` в ветке делает имя локальным для всей, `test_shutdown_notice_is_sent_before_services_are_stopped` — Docker даёт на остановку ~10 секунд: сообщение — первым делом, пока сессия жива.
+- `tests/services/test_spofy_subpage_admin_marker.py` — Python-модуль
+  Классы: нет
+  Функции: `test_mark_goes_to_the_title_line`, `test_context_is_off_by_default_and_resets`, `test_send_message_marks_and_routes_subpage_purchases`, `test_regular_purchases_are_untouched`, `test_cart_completion_runs_inside_the_context`, `test_topup_notification_is_marked_when_a_subpage_purchase_is_pending`
 - `tests/services/test_spofy_ux_round.py` — Python-модуль
   Классы: нет
   Функции: `test_info_prompt_has_no_hardcoded_legal_links`, `test_expired_webhook_after_monitoring_does_not_notify_twice`, `test_expired_webhook_first_still_notifies`, `test_device_added_is_quiet_during_first_day`, `test_bandwidth_threshold_says_gb_left_and_bypass_note`, `test_bandwidth_threshold_regular_note_without_bypass`, `test_threshold_text_formats_in_ru_and_en`, `test_followups_skip_quiet_hours`, `bypass_on`, `test_trial_needs_the_include_trial_switch`, `test_bypass_quota_flag`, `test_trial_suspension_sends_trial_text`, `test_trial_texts_explain_unlimited_regular_servers`, `test_device_rows_use_disconnect_icon_and_add_slot_button`, `test_no_add_slot_button_by_default`, `test_all_slots_taken`
