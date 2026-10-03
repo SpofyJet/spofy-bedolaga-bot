@@ -436,7 +436,12 @@ async def send_cart_notification_after_topup(
         # оно дублировало «Пополнение успешно!», а его клавиатура не учитывала
         # MAIN_MENU_MODE=cabinet и уводила из миниаппа в полное меню бота.
         try:
-            await auto_purchase_saved_cart_after_topup(db, user, bot=bot)
+            completed = await auto_purchase_saved_cart_after_topup(db, user, bot=bot)
+            if not completed:
+                # Spofy: purchases started on sub.spofyltd.ru complete even with the global switch off.
+                from app.services.spofy_subpage_service import complete_subpage_carts_after_topup
+
+                await complete_subpage_carts_after_topup(db, user, bot=bot)
         except Exception as auto_error:
             logger.error(
                 'Ошибка автоматической покупки подписки для пользователя',
