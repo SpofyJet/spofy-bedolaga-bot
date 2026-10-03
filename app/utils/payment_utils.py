@@ -578,7 +578,7 @@ def get_payment_methods_text(language: str) -> str:
     if not methods:
         return texts.t(
             'PAYMENT_METHODS_NONE_AVAILABLE',
-            """💳 <b>Способы пополнения баланса</b>
+            """<b>Способы пополнения баланса</b>
 
 ⚠️ В данный момент способы оплаты временно недоступны.
 Попробуйте позже.
@@ -589,7 +589,7 @@ def get_payment_methods_text(language: str) -> str:
     if len(methods) == 1 and methods[0]['id'] == 'support':
         return texts.t(
             'PAYMENT_METHODS_ONLY_SUPPORT',
-            """💳 <b>Способы пополнения баланса</b>
+            """<b>Способы пополнения баланса</b>
 
 ⚠️ В данный момент автоматические способы оплаты временно недоступны.
 Обратитесь в техподдержку для пополнения баланса.
@@ -600,7 +600,7 @@ def get_payment_methods_text(language: str) -> str:
     text = (
         texts.t(
             'PAYMENT_METHODS_TITLE',
-            '💳 <b>Способы пополнения баланса</b>',
+            '<b>Способы пополнения баланса</b>',
         )
         + '\n\n'
     )
