@@ -100,7 +100,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
 
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='⭐ Оплатить', url=invoice_link)],
+                [types.InlineKeyboardButton(text='Оплатить', url=invoice_link)],
                 [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
             ]
         )
@@ -122,7 +122,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
                 logger.warning('Не удалось удалить сообщение с запросом суммы Stars', delete_error=delete_error)
 
         invoice_message = await message.answer(
-            f'⭐ <b>Telegram Stars</b>\n\n'
+            f'<b>Telegram Stars</b>\n\n'
             f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
             f'⭐ К оплате: {stars_amount} звезд\n'
             f'📊 Курс: {stars_rate}₽ за звезду\n\n'

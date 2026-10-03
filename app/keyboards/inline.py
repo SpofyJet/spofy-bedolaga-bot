@@ -1846,7 +1846,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
             keyboard.append(
                 [
                     InlineKeyboardButton(
-                        text=texts.t('PAYMENT_PLATEGA', f'💳 {platega_name}'),
+                        text=texts.t('PAYMENT_PLATEGA', platega_name),
                         callback_data=_build_callback('platega'),
                     )
                 ]
@@ -1857,7 +1857,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars'), callback_data=_build_callback('stars')
+                    text=texts.t('PAYMENT_TELEGRAM_STARS', 'Telegram Stars'), callback_data=_build_callback('stars')
                 )
             ]
         )
@@ -1868,7 +1868,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
             keyboard.append(
                 [
                     InlineKeyboardButton(
-                        text=texts.t('PAYMENT_SBP_YOOKASSA', '🏦 Оплатить по СБП (YooKassa)'),
+                        text=texts.t('PAYMENT_SBP_YOOKASSA', 'Оплатить по СБП (YooKassa)'),
                         callback_data=_build_callback('yookassa_sbp'),
                     )
                 ]
@@ -1878,7 +1878,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('PAYMENT_CARD_YOOKASSA', '💳 Банковская карта (YooKassa)'),
+                    text=texts.t('PAYMENT_CARD_YOOKASSA', 'Банковская карта (YooKassa)'),
                     callback_data=_build_callback('yookassa'),
                 )
             ]
@@ -1889,7 +1889,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('PAYMENT_CARD_TRIBUTE', '💳 Банковская карта (Tribute)'),
+                    text=texts.t('PAYMENT_CARD_TRIBUTE', 'Банковская карта (Tribute)'),
                     callback_data=_build_callback('tribute'),
                 )
             ]
@@ -1903,7 +1903,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
                 InlineKeyboardButton(
                     text=texts.t(
                         'PAYMENT_CARD_MULENPAY',
-                        '💳 Банковская карта ({mulenpay_name})',
+                        'Банковская карта ({mulenpay_name})',
                     ).format(mulenpay_name=mulenpay_name),
                     callback_data=_build_callback('mulenpay'),
                 )
@@ -1915,7 +1915,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('PAYMENT_CARD_WATA', '💳 Банковская карта (WATA)'),
+                    text=texts.t('PAYMENT_CARD_WATA', 'Банковская карта (WATA)'),
                     callback_data=_build_callback('wata'),
                 )
             ]
@@ -1926,7 +1926,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('PAYMENT_CARD_PAL24', '🏦 СБП (PayPalych)'), callback_data=_build_callback('pal24')
+                    text=texts.t('PAYMENT_CARD_PAL24', 'СБП (PayPalych)'), callback_data=_build_callback('pal24')
                 )
             ]
         )
