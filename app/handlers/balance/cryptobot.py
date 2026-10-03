@@ -62,7 +62,7 @@ async def start_cryptobot_payment(callback: types.CallbackQuery, db_user: User, 
         f'Выберите сумму или введите свою от 100 до 100,000 ₽:\n\n'
         f'💰 Доступные активы: {assets_text}\n'
         f'⚡ Мгновенное зачисление на баланс\n'
-        f'🔒 Безопасная оплата через CryptoBot\n\n'
+        f'Безопасная оплата через CryptoBot\n\n'
         f'{rate_text}\n'
         f'Сумма будет автоматически конвертирована в USD для оплаты.'
     )
@@ -222,7 +222,7 @@ async def process_cryptobot_payment_amount(
             f'2. Выберите удобный актив\n'
             f'3. Переведите указанную сумму\n'
             f'4. Деньги поступят на баланс автоматически\n\n'
-            f'🔒 Оплата проходит через защищенную систему CryptoBot\n'
+            f'Оплата проходит через защищенную систему CryptoBot\n'
             f'⚡ Поддерживаемые активы: USDT, TON, BTC, ETH\n\n'
             f'❓ Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}',
             reply_markup=keyboard,

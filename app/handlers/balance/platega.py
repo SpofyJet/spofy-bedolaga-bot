@@ -72,7 +72,7 @@ async def _prompt_amount(
 
     prompt_template = texts.t(
         'PLATEGA_TOPUP_PROMPT',
-        (f'💳 <b>Оплата через Platega ({{method_name}})</b>\n\n{default_prompt_body}Оплата происходит через Platega.'),
+        (f'<b>Оплата через Platega ({{method_name}})</b>\n\n{default_prompt_body}Оплата происходит через Platega.'),
     )
 
     keyboard = await get_topup_amount_keyboard('platega', db_user.language, back_callback='back_to_menu')
@@ -353,7 +353,7 @@ async def process_platega_payment_amount(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'PLATEGA_PAY_BUTTON',
-                        '💳 Оплатить через {method}',
+                        'Оплатить через {method}',
                     ).format(method=method_title),
                     url=redirect_url,
                 )
@@ -371,7 +371,7 @@ async def process_platega_payment_amount(
     instructions_template = texts.t(
         'PLATEGA_PAYMENT_INSTRUCTIONS',
         (
-            '💳 <b>Оплата через Platega ({method})</b>\n\n'
+            '<b>Оплата через Platega ({method})</b>\n\n'
             '💰 Сумма: {amount}\n'
             '🆔 ID транзакции: {transaction}\n\n'
             '📱 <b>Инструкция:</b>\n'

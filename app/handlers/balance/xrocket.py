@@ -51,7 +51,7 @@ async def start_xrocket_payment(callback: types.CallbackQuery, db_user: User, st
         f'Выберите сумму или введите свою от 100 до 100,000 ₽:\n\n'
         f'💰 Доступные активы: {assets_text}\n'
         f'⚡ Мгновенное зачисление на баланс\n'
-        f'🔒 Безопасная оплата через xRocket\n\n'
+        f'Безопасная оплата через xRocket\n\n'
         f'Курс фиксируется в момент создания счёта.'
     )
 
@@ -220,7 +220,7 @@ async def _create_xrocket_invoice(
 
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='🚀 Оплатить', url=payment_url)],
+                [types.InlineKeyboardButton(text='Оплатить', url=payment_url)],
                 [
                     types.InlineKeyboardButton(
                         text='📊 Проверить статус',
@@ -243,7 +243,7 @@ async def _create_xrocket_invoice(
             f"1. Нажмите кнопку 'Оплатить'\n"
             f'2. Подтвердите платёж в @xrocket\n'
             f'3. Деньги поступят на баланс автоматически\n\n'
-            f'🔒 Оплата проходит через xRocket\n\n'
+            f'Оплата проходит через xRocket\n\n'
             f'❓ Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}',
             reply_markup=keyboard,
             parse_mode='HTML',

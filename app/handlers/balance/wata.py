@@ -53,7 +53,7 @@ async def start_wata_payment(
     message_text = texts.t(
         'WATA_TOPUP_PROMPT',
         (
-            '💳 <b>Оплата через WATA</b>\n\n'
+            '<b>Оплата через WATA</b>\n\n'
             'Введите сумму пополнения. Минимальная сумма — {min_amount}, максимальная — {max_amount}.\n'
             'Оплата происходит через защищенную форму WATA.'
         ),
@@ -163,7 +163,7 @@ async def process_wata_payment_amount(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('WATA_PAY_BUTTON', '💳 Оплатить через WATA'),
+                    text=texts.t('WATA_PAY_BUTTON', 'Оплатить через WATA'),
                     url=payment_url,
                 )
             ],
@@ -180,7 +180,7 @@ async def process_wata_payment_amount(
     message_template = texts.t(
         'WATA_PAYMENT_INSTRUCTIONS',
         (
-            '💳 <b>Оплата через WATA</b>\n\n'
+            '<b>Оплата через WATA</b>\n\n'
             '💰 Сумма: {amount}\n'
             '🆔 ID платежа: {payment_id}\n\n'
             '📱 <b>Инструкция:</b>\n'
@@ -295,7 +295,7 @@ async def check_wata_payment_status(
     )
 
     message_lines = [
-        texts.t('WATA_STATUS_TITLE', '💳 <b>Статус платежа WATA</b>'),
+        texts.t('WATA_STATUS_TITLE', '<b>Статус платежа WATA</b>'),
         '',
         f'🆔 ID: {payment.payment_link_id}',
         f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}',
