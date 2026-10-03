@@ -2030,7 +2030,7 @@
   "TARIFF_PURCHASE_CART_SAVED_HINT": "\n\n🛒 <i>购物车已保存！余额充值后将自动为您开通订阅。</i>",
   "TARIFF_PURCHASE_CHARGE_ERROR": "❌ 余额扣款失败",
   "TARIFF_PURCHASE_CHOOSE_PERIOD": "\n请选择订阅周期：",
-  "TARIFF_PURCHASE_CONFIRM": "✅ <b>购买确认</b>\n\n📦 套餐：<b>{name}</b>\n📊 流量：{traffic}\n📱 设备：{devices}\n📅 周期：{period}\n{discount}\n💰 <b>总计：{total}</b>\n\n💳 您的余额：{balance}\n支付后：{after}",
+  "TARIFF_PURCHASE_CONFIRM": "✅ <b>购买确认</b>\n\n📦 套餐：<b>{name}</b>\n📊 流量：{traffic}\n📱 设备：{devices}\n📅 周期：{period}\n{discount}\n💰 <b>总计：{total}</b>\n\n💳 您的余额：{balance}\n支付后：{after}\n\n⚡ 付款后 VPN 立即可用。",
   "TARIFF_PURCHASE_CONFIRM_BUTTON": "✅ 确认购买",
   "TARIFF_PERIOD_BEST_VALUE_BADGE": "⭐ 超值",
   "TARIFF_BEST_VALUE_BADGE": "⭐ 超值",
@@ -2069,7 +2069,7 @@
   "TARIFF_PURCHASE_STILL_INSUFFICIENT": "❌ <b>余额仍然不足</b>\n\n📦 套餐：<b>{name}</b>\n📅 周期：{period}\n💰 费用：{price}\n\n💳 您的余额：{balance}\n⚠️ 还差：<b>{missing}</b>",
   "TARIFF_PURCHASE_STILL_INSUFFICIENT_DAILY": "❌ <b>余额仍然不足</b>\n\n📦 套餐：<b>{name}</b>\n🔄 类型：每日\n💰 费用：{price}\n\n💳 您的余额：{balance}\n⚠️ 还差：<b>{missing}</b>",
   "TARIFF_PURCHASE_SUBSCRIPTION_FALLBACK": "订阅 #{id}",
-  "TARIFF_PURCHASE_SUCCESS": "🎉 <b>订阅开通成功！</b>\n\n📦 套餐：<b>{name}</b>\n📊 流量：{traffic}\n📱 设备：{devices}\n📅 周期：{period}\n💰 已扣款：{price}\n\n请前往「订阅」板块进行连接。",
+  "TARIFF_PURCHASE_SUCCESS": "🎉 <b>订阅开通成功！</b>\n\n📦 套餐：<b>{name}</b>\n📊 流量：{traffic}\n📱 设备：{devices}\n📅 周期：{period}\n💰 已扣款：{price}\n\n只差一步 — 连接您的设备：点击下方「连接 VPN」，只需一分钟。",
   "TARIFF_PURCHASE_TARIFF_NOT_FOUND": "未找到套餐",
   "TARIFF_PURCHASE_TOTAL_AND_BALANCE": "\n<b>💰 总计：{total}</b>\n\n💳 您的余额：{balance}",
   "TARIFF_PURCHASE_TRAFFIC_BUTTON": "📊 {traffic} GB",
@@ -2399,5 +2399,6 @@
   "TRIAL_AVAILABLE_BYPASS_LINE": "\n🏴‍☠️ <b>绕行：</b>{gb} GB，用于「Обход」服务器 — 普通 VPN 无法连接时也能使用",
   "TRIAL_TRAFFIC_UNLIMITED_REGULAR": "普通服务器不限流量",
   "WEBHOOK_BANDWIDTH_NOTE_BYPASS": " 这是「Обход」服务器的额度。用完后只会关闭这些服务器，普通服务器仍然不限流量。",
-  "WEBHOOK_BANDWIDTH_NOTE_REGULAR": " 如果不够用，可以在「我的订阅」中购买流量包，VPN 不会断开。"
+  "WEBHOOK_BANDWIDTH_NOTE_REGULAR": " 如果不够用，可以在「我的订阅」中购买流量包，VPN 不会断开。",
+  "PURCHASE_SUCCESS_CONNECT_BUTTON": "📱 连接 VPN"
 }

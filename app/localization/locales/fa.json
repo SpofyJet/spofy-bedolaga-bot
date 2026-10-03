@@ -994,7 +994,7 @@
   "TARIFF_PURCHASE_CART_SAVED_HINT": "\n\n🛒 <i>سبد خرید ذخیره شد! پس از شارژ موجودی، اشتراک به‌صورت خودکار ثبت می‌شود.</i>",
   "TARIFF_PURCHASE_CHARGE_ERROR": "❌ خطا در برداشت از موجودی",
   "TARIFF_PURCHASE_CHOOSE_PERIOD": "\nدوره اشتراک را انتخاب کنید:",
-  "TARIFF_PURCHASE_CONFIRM": "✅ <b>تأیید خرید</b>\n\n📦 تعرفه: <b>{name}</b>\n📊 ترافیک: {traffic}\n📱 دستگاه‌ها: {devices}\n📅 دوره: {period}\n{discount}\n💰 <b>جمع کل: {total}</b>\n\n💳 موجودی شما: {balance}\nپس از پرداخت: {after}",
+  "TARIFF_PURCHASE_CONFIRM": "✅ <b>تأیید خرید</b>\n\n📦 تعرفه: <b>{name}</b>\n📊 ترافیک: {traffic}\n📱 دستگاه‌ها: {devices}\n📅 دوره: {period}\n{discount}\n💰 <b>جمع کل: {total}</b>\n\n💳 موجودی شما: {balance}\nپس از پرداخت: {after}\n\n⚡ پس از پرداخت VPN فوراً کار می‌کند.",
   "TARIFF_PURCHASE_CONFIRM_BUTTON": "✅ تأیید خرید",
   "TARIFF_PERIOD_BEST_VALUE_BADGE": "⭐ به‌صرفه",
   "TARIFF_BEST_VALUE_BADGE": "⭐ به‌صرفه",
@@ -1033,7 +1033,7 @@
   "TARIFF_PURCHASE_STILL_INSUFFICIENT": "❌ <b>موجودی همچنان ناکافی است</b>\n\n📦 تعرفه: <b>{name}</b>\n📅 دوره: {period}\n💰 هزینه: {price}\n\n💳 موجودی شما: {balance}\n⚠️ کسری: <b>{missing}</b>",
   "TARIFF_PURCHASE_STILL_INSUFFICIENT_DAILY": "❌ <b>موجودی همچنان ناکافی است</b>\n\n📦 تعرفه: <b>{name}</b>\n🔄 نوع: روزانه\n💰 هزینه: {price}\n\n💳 موجودی شما: {balance}\n⚠️ کسری: <b>{missing}</b>",
   "TARIFF_PURCHASE_SUBSCRIPTION_FALLBACK": "اشتراک #{id}",
-  "TARIFF_PURCHASE_SUCCESS": "🎉 <b>اشتراک با موفقیت ثبت شد!</b>\n\n📦 تعرفه: <b>{name}</b>\n📊 ترافیک: {traffic}\n📱 دستگاه‌ها: {devices}\n📅 دوره: {period}\n💰 کسر شد: {price}\n\nبرای اتصال به بخش «اشتراک» بروید.",
+  "TARIFF_PURCHASE_SUCCESS": "🎉 <b>اشتراک با موفقیت ثبت شد!</b>\n\n📦 تعرفه: <b>{name}</b>\n📊 ترافیک: {traffic}\n📱 دستگاه‌ها: {devices}\n📅 دوره: {period}\n💰 کسر شد: {price}\n\nیک قدم مانده — دستگاه خود را وصل کنید: دکمه «اتصال VPN» را بزنید، یک دقیقه طول می‌کشد.",
   "TARIFF_PURCHASE_TARIFF_NOT_FOUND": "تعرفه یافت نشد",
   "TARIFF_PURCHASE_TOTAL_AND_BALANCE": "\n<b>💰 جمع کل: {total}</b>\n\n💳 موجودی شما: {balance}",
   "TARIFF_PURCHASE_TRAFFIC_BUTTON": "📊 {traffic} گیگ",
@@ -2399,5 +2399,6 @@
   "TRIAL_AVAILABLE_BYPASS_LINE": "\n🏴‍☠️ <b>عبور:</b> {gb} گیگابایت برای سرورهای «Обход» — جایی که VPN معمولی کار نمی‌کند",
   "TRIAL_TRAFFIC_UNLIMITED_REGULAR": "نامحدود روی سرورهای معمولی",
   "WEBHOOK_BANDWIDTH_NOTE_BYPASS": " این سهمیه سرورهای «Обход» است. وقتی تمام شود فقط آن‌ها خاموش می‌شوند و سرورهای معمولی بدون محدودیت کار می‌کنند.",
-  "WEBHOOK_BANDWIDTH_NOTE_REGULAR": " اگر کم آمد، بسته را در «اشتراک من» بخرید — VPN قطع نمی‌شود."
+  "WEBHOOK_BANDWIDTH_NOTE_REGULAR": " اگر کم آمد، بسته را در «اشتراک من» بخرید — VPN قطع نمی‌شود.",
+  "PURCHASE_SUCCESS_CONNECT_BUTTON": "📱 اتصال VPN"
 }

@@ -34,6 +34,7 @@ from app.utils.formatting import format_period, format_price_kopeks, format_traf
 from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.subscription_time import local_days_until
+from app.utils.subscription_utils import get_display_subscription_link
 
 
 logger = structlog.get_logger(__name__)
@@ -254,6 +255,21 @@ def get_tariffs_keyboard(
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def _connect_rows(subscription, texts) -> list[list[InlineKeyboardButton]]:
+    """Кнопка «Подключить» на экране успеха: человек только что заплатил — дальше одно нажатие.
+
+    В режиме ссылки — прямо на страницу подписки (там выбор приложения и добавление
+    подписки в один тап); иначе — обычный экран подключения бота.
+    """
+    if not subscription:
+        return []
+    text = texts.t('PURCHASE_SUCCESS_CONNECT_BUTTON', '📱 Подключить VPN')
+    link = get_display_subscription_link(subscription)
+    if settings.CONNECT_BUTTON_MODE == 'link' and link:
+        return [[InlineKeyboardButton(text=text, url=link)]]
+    return [[InlineKeyboardButton(text=text, callback_data='subscription_connect')]]
 
 
 def _period_button_text(tariff: Tariff, period: int, price: int, price_text: str, prices: dict, texts) -> str:
@@ -1684,6 +1700,7 @@ async def handle_custom_confirm(
                     tariff,
                     texts,
                     [
+                        *_connect_rows(subscription, texts),
                         [
                             InlineKeyboardButton(
                                 text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
@@ -2378,6 +2395,7 @@ async def confirm_tariff_purchase(
                 tariff,
                 texts,
                 [
+                    *_connect_rows(subscription, texts),
                     [
                         InlineKeyboardButton(
                             text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
@@ -2682,6 +2700,7 @@ async def confirm_daily_tariff_purchase(
                 tariff,
                 texts,
                 [
+                    *_connect_rows(subscription, texts),
                     [
                         InlineKeyboardButton(
                             text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),

@@ -2030,7 +2030,7 @@
   "TARIFF_PURCHASE_CART_SAVED_HINT": "\n\n🛒 <i>Кошик збережено! Після поповнення балансу підписку буде оформлено автоматично.</i>",
   "TARIFF_PURCHASE_CHARGE_ERROR": "❌ Помилка списання балансу",
   "TARIFF_PURCHASE_CHOOSE_PERIOD": "\nОберіть період підписки:",
-  "TARIFF_PURCHASE_CONFIRM": "✅ <b>Підтвердження покупки</b>\n\n📦 Тариф: <b>{name}</b>\n📊 Трафік: {traffic}\n📱 Пристроїв: {devices}\n📅 Період: {period}\n{discount}\n💰 <b>Разом: {total}</b>\n\n💳 Ваш баланс: {balance}\nПісля оплати: {after}",
+  "TARIFF_PURCHASE_CONFIRM": "✅ <b>Підтвердження покупки</b>\n\n📦 Тариф: <b>{name}</b>\n📊 Трафік: {traffic}\n📱 Пристроїв: {devices}\n📅 Період: {period}\n{discount}\n💰 <b>Разом: {total}</b>\n\n💳 Ваш баланс: {balance}\nПісля оплати: {after}\n\n⚡ Після оплати VPN запрацює одразу.",
   "TARIFF_PURCHASE_CONFIRM_BUTTON": "✅ Підтвердити покупку",
   "TARIFF_PERIOD_BEST_VALUE_BADGE": "⭐ вигідно",
   "TARIFF_BEST_VALUE_BADGE": "⭐ вигідно",
@@ -2069,7 +2069,7 @@
   "TARIFF_PURCHASE_STILL_INSUFFICIENT": "❌ <b>Все ще недостатньо коштів</b>\n\n📦 Тариф: <b>{name}</b>\n📅 Період: {period}\n💰 Вартість: {price}\n\n💳 Ваш баланс: {balance}\n⚠️ Не вистачає: <b>{missing}</b>",
   "TARIFF_PURCHASE_STILL_INSUFFICIENT_DAILY": "❌ <b>Все ще недостатньо коштів</b>\n\n📦 Тариф: <b>{name}</b>\n🔄 Тип: Добовий\n💰 Вартість: {price}\n\n💳 Ваш баланс: {balance}\n⚠️ Не вистачає: <b>{missing}</b>",
   "TARIFF_PURCHASE_SUBSCRIPTION_FALLBACK": "Підписка #{id}",
-  "TARIFF_PURCHASE_SUCCESS": "🎉 <b>Підписку успішно оформлено!</b>\n\n📦 Тариф: <b>{name}</b>\n📊 Трафік: {traffic}\n📱 Пристроїв: {devices}\n📅 Період: {period}\n💰 Списано: {price}\n\nПерейдіть у розділ «Підписка» для підключення.",
+  "TARIFF_PURCHASE_SUCCESS": "🎉 <b>Підписку успішно оформлено!</b>\n\n📦 Тариф: <b>{name}</b>\n📊 Трафік: {traffic}\n📱 Пристроїв: {devices}\n📅 Період: {period}\n💰 Списано: {price}\n\nЗалишився один крок — підключіть пристрій: натисніть «Підключити VPN» нижче, це займе хвилину.",
   "TARIFF_PURCHASE_TARIFF_NOT_FOUND": "Тариф не знайдено",
   "TARIFF_PURCHASE_TOTAL_AND_BALANCE": "\n<b>💰 Разом: {total}</b>\n\n💳 Ваш баланс: {balance}",
   "TARIFF_PURCHASE_TRAFFIC_BUTTON": "📊 {traffic} ГБ",
@@ -2399,5 +2399,6 @@
   "TRIAL_AVAILABLE_BYPASS_LINE": "\n🏴‍☠️ <b>Обходи:</b> {gb} ГБ на сервери «Обход» — вони працюють там, де звичайний VPN мовчить",
   "TRIAL_TRAFFIC_UNLIMITED_REGULAR": "без ліміту на звичайних серверах",
   "WEBHOOK_BANDWIDTH_NOTE_BYPASS": " Це квота на сервери «Обход». Коли вона закінчиться, вимкнуться лише вони — звичайні сервери працюватимуть без ліміту.",
-  "WEBHOOK_BANDWIDTH_NOTE_REGULAR": " Якщо не вистачить — пакет можна докупити в «Моя підписка», VPN при цьому не вимкнеться."
+  "WEBHOOK_BANDWIDTH_NOTE_REGULAR": " Якщо не вистачить — пакет можна докупити в «Моя підписка», VPN при цьому не вимкнеться.",
+  "PURCHASE_SUCCESS_CONNECT_BUTTON": "📱 Підключити VPN"
 }
