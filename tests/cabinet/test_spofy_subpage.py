@@ -23,7 +23,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from app.cabinet.routes import spofy_subpage as bridge
-from app.config import settings
+from app.config import Settings, settings
 
 
 KEY = 'k' * 40
@@ -108,7 +108,9 @@ def owner(monkeypatch):
 @pytest.fixture
 def topup(monkeypatch):
     mock = AsyncMock(
-        return_value=SimpleNamespace(payment_url='https://pay.example/x', payment_id='17', qr_payload=None, expires_at=None)
+        return_value=SimpleNamespace(
+            payment_url='https://pay.example/x', payment_id='17', qr_payload=None, expires_at=None
+        )
     )
     monkeypatch.setattr(bridge, 'create_topup', mock)
     monkeypatch.setattr(bridge, 'get_payment_methods', AsyncMock(return_value=[_method()]))
@@ -235,9 +237,7 @@ async def test_devices_checkout_saves_cabinet_cart(monkeypatch, auto_on, owner, 
 
 
 async def test_devices_unavailable(monkeypatch, auto_on, owner, topup):
-    monkeypatch.setattr(
-        bridge, 'get_device_price', AsyncMock(return_value={'available': False, 'reason': 'max'})
-    )
+    monkeypatch.setattr(bridge, 'get_device_price', AsyncMock(return_value={'available': False, 'reason': 'max'}))
     body = bridge.CheckoutRequest(kind='devices', devices=1, payment_method='yookassa')
     with pytest.raises(HTTPException) as error:
         await bridge.checkout('abcdefgh', body, db=None)
@@ -298,8 +298,8 @@ async def test_renewal_cart_rejects_trial_and_unknown_period(monkeypatch):
 async def test_tariff_cart_for_trial_user(monkeypatch):
     user, sub = _user(), _subscription(is_trial=True, tariff=None, device_limit=1)
     tariff = _tariff()
-    monkeypatch.setattr(settings, 'is_tariffs_mode', lambda: True)
-    monkeypatch.setattr(settings, 'is_multi_tariff_enabled', lambda: False)
+    monkeypatch.setattr(Settings, 'is_tariffs_mode', lambda self: True)
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr(bridge, 'get_tariff_by_id', AsyncMock(return_value=tariff))
     monkeypatch.setattr(
         bridge.pricing_engine, 'calculate_tariff_purchase_price', AsyncMock(return_value=_pricing(19900))
@@ -314,11 +314,11 @@ async def test_tariff_cart_for_trial_user(monkeypatch):
 
 
 async def test_tariff_cart_refuses_daily_and_multi_tariff(monkeypatch):
-    monkeypatch.setattr(settings, 'is_tariffs_mode', lambda: True)
-    monkeypatch.setattr(settings, 'is_multi_tariff_enabled', lambda: True)
+    monkeypatch.setattr(Settings, 'is_tariffs_mode', lambda self: True)
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
     with pytest.raises(HTTPException):
         await bridge.save_tariff_cart(None, _user(), _subscription(), 7, 30)
-    monkeypatch.setattr(settings, 'is_multi_tariff_enabled', lambda: False)
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr(bridge, 'get_tariff_by_id', AsyncMock(return_value=_tariff(is_daily=True)))
     with pytest.raises(HTTPException):
         await bridge.save_tariff_cart(None, _user(), _subscription(), 7, 30)
@@ -349,7 +349,7 @@ async def test_offer_for_trial_user_lists_tariffs_not_renewal(monkeypatch, auto_
 
 # ───────────── completion after top-up (app/services/spofy_subpage_service.py) ─────────────
 
-from app.services import spofy_subpage_service as completion  # noqa: E402
+from app.services import spofy_subpage_service as completion
 
 
 def _carts(monkeypatch, *, per_sub, global_cart, intent=True):
