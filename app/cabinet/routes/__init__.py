@@ -5,7 +5,6 @@ from fastapi import APIRouter
 from app.cabinet.apple_iap import apple_iap_only_router, router as apple_iap_router
 
 from .abuse import router as abuse_router
-from .spofy_subpage import router as spofy_subpage_router
 from .account_linking import merge_router as merge_router, router as account_linking_router
 from .activity import router as activity_router
 from .admin_apps import router as admin_apps_router
@@ -74,6 +73,7 @@ from .promocode import router as promocode_router
 from .referral import router as referral_router
 from .reminders import router as reminders_router
 from .site_verification import router as site_verification_router
+from .spofy_subpage import router as spofy_subpage_router
 from .subscription import router as subscription_router
 from .subscription_modules.multi_tariff import router as multi_tariff_subscription_router
 from .support_ws import router as support_ws_router
