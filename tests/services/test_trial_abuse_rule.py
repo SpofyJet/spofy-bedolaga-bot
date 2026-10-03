@@ -187,7 +187,7 @@ def test_realtime_switch(monkeypatch):
     svc.check_new_device.assert_not_called()
 
 
-async def test_device_webhook_schedules_the_check_even_on_the_first_day(monkeypatch):
+async def test_device_webhook_schedules_the_check_and_still_notifies(monkeypatch):
     from app.services import trial_abuse_service as module
     from app.services.remnawave_webhook_service import RemnaWaveWebhookService
 
@@ -195,6 +195,7 @@ async def test_device_webhook_schedules_the_check_even_on_the_first_day(monkeypa
     monkeypatch.setattr(module.trial_abuse_service, 'schedule_device_check', schedule)
     webhook = RemnaWaveWebhookService(MagicMock())
     webhook._notify_user = AsyncMock()
+    webhook._get_subscription_keyboard = MagicMock(return_value=None)
     subscription = SimpleNamespace(start_date=datetime.now(UTC) - timedelta(minutes=5))
 
     await webhook._handle_device_added(
@@ -202,6 +203,7 @@ async def test_device_webhook_schedules_the_check_even_on_the_first_day(monkeypa
     )
 
     schedule.assert_called_once_with(2, HWID)
+    webhook._notify_user.assert_awaited_once()
 
 
 # ==================== кто это: имена из бота, а не служебные из панели ====================

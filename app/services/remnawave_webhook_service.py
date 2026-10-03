@@ -12,7 +12,7 @@ import asyncio
 import html
 import re
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -1991,15 +1991,6 @@ class RemnaWaveWebhookService:
         from app.services.trial_abuse_service import trial_abuse_service
 
         trial_abuse_service.schedule_device_check(device_obj.get('userId'), device_obj.get('hwid'))
-        # Первые сутки подписки человек сам подключает свои устройства одно за
-        # другим — «новое устройство, если не вы…» на каждое было шумом (~12 тыс.
-        # сообщений). Предупреждаем о подключениях позже, когда они неожиданны.
-        start_date = getattr(subscription, 'start_date', None) if subscription else None
-        if start_date is not None:
-            if start_date.tzinfo is None:
-                start_date = start_date.replace(tzinfo=UTC)
-            if datetime.now(UTC) - start_date < timedelta(hours=24):
-                return
         await self._notify_user(
             user,
             'WEBHOOK_DEVICE_ADDED',

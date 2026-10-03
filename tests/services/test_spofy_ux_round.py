@@ -87,14 +87,16 @@ async def test_expired_webhook_first_still_notifies(monkeypatch):
     assert svc._notify_user.await_args.args[1] == 'WEBHOOK_SUB_EXPIRED'
 
 
-@pytest.mark.parametrize(('age_hours', 'notified'), [(2, False), (23, False), (25, True)])
-async def test_device_added_is_quiet_during_first_day(age_hours, notified):
+@pytest.mark.parametrize('age_hours', [0.1, 2, 23, 25])
+async def test_device_added_always_notifies_the_owner(age_hours):
+    """Уведомление о новом устройстве приходит всегда, в том числе в первые сутки: это полезная
+    информация (владелец вернул его после того, как оно было убрано как «шум»)."""
     svc = _service()
     subscription = SimpleNamespace(start_date=datetime.now(UTC) - timedelta(hours=age_hours))
 
     await svc._handle_device_added(None, _user(), subscription, {'hwidUserDevice': {'deviceModel': 'iPhone'}})
 
-    assert svc._notify_user.await_count == (1 if notified else 0)
+    assert svc._notify_user.await_count == 1
 
 
 async def test_bandwidth_threshold_says_gb_left_and_bypass_note(monkeypatch):
