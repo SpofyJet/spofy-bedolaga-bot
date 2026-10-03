@@ -925,7 +925,7 @@
   Классы: `Pal24APIError`, `Pal24Response` (2 методов), `Pal24Client` (14 методов)
   Функции: нет
 - `app/external/remnawave_api.py` — Python-модуль
-  Классы: `UserStatus`, `TrafficLimitStrategy`, `UserTraffic`, `RemnaWaveUser` (4 методов), `RemnaWaveInbound`, `RemnaWaveInternalSquad`, `RemnaWaveAccessibleNode`, `RemnaWaveHost`, `RemnaWaveNode` (2 методов), `SubscriptionInfo`, `SubscriptionPageConfig`, `RemnaWaveExternalSquad`, `RemnaWaveTransientError`, `RemnaWaveAPI` (108 методов)
+  Классы: `UserStatus`, `TrafficLimitStrategy`, `UserTraffic`, `RemnaWaveUser` (4 методов), `RemnaWaveInbound`, `RemnaWaveInternalSquad`, `RemnaWaveAccessibleNode`, `RemnaWaveHost`, `RemnaWaveNode` (2 методов), `SubscriptionInfo`, `SubscriptionPageConfig`, `RemnaWaveExternalSquad`, `RemnaWaveTransientError`, `RemnaWaveAPI` (109 методов)
   Функции: `is_valid_internal_squad_name` — Имя сквада, которое примет панель., `is_expire_in_past_error` — Панель отвергла ``expireAt`` как прошедшую дату., `is_user_not_found_error` — Панель сообщила, что такого пользователя НЕТ (удалён / протух идентификатор)., `is_stale_external_squad_error` — Панель отвергла запись из-за ``externalSquadUuid`` (или не смогла её отличить)., `format_bytes`, `parse_bytes`, `test_api_connection`
 - `app/external/remnawave_errors.py` — Python-модуль
   Классы: `RemnaWaveAPIError` (1 методов), `RemnaWaveInvalidUserIdError`
@@ -1884,7 +1884,7 @@
   Классы: нет
   Функции: `should_reset_traffic_on_daily_charge` — Обнулять ли израсходованный трафик после успешного суточного списания., `should_reset_traffic_on_tariff_purchase` — Обнулять ли израсходованный трафик при покупке тарифа из кабинета., `lift_panel_traffic_limit` — Снять с аккаунта в панели статус «трафик исчерпан» после оплаты новых суток.
 - `app/services/trial_abuse_service.py` — Python-модуль
-  Классы: `TrialAbuseService` (24 методов)
+  Классы: `TrialAbuseService` (28 методов)
   Функции: нет
 - `app/services/trial_activation_service.py` — Python-модуль
   Классы: `TrialPaymentError`, `TrialPaymentInsufficientFunds` (1 методов), `TrialPaymentChargeFailed`, `TrialActivationReversionResult`
@@ -5003,6 +5003,9 @@
 - `tests/services/test_traffic_monitoring_status_filter.py` — Python-модуль
   Классы: нет
   Функции: `service`, `test_disabled_and_expired_are_filtered_out` — DISABLED/EXPIRED отсекаются, ACTIVE/LIMITED остаются., `test_all_active_pass_through` — Когда все активны — ничего не теряется., `test_all_inactive_returns_empty` — Сплошь DISABLED/EXPIRED → пустой список (никого не проверяем)., `test_filter_applies_across_paginated_batches` — Фильтр работает на каждом батче; пагинация — по сырому размеру страницы.
+- `tests/services/test_trial_abuse_rule.py` — Python-модуль
+  Классы: нет
+  Функции: `test_second_account_on_a_device_is_the_abuser_not_the_first`, `test_two_accounts_are_enough`, `test_same_bot_user_is_one_person`, `test_account_without_telegram_no_longer_hides_behind_one_telegram`, `test_paid_and_expired_accounts_are_never_punished`, `test_unknown_accounts_are_not_touched`, `test_new_device_of_a_second_account_is_punished_at_once`, `test_owner_connecting_again_is_not_punished`, `test_non_trial_accounts_skip_the_panel_lookup`, `test_bogus_hwid_is_not_checked`, `test_realtime_switch`, `test_device_webhook_schedules_the_check_even_on_the_first_day`
 - `tests/services/test_tribute_payment_not_lost.py` — Python-модуль
   Классы: нет
   Функции: `service_on` — TributeService над тестовой сессией; уведомления и рефералка заглушены., `test_failure_before_commit_leaves_nothing_and_retry_credits_once`, `test_unknown_user_raises_alert_and_writes_nothing`, `test_alert_logger_is_not_silenced_as_payment_logger` — Логгеры tribute_service отрезаны от админ-чата, журнала ошибок и файлов — тревога идёт мимо этих фильтров., `test_failure_after_commit_answers_ok_and_is_not_credited_twice` — Деньги уже на балансе — 5xx тут опасен: повтор Tribute с синтетическим ключом, пришедший, `test_event_without_money_does_not_raise_payment_alert`

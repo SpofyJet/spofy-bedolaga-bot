@@ -1986,6 +1986,11 @@ class RemnaWaveWebhookService:
     ) -> None:
         device_name = self._extract_device_name(data)
         logger.info('Webhook: device added for user', user_id=user.id, device_name=device_name or '(empty)')
+        # Антиабуз: тот же HWID у другого аккаунта → триал гасится сразу (в фоне).
+        device_obj = data.get('hwidUserDevice') if isinstance(data.get('hwidUserDevice'), dict) else {}
+        from app.services.trial_abuse_service import trial_abuse_service
+
+        trial_abuse_service.schedule_device_check(device_obj.get('userId'), device_obj.get('hwid'))
         # Первые сутки подписки человек сам подключает свои устройства одно за
         # другим — «новое устройство, если не вы…» на каждое было шумом (~12 тыс.
         # сообщений). Предупреждаем о подключениях позже, когда они неожиданны.

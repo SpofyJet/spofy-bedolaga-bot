@@ -1,20 +1,31 @@
 """Сервис автоматической защиты от абуза триалов.
 
-Каждые TRIAL_ABUSE_INTERVAL_HOURS часов (по умолчанию 4):
-1. Забирает из панели RemnaWave все HWID-устройства и пользователей.
-2. Ищет аккаунты-«близнецы» на одном устройстве (один HWID на 2+ аккаунта),
-   а также пользователей бота с 2+ триальными подписками.
-3. НИКОГДА не трогает платных пользователей и аккаунты, которых нет в БД бота.
+Две проверки, одно правило (_abusers_in_hwid_group):
+- в момент подключения устройства (вебхук user_hwid_devices.added,
+  TRIAL_ABUSE_REALTIME_ENABLED): панель отдаёт все аккаунты с этим HWID одним
+  запросом — абузер теряет триал через секунды после подключения;
+- каждые TRIAL_ABUSE_INTERVAL_HOURS часов (по умолчанию 6) — полный проход по
+  панели как подстраховка (пропущенные вебхуки, рестарты бота).
+
+Правило: на одном устройстве (HWID) первый по дате аккаунт — законный; каждый
+следующий аккаунт ДРУГОГО человека, у которого только триал, — абузер. «Тот же
+человек» — тот же пользователь бота (несколько подписок мульти-тарифа) или тот же
+Telegram. Аккаунты без Telegram (email/Google/VK) больше не прячутся за «одним
+Telegram» в группе.
+
+Также: пользователи бота с 2+ триальными подписками.
+НИКОГДА не трогает платных пользователей и аккаунты, которых нет в БД бота.
 4. Отправляет нарушителю предупреждение в Telegram и применяет действие:
    - expire  — «обнуление» подписки (доступ пропадает через ~30 секунд);
    - disable — полная блокировка аккаунта в панели.
 
 Настройки (.env):
     TRIAL_ABUSE_ENABLED=true           # вкл/выкл сервис (по умолчанию выкл)
-    TRIAL_ABUSE_INTERVAL_HOURS=4       # интервал проверки, часов
+    TRIAL_ABUSE_INTERVAL_HOURS=6       # интервал плановой проверки, часов
     TRIAL_ABUSE_ACTION=expire          # expire | disable
     TRIAL_ABUSE_NOTIFY=true            # слать предупреждение абузеру в Telegram
     TRIAL_ABUSE_MIN_ACCOUNTS=2         # минимум аккаунтов на HWID для реакции
+    TRIAL_ABUSE_REALTIME_ENABLED=true  # проверка в момент подключения устройства
     TRIAL_ABUSE_START_DELAY_MINUTES=5  # пауза после старта бота перед 1-й проверкой
     TRIAL_ABUSE_WARNING_TEXT=...       # свой текст предупреждения (необязательно)
     TRIAL_ABUSE_EXCLUDE_TELEGRAM_IDS=  # белый список TG id через запятую
@@ -25,6 +36,7 @@ import asyncio
 import html
 from collections import defaultdict
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 
 import structlog
@@ -65,6 +77,8 @@ class TrialAbuseService:
         self._task: asyncio.Task | None = None
         # Антиспам: кого уже наказывали в рамках этого процесса
         self._punished: set[int] = set()
+        # Фоновые проверки новых устройств: ссылки держим, чтобы задачи не собрал GC
+        self._device_tasks: set[asyncio.Task] = set()
 
     def set_bot(self, bot: Bot) -> None:
         self.bot = bot
@@ -84,7 +98,7 @@ class TrialAbuseService:
         return bool(getattr(settings, 'TRIAL_ABUSE_ENABLED', False))
 
     def get_interval_hours(self) -> int:
-        return max(1, int(getattr(settings, 'TRIAL_ABUSE_INTERVAL_HOURS', 4)))
+        return max(1, int(getattr(settings, 'TRIAL_ABUSE_INTERVAL_HOURS', 6)))
 
     def get_action(self) -> str:
         action = str(getattr(settings, 'TRIAL_ABUSE_ACTION', 'expire')).strip().lower()
@@ -220,17 +234,8 @@ class TrialAbuseService:
                 if len(uids) < min_accounts:
                     continue
                 stats['hwid_groups'] += 1
-                tg_ids = {users_by_id[uid].telegram_id for uid in uids if users_by_id[uid].telegram_id}
-                # Все аккаунты привязаны к одному Telegram — это один человек
-                # (например, пересоздание подписки), не наказываем.
-                if len(tg_ids) == 1:
-                    stats['skipped_same_telegram'] += 1
-                    continue
-                for uid in uids:
-                    verdict = self._account_verdict(users_by_id[uid], bot_index, now)
-                    stats[f'verdict_{verdict}'] += 1
-                    if verdict == 'candidate':
-                        candidates[uid] = f'HWID …{hwid[-6:]} на {len(uids)} акк.'
+                abusers = self._abusers_in_hwid_group(hwid, uids, users_by_id, bot_index, now, stats)
+                candidates.update(abusers)
 
             # --- мультитриал по данным БД бота (2+ триальных подписок) ---
             for record in bot_index['records'].values():
@@ -289,6 +294,145 @@ class TrialAbuseService:
             await self._send_admin_summary(stats, punished_ok, punished_fail)
 
         return dict(stats)
+
+    # ------------------------------------------------------------------ #
+    # Правило для одного устройства
+    # ------------------------------------------------------------------ #
+    def _abusers_in_hwid_group(
+        self,
+        hwid: str,
+        uids: set[int],
+        users_by_id: dict[int, RemnaWaveUser],
+        bot_index: dict[str, Any],
+        now: datetime,
+        stats: dict[str, int] | None = None,
+    ) -> dict[int, str]:
+        """Абузеры на одном HWID: panel_user_id -> причина.
+
+        Первый по дате создания аккаунт — законный владелец устройства. Каждый
+        следующий аккаунт другого человека, у которого только живой триал, — абузер.
+        Раньше наказывались все триальные аккаунты группы (и первый тоже), а группа
+        целиком пропускалась, если среди аккаунтов с Telegram он был один, — так
+        прятались аккаунты без Telegram (email/Google/VK).
+        """
+        stats = stats if stats is not None else defaultdict(int)
+        members = [users_by_id[uid] for uid in uids if uid in users_by_id]
+        if len(members) < 2:
+            return {}
+        far_future = datetime.max.replace(tzinfo=UTC)
+        members.sort(key=lambda u: (self._as_utc(u.created_at) or far_future, u.id))
+        owner = members[0]
+        owner_person = self._person_key(owner, bot_index)
+
+        abusers: dict[int, str] = {}
+        for panel_user in members[1:]:
+            if self._person_key(panel_user, bot_index) == owner_person:
+                stats['skipped_same_person'] += 1
+                continue
+            verdict = self._account_verdict(panel_user, bot_index, now)
+            stats[f'verdict_{verdict}'] += 1
+            if verdict == 'candidate':
+                abusers[panel_user.id] = (
+                    f'HWID …{hwid[-6:]}: {len(members)}-й аккаунт на устройстве после id={owner.id}'
+                )
+        return abusers
+
+    @staticmethod
+    def _person_key(panel_user: RemnaWaveUser, bot_index: dict[str, Any]) -> tuple:
+        """Кто стоит за аккаунтом панели: пользователь бота, иначе Telegram, иначе сам аккаунт."""
+        record = bot_index['by_id'].get(panel_user.id)
+        if record is None and panel_user.short_uuid:
+            record = bot_index['by_short'].get(panel_user.short_uuid)
+        if record is None and panel_user.telegram_id is not None:
+            record = bot_index['by_tg'].get(panel_user.telegram_id)
+        if record is not None:
+            return ('bot', record['bot_user_id'])
+        if panel_user.telegram_id:
+            return ('tg', panel_user.telegram_id)
+        return ('panel', panel_user.id)
+
+    # ------------------------------------------------------------------ #
+    # Проверка в момент подключения устройства
+    # ------------------------------------------------------------------ #
+    def schedule_device_check(self, panel_user_id: Any, hwid: Any) -> None:
+        """Из вебхука user_hwid_devices.added: проверить в фоне, вебхук не ждёт."""
+        if not (self.is_enabled() and getattr(settings, 'TRIAL_ABUSE_REALTIME_ENABLED', True)):
+            return
+        try:
+            panel_user_id = int(panel_user_id)
+        except (TypeError, ValueError):
+            return
+        hwid = str(hwid or '').strip()
+        if not self._is_valid_hwid(hwid):
+            return
+        task = asyncio.create_task(self.check_new_device(panel_user_id, hwid))
+        self._device_tasks.add(task)
+        task.add_done_callback(self._device_tasks.discard)
+
+    async def check_new_device(self, panel_user_id: int, hwid: str) -> bool:
+        """True — аккаунт наказан. Тяжёлую часть делаем только для живых триалов."""
+        if panel_user_id in self._punished:
+            return False
+        try:
+            async with AsyncSessionLocal() as db:
+                probe = SimpleNamespace(id=panel_user_id, short_uuid=None)
+                if not await self._find_bot_trials(db, probe):
+                    return False  # не триал (платный, неизвестный) — дальше не идём
+
+            now = datetime.now(UTC)
+            async with remnawave_service.get_api_client() as api:
+                devices = await api.get_hwid_devices_by_hwid(hwid)
+                uids = {
+                    int(d['userId'])
+                    for d in devices
+                    if str(d.get('hwid') or '').strip() == hwid and d.get('userId') is not None
+                }
+                uids.add(panel_user_id)
+                if len(uids) < max(2, self.get_min_accounts()):
+                    return False
+                users_by_id: dict[int, RemnaWaveUser] = {}
+                for uid in uids:
+                    panel_user = await api.get_user_by_id(uid)
+                    if panel_user is not None:
+                        users_by_id[uid] = panel_user
+                if panel_user_id not in users_by_id:
+                    return False
+
+                bot_index = await self._load_bot_index(now)
+                abusers = self._abusers_in_hwid_group(hwid, set(users_by_id), users_by_id, bot_index, now)
+                reason = abusers.get(panel_user_id)
+                if reason is None:
+                    return False
+                tg_id = users_by_id[panel_user_id].telegram_id
+                if tg_id and tg_id in self.get_excluded_telegram_ids():
+                    return False
+
+                panel_user = users_by_id[panel_user_id]
+                notified = False
+                if self.is_notify_enabled() and panel_user.telegram_id and self.bot:
+                    notified = await self._send_warning(panel_user.telegram_id)
+                ok, detail = await self._apply_action(api, panel_user)
+        except Exception as error:
+            logger.error(
+                'Антиабуз триалов: ошибка проверки нового устройства', panel_user_id=panel_user_id, error=str(error)
+            )
+            return False
+
+        label = (
+            f'id={panel_user_id} @{html.escape(str(panel_user.username or "-"))} '
+            f'tg={panel_user.telegram_id or "-"} ({html.escape(reason)})'
+        )
+        if ok:
+            self._punished.add(panel_user_id)
+            logger.warning(f'Антиабуз триалов: наказан при подключении {label} -> {detail}')
+            if self.get_report_mode() != 'never':
+                await self._notify_admin(
+                    f'🛡 <b>Антиабуз триалов: сразу при подключении</b>\n'
+                    f'✅ {html.escape(self.get_action())}: {label}' + (' 📨' if notified else '')
+                )
+        else:
+            logger.error(f'Антиабуз триалов: ошибка наказания при подключении {label}: {detail}')
+        return ok
 
     # ------------------------------------------------------------------ #
     # Вердикты
@@ -369,6 +513,7 @@ class TrialAbuseService:
                 except (TypeError, ValueError):
                     pass
             records[user_id] = {
+                'bot_user_id': user_id,
                 'telegram_id': telegram_id,
                 'panel_ids': panel_ids,
                 'shorts': set(),

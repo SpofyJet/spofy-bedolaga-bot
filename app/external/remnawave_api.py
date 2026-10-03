@@ -1752,6 +1752,20 @@ class RemnaWaveAPI:
 
         return {'devices': all_devices, 'total': len(all_devices)}
 
+    async def get_hwid_devices_by_hwid(self, hwid: str) -> list[dict[str, Any]]:
+        """Все устройства (любых пользователей) с этим HWID — одним запросом.
+
+        ``GET /api/hwid/devices`` принимает фильтры таблицы (``filters`` — JSON); фильтр
+        по строке может быть «содержит», поэтому точное совпадение досматриваем здесь.
+        """
+        response = await self._make_request(
+            'GET',
+            '/api/hwid/devices',
+            params={'start': 0, 'size': 100, 'filters': json.dumps([{'id': 'hwid', 'value': hwid}])},
+        )
+        devices = (response.get('response') or {}).get('devices') or []
+        return [d for d in devices if str(d.get('hwid') or '').strip() == hwid]
+
     async def get_user_devices(self, user_id: int) -> dict[str, Any]:
         panel_user_id = coerce_panel_user_id(user_id)
         try:

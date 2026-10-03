@@ -1572,8 +1572,11 @@ class Settings(BaseSettings):
     # === Антиабуз триалов (n20) ===
     TRIAL_ABUSE_ENABLED: bool = True
     TRIAL_ABUSE_ACTION: str = 'expire'
-    TRIAL_ABUSE_INTERVAL_HOURS: int = 12
-    TRIAL_ABUSE_MIN_ACCOUNTS: int = 3
+    TRIAL_ABUSE_INTERVAL_HOURS: int = 6
+    TRIAL_ABUSE_MIN_ACCOUNTS: int = 2
+    # Проверка в момент подключения устройства (вебхук user_hwid_devices.added): абузер
+    # подключается в среднем через минуты после регистрации, плановая проверка — подстраховка.
+    TRIAL_ABUSE_REALTIME_ENABLED: bool = True
     TRIAL_ABUSE_NOTIFY: bool = True
     TRIAL_ABUSE_START_DELAY_MINUTES: int = 5
     TRIAL_ABUSE_REPORT_MODE: str = 'changes'
