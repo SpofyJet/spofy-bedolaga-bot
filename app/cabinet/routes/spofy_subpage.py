@@ -41,6 +41,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
+from app.database.crud.user import get_user_by_id
 from app.database.models import Subscription, SubscriptionStatus, User, UserStatus
 from app.services.pricing_engine import pricing_engine
 from app.services.spofy_subpage_service import SUBPAGE_SOURCE, tag_current_cart_as_subpage
@@ -102,7 +103,13 @@ async def resolve_owner(db: AsyncSession, short_uuid: str) -> tuple[User, Subscr
     if not subscription or not subscription.user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
 
-    user = subscription.user
+    # The same loader as the cabinet's get_current_cabinet_user: promo groups, subscriptions
+    # and tariffs eager-loaded. With only selectinload(Subscription.user) the pricing engine's
+    # user.get_primary_promo_group() lazy-loaded promo_group inside async code →
+    # sqlalchemy MissingGreenlet → 500 on offer for a multi-tariff subscription.
+    user = await get_user_by_id(db, subscription.user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
     if getattr(user, 'status', None) in {UserStatus.BLOCKED.value, UserStatus.DELETED.value}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Account unavailable')
     return user, subscription
@@ -122,13 +129,26 @@ def snapshot(subscription: Subscription) -> dict[str, Any]:
     }
 
 
-async def _soft(coro: Any, default: Any) -> Any:
-    """One unavailable part (e.g. devices for a legacy subscription) must not break the offer."""
+async def _soft(coro: Any, default: Any, part: str = 'offer part') -> Any:
+    """One unavailable or failing part (devices, traffic, trial...) must not break the whole offer."""
     try:
         return await coro
     except HTTPException as error:
-        logger.debug('spofy subpage: offer part unavailable', status=error.status_code, detail=str(error.detail))
+        logger.debug(
+            'spofy subpage: offer part unavailable', part=part, status=error.status_code, detail=str(error.detail)
+        )
         return default
+    except Exception:
+        # Any other error in a cabinet helper (e.g. a multi-tariff edge case) used to turn the
+        # whole offer into a 500 and every button on the page into an error.
+        logger.exception('spofy subpage: offer part failed', part=part)
+        return default
+
+
+def _bridge_failure(error: Exception, where: str) -> HTTPException:
+    """Unexpected error → 502 with the error type (the caller holds the key; no internals leak to users)."""
+    logger.error('spofy subpage: bridge failure', where=where, exc_info=error)
+    return HTTPException(status.HTTP_502_BAD_GATEWAY, f'bridge failure in {where}: {type(error).__name__}')
 
 
 def _restricted(user: User) -> str | None:
@@ -163,9 +183,7 @@ async def tariff_offers(db: AsyncSession, user: User, subscription: Subscription
                 {
                     'period_days': period_days,
                     'price_kopeks': price.final_total,
-                    'original_price_kopeks': price.original_total
-                    if price.original_total > price.final_total
-                    else None,
+                    'original_price_kopeks': price.original_total if price.original_total > price.final_total else None,
                     'is_highlighted': tariff.highlight_period_days == period_days,
                 }
             )
@@ -287,27 +305,79 @@ async def save_tariff_cart(
     return price
 
 
+MAX_DEVICE_QUOTES = 10
+
+
+async def device_offer(db: AsyncSession, user: User, subscription: Subscription) -> dict[str, Any]:
+    """Device add-on with an exact quote per count.
+
+    The bot's price is not linear: it is prorated to the days left, devices still inside the
+    tariff's limit are free, and promo-group discounts and the 1 ₽ minimum apply. So the page
+    gets the bot's own total for 1..N devices instead of multiplying a single-device price.
+    """
+    info = await _soft(
+        get_device_price(devices=1, subscription_id=subscription.id, user=user, db=db),
+        {'available': False, 'reason_code': 'unavailable'},
+        'devices',
+    )
+    if not info.get('available'):
+        return info
+    can_add = info.get('can_add')
+    upper = min(can_add, MAX_DEVICE_QUOTES) if can_add else MAX_DEVICE_QUOTES
+    quotes = []
+    for count in range(1, upper + 1):
+        quote = (
+            info
+            if count == 1
+            else await _soft(
+                get_device_price(devices=count, subscription_id=subscription.id, user=user, db=db),
+                None,
+                f'devices x{count}',
+            )
+        )
+        if not quote or not quote.get('available'):
+            break
+        quotes.append(
+            {
+                'devices': count,
+                'total_price_kopeks': int(quote['total_price_kopeks']),
+                'discount_percent': int(quote.get('discount_percent') or 0),
+            }
+        )
+    return {**info, 'quotes': quotes}
+
+
 # ───────────────────────── endpoints ─────────────────────────
 
 
 @router.get('/{short_uuid}/offer')
 async def get_offer(short_uuid: str, db: AsyncSession = Depends(get_cabinet_db)) -> dict[str, Any]:
+    try:
+        return await _offer(short_uuid, db)
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise _bridge_failure(error, 'offer') from error
+
+
+async def _offer(short_uuid: str, db: AsyncSession) -> dict[str, Any]:
     user, subscription = await resolve_owner(db, short_uuid)
     restriction = _restricted(user)
 
-    methods = await _soft(get_payment_methods(user=user, db=db), [])
+    methods = await _soft(get_payment_methods(user=user, db=db), [], 'payment_methods')
     renewal = (
         []
         if subscription.is_trial
-        else await _soft(get_renewal_options(user=user, db=db, subscription_id=subscription.id), [])
+        else await _soft(get_renewal_options(user=user, db=db, subscription_id=subscription.id), [], 'renewal')
     )
-    tariffs = await tariff_offers(db, user, subscription) if (subscription.is_trial or not renewal) else []
-    devices = await _soft(
-        get_device_price(devices=1, subscription_id=subscription.id, user=user, db=db),
-        {'available': False, 'reason_code': 'unavailable'},
+    tariffs = (
+        await _soft(tariff_offers(db, user, subscription), [], 'tariffs')
+        if (subscription.is_trial or not renewal)
+        else []
     )
-    traffic = await _soft(get_traffic_packages(user=user, db=db, subscription_id=subscription.id), [])
-    trial = await _soft(get_trial_info(user=user, db=db), None)
+    devices = await device_offer(db, user, subscription)
+    traffic = await _soft(get_traffic_packages(user=user, db=db, subscription_id=subscription.id), [], 'traffic')
+    trial = await _soft(get_trial_info(user=user, db=db), None, 'trial')
 
     return {
         'checkout_enabled': restriction is None and bool(methods),
@@ -343,6 +413,15 @@ class CheckoutRequest(BaseModel):
 async def checkout(
     short_uuid: str, body: CheckoutRequest, db: AsyncSession = Depends(get_cabinet_db)
 ) -> dict[str, Any]:
+    try:
+        return await _checkout(short_uuid, body, db)
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise _bridge_failure(error, f'checkout/{body.kind}') from error
+
+
+async def _checkout(short_uuid: str, body: CheckoutRequest, db: AsyncSession) -> dict[str, Any]:
     user, subscription = await resolve_owner(db, short_uuid)
     restriction = _restricted(user)
     if restriction:
@@ -395,9 +474,7 @@ async def checkout(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Amount exceeds the payment method limit')
 
     topup = await create_topup(
-        request=TopUpRequest(
-            amount_kopeks=amount, payment_method=method.id, payment_option=body.payment_option
-        ),
+        request=TopUpRequest(amount_kopeks=amount, payment_method=method.id, payment_option=body.payment_option),
         user=user,
         db=db,
     )
