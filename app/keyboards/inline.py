@@ -3551,17 +3551,23 @@ def get_cryptobot_payment_keyboard(
     bot_invoice_url: str,
     language: str = DEFAULT_LANGUAGE,
 ) -> InlineKeyboardMarkup:
+    from app.utils.miniapp_buttons import strip_leading_emoji
+
     texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=texts.t('PAY_WITH_COINS_BUTTON', 'Оплатить'), url=bot_invoice_url)],
             [
                 InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                    text=strip_leading_emoji(texts.t('CHECK_STATUS_BUTTON', 'Проверить статус')),
                     callback_data=f'check_cryptobot_{local_payment_id}',
                 )
             ],
-            [InlineKeyboardButton(text=texts.t('MY_BALANCE_BUTTON', '💰 Мой баланс'), callback_data='menu_balance')],
+            [
+                InlineKeyboardButton(
+                    text=strip_leading_emoji(texts.t('MY_BALANCE_BUTTON', 'Мой баланс')), callback_data='menu_balance'
+                )
+            ],
         ]
     )
 

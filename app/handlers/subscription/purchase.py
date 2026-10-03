@@ -846,7 +846,7 @@ def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = Fals
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('PAYMENT_HELEKET', '🪙 Криптовалюта (Heleket)'), callback_data='trial_payment_heleket'
+                    text=texts.t('PAYMENT_HELEKET', 'Криптовалюта (Heleket)'), callback_data='trial_payment_heleket'
                 )
             ]
         )

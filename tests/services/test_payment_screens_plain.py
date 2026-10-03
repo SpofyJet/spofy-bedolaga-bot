@@ -1,4 +1,4 @@
-"""Экраны оплаты активных способов (Platega, WATA, Stars, CryptoBot, xRocket, Heleket) — без эмодзи у названий."""
+"""Эмодзи у способов оплаты: у карт, СБП и Stars остаются, у криптовалют (CryptoBot, xRocket, Heleket) убраны."""
 
 import json
 import re
@@ -6,31 +6,45 @@ from pathlib import Path
 
 import pytest
 
+from app.keyboards.inline import get_cryptobot_payment_keyboard
+from app.localization.texts import get_texts
 
-EMOJI = '[\U0001f000-\U0001faff☀-➿⬀-⯿️]'
-TITLE = re.compile(
-    r"""['"]"""
-    + EMOJI
-    + r'+ (<b>Оплата через|Оплатить через|<b>Статус платежа WATA|<b>Telegram Stars|Безопасная оплата)'
+
+EMOJI = '[\U0001f000-\U0001faff\u2600-\u27bf\u2b00-\u2bff\ufe0f]'
+CRYPTO_KEYS = re.compile(r'CRYPTO|HELEKET|XROCKET|PLATEGA_M13')
+METHOD_NAME_KEYS = re.compile(
+    r'^PAYMENT_(METHOD_[A-Z0-9_]+_NAME|PLATEGA(_M\d+)?|CRYPTOBOT|HELEKET|XROCKET|TELEGRAM_STARS)$'
 )
-KEYS = ['TOP_UP_STARS', 'WATA_PAYMENT_INSTRUCTIONS', 'WATA_TOPUP_PROMPT', 'WATA_PAY_BUTTON', 'PLATEGA_PAY_BUTTON']
 
 
-@pytest.mark.parametrize('name', ['platega', 'wata', 'stars', 'cryptobot', 'xrocket', 'heleket'])
-def test_screen_titles_have_no_leading_emoji(name):
+def _data(lang):
+    return json.loads(Path(f'app/localization/locales/{lang}.json').read_text(encoding='utf-8'))
+
+
+@pytest.mark.parametrize('lang', ['ru', 'en', 'ua', 'zh', 'fa'])
+def test_crypto_method_names_have_no_emoji(lang):
+    for key, value in _data(lang).items():
+        if METHOD_NAME_KEYS.match(key) and CRYPTO_KEYS.search(key):
+            assert not re.search(EMOJI, value), key
+
+
+def test_card_and_sbp_names_keep_their_emoji():
+    data = _data('ru')
+    assert data['PAYMENT_PLATEGA_M2'].startswith('💳')
+    assert data['PAYMENT_METHOD_SBP'].startswith('🏦')
+    assert data['PAYMENT_METHODS_TITLE'].startswith('💳')
+
+
+def test_crypto_payment_keyboard_has_no_emoji_in_its_buttons():
+    keyboard = get_cryptobot_payment_keyboard('inv1', 1, 1.0, 'USDT', 'https://t.me/x', 'ru')
+    labels = [button.text for row in keyboard.inline_keyboard for button in row]
+    assert labels
+    for label in labels:
+        if label != get_texts('ru').BACK:
+            assert not re.search(EMOJI, label), label
+
+
+@pytest.mark.parametrize('name', ['cryptobot', 'xrocket', 'heleket'])
+def test_crypto_screen_buttons_are_plain(name):
     source = Path(f'app/handlers/balance/{name}.py').read_text(encoding='utf-8')
-    assert not TITLE.search(source)
-
-
-@pytest.mark.parametrize('lang', ['ru', 'en', 'ua', 'zh', 'fa'])
-def test_method_keys_have_no_leading_emoji(lang):
-    data = json.loads(Path(f'app/localization/locales/{lang}.json').read_text(encoding='utf-8'))
-    for key in KEYS:
-        if key in data:
-            assert not re.match(EMOJI, data[key]), key
-
-
-@pytest.mark.parametrize('lang', ['ru', 'en', 'ua', 'zh', 'fa'])
-def test_methods_screen_title_has_no_emoji(lang):
-    data = json.loads(Path(f'app/localization/locales/{lang}.json').read_text(encoding='utf-8'))
-    assert not re.search(EMOJI, data['PAYMENT_METHODS_TITLE'])
+    assert not re.search(r"text='" + EMOJI, source)
