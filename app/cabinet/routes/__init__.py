@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.cabinet.apple_iap import apple_iap_only_router, router as apple_iap_router
 
 from .abuse import router as abuse_router
+from .spofy_subpage import router as spofy_subpage_router
 from .account_linking import merge_router as merge_router, router as account_linking_router
 from .activity import router as activity_router
 from .admin_apps import router as admin_apps_router
@@ -98,6 +99,7 @@ router.include_router(site_verification_router)
 router.include_router(unsubscribe_router)
 
 # Include all sub-routers
+router.include_router(spofy_subpage_router)  # Spofy: sub.spofyltd.ru checkout bridge
 router.include_router(auth_router)
 router.include_router(oauth_router)
 router.include_router(account_linking_router)

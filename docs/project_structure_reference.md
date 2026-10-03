@@ -388,6 +388,9 @@
 - `app/cabinet/routes/site_verification.py` — Python-модуль
   Классы: нет
   Функции: `get_site_verification` — Return all configured site-verification tokens.
+- `app/cabinet/routes/spofy_subpage.py` — Python-модуль
+  Классы: `CheckoutRequest`
+  Функции: `require_subpage_key`, `resolve_owner` — Subscription (and its user) behind a Remnawave short UUID., `snapshot` — What the page compares before/after payment to show «готово»., `tariff_offers` — Tariffs a trial (or tariff-less) user can buy; plain period tariffs only (v1)., `save_renewal_cart` — Mirror of POST /subscription/renew on insufficient funds — without ever charging., `save_tariff_cart` — Mirror of POST /subscription/purchase-tariff on insufficient funds (plain period tariffs)., `get_offer`, `checkout`, `payment_status`
 - `app/cabinet/routes/subscription.py` — Python-модуль
   Классы: нет
   Функции: `get_subscription`
@@ -1817,6 +1820,9 @@
 - `app/services/severpay_service.py` — Python-модуль
   Классы: `SeverPayAPIError` (1 методов), `SeverPayService` (9 методов)
   Функции: нет
+- `app/services/spofy_subpage_service.py` — Python-модуль
+  Классы: нет
+  Функции: `is_subpage_cart`, `tag_current_cart_as_subpage` — Re-tag the cart the cabinet helpers just saved (devices / traffic carry source='cabinet')., `complete_subpage_carts_after_topup` — Complete only subscription-page carts. Returns True when a purchase went through.
 - `app/services/start_media_service.py` — Python-модуль
   Классы: нет
   Функции: `get_start_video_file_id` — file_id видео для стартового меню либо None., `set_start_video_file_id` — Сохраняет (или очищает) file_id видео стартового меню., `reset_start_video_cache` — Сбрасывает кеш (для тестов и ручной инвалидации).
@@ -3615,6 +3621,9 @@
 - `tests/cabinet/test_settings_writes_are_committed.py` — Python-модуль
   Классы: нет
   Функции: `isolated_settings` — Настройки — глобальный объект: возвращаем значения после теста., `test_set_value_survives_a_session_without_commit` — Сама запись настройки обязана коммитить — на неё полагаются все вызовы., `test_levels_mode_route_persists` — Переключение режима из кабинета доезжает до базы., `test_chain_depth_route_persists` — Глубина цепочки — та же поверхность, тот же дефект., `test_reward_scheme_route_persists` — Схема наград — и она тоже., `test_email_type_switch_persists` — Выключатель писем по типу — четвёртое место с тем же дефектом., `test_batch_writers_commit_themselves` — Кто отказался от коммита внутри записи — обязан коммитить сам.
+- `tests/cabinet/test_spofy_subpage.py` — Python-модуль
+  Классы: нет
+  Функции: `auto_on`, `owner`, `topup`, `test_router_hidden_without_key`, `test_short_key_counts_as_unset`, `test_wrong_key_rejected`, `test_right_key_passes`, `test_resolve_rejects_malformed_short_uuid`, `test_checkout_works_with_global_auto_purchase_off`, `test_renew_checkout_tops_up_full_price_and_never_charges`, `test_amount_raised_to_method_minimum`, `test_unknown_method_rejected`, `test_restricted_user_cannot_checkout`, `test_devices_checkout_saves_cabinet_cart`, `test_devices_unavailable`, `test_traffic_package_must_exist`, `test_renewal_cart_mirrors_cabinet_extend_cart`, `test_renewal_cart_rejects_trial_and_unknown_period`, `test_tariff_cart_for_trial_user`, `test_tariff_cart_refuses_daily_and_multi_tariff`, `test_offer_for_trial_user_lists_tariffs_not_renewal`, `test_completion_only_processes_subpage_carts`, `test_completion_skips_when_global_switch_on`, `test_completion_needs_fresh_intent`, `test_completion_ignores_plain_topups`, `test_tagging_rewrites_source_and_intent`
 - `tests/cabinet/test_squad_name_validation.py` — Python-модуль
   Классы: нет
   Функции: `test_limits_match_panel_contract`, `test_helper_rejects_names_the_panel_rejects`, `test_helper_accepts_panel_valid_names`, `test_create_schemas_reject_invalid_names`, `test_update_schemas_reject_invalid_names`, `test_rename_action_rejects_invalid_names`, `test_schemas_accept_panel_valid_names`, `test_update_and_action_still_allow_omitting_name`
