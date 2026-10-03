@@ -94,7 +94,7 @@ def ineligibility_reason(user, subscription, *, tariff=None, now: datetime | Non
         return 'not_configured'
     if user is None or getattr(user, 'status', UserStatus.ACTIVE.value) != UserStatus.ACTIVE.value:
         return 'user_inactive'
-    if getattr(subscription, 'is_trial', False):
+    if getattr(subscription, 'is_trial', False) and not settings.BYPASS_INCLUDE_TRIAL:
         return 'trial'
     if tariff is not None and getattr(tariff, 'is_daily', False):
         return 'daily'
@@ -112,6 +112,20 @@ def ineligibility_reason(user, subscription, *, tariff=None, now: datetime | Non
     if (getattr(subscription, 'traffic_limit_gb', 0) or 0) <= 0:
         return 'unlimited'
     return None
+
+
+def has_bypass_quota(subscription) -> bool:
+    """Лимит подписки — это квота на обходы: в сквадах обходы, у тарифа есть лимит.
+
+    Обычные ноды трафик не считают, так что на них лимита нет. По этому признаку
+    бот и кабинет пишут «обходы X из Y ГБ · обычные серверы без лимита».
+    """
+    squad = settings.BYPASS_SQUAD_UUID
+    return (
+        bool(squad)
+        and squad in (getattr(subscription, 'connected_squads', None) or [])
+        and (getattr(subscription, 'traffic_limit_gb', 0) or 0) > 0
+    )
 
 
 def is_suspended_snapshot(squads: Iterable[str]) -> bool:

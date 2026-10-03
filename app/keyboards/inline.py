@@ -3571,6 +3571,7 @@ def get_devices_management_keyboard(
     pagination,
     language: str = DEFAULT_LANGUAGE,
     back_callback: str = 'subscription_settings',
+    add_slot_callback: str | None = None,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
@@ -3598,7 +3599,10 @@ def get_devices_management_keyboard(
                     text=texts.t('DEVICE_RENAME_BUTTON', '✏️'),
                     callback_data=f'device_rename_{i}_{pagination.page}',
                 ),
-                InlineKeyboardButton(text=f'🔄 {device_info}', callback_data=f'reset_device_{i}_{pagination.page}'),
+                InlineKeyboardButton(
+                    text=texts.t('DEVICE_DISCONNECT_ROW', '🗑 {device}').format(device=device_info),
+                    callback_data=f'reset_device_{i}_{pagination.page}',
+                ),
             ]
         )
 
@@ -3634,6 +3638,15 @@ def get_devices_management_keyboard(
         ]
     )
 
+    if add_slot_callback:
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('DEVICE_ADD_SLOT_BUTTON', '➕ Добавить место для устройства'),
+                    callback_data=add_slot_callback,
+                )
+            ]
+        )
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)

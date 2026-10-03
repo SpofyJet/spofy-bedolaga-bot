@@ -312,6 +312,9 @@ class Settings(BaseSettings):
     # набора инбаундов с Bypass-Off и распознавания снимков панели; в панель не уходит.
     BYPASS_FALLBACK_SQUAD_UUID: str = ''
     BYPASS_RECONCILE_INTERVAL_MINUTES: int = 5
+    # Пробный период с квотой на обходы (сквад с обходами + TRIAL_TRAFFIC_LIMIT_GB):
+    # квота кончилась — обходы отключаются, обычные серверы работают до конца пробного.
+    BYPASS_INCLUDE_TRIAL: bool = False
     GRACE_ACCESS_RECONCILE_BATCH_SIZE: int = 200
 
     GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES: int = 30

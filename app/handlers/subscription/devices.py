@@ -971,7 +971,12 @@ async def show_devices_page(
             '📊 Всего подключено: {total} устройств\n'
             '📄 Страница {page} из {pages}\n\n'
         ),
-    ).format(total=len(devices_list), page=pagination.page, pages=pagination.total_pages)
+    ).format(
+        total=len(devices_list),
+        limit=_device_limit_text(db_user, sub_id),
+        page=pagination.page,
+        pages=pagination.total_pages,
+    )
 
     if pagination.items:
         devices_text += texts.t(
@@ -1005,6 +1010,16 @@ async def show_devices_page(
         ),
     )
 
+    # Все места заняты — новое устройство не подключится. Говорим это прямо и
+    # даём оба выхода: отключить старое (кнопки выше) или добавить место.
+    can_add_slot = _all_device_slots_taken(db_user, sub_id, len(devices_list))
+    if can_add_slot:
+        devices_text += texts.t(
+            'DEVICE_LIMIT_FULL_HINT',
+            '\n\n⚠️ <b>Все места заняты.</b> Новое устройство не подключится, пока вы не отключите '
+            'одно из этих или не добавите место.',
+        )
+
     await callback.message.edit_text(
         devices_text,
         reply_markup=get_devices_management_keyboard(
@@ -1012,8 +1027,36 @@ async def show_devices_page(
             pagination,
             db_user.language,
             back_callback=_devices_back_callback(db_user, sub_id),  # trial-nav-fix
+            add_slot_callback='subscription_change_devices' if can_add_slot else None,
         ),
     )
+
+
+def _device_subscription(db_user: User, sub_id: int | None):
+    try:
+        sub = db_user.subscription
+    except Exception:
+        return None
+    if sub_id and getattr(sub, 'id', None) != sub_id:
+        return None
+    return sub
+
+
+def _device_limit_text(db_user: User, sub_id: int | None) -> str:
+    sub = _device_subscription(db_user, sub_id)
+    limit = getattr(sub, 'device_limit', None)
+    return str(limit) if limit else '—'
+
+
+def _all_device_slots_taken(db_user: User, sub_id: int | None, connected: int) -> bool:
+    """Показывать ли «Все места заняты» + «Добавить место» (одиночный режим, не триал)."""
+    if settings.is_multi_tariff_enabled() or not settings.is_devices_selection_enabled():
+        return False
+    sub = _device_subscription(db_user, sub_id)
+    if sub is None or getattr(sub, 'is_trial', False):
+        return False
+    limit = getattr(sub, 'device_limit', 0) or 0
+    return limit > 0 and connected >= limit
 
 
 async def handle_devices_page(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):

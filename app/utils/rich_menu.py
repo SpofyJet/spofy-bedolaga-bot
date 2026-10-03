@@ -532,10 +532,19 @@ async def _build_single_subscription_block(user: User, texts, db: AsyncSession) 
         lines.append(f'<code>{_progress_bar(seconds_left, total_seconds)}</code> {relative_line}')
 
     if actual_status in {'active', 'trial', 'limited'}:
-        traffic_template = texts.t('MAIN_MENU_RICH_TRAFFIC', '📊 Трафик: {traffic}')
-        lines.append(
-            _rich_text(traffic_template).replace('{traffic}', html.escape(_traffic_usage_text(subscription, texts)))
-        )
+        from app.services.bypass_downgrade import has_bypass_quota
+
+        if has_bypass_quota(subscription):
+            # Лимит — квота только на обходы; обычные серверы без лимита.
+            bypass_template = texts.t('MAIN_MENU_RICH_TRAFFIC_BYPASS', '📊 Трафик: без лимита · 🏴‍☠️ обходы {traffic}')
+            lines.append(
+                _rich_text(bypass_template).replace('{traffic}', html.escape(_traffic_usage_text(subscription, texts)))
+            )
+        else:
+            traffic_template = texts.t('MAIN_MENU_RICH_TRAFFIC', '📊 Трафик: {traffic}')
+            lines.append(
+                _rich_text(traffic_template).replace('{traffic}', html.escape(_traffic_usage_text(subscription, texts)))
+            )
         device_limit = getattr(subscription, 'device_limit', None)
         if device_limit is not None:
             devices_template = texts.t('MAIN_MENU_RICH_DEVICES', '📱 Устройства: {devices}')

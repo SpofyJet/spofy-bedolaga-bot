@@ -51,6 +51,8 @@ class SubscriptionData(BaseModel):
     is_limited: bool = False
     # Spofy: обходы отключены за исчерпанный трафик, обычные серверы работают.
     bypass_suspended: bool = False
+    # Лимит трафика — квота только на обходы, обычные серверы без лимита.
+    bypass_quota: bool = False
     traffic_purchases: list[TrafficPurchaseInfo] = []
     # Daily tariff fields
     is_daily: bool = False

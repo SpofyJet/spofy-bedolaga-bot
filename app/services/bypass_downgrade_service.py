@@ -96,7 +96,8 @@ class BypassDowngradeService:
             repeat=already,
         )
         if notify and not already:
-            await self.notify(user, 'BYPASS_SUSPENDED', subscription)
+            key = 'BYPASS_SUSPENDED_TRIAL' if getattr(subscription, 'is_trial', False) else 'BYPASS_SUSPENDED'
+            await self.notify(user, key, subscription)
         return pushed
 
     async def restore(
@@ -280,7 +281,18 @@ class BypassDowngradeService:
         if not message:
             logger.warning('Bypass-Off: нет текста', text_key=text_key, language=getattr(user, 'language', None))
             return
-        if text_key == 'BYPASS_SUSPENDED':
+        if text_key == 'BYPASS_SUSPENDED_TRIAL':
+            # Пробному докупить трафик нельзя — путь назад к обходам один: тариф.
+            rows = [
+                [
+                    build_miniapp_or_callback_button(
+                        text=texts.get('BYPASS_TRIAL_BUY_BUTTON', '🏴‍☠️ Оформить «С Обходами»'),
+                        callback_data='menu_buy',
+                    )
+                ]
+            ]
+            notification_type = NotificationType.WEBHOOK_SUB_LIMITED
+        elif text_key == 'BYPASS_SUSPENDED':
             rows = [
                 [
                     build_miniapp_or_callback_button(

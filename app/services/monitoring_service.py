@@ -1406,6 +1406,19 @@ class MonitoringService:
         try:
             now = datetime.now(UTC)
 
+            # Догоняющие письма после окончания не срочные — ночью не будим. Окна у
+            # них 24–48 ч, тихие часы короче, так что письмо уйдёт днём того же окна.
+            from app.services.user_reminders.dispatcher import is_quiet_time
+            from app.utils.timezone import get_local_timezone
+
+            if is_quiet_time(
+                now,
+                start_hour=settings.USER_REMINDERS_QUIET_HOURS_START,
+                end_hour=settings.USER_REMINDERS_QUIET_HOURS_END,
+                tz=get_local_timezone(),
+            ):
+                return
+
             # Lookback window — don't re-check subscriptions expired more than 30 days ago
             lookback = now - timedelta(days=30)
 
@@ -2009,13 +2022,16 @@ class MonitoringService:
                     tariff_label = f' «{tariff_name}»'
                 elif hasattr(subscription, 'tariff') and subscription.tariff:
                     tariff_label = f' «{subscription.tariff.name}»'
-            message = f"""
-⛔ <b>Подписка{tariff_label} истекла</b>
-
-Ваша подписка истекла. Для восстановления доступа продлите подписку.
-
-🔧 Доступ к серверам заблокирован до продления.
-"""
+            # Текст из локалей (был зашит по-русски и не переводился).
+            message = (
+                get_texts(user.language)
+                .t(
+                    'SUBSCRIPTION_EXPIRED',
+                    '🔴 <b>Подписка{tariff_label} закончилась</b>\n\nVPN больше не подключается. Продлите — '
+                    'всё заработает на прежних настройках.',
+                )
+                .format(tariff_label=tariff_label)
+            )
 
             from aiogram.types import InlineKeyboardMarkup
 

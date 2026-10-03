@@ -12,7 +12,7 @@ import asyncio
 import html
 import re
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -1163,7 +1163,10 @@ class RemnaWaveWebhookService:
         subscription.grace_candidate_reason = GraceReason.EXPIRED.value
         subscription.grace_candidate_at = candidate_at
         self._stamp_webhook_update(subscription)
-        if subscription.status != SubscriptionStatus.EXPIRED.value:
+        # Подписку погасил мониторинг раньше вебхука — он же и написал человеку
+        # (SUBSCRIPTION_EXPIRED). Второе «подписка истекла» в ту же минуту не шлём.
+        already_expired = subscription.status == SubscriptionStatus.EXPIRED.value
+        if not already_expired:
             await expire_subscription(db, subscription)
             logger.info('Webhook: subscription expired for user', subscription_id=subscription.id, user_id=user.id)
         else:
@@ -1175,6 +1178,8 @@ class RemnaWaveWebhookService:
             source='webhook',
         )
 
+        if already_expired:
+            return
         await self._notify_user(
             user,
             'WEBHOOK_SUB_EXPIRED',
@@ -1883,11 +1888,29 @@ class RemnaWaveWebhookService:
         # Sanitize to numeric value only (prevent format string injection)
         percent_str = re.sub(r'[^\d.]', '', str(percent)) or '80'
 
+        # Сколько осталось — в ГБ (процент сам по себе мало что говорит), и что
+        # будет на нуле: на тарифе с обходами отключатся только обходы.
+        from app.services.bypass_downgrade import has_bypass_quota
+
+        texts = get_texts(user.language)
+        left_gb = '—'
+        if subscription is not None and (subscription.traffic_limit_gb or 0) > 0:
+            used_bytes = data.get('usedTrafficBytes')
+            used_gb = (
+                int(used_bytes) / 1024**3 if str(used_bytes or '').isdigit() else subscription.traffic_used_gb or 0
+            )
+            left_gb = f'{max(0.0, subscription.traffic_limit_gb - used_gb):.1f}'.rstrip('0').rstrip('.')
+        bypass = subscription is not None and has_bypass_quota(subscription)
+        note = texts.t(
+            'WEBHOOK_BANDWIDTH_NOTE_BYPASS' if bypass else 'WEBHOOK_BANDWIDTH_NOTE_REGULAR',
+            '',
+        )
+
         await self._notify_user(
             user,
             'WEBHOOK_SUB_BANDWIDTH_THRESHOLD',
             reply_markup=self._get_traffic_keyboard(user),
-            format_kwargs={'percent': percent_str},
+            format_kwargs={'percent': percent_str, 'left': left_gb, 'note': note},
             subscription=subscription,
         )
 
@@ -1963,6 +1986,15 @@ class RemnaWaveWebhookService:
     ) -> None:
         device_name = self._extract_device_name(data)
         logger.info('Webhook: device added for user', user_id=user.id, device_name=device_name or '(empty)')
+        # Первые сутки подписки человек сам подключает свои устройства одно за
+        # другим — «новое устройство, если не вы…» на каждое было шумом (~12 тыс.
+        # сообщений). Предупреждаем о подключениях позже, когда они неожиданны.
+        start_date = getattr(subscription, 'start_date', None) if subscription else None
+        if start_date is not None:
+            if start_date.tzinfo is None:
+                start_date = start_date.replace(tzinfo=UTC)
+            if datetime.now(UTC) - start_date < timedelta(hours=24):
+                return
         await self._notify_user(
             user,
             'WEBHOOK_DEVICE_ADDED',
