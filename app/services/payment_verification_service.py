@@ -254,6 +254,7 @@ class AutoPaymentVerificationService:
 
     def __init__(self) -> None:
         self._task: asyncio.Task[None] | None = None
+        self._fast_task: asyncio.Task[None] | None = None
         self._payment_service: PaymentService | None = None
 
     def set_payment_service(self, payment_service: PaymentService) -> None:
@@ -282,13 +283,72 @@ class AutoPaymentVerificationService:
         interval_minutes = settings.get_payment_verification_auto_check_interval()
 
         self._task = asyncio.create_task(self._auto_check_loop())
+        if int(settings.PAYMENT_VERIFICATION_FAST_SECONDS or 0) > 0:
+            self._fast_task = asyncio.create_task(self._fast_crypto_loop())
         logger.info(
             '🔄 Автопроверка пополнений запущена',
             interval_minutes=interval_minutes,
             display_names=display_names,
         )
 
+    async def _fast_crypto_loop(self) -> None:
+        """Свежие крипто-счета — раз в несколько секунд, а не раз в интервал автопроверки."""
+        try:
+            while True:
+                delay = max(5, int(settings.PAYMENT_VERIFICATION_FAST_SECONDS or 15))
+                try:
+                    await self._run_fast_crypto_checks()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as error:
+                    logger.error('Быстрая проверка крипто-счетов: ошибка', error=str(error))
+                await asyncio.sleep(delay)
+        except asyncio.CancelledError:
+            raise
+
+    async def _run_fast_crypto_checks(self) -> None:
+        if not self._payment_service:
+            return
+        window = timedelta(minutes=max(1, int(settings.PAYMENT_VERIFICATION_FAST_WINDOW_MINUTES or 15)))
+        cutoff = datetime.now(UTC) - window
+        async with AsyncSessionLocal() as session:
+            records: list[PendingPayment] = []
+            if PaymentMethod.CRYPTOBOT in get_enabled_auto_methods():
+                records += await _fetch_cryptobot_payments(session, cutoff)
+            if PaymentMethod.HELEKET in get_enabled_auto_methods():
+                records += await _fetch_heleket_payments(session, cutoff)
+            for record in records:
+                if record.is_paid:
+                    continue
+                try:
+                    refreshed = await run_manual_check(session, record.method, record.local_id, self._payment_service)
+                except Exception as check_error:
+                    logger.error(
+                        'Быстрая проверка крипто-счёта не удалась',
+                        method_display_name=method_display_name(record.method),
+                        identifier=record.identifier,
+                        error=check_error,
+                    )
+                    if session.in_transaction():
+                        await session.rollback()
+                    continue
+                if refreshed and refreshed.is_paid:
+                    logger.info(
+                        '✅ крипто-счёт оплачен (быстрая проверка)',
+                        method_display_name=method_display_name(refreshed.method),
+                        identifier=refreshed.identifier,
+                    )
+            if session.in_transaction():
+                await session.commit()
+
     async def stop(self) -> None:
+        if self._fast_task and not self._fast_task.done():
+            self._fast_task.cancel()
+            try:
+                await self._fast_task
+            except asyncio.CancelledError:
+                pass
+        self._fast_task = None
         if self._task and not self._task.done():
             self._task.cancel()
             try:

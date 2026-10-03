@@ -301,7 +301,7 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('PAYMENT_CRYPTOBOT', '🦋 Криптовалюта (CryptoBot)'),
+                    text=texts.t('PAYMENT_CRYPTOBOT', 'Криптовалюта (CryptoBot)'),
                     callback_data='simple_subscription_cryptobot',
                 )
             ]
@@ -311,7 +311,7 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('PAYMENT_HELEKET', '🪙 Криптовалюта (Heleket)'),
+                    text=texts.t('PAYMENT_HELEKET', 'Криптовалюта (Heleket)'),
                     callback_data='simple_subscription_heleket',
                 )
             ]
@@ -1236,7 +1236,7 @@ async def handle_simple_subscription_payment_method(
                 '🪙 <b>Оплата через CryptoBot</b>\n\n'
                 f'💰 Сумма к оплате: {amount_rubles:.0f} ₽\n'
                 f'💵 В долларах: {amount_usd:.2f} USD\n'
-                f'🪙 Актив: {crypto_result["asset"]}\n'
+                f'Актив: {crypto_result["asset"]}\n'
                 f'💱 Курс: 1 USD ≈ {usd_rate:.2f} ₽\n'
                 f'🆔 ID платежа: {crypto_result["invoice_id"][:8]}...\n\n'
                 '📱 <b>Инструкция:</b>\n'
@@ -1333,7 +1333,7 @@ async def handle_simple_subscription_payment_method(
             ]
 
             if payer_amount and payer_currency:
-                message_lines.append(f'🪙 К оплате: {payer_amount} {payer_currency}')
+                message_lines.append(f'К оплате: {payer_amount} {payer_currency}')
                 try:
                     payer_amount_float = float(payer_amount)
                     if payer_amount_float > 0:
@@ -2061,7 +2061,7 @@ async def check_simple_heleket_payment_status(
     texts = get_texts(language)
 
     message_lines = [
-        '🪙 Статус платежа Heleket:',
+        'Статус платежа Heleket:',
         '',
         f'🆔 UUID: {payment.uuid[:8]}...',
         f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}',

@@ -1936,7 +1936,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('PAYMENT_CRYPTOBOT', '🦋 Криптовалюта (CryptoBot)'),
+                    text=texts.t('PAYMENT_CRYPTOBOT', 'Криптовалюта (CryptoBot)'),
                     callback_data=_build_callback('cryptobot'),
                 )
             ]
@@ -1947,7 +1947,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('PAYMENT_XROCKET', '🚀 Криптовалюта (xRocket)'),
+                    text=texts.t('PAYMENT_XROCKET', 'Криптовалюта (xRocket)'),
                     callback_data=_build_callback('xrocket'),
                 )
             ]
@@ -1958,7 +1958,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('PAYMENT_HELEKET', '🪙 Криптовалюта (Heleket)'),
+                    text=texts.t('PAYMENT_HELEKET', 'Криптовалюта (Heleket)'),
                     callback_data=_build_callback('heleket'),
                 )
             ]
@@ -3554,7 +3554,7 @@ def get_cryptobot_payment_keyboard(
     texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=texts.t('PAY_WITH_COINS_BUTTON', '🪙 Оплатить'), url=bot_invoice_url)],
+            [InlineKeyboardButton(text=texts.t('PAY_WITH_COINS_BUTTON', 'Оплатить'), url=bot_invoice_url)],
             [
                 InlineKeyboardButton(
                     text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),

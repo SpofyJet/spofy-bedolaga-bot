@@ -58,7 +58,7 @@ async def start_cryptobot_payment(callback: types.CallbackQuery, db_user: User, 
     assets_text = ', '.join(available_assets)
 
     message_text = (
-        f'🦋 <b>Криптовалюта (CryptoBot)</b>\n\n'
+        f'<b>Криптовалюта (CryptoBot)</b>\n\n'
         f'Выберите сумму или введите свою от 100 до 100,000 ₽:\n\n'
         f'💰 Доступные активы: {assets_text}\n'
         f'⚡ Мгновенное зачисление на баланс\n'
@@ -184,7 +184,7 @@ async def process_cryptobot_payment_amount(
 
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='🪙 Оплатить', url=payment_url)],
+                [types.InlineKeyboardButton(text='Оплатить', url=payment_url)],
                 [
                     types.InlineKeyboardButton(
                         text='📊 Проверить статус',
@@ -211,10 +211,10 @@ async def process_cryptobot_payment_amount(
                 logger.warning('Не удалось удалить сообщение с запросом суммы CryptoBot', delete_error=delete_error)
 
         invoice_message = await message.answer(
-            f'🦋 <b>Криптовалюта (CryptoBot)</b>\n\n'
+            f'<b>Криптовалюта (CryptoBot)</b>\n\n'
             f'💰 Сумма к зачислению: {amount_rubles:.0f} ₽\n'
             f'💵 К оплате: {amount_usd:.2f} USD\n'
-            f'🪙 Актив: {payment_result["asset"]}\n'
+            f'Актив: {payment_result["asset"]}\n'
             f'💱 Курс: 1 USD = {current_rate:.2f} ₽\n'
             f'🆔 ID платежа: {payment_result["invoice_id"][:8]}...\n\n'
             f'📱 <b>Инструкция:</b>\n'
@@ -271,7 +271,7 @@ async def check_cryptobot_payment_status(callback: types.CallbackQuery, db: Asyn
         status = status_text.get(payment.status, 'Неизвестно')
 
         message_text = (
-            f'🪙 Статус платежа:\n\n'
+            f'Статус платежа:\n\n'
             f'🆔 ID: {payment.invoice_id[:8]}...\n'
             f'💰 Сумма: {payment.amount} {payment.asset}\n'
             f'📊 Статус: {emoji} {status}\n'

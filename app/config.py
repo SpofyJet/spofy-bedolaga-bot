@@ -739,6 +739,12 @@ class Settings(BaseSettings):
     SUPPORT_TOPUP_ENABLED: bool = True
     PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED: bool = False
     PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES: int = 10
+    # Spofy: крипто-счета (CryptoBot, Heleket) бот узнаёт оплаченными только опросом — вебхук
+    # провайдера не доходит, и зачисление ждало до интервала автопроверки (медиана 73 с,
+    # до 3 мин). Свежие счета (до PAYMENT_VERIFICATION_FAST_WINDOW_MINUTES) опрашиваются
+    # каждые PAYMENT_VERIFICATION_FAST_SECONDS секунд; 0 — выключить быструю полосу.
+    PAYMENT_VERIFICATION_FAST_SECONDS: int = 15
+    PAYMENT_VERIFICATION_FAST_WINDOW_MINUTES: int = 15
 
     NALOGO_ENABLED: bool = False
     NALOGO_INN: str | None = None
