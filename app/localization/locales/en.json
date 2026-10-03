@@ -2033,7 +2033,7 @@
   "TARIFF_PURCHASE_CART_SAVED_HINT": "\n\n🛒 <i>Cart saved! After you top up the balance, the subscription will be purchased automatically.</i>",
   "TARIFF_PURCHASE_CHARGE_ERROR": "❌ Failed to charge balance",
   "TARIFF_PURCHASE_CHOOSE_PERIOD": "\nChoose a subscription period:",
-  "TARIFF_PURCHASE_CONFIRM": "✅ <b>Purchase confirmation</b>\n\n📦 Plan: <b>{name}</b>\n📊 Traffic: {traffic}\n📱 Devices: {devices}\n📅 Period: {period}\n{discount}\n💰 <b>Total: {total}</b>\n\n💳 Your balance: {balance}\nAfter payment: {after}\n\n⚡ The VPN works right after payment.",
+  "TARIFF_PURCHASE_CONFIRM": "✅ <b>Purchase confirmation</b>\n\n📦 Plan: <b>{name}</b>\n📊 Traffic: {traffic}\n📱 Devices: {devices}\n📅 Period: {period}\n{discount}\n💰 <b>Total: {total}</b>\n\n💳 Your balance: {balance}\nAfter payment: {after}",
   "TARIFF_PURCHASE_CONFIRM_BUTTON": "✅ Confirm purchase",
   "TARIFF_PERIOD_BEST_VALUE_BADGE": "⭐ best value",
   "TARIFF_BEST_VALUE_BADGE": "⭐ best value",
@@ -2072,7 +2072,7 @@
   "TARIFF_PURCHASE_STILL_INSUFFICIENT": "❌ <b>Still insufficient funds</b>\n\n📦 Plan: <b>{name}</b>\n📅 Period: {period}\n💰 Price: {price}\n\n💳 Your balance: {balance}\n⚠️ Missing: <b>{missing}</b>",
   "TARIFF_PURCHASE_STILL_INSUFFICIENT_DAILY": "❌ <b>Still insufficient funds</b>\n\n📦 Plan: <b>{name}</b>\n🔄 Type: Daily\n💰 Price: {price}\n\n💳 Your balance: {balance}\n⚠️ Missing: <b>{missing}</b>",
   "TARIFF_PURCHASE_SUBSCRIPTION_FALLBACK": "Subscription #{id}",
-  "TARIFF_PURCHASE_SUCCESS": "🎉 <b>Subscription activated!</b>\n\n📦 Plan: <b>{name}</b>\n📊 Traffic: {traffic}\n📱 Devices: {devices}\n📅 Period: {period}\n💰 Charged: {price}\n\nOne step left — connect your device: tap «Connect VPN» below, it takes a minute.",
+  "TARIFF_PURCHASE_SUCCESS": "🎉 <b>Subscription activated!</b>\n\n📦 Plan: <b>{name}</b>\n📊 Traffic: {traffic}\n📱 Devices: {devices}\n📅 Period: {period}\n💰 Charged: {price}\n\nGo to the \"Subscription\" section to connect.",
   "TARIFF_PURCHASE_TARIFF_NOT_FOUND": "Plan not found",
   "TARIFF_PURCHASE_TOTAL_AND_BALANCE": "\n<b>💰 Total: {total}</b>\n\n💳 Your balance: {balance}",
   "TARIFF_PURCHASE_TRAFFIC_BUTTON": "📊 {traffic} GB",
@@ -2399,6 +2399,5 @@
   "MAIN_MENU_RICH_TRAFFIC_BYPASS": "📊 Traffic: unlimited · 🏴‍☠️ bypass {traffic}",
   "DEVICE_LIMIT_FULL_HINT": "\n\n⚠️ <b>All slots are taken.</b> A new device won't connect until you disconnect one of these or add a slot.",
   "DEVICE_DISCONNECT_ROW": "🗑 {device}",
-  "DEVICE_ADD_SLOT_BUTTON": "➕ Add a device slot",
-  "PURCHASE_SUCCESS_CONNECT_BUTTON": "📱 Connect VPN"
+  "DEVICE_ADD_SLOT_BUTTON": "➕ Add a device slot"
 }
