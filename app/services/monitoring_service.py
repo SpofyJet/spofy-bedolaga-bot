@@ -3071,7 +3071,9 @@ class MonitoringService:
             try:
                 orphans_cancelled = 0
                 remote_page = await service.list_subscriptions(
-                    date_from=local_date(datetime.now(UTC) - timedelta(days=30)).isoformat(),
+                    # Момент в UTC с «Z»: дату без зоны Platega отвергает (400 «Cannot write
+                    # DateTime with Kind=Unspecified»), и свип сирот не работал вовсе.
+                    date_from=(datetime.now(UTC) - timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ'),
                     size=100,
                 )
                 remote_items: list = []

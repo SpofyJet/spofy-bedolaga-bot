@@ -337,6 +337,12 @@ class BypassDowngradeService:
 
         self._stop_event = asyncio.Event()
         interval = max(1, settings.BYPASS_RECONCILE_INTERVAL_MINUTES) * 60
+        logger.info(
+            'Bypass-Off: сверка запущена',
+            mode=rules.mode(),
+            configured=rules.is_configured(),
+            interval_min=interval // 60,
+        )
         try:
             while not self._stop_event.is_set():
                 # Режим читается на каждом проходе: его меняют из админки без рестарта,
