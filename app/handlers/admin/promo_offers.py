@@ -1972,6 +1972,84 @@ def _build_connect_button_rows(user: User, texts) -> list[list[InlineKeyboardBut
     return rows
 
 
+async def _send_prepaid_tariff_offer(bot, new_db, template: PromoOfferTemplate, user: User, fallback_language) -> bool:
+    """Предложение «скидка на один тариф», активное сразу при отправке (без шага «Забрать»)."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from app.database.crud.discount_offer import mark_offer_claimed
+    from app.database.models import DiscountOffer
+    from app.utils.notification_prefs import is_promo_offers_enabled
+    from app.utils.promo_offer import get_user_active_promo_discount_percent, offer_discount_source
+
+    if not user.telegram_id or not settings.is_notifications_enabled() or not is_promo_offers_enabled(user):
+        return False
+
+    fresh = await new_db.get(User, user.id)
+    if fresh is None or get_user_active_promo_discount_percent(fresh, int(settings.PROMO_OFFER_TARIFF_ID)) > 0:
+        return False  # не затираем действующую скидку
+    if (getattr(fresh, 'promo_offer_discount_percent', 0) or 0) > 0:
+        expires = getattr(fresh, 'promo_offer_discount_expires_at', None)
+        if expires is None or expires > datetime.now(UTC):
+            return False
+
+    existing = await new_db.execute(
+        select(DiscountOffer.id)
+        .where(DiscountOffer.user_id == fresh.id, DiscountOffer.notification_type == f'promo_template_{template.id}')
+        .limit(1)
+    )
+    if existing.scalar_one_or_none() is not None:
+        return False  # без повторного предложения
+
+    hours = int(template.active_discount_hours or template.valid_hours or 1)
+    offer = await upsert_discount_offer(
+        new_db,
+        user_id=fresh.id,
+        subscription_id=None,
+        notification_type=f'promo_template_{template.id}',
+        discount_percent=template.discount_percent,
+        bonus_amount_kopeks=0,
+        valid_hours=hours,
+        effect_type='percent_discount',
+        extra_data={
+            'template_id': template.id,
+            'offer_type': template.offer_type,
+            'active_discount_hours': hours,
+        },
+    )
+    now = datetime.now(UTC)
+    fresh.promo_offer_discount_percent = int(template.discount_percent)
+    fresh.promo_offer_discount_source = offer_discount_source(offer)
+    fresh.promo_offer_discount_expires_at = now + timedelta(hours=hours)
+    await mark_offer_claimed(new_db, offer, details={'context': 'prepaid_tariff_offer'})
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=template.button_text,
+                    callback_data=f'tariff_select:{int(settings.PROMO_OFFER_TARIFF_ID)}',
+                )
+            ]
+        ]
+    )
+    try:
+        await bot.send_message(
+            chat_id=user.telegram_id,
+            text=_render_template_text(template, user.language or fallback_language),
+            reply_markup=keyboard,
+            parse_mode='HTML',
+        )
+    except Exception:
+        fresh.promo_offer_discount_percent = 0
+        fresh.promo_offer_discount_source = None
+        fresh.promo_offer_discount_expires_at = None
+        await new_db.commit()
+        raise
+    return True
+
+
 async def _send_offer_to_users(
     bot,
     template: PromoOfferTemplate,
@@ -2005,6 +2083,8 @@ async def _send_offer_to_users(
             try:
                 # Используем отдельную сессию для изоляции транзакции
                 async with AsyncSessionLocal() as new_db:
+                    if template.offer_type == 'tariff_discount':
+                        return await _send_prepaid_tariff_offer(bot, new_db, template, user, db_user.language)
                     if settings.is_multi_tariff_enabled():
                         _user_subs = getattr(user, 'subscriptions', None) or []
                         _active_subs = [s for s in _user_subs if s.is_active]
