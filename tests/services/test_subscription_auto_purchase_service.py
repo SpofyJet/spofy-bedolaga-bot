@@ -370,7 +370,7 @@ async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
     # Патчим в исходном модуле, т.к. внутри _prepare_auto_extend_context импорт ленивый.
     monkeypatch.setattr(
         'app.utils.promo_offer.get_user_active_promo_discount_percent',
-        lambda _user: 25,
+        lambda _user, _tariff_id=None: 25,
     )
     # Избегаем фейкового Redis при сканировании per-subscription корзин
     monkeypatch.setattr(
@@ -539,7 +539,7 @@ def _prepare_extend_race_guard_scenario(monkeypatch, *, recent_transactions: lis
     )
     monkeypatch.setattr(
         'app.utils.promo_offer.get_user_active_promo_discount_percent',
-        lambda _user: 0,
+        lambda _user, _tariff_id=None: 0,
     )
     monkeypatch.setattr(
         'app.services.subscription_auto_purchase_service.user_cart_service.get_all_subscription_carts',

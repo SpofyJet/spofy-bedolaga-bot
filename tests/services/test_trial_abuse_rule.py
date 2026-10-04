@@ -18,7 +18,7 @@ from app.external.remnawave_api import UserStatus
 from app.services.trial_abuse_service import TrialAbuseService
 
 
-NOW = datetime(2026, 10, 3, 12, 0, tzinfo=UTC)
+NOW = datetime.now(UTC).replace(microsecond=0)  # реальное время: сервис сам читает часы
 HWID = 'ABCDEF0123456789'
 
 

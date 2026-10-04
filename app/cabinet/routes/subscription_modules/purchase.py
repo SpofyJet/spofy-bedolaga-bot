@@ -50,6 +50,7 @@ from app.services.subscription_service import SubscriptionService
 from app.services.traffic_reset_policy import should_reset_traffic_on_tariff_purchase
 from app.services.user_cart_service import user_cart_service
 from app.utils.pricing_utils import calculate_price_per_month, format_period_description
+from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.timezone import format_local_datetime
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
@@ -214,6 +215,14 @@ async def _build_tariff_response(
             else:
                 discount_percent = 0
                 final_price = original_price
+
+            # Персональное предложение (как в PricingEngine: поверх скидки группы). Для тарифных
+            # предложений процент отдаётся только этому тарифу.
+            offer_pct = get_user_active_promo_discount_percent(user, tariff.id) if user else 0
+            if offer_pct > 0:
+                final_price = pricing_engine.apply_discount(final_price, offer_pct)
+                discount_amount = original_price - final_price
+                discount_percent = max(discount_percent, round(discount_amount * 100 / original_price))
 
             per_month = calculate_price_per_month(final_price, period_days)
             original_per_month = calculate_price_per_month(original_price, period_days)

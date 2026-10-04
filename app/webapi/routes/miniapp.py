@@ -6403,7 +6403,7 @@ async def _build_tariff_model(
 
             # Применяем скидку промогруппы + promo-offer (stacked)
             group_pct = promo_group.get_discount_percent('period', period_days) if promo_group else 0
-            offer_pct = get_user_active_promo_discount_percent(user) if user else 0
+            offer_pct = get_user_active_promo_discount_percent(user, tariff.id) if user else 0
             if group_pct > 0 or offer_pct > 0:
                 price_kopeks, _, _ = PricingEngine.apply_stacked_discounts(original_price_kopeks, group_pct, offer_pct)
                 # Комбинированный процент для отображения
@@ -6505,7 +6505,7 @@ async def _build_current_tariff_model(db: AsyncSession, tariff, promo_group=None
 
     # Применяем скидку промогруппы + promo-offer для 30-дневного периода
     group_pct = promo_group.get_discount_percent('period', 30) if promo_group else 0
-    offer_pct = get_user_active_promo_discount_percent(user) if user else 0
+    offer_pct = get_user_active_promo_discount_percent(user, tariff.id) if user else 0
     if group_pct > 0 or offer_pct > 0:
         monthly_price, _, _ = PricingEngine.apply_stacked_discounts(monthly_price, group_pct, offer_pct)
 

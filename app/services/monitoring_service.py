@@ -1792,7 +1792,9 @@ class MonitoringService:
                     # calculate_renewal_price уже включает promo_group + promo_offer скидки.
                     # Не применяем promo_offer повторно — только consume-им при успешной оплате.
                     charge_amount = renewal_cost
-                    promo_discount_percent = get_user_active_promo_discount_percent(user)
+                    promo_discount_percent = get_user_active_promo_discount_percent(
+                        user, getattr(subscription, 'tariff_id', None)
+                    )
 
                     autopay_key = f'autopay_{user.id}_{subscription.id}'
                     if autopay_key in self._notified_users:
