@@ -103,7 +103,7 @@ from app.utils.pricing_utils import (
     calculate_prorated_price,
     format_period_description,
 )
-from app.utils.promo_offer import get_user_active_promo_discount_percent
+from app.utils.promo_offer import get_user_active_promo_discount_percent, offer_discount_source
 from app.utils.subscription_time import days_left_rounded_up
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
 from app.utils.telegram_webapp import (
@@ -4357,7 +4357,7 @@ async def claim_promo_offer(
         )
 
     user.promo_offer_discount_percent = discount_percent
-    user.promo_offer_discount_source = offer.notification_type
+    user.promo_offer_discount_source = offer_discount_source(offer)
     user.updated_at = now
 
     extra_data = _extract_offer_extra(offer)

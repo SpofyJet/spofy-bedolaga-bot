@@ -29,6 +29,7 @@
 - `docker-compose.local.yml` — файл
 - `docker-compose.yml` — файл
 - `docs/`
+- `locales/`
 - `main.py` — Python-модуль
   Классы: `GracefulExit` (2 методов)
   Функции: `main`
@@ -1518,7 +1519,7 @@
   Классы: нет
   Функции: `mode`, `is_configured`, `is_enforcing` — Режим true и оба сквада заданы: подписки реально переводятся., `is_observing`, `quota_exhausted`, `is_suspension_effective` — Отдавать ли панели «обходы отключены» для этой подписки прямо сейчас., `panel_squads_for` — Сквады, которые уходят в панель: сквады тарифа или ``[Bypass-Off]``., `panel_traffic_limit_bytes_for` — Лимит для панели: в Bypass-Off — безлимит (обычные ноды считают ×0)., `ineligibility_reason` — Почему подписку НЕЛЬЗЯ перевести в Bypass-Off; ``None`` — можно., `has_bypass_quota` — Лимит подписки — это квота на обходы: в сквадах обходы, у тарифа есть лимит., `is_suspended_snapshot` — Сквады из панели — это форма «обходы отключены», а не смена тарифа.
 - `app/services/bypass_downgrade_service.py` — Python-модуль
-  Классы: `BypassDowngradeService` (15 методов)
+  Классы: `BypassDowngradeService` (16 методов)
   Функции: нет
 - `app/services/campaign_service.py` — Python-модуль
   Классы: `CampaignBonusResult`, `AdvertisingCampaignService` (8 методов)
@@ -1825,7 +1826,7 @@
   Функции: `is_subpage_purchase_context`, `subpage_purchase_context`, `mark_subpage_text` — Дописать пометку к первой строке — заголовку уведомления (в rich-виде это h6)., `user_has_pending_subpage_purchase` — Есть корзина страницы подписки и свежая метка пополнения под неё —
 - `app/services/spofy_subpage_service.py` — Python-модуль
   Классы: нет
-  Функции: `is_subpage_cart`, `tag_current_cart_as_subpage` — Re-tag the cart the cabinet helpers just saved (devices / traffic carry source='cabinet')., `complete_subpage_carts_after_topup` — Complete only subscription-page carts. Returns True when a purchase went through.
+  Функции: `is_subpage_cart`, `tag_current_cart_as_subpage` — Re-tag the cart the cabinet helpers just saved (devices / traffic carry source='cabinet')., `bind_cart_to_payment` — Remember what the page asked the customer to pay for this cart., `is_funded_by_payment` — True only if the credited amount is this cart's own payment and covers its price., `complete_subpage_carts_after_topup` — Complete only subscription-page carts funded by the payment that just arrived.
 - `app/services/start_media_service.py` — Python-модуль
   Классы: нет
   Функции: `get_start_video_file_id` — file_id видео для стартового меню либо None., `set_start_video_file_id` — Сохраняет (или очищает) file_id видео стартового меню., `reset_start_video_cache` — Сбрасывает кеш (для тестов и ручной инвалидации).
@@ -2351,7 +2352,7 @@
   Функции: `calculate_months_from_days`, `calculate_price_per_month` — Месячная ставка для периода длиной period_days дней (месяц = 30 дней)., `calculate_prorated_price` — Calculate prorated price based on remaining days., `apply_percentage_discount` — Apply percentage discount using PricingEngine's floor division., `resolve_discount_percent` — Определяет размер скидки для указанной категории., `compute_simple_subscription_price` — Вычисляет стоимость простой подписки с учетом всех доплат и скидок., `format_period_description`, `validate_pricing_calculation`
 - `app/utils/promo_offer.py` — Python-модуль
   Классы: нет
-  Функции: `get_user_active_promo_discount_percent`, `consume_user_promo_offer` — Consume the user's one-shot promo-offer discount (zeroes out the fields)., `build_promo_offer_timer_line`, `build_promo_offer_hint`, `build_test_access_hint`
+  Функции: `offer_discount_source` — Значение для ``User.promo_offer_discount_source`` при активации предложения., `split_discount_source` — ``(tariff_id или None, notification_type)`` из источника скидки., `get_user_active_promo_discount_percent`, `consume_user_promo_offer` — Consume the user's one-shot promo-offer discount (zeroes out the fields)., `build_promo_offer_timer_line`, `build_promo_offer_hint`, `build_test_access_hint`
 - `app/utils/promo_rate_limiter.py` — Python-модуль
   Классы: `PromoRateLimiter` (8 методов)
   Функции: `validate_promo_format` — Проверяет формат промокода: 3-50 символов, только буквы/цифры/дефис/подчёркивание.
@@ -2718,6 +2719,14 @@
 
 - `docs/handoffs/handoff-2026-08-31-1659.md` — файл
 - `docs/handoffs/handoff-2026-08-31-1944.md` — файл
+
+## locales
+
+- `locales/en.json` — файл
+- `locales/fa.json` — файл
+- `locales/ru.json` — файл
+- `locales/ua.json` — файл
+- `locales/zh.json` — файл
 
 ## migrations
 
@@ -3626,7 +3635,7 @@
   Функции: `isolated_settings` — Настройки — глобальный объект: возвращаем значения после теста., `test_set_value_survives_a_session_without_commit` — Сама запись настройки обязана коммитить — на неё полагаются все вызовы., `test_levels_mode_route_persists` — Переключение режима из кабинета доезжает до базы., `test_chain_depth_route_persists` — Глубина цепочки — та же поверхность, тот же дефект., `test_reward_scheme_route_persists` — Схема наград — и она тоже., `test_email_type_switch_persists` — Выключатель писем по типу — четвёртое место с тем же дефектом., `test_batch_writers_commit_themselves` — Кто отказался от коммита внутри записи — обязан коммитить сам.
 - `tests/cabinet/test_spofy_subpage.py` — Python-модуль
   Классы: нет
-  Функции: `auto_on`, `owner`, `topup`, `test_router_hidden_without_key`, `test_short_key_counts_as_unset`, `test_wrong_key_rejected`, `test_right_key_passes`, `test_resolve_rejects_malformed_short_uuid`, `test_checkout_works_with_global_auto_purchase_off`, `test_renew_checkout_tops_up_full_price_and_never_charges`, `test_amount_raised_to_method_minimum`, `test_unknown_method_rejected`, `test_restricted_user_cannot_checkout`, `test_devices_checkout_saves_cabinet_cart`, `test_devices_unavailable`, `test_traffic_package_must_exist`, `test_renewal_cart_mirrors_cabinet_extend_cart`, `test_renewal_cart_rejects_trial_and_unknown_period`, `test_tariff_cart_for_trial_user`, `test_tariff_cart_refuses_daily_and_multi_tariff`, `test_offer_for_trial_user_lists_tariffs_not_renewal`, `test_device_offer_quotes_each_count_from_the_bot`, `test_device_offer_stops_at_first_unavailable_count`, `test_offer_survives_unexpected_errors_in_parts`, `test_unexpected_checkout_error_is_a_502_with_its_type`, `test_completion_only_processes_subpage_carts`, `test_completion_skips_when_global_switch_on`, `test_completion_needs_fresh_intent`, `test_completion_ignores_plain_topups`, `test_tagging_rewrites_source_and_intent`
+  Функции: `auto_on`, `owner`, `topup`, `test_router_hidden_without_key`, `test_short_key_counts_as_unset`, `test_wrong_key_rejected`, `test_right_key_passes`, `test_resolve_rejects_malformed_short_uuid`, `test_checkout_works_with_global_auto_purchase_off`, `test_renew_checkout_tops_up_full_price_and_never_charges`, `test_amount_raised_to_method_minimum`, `test_unknown_method_rejected`, `test_restricted_user_cannot_checkout`, `test_devices_checkout_saves_cabinet_cart`, `test_devices_unavailable`, `test_traffic_package_must_exist`, `test_renewal_cart_mirrors_cabinet_extend_cart`, `test_renewal_cart_rejects_trial_and_unknown_period`, `test_tariff_cart_for_trial_user`, `test_tariff_cart_refuses_daily_and_multi_tariff`, `test_offer_for_trial_user_lists_tariffs_not_renewal`, `test_device_offer_quotes_each_count_from_the_bot`, `test_device_offer_stops_at_first_unavailable_count`, `test_offer_survives_unexpected_errors_in_parts`, `test_unexpected_checkout_error_is_a_502_with_its_type`, `test_completion_only_processes_subpage_carts`, `test_completion_skips_when_global_switch_on`, `test_completion_needs_fresh_intent`, `test_completion_ignores_plain_topups`, `test_tagging_rewrites_source_and_intent`, `test_unbound_cart_is_never_completed`, `test_unrelated_topup_does_not_buy_an_abandoned_cart`, `test_payment_smaller_than_price_never_reaches_into_balance`, `test_small_provider_rounding_is_tolerated`, `test_two_identical_carts_one_payment_buys_only_one`, `test_checkout_binds_the_cart_to_its_payment`, `test_binding_marks_price_and_requested_amount`
 - `tests/cabinet/test_spofy_subpage_owner_loader.py` — Python-модуль
   Классы: нет
   Функции: `test_owner_comes_from_the_cabinet_user_loader`, `test_blocked_owner_is_still_refused`
@@ -4927,7 +4936,7 @@
   Функции: `test_mark_goes_to_the_title_line`, `test_context_is_off_by_default_and_resets`, `test_send_message_marks_and_routes_subpage_purchases`, `test_regular_purchases_are_untouched`, `test_cart_completion_runs_inside_the_context`, `test_topup_notification_is_marked_when_a_subpage_purchase_is_pending`
 - `tests/services/test_spofy_ux_round.py` — Python-модуль
   Классы: нет
-  Функции: `test_info_prompt_has_no_hardcoded_legal_links`, `test_expired_webhook_after_monitoring_does_not_notify_twice`, `test_expired_webhook_first_still_notifies`, `test_device_added_is_quiet_during_first_day`, `test_bandwidth_threshold_says_gb_left_and_bypass_note`, `test_bandwidth_threshold_regular_note_without_bypass`, `test_threshold_text_formats_in_ru_and_en`, `test_followups_skip_quiet_hours`, `bypass_on`, `test_trial_needs_the_include_trial_switch`, `test_bypass_quota_flag`, `test_trial_suspension_sends_trial_text`, `test_trial_texts_explain_unlimited_regular_servers`, `test_device_rows_use_disconnect_icon_and_add_slot_button`, `test_no_add_slot_button_by_default`, `test_all_slots_taken`
+  Функции: `test_info_prompt_has_no_hardcoded_legal_links`, `test_expired_webhook_after_monitoring_does_not_notify_twice`, `test_expired_webhook_first_still_notifies`, `test_device_added_always_notifies_the_owner` — Уведомление о новом устройстве приходит всегда, в том числе в первые сутки: это полезная, `test_bandwidth_threshold_says_gb_left_and_bypass_note`, `test_bandwidth_threshold_regular_note_without_bypass`, `test_threshold_text_formats_in_ru_and_en`, `test_followups_skip_quiet_hours`, `bypass_on`, `test_trial_needs_the_include_trial_switch`, `test_bypass_quota_flag`, `test_trial_suspension_sends_trial_text`, `test_trial_texts_explain_unlimited_regular_servers`, `test_device_rows_use_disconnect_icon_and_add_slot_button`, `test_no_add_slot_button_by_default`, `test_all_slots_taken`
 - `tests/services/test_stars_payload_amount.py` — Python-модуль
   Классы: нет
   Функции: `test_parser_extracts_amount_kopeks_from_known_payload_shapes`, `test_parser_returns_none_for_unrecognised_shapes`, `test_plausibility_accepts_lossless_round_trip` — At rate=1.0 with integer rubles, payload == reconstructed exactly., `test_plausibility_accepts_sub_ruble_drift` — 50.50 ₽ requested → 50 ⭐ × 1.0 = 50.00 ₽ reconstructed → 50 kopeks drift, well within tolerance., `test_plausibility_accepts_20pct_drift` — A 20% rate change between invoice creation and payment must NOT trip the guard., `test_plausibility_rejects_inflated_payload` — A payload claiming 10× the reconstructed amount is pathological — fall back to stars×rate., `test_plausibility_rejects_zero_or_negative`, `test_plausibility_uses_minimum_100_kopek_floor_for_tiny_amounts` — For tiny amounts (e.g. 50 kopeks reconstructed), 20% would be 10 — too tight., `test_negative_control_old_rate_was_lossy` — Regression cover: the pre-fix flow under rate=1.3 lost 0.50 ₽ on a 150 ₽ top-up., `test_negative_control_at_new_rate_is_lossless_for_integer_rubles` — At rate=1.0 with integer rubles, payload and reconstructed agree exactly.
@@ -4982,6 +4991,9 @@
 - `tests/services/test_tariff_custom_traffic.py` — Python-модуль
   Классы: нет
   Функции: `test_parse_positive_rubles_to_kopeks`, `test_parse_positive_rubles_to_kopeks_rejects_invalid_values`, `test_parse_positive_gb`, `test_parse_positive_gb_rejects_invalid_values`, `test_valid_custom_traffic_configuration_has_no_errors`, `test_invalid_custom_traffic_configuration_reports_specific_error`, `test_invalid_configuration_reports_all_independent_missing_fields`
+- `tests/services/test_tariff_discount_offer.py` — Python-модуль
+  Классы: нет
+  Функции: `test_source_carries_the_tariff`, `test_ordinary_offer_source_is_unchanged`, `test_discount_only_for_its_tariff`, `test_ordinary_discount_is_unaffected`, `test_expired_discount_is_zero`
 - `tests/services/test_tariff_purchase_subscription_pinning.py` — Python-модуль
   Классы: нет
   Функции: `test_select_tariff_period_resolves_and_pins_target_subscription_id` — REGRESSION: ``select_tariff_period`` must resolve the existing, `test_confirm_tariff_purchase_reads_target_subscription_id_from_fsm` — REGRESSION: ``confirm_tariff_purchase`` must read, `test_confirm_tariff_purchase_guards_against_tariff_divergence` — If the FSM-pinned subscription's tariff_id no longer matches, `test_confirm_tariff_purchase_does_not_use_only_tariff_lookup` — Pre-fix shape: confirm_tariff_purchase ran a single
@@ -5011,7 +5023,7 @@
   Функции: `service`, `test_disabled_and_expired_are_filtered_out` — DISABLED/EXPIRED отсекаются, ACTIVE/LIMITED остаются., `test_all_active_pass_through` — Когда все активны — ничего не теряется., `test_all_inactive_returns_empty` — Сплошь DISABLED/EXPIRED → пустой список (никого не проверяем)., `test_filter_applies_across_paginated_batches` — Фильтр работает на каждом батче; пагинация — по сырому размеру страницы.
 - `tests/services/test_trial_abuse_rule.py` — Python-модуль
   Классы: нет
-  Функции: `test_second_account_on_a_device_is_the_abuser_not_the_first`, `test_two_accounts_are_enough`, `test_same_bot_user_is_one_person`, `test_account_without_telegram_no_longer_hides_behind_one_telegram`, `test_paid_and_expired_accounts_are_never_punished`, `test_unknown_accounts_are_not_touched`, `test_new_device_of_a_second_account_is_punished_at_once`, `test_owner_connecting_again_is_not_punished`, `test_non_trial_accounts_skip_the_panel_lookup`, `test_bogus_hwid_is_not_checked`, `test_realtime_switch`, `test_device_webhook_schedules_the_check_even_on_the_first_day`, `test_who_shows_real_name_username_and_telegram`, `test_who_for_email_only_account_and_for_unknown_account`, `test_who_html_links_to_the_telegram_profile_and_escapes`, `test_reason_names_the_first_account_on_the_device`
+  Функции: `test_second_account_on_a_device_is_the_abuser_not_the_first`, `test_two_accounts_are_enough`, `test_same_bot_user_is_one_person`, `test_account_without_telegram_no_longer_hides_behind_one_telegram`, `test_paid_and_expired_accounts_are_never_punished`, `test_unknown_accounts_are_not_touched`, `test_new_device_of_a_second_account_is_punished_at_once`, `test_owner_connecting_again_is_not_punished`, `test_non_trial_accounts_skip_the_panel_lookup`, `test_bogus_hwid_is_not_checked`, `test_realtime_switch`, `test_device_webhook_schedules_the_check_and_still_notifies`, `test_who_shows_real_name_username_and_telegram`, `test_who_for_email_only_account_and_for_unknown_account`, `test_who_html_links_to_the_telegram_profile_and_escapes`, `test_reason_names_the_first_account_on_the_device`
 - `tests/services/test_tribute_payment_not_lost.py` — Python-модуль
   Классы: нет
   Функции: `service_on` — TributeService над тестовой сессией; уведомления и рефералка заглушены., `test_failure_before_commit_leaves_nothing_and_retry_credits_once`, `test_unknown_user_raises_alert_and_writes_nothing`, `test_alert_logger_is_not_silenced_as_payment_logger` — Логгеры tribute_service отрезаны от админ-чата, журнала ошибок и файлов — тревога идёт мимо этих фильтров., `test_failure_after_commit_answers_ok_and_is_not_credited_twice` — Деньги уже на балансе — 5xx тут опасен: повтор Tribute с синтетическим ключом, пришедший, `test_event_without_money_does_not_raise_payment_alert`

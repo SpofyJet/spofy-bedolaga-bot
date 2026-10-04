@@ -317,6 +317,8 @@ class Settings(BaseSettings):
     # Пробный период с квотой на обходы (сквад с обходами + TRIAL_TRAFFIC_LIMIT_GB):
     # квота кончилась — обходы отключаются, обычные серверы работают до конца пробного.
     BYPASS_INCLUDE_TRIAL: bool = False
+    # Тариф, на который действуют предложения типа tariff_discount (ULTIMA).
+    PROMO_OFFER_TARIFF_ID: int = 4
     GRACE_ACCESS_RECONCILE_BATCH_SIZE: int = 200
 
     GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES: int = 30

@@ -84,6 +84,27 @@ DEFAULT_TEMPLATES: tuple[dict, ...] = (
         'test_duration_hours': None,
         'test_squad_uuids': [],
     },
+    {
+        'offer_type': 'tariff_discount',
+        'name': 'ULTIMA навсегда со скидкой',
+        'message_text': (
+            '👑 <b>ULTIMA навсегда — скидка {discount_percent}%</b>\n\n'
+            'Один платёж — и ULTIMA навсегда: 10 устройств, без лимита трафика.\n\n'
+            'Стоимость — <s>5 000 ₽</s>\n'
+            'Скидка — 3 150 ₽\n'
+            '<b>К оплате — 1 850 ₽</b>\n\n'
+            'Предложение персональное. Заберите его в течение {valid_hours} ч. '
+            'После активации скидка действует {active_discount_hours} ч. и сгорает, '
+            'если за это время не оплатить.'
+        ),
+        'button_text': '👑 Забрать ULTIMA за 1 850 ₽',
+        'valid_hours': 1,
+        'discount_percent': 63,
+        'bonus_amount_kopeks': 0,
+        'active_discount_hours': 1,
+        'test_duration_hours': None,
+        'test_squad_uuids': [],
+    },
 )
 
 

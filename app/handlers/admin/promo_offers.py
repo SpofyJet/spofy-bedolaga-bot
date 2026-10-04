@@ -136,6 +136,18 @@ OFFER_TYPE_CONFIG = {
         ],
         'effect_type': 'percent_discount',
     },
+    'tariff_discount': {
+        'icon': '👑',
+        'label_key': 'ADMIN_PROMO_OFFER_TARIFF',
+        'default_label': 'Скидка на один тариф (ULTIMA)',
+        'allowed_segments': [
+            ('paid_active', '🟢 Активные платные'),
+            ('paid_expired', '🔴 Истёкшие платные'),
+            ('trial_active', '🎁 Активные триалы'),
+            ('trial_expired', '🥶 Истёкшие триалы'),
+        ],
+        'effect_type': 'percent_discount',
+    },
 }
 
 

@@ -339,7 +339,7 @@ class PricingEngine:
                     key=lambda p: abs(p - remaining_days),
                 )
                 group_pct = promo_group.get_discount_percent('period', best_period)
-            offer_pct = get_user_active_promo_discount_percent(user)
+            offer_pct = get_user_active_promo_discount_percent(user, getattr(new_tariff, 'id', None))
 
         # Применяем stacked скидки к итоговой сумме напрямую (без float round-trip)
         if group_pct > 0 or offer_pct > 0:
@@ -382,7 +382,7 @@ class PricingEngine:
             if promo_group:
                 period_hint = remaining_days if remaining_days > 0 else 30
                 group_pct = promo_group.get_discount_percent('period', period_hint)
-            offer_pct = get_user_active_promo_discount_percent(user)
+            offer_pct = get_user_active_promo_discount_percent(user, getattr(new_tariff, 'id', None))
 
         if group_pct > 0 or offer_pct > 0:
             upgrade_cost, _, _ = self.apply_stacked_discounts(daily_price, group_pct, offer_pct)
@@ -428,7 +428,7 @@ class PricingEngine:
             promo_group = self.resolve_promo_group(user)
             if promo_group:
                 group_pct = promo_group.get_discount_percent('period', min_period_days)
-            offer_pct = get_user_active_promo_discount_percent(user)
+            offer_pct = get_user_active_promo_discount_percent(user, getattr(new_tariff, 'id', None))
 
         if group_pct > 0 or offer_pct > 0:
             upgrade_cost, _, _ = self.apply_stacked_discounts(min_period_price, group_pct, offer_pct)
@@ -650,7 +650,7 @@ class PricingEngine:
             period_pct = promo_group.get_discount_percent('period', period_days)
             devices_pct = promo_group.get_discount_percent('devices', period_days)
 
-        offer_pct = get_user_active_promo_discount_percent(user) if user else 0
+        offer_pct = get_user_active_promo_discount_percent(user, getattr(tariff, 'id', None)) if user else 0
 
         discounted_base = self.apply_discount(base_price, period_pct)
         discounted_devices = self.apply_discount(devices_price, devices_pct)

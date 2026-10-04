@@ -20,6 +20,7 @@ from app.utils.pricing_utils import (
 )
 from app.utils.promo_offer import (
     build_promo_offer_hint,
+    offer_discount_source,
 )
 from app.utils.timezone import format_local_datetime
 
@@ -224,7 +225,7 @@ async def claim_discount_offer(
         return
 
     db_user.promo_offer_discount_percent = discount_percent
-    db_user.promo_offer_discount_source = offer.notification_type
+    db_user.promo_offer_discount_source = offer_discount_source(offer)
     db_user.updated_at = now
 
     extra_data = offer.extra_data or {}
@@ -351,6 +352,9 @@ async def claim_discount_offer(
     elif offer_type == 'extend_discount':
         button_text = texts.get('SUBSCRIPTION_EXTEND', '💎 Продлить подписку')
         button_callback = 'subscription_extend'
+    elif offer_type == 'tariff_discount':
+        button_text = texts.get('OFFER_BUY_TARIFF_BUTTON', '👑 Купить со скидкой')
+        button_callback = f'tariff_select:{int(settings.PROMO_OFFER_TARIFF_ID)}'
     else:
         has_active_paid_subscription = bool(
             subscription and getattr(subscription, 'is_active', False) and not getattr(subscription, 'is_trial', False)

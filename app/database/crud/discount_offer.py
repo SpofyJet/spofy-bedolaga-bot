@@ -261,7 +261,9 @@ async def get_latest_claimed_offer_for_user(
     )
 
     if source:
-        stmt = stmt.where(DiscountOffer.notification_type == source)
+        from app.utils.promo_offer import split_discount_source
+
+        stmt = stmt.where(DiscountOffer.notification_type == split_discount_source(source)[1])
 
     result = await db.execute(stmt)
     return result.scalars().first()

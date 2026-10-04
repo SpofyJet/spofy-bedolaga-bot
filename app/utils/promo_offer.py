@@ -19,8 +19,40 @@ def _escape_format_braces(text: str) -> str:
     return text.replace('{', '{{').replace('}', '}}')
 
 
-def get_user_active_promo_discount_percent(user: User | None) -> int:
+# Предложение «скидка только на один тариф»: источник скидки на пользователе хранится как
+# ``tariff:<id>|<notification_type>``. Такая скидка отдаётся только вызову, который явно
+# сообщил тот же тариф; все остальные вызовы получают 0 (скидка не утечёт на другие тарифы).
+TARIFF_SOURCE_PREFIX = 'tariff:'
+
+
+def offer_discount_source(offer) -> str:
+    """Значение для ``User.promo_offer_discount_source`` при активации предложения."""
+    notification_type = getattr(offer, 'notification_type', None) or ''
+    extra = getattr(offer, 'extra_data', None)
+    if isinstance(extra, dict) and extra.get('offer_type') == 'tariff_discount':
+        from app.config import settings
+
+        return f'{TARIFF_SOURCE_PREFIX}{int(settings.PROMO_OFFER_TARIFF_ID)}|{notification_type}'
+    return notification_type
+
+
+def split_discount_source(source: str | None) -> tuple[int | None, str | None]:
+    """``(tariff_id или None, notification_type)`` из источника скидки."""
+    if source and source.startswith(TARIFF_SOURCE_PREFIX) and '|' in source:
+        head, _, rest = source.partition('|')
+        try:
+            return int(head[len(TARIFF_SOURCE_PREFIX) :]), rest
+        except ValueError:
+            return -1, rest
+    return None, source
+
+
+def get_user_active_promo_discount_percent(user: User | None, tariff_id: int | None = None) -> int:
     if not user:
+        return 0
+
+    restricted_to, _ = split_discount_source(getattr(user, 'promo_offer_discount_source', None))
+    if restricted_to is not None and restricted_to != tariff_id:
         return 0
 
     try:
