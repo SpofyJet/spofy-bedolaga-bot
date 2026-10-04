@@ -2990,6 +2990,13 @@ class MonitoringService:
                 try:
                     if record.platega_subscription_id:
                         remote, http_status = await service.get_subscription_status(record.platega_subscription_id)
+                        if http_status in (401, 403):
+                            # Метод Subscription не включён для мерчанта: остальные записи ответят так же.
+                            logger.warning(
+                                'Platega Subscription API недоступен для мерчанта — сверка подписок пропущена',
+                                http_status=http_status,
+                            )
+                            return
                         # 404 = провайдер достоверно не знает подписку; None-статус =
                         # транспортный сбой — зависший PENDING хоронить рано.
                         remote_missing = http_status == 404
@@ -3055,7 +3062,13 @@ class MonitoringService:
             )
             for record in cancelled_records:
                 try:
-                    remote = await service.get_subscription(record.platega_subscription_id)
+                    remote, http_status = await service.get_subscription_status(record.platega_subscription_id)
+                    if http_status in (401, 403):
+                        logger.warning(
+                            'Platega Subscription API недоступен для мерчанта — досверка отмен пропущена',
+                            http_status=http_status,
+                        )
+                        return
                     remote_status = (
                         str(remote.get('status')).strip().lower()
                         if remote and remote.get('status') is not None

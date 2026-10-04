@@ -287,9 +287,9 @@ async def test_reconcile_cancelled_sweep_runs_with_recurrent_flag_off(monkeypatc
 
     _configure(monkeypatch, PLATEGA_RECURRENT_ENABLED=False)
 
-    mock_get = AsyncMock(return_value={'status': 'ACTIVE'})
+    mock_get = AsyncMock(return_value=({'status': 'ACTIVE'}, 200))
     mock_cancel = AsyncMock(return_value={'status': 'cancelled'})
-    monkeypatch.setattr(PlategaService, 'get_subscription', mock_get)
+    monkeypatch.setattr(PlategaService, 'get_subscription_status', mock_get)
     monkeypatch.setattr(PlategaService, 'cancel_subscription', mock_cancel)
 
     async with _memory_session(monkeypatch) as db:
@@ -352,9 +352,9 @@ async def test_reconcile_recancels_remotely_active_cancelled_record(monkeypatch:
 
     _configure(monkeypatch, PLATEGA_RECURRENT_ENABLED=True)
 
-    mock_get = AsyncMock(return_value={'status': 'ACTIVE'})
+    mock_get = AsyncMock(return_value=({'status': 'ACTIVE'}, 200))
     mock_cancel = AsyncMock(return_value={'status': 'cancelled'})
-    monkeypatch.setattr(PlategaService, 'get_subscription', mock_get)
+    monkeypatch.setattr(PlategaService, 'get_subscription_status', mock_get)
     monkeypatch.setattr(PlategaService, 'cancel_subscription', mock_cancel)
 
     async with _memory_session(monkeypatch) as db:
@@ -387,9 +387,9 @@ async def test_reconcile_skips_cancelled_record_confirmed_remotely(monkeypatch: 
 
     _configure(monkeypatch, PLATEGA_RECURRENT_ENABLED=True)
 
-    mock_get = AsyncMock(return_value={'status': 'CANCELLED'})
+    mock_get = AsyncMock(return_value=({'status': 'CANCELLED'}, 200))
     mock_cancel = AsyncMock()
-    monkeypatch.setattr(PlategaService, 'get_subscription', mock_get)
+    monkeypatch.setattr(PlategaService, 'get_subscription_status', mock_get)
     monkeypatch.setattr(PlategaService, 'cancel_subscription', mock_cancel)
 
     async with _memory_session(monkeypatch) as db:
@@ -473,3 +473,35 @@ async def test_create_subscription_sends_payer_metadata(monkeypatch: pytest.Monk
     await service.create_subscription(payer=PAYER, amount=199.0, currency='RUB', interval=3)
 
     assert captured['json_data']['metadata'] == {'userId': '555', 'userName': '@neo'}
+
+
+async def test_reconcile_stops_on_first_401_from_platega(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Метод Subscription не включён для мерчанта (401): проход прекращается после первой записи,
+    а не долбит провайдера по каждой отменённой подписке (и не спамит лог ошибками)."""
+    from unittest.mock import AsyncMock
+
+    _configure(monkeypatch, PLATEGA_RECURRENT_ENABLED=True)
+    mock_status = AsyncMock(return_value=(None, 401))
+    mock_cancel = AsyncMock()
+    monkeypatch.setattr(PlategaService, 'get_subscription_status', mock_status)
+    monkeypatch.setattr(PlategaService, 'cancel_subscription', mock_cancel)
+
+    async with _memory_session(monkeypatch) as db:
+        for n in range(5):
+            await sub_crud.create_platega_subscription(
+                db,
+                user_id=1,
+                subscription_id=1,
+                tariff_id=None,
+                interval=3,
+                charge_days=30,
+                amount_kopeks=19900,
+                redirect_url=None,
+                platega_subscription_id=f'ps-401-{n}',
+                status='CANCELLED',
+            )
+
+        await MonitoringService()._reconcile_platega_subscriptions(db)
+
+    assert mock_status.await_count == 1
+    mock_cancel.assert_not_awaited()

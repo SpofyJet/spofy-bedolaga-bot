@@ -136,7 +136,7 @@ def _apply_promo_discount(price: int, group_pct: int, offer_pct: int = 0) -> int
     return final
 
 
-def _get_user_period_discount(db_user: User, period_days: int) -> tuple[int, int, int]:
+def _get_user_period_discount(db_user: User, period_days: int, tariff_id: int | None = None) -> tuple[int, int, int]:
     """Получает скидку пользователя на период из промогруппы + промо-оффер.
 
     Returns:
@@ -145,7 +145,7 @@ def _get_user_period_discount(db_user: User, period_days: int) -> tuple[int, int
     """
     promo_group = db_user.get_primary_promo_group()
     group_discount = promo_group.get_discount_percent('period', period_days) if promo_group else 0
-    personal_discount = get_user_active_promo_discount_percent(db_user)
+    personal_discount = get_user_active_promo_discount_percent(db_user, tariff_id)
 
     if group_discount <= 0 and personal_discount <= 0:
         return 0, 0, 0
@@ -190,7 +190,7 @@ def format_tariffs_list_text(
             # Для суточных тарифов показываем цену за день с учётом скидки промогруппы
             daily_price = getattr(tariff, 'daily_price_kopeks', 0)
             if db_user:
-                group_pct, offer_pct, daily_discount = _get_user_period_discount(db_user, 1)
+                group_pct, offer_pct, daily_discount = _get_user_period_discount(db_user, 1, tariff.id)
                 if daily_discount > 0:
                     daily_price = _apply_promo_discount(daily_price, group_pct, offer_pct)
                     discount_icon = '🔥'
@@ -205,7 +205,9 @@ def format_tariffs_list_text(
                 min_price = prices[min_period]
                 group_pct, offer_pct, discount_percent = 0, 0, 0
                 if db_user:
-                    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, int(min_period))
+                    group_pct, offer_pct, discount_percent = _get_user_period_discount(
+                        db_user, int(min_period), tariff.id
+                    )
                 if discount_percent > 0:
                     min_price = _apply_promo_discount(min_price, group_pct, offer_pct)
                     discount_icon = '🔥'
@@ -295,7 +297,7 @@ def get_tariff_periods_keyboard(
         # Получаем скидку для конкретного периода
         group_pct, offer_pct, discount_percent = 0, 0, 0
         if db_user:
-            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
+            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period, tariff.id)
 
         if discount_percent > 0:
             price = _apply_promo_discount(price, group_pct, offer_pct)
@@ -329,7 +331,7 @@ def get_tariff_periods_keyboard_with_traffic(
         # Получаем скидку для конкретного периода
         group_pct, offer_pct, discount_percent = 0, 0, 0
         if db_user:
-            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
+            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period, tariff.id)
 
         if discount_percent > 0:
             price = _apply_promo_discount(price, group_pct, offer_pct)
@@ -1101,7 +1103,7 @@ async def _proceed_with_selected_tariff(
     if is_daily:
         # Для суточного тарифа показываем подтверждение без выбора периода
         raw_daily_price = getattr(tariff, 'daily_price_kopeks', 0)
-        group_pct, offer_pct, daily_discount = _get_user_period_discount(db_user, 1)
+        group_pct, offer_pct, daily_discount = _get_user_period_discount(db_user, 1, tariff.id)
         daily_price = (
             _apply_promo_discount(raw_daily_price, group_pct, offer_pct) if daily_discount > 0 else raw_daily_price
         )
@@ -1208,7 +1210,7 @@ async def _proceed_with_selected_tariff(
             initial_traffic = tariff.min_traffic_gb if can_custom_traffic else tariff.traffic_limit_gb
 
             # Вычисляем скидку для начального периода
-            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, initial_days)
+            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, initial_days, tariff.id)
 
             await state.update_data(
                 selected_tariff_id=tariff_id,
@@ -1303,7 +1305,7 @@ async def handle_custom_days_change(
     new_days = max(tariff.min_days, min(tariff.max_days, new_days))
 
     # При изменении дней пересчитываем скидку для нового периода
-    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, new_days)
+    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, new_days, tariff.id)
 
     await state.update_data(
         custom_days=new_days,
@@ -1740,7 +1742,7 @@ async def select_tariff_period_with_traffic(
     initial_traffic = tariff.min_traffic_gb
 
     # Получаем скидку для выбранного периода
-    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
+    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period, tariff.id)
 
     # Сохраняем выбранный период и скидку в состояние
     await state.update_data(
@@ -2744,7 +2746,7 @@ def get_tariff_extend_keyboard(
         # Per-category group discounts (period + devices separately, like PricingEngine)
         period_pct = promo_group.get_discount_percent('period', period) if promo_group else 0
         devices_pct = promo_group.get_discount_percent('devices', period) if promo_group else 0
-        offer_pct = get_user_active_promo_discount_percent(db_user) if db_user else 0
+        offer_pct = get_user_active_promo_discount_percent(db_user, tariff.id) if db_user else 0
 
         discounted_base = PricingEngine.apply_discount(base_price, period_pct)
         discounted_devices = PricingEngine.apply_discount(devices_cost, devices_pct)
@@ -3480,7 +3482,7 @@ def format_tariff_switch_list_text(
             # Для суточных тарифов показываем цену за день с учётом скидки промогруппы
             daily_price = getattr(tariff, 'daily_price_kopeks', 0)
             if db_user:
-                group_pct, offer_pct, daily_discount = _get_user_period_discount(db_user, 1)
+                group_pct, offer_pct, daily_discount = _get_user_period_discount(db_user, 1, tariff.id)
                 if daily_discount > 0:
                     daily_price = _apply_promo_discount(daily_price, group_pct, offer_pct)
                     discount_icon = '🔥'
@@ -3494,7 +3496,9 @@ def format_tariff_switch_list_text(
                 min_price = prices[min_period]
                 group_pct, offer_pct, discount_percent = 0, 0, 0
                 if db_user:
-                    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, int(min_period))
+                    group_pct, offer_pct, discount_percent = _get_user_period_discount(
+                        db_user, int(min_period), tariff.id
+                    )
                 if discount_percent > 0:
                     min_price = _apply_promo_discount(min_price, group_pct, offer_pct)
                     discount_icon = '🔥'
@@ -3549,7 +3553,7 @@ def get_tariff_switch_periods_keyboard(
         # Получаем скидку для конкретного периода
         group_pct, offer_pct, discount_percent = 0, 0, 0
         if db_user:
-            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
+            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period, tariff.id)
 
         if discount_percent > 0:
             price = _apply_promo_discount(price, group_pct, offer_pct)
@@ -3783,7 +3787,7 @@ async def select_tariff_switch(
     if is_daily:
         # Для суточного тарифа показываем подтверждение без выбора периода
         raw_daily_price = getattr(tariff, 'daily_price_kopeks', 0)
-        group_pct, offer_pct, daily_discount = _get_user_period_discount(db_user, 1)
+        group_pct, offer_pct, daily_discount = _get_user_period_discount(db_user, 1, tariff.id)
         daily_price = (
             _apply_promo_discount(raw_daily_price, group_pct, offer_pct) if daily_discount > 0 else raw_daily_price
         )
@@ -5068,7 +5072,7 @@ async def preview_instant_switch(
     if is_new_daily:
         raw_daily_price = getattr(new_tariff, 'daily_price_kopeks', 0)
         # Применяем групповую скидку + promo-offer для отображения
-        daily_group_pct, daily_offer_pct, daily_discount = _get_user_period_discount(db_user, 1)
+        daily_group_pct, daily_offer_pct, daily_discount = _get_user_period_discount(db_user, 1, new_tariff.id)
         daily_price = (
             _apply_promo_discount(raw_daily_price, daily_group_pct, daily_offer_pct)
             if daily_discount > 0
