@@ -31,6 +31,7 @@ def enforcing(monkeypatch):
     monkeypatch.setattr(settings, 'BYPASS_SQUAD_UUID', BYPASS)
     monkeypatch.setattr(settings, 'BYPASS_OFF_SQUAD_UUID', OFF)
     monkeypatch.setattr(settings, 'BYPASS_FALLBACK_SQUAD_UUID', REGULAR)
+    monkeypatch.setattr(settings, 'BYPASS_INCLUDE_TRIAL', False)
 
 
 def _user(**kw):
@@ -208,6 +209,8 @@ def _service(push_ok=True):
 def _db():
     db = MagicMock()
     db.commit = AsyncMock()
+    # _has_open_grace: открытых грейс-сессий нет
+    db.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None)))
     return db
 
 

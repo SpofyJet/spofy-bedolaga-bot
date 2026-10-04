@@ -78,7 +78,10 @@ class BypassDowngradeService:
         already = subscription.bypass_suspended_at is not None
         if not already:
             subscription.bypass_suspended_at = now
-        if subscription.status == SubscriptionStatus.LIMITED.value:
+        if subscription.status == SubscriptionStatus.LIMITED.value and not await self._has_open_grace(
+            db, subscription.id
+        ):
+            # При открытом грейсе статус не трогаем: иначе пуш затрёт его оверлей.
             subscription.status = SubscriptionStatus.ACTIVE.value
         # Не грейс: человек не потерял доступ, обычные серверы работают.
         subscription.grace_candidate_reason = None
@@ -127,6 +130,20 @@ class BypassDowngradeService:
         if notify and subscription.actual_status == 'active':
             await self.notify(user, 'BYPASS_RESTORED', subscription)
         return pushed
+
+    async def _has_open_grace(self, db: AsyncSession, subscription_id: int) -> bool:
+        from app.database.models import GraceAccessSessionModel
+        from app.services.grace_access_runtime import _OPEN_STATES
+
+        result = await db.execute(
+            select(GraceAccessSessionModel.id)
+            .where(
+                GraceAccessSessionModel.subscription_id == subscription_id,
+                GraceAccessSessionModel.state.in_(_OPEN_STATES),
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
 
     async def _push(self, db: AsyncSession, subscription: Subscription) -> bool:
         from app.services.subscription_service import SubscriptionService
@@ -202,7 +219,7 @@ class BypassDowngradeService:
                     Subscription.end_date > now,
                     or_(
                         Subscription.status == SubscriptionStatus.LIMITED.value,
-                        Subscription.traffic_used_gb >= Subscription.traffic_limit_gb - 0.01,
+                        Subscription.traffic_used_gb >= Subscription.traffic_limit_gb - rules._EPSILON_GB,
                     ),
                 ),
             )
@@ -220,14 +237,22 @@ class BypassDowngradeService:
         return stats
 
     async def _load(self, db: AsyncSession, condition) -> list[Subscription]:
-        result = await db.execute(
-            select(Subscription)
-            .where(condition)
-            .options(selectinload(Subscription.user), selectinload(Subscription.tariff))
-            .order_by(Subscription.id)
-            .limit(_BATCH)
-        )
-        return list(result.scalars().all())
+        # Все совпадения порциями по _BATCH (keyset по id), а не только первые _BATCH.
+        rows: list[Subscription] = []
+        last_id = 0
+        while True:
+            result = await db.execute(
+                select(Subscription)
+                .where(condition, Subscription.id > last_id)
+                .options(selectinload(Subscription.user), selectinload(Subscription.tariff))
+                .order_by(Subscription.id)
+                .limit(_BATCH)
+            )
+            batch = list(result.scalars().all())
+            rows.extend(batch)
+            if len(batch) < _BATCH:
+                return rows
+            last_id = batch[-1].id
 
     async def _load_tariff(self, db: AsyncSession, subscription: Subscription):
         if subscription.tariff_id is None:

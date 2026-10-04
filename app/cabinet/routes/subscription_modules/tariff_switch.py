@@ -443,7 +443,7 @@ async def switch_tariff(
     # Update subscription
     old_tariff_name = current_tariff.name if current_tariff else 'Unknown'
 
-    # Reset device limit to new tariff base (extra purchased devices are not carried over)
+    # Device limit = new tariff base + extra purchased devices (carried over)
     from app.database.crud.subscription import calc_device_limit_on_tariff_switch
     from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
     from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe

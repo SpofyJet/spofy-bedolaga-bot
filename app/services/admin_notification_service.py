@@ -626,6 +626,7 @@ class AdminNotificationService:
                         )
                 except Exception:
                     logger.error('Spofy: failed to persist subscription conversion', exc_info=True)
+                    await db.rollback()
 
             if not self._is_enabled():
                 return False

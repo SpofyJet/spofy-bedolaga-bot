@@ -517,7 +517,7 @@ class PlategaPaymentMixin:
                 candidate = await sub_crud.get_latest_platega_subscription_by_subscription(db, hint[1])
                 if candidate:
                     found = candidate
-                    platega_id = platega_id or candidate.platega_subscription_id
+                    platega_id = candidate.platega_subscription_id
                     logger.info(
                         'Platega subscription callback: запись найдена по payload-токену',
                         platega_subscription_id=platega_id,
@@ -529,7 +529,6 @@ class PlategaPaymentMixin:
             logger.warning('Platega subscription callback без SubscriptionId', status=status)
             return
 
-        found = await sub_crud.get_platega_subscription_by_platega_id(db, platega_id)
         if not found:
             logger.warning(
                 'Platega subscription callback: подписка не найдена',

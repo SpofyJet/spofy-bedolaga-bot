@@ -2500,7 +2500,7 @@ async def confirm_daily_tariff_purchase(
     try:
         if existing_subscription:
             # Обновляем существующую подписку на суточный тариф
-            # Сбрасываем лимит устройств на базу нового тарифа (докупленные не переносятся)
+            # Лимит устройств = база нового тарифа + докупленные устройства (переносятся)
             from app.database.crud.subscription import calc_device_limit_on_tariff_switch
 
             old_tariff = (
@@ -4444,7 +4444,7 @@ async def confirm_daily_tariff_switch(
             squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
         # Обновляем подписку на суточный тариф
-        # Сбрасываем лимит устройств на базу нового тарифа (докупленные не переносятся)
+        # Лимит устройств = база нового тарифа + докупленные устройства (переносятся)
         from app.database.crud.subscription import calc_device_limit_on_tariff_switch
 
         old_tariff = await get_tariff_by_id(db, subscription.tariff_id) if subscription.tariff_id else None
@@ -5492,7 +5492,7 @@ async def confirm_instant_switch(
         is_new_daily = getattr(new_tariff, 'is_daily', False)
 
         # Обновляем подписку с новыми параметрами тарифа
-        # Сбрасываем лимит устройств на базу нового тарифа (докупленные не переносятся)
+        # Лимит устройств = база нового тарифа + докупленные устройства (переносятся)
         from app.database.crud.subscription import calc_device_limit_on_tariff_switch
 
         old_tariff = await get_tariff_by_id(db, subscription.tariff_id) if subscription.tariff_id else None

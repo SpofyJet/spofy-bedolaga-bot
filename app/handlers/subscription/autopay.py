@@ -234,14 +234,14 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
     # n2: включение баланс-автоплатежа централизованно гасит провайдерские
     # привязки этой подписки (см. crud.update_subscription_autopay) —
     # предупреждаем alert'ом, флоу не прерываем.
+    engines_warning = None
     if enable:
         try:
             from app.services.recurrent_amount import get_active_recurrent_engines, recurrent_engines_warning
 
             _engines = await get_active_recurrent_engines(db, subscription)
             _warning = recurrent_engines_warning(get_texts(db_user.language), _engines, enabling='balance')
-            if _warning:
-                await callback.answer(_warning, show_alert=True)
+            engines_warning = _warning or None
         except Exception:
             pass
 
@@ -263,7 +263,11 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
         await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
     texts = get_texts(db_user.language)
     status = texts.t('AUTOPAY_STATUS_ENABLED', 'включен') if enable else texts.t('AUTOPAY_STATUS_DISABLED', 'выключен')
-    await callback.answer(texts.t('AUTOPAY_TOGGLE_SUCCESS', '✅ Автоплатеж {status}!').format(status=status))
+    if engines_warning:
+        # Один callback.answer на запрос: предупреждение вытесняет тост успеха.
+        await callback.answer(engines_warning, show_alert=True)
+    else:
+        await callback.answer(texts.t('AUTOPAY_TOGGLE_SUCCESS', '✅ Автоплатеж {status}!').format(status=status))
 
     try:
         await handle_autopay_menu(callback, db_user, db, state)
