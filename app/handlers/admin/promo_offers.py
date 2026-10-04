@@ -1983,18 +1983,23 @@ async def _send_prepaid_tariff_offer(bot, new_db, template: PromoOfferTemplate, 
     from app.database.crud.discount_offer import mark_offer_claimed
     from app.database.models import DiscountOffer
     from app.utils.notification_prefs import is_promo_offers_enabled
-    from app.utils.promo_offer import get_user_active_promo_discount_percent, offer_discount_source
+    from app.utils.promo_offer import TARIFF_SOURCE_PREFIX, offer_discount_source
 
     if not user.telegram_id or not settings.is_notifications_enabled() or not is_promo_offers_enabled(user):
         return False
 
     fresh = await new_db.get(User, user.id)
-    if fresh is None or get_user_active_promo_discount_percent(fresh, int(settings.PROMO_OFFER_TARIFF_ID)) > 0:
-        return False  # не затираем действующую скидку
-    if (getattr(fresh, 'promo_offer_discount_percent', 0) or 0) > 0:
-        expires = getattr(fresh, 'promo_offer_discount_expires_at', None)
-        if expires is None or expires > datetime.now(UTC):
-            return False
+    if fresh is None:
+        return False
+    # Действующую скидку не затираем, кроме скидки этого же тарифного предложения: её можно обновить.
+    prev_percent = fresh.promo_offer_discount_percent
+    prev_source = fresh.promo_offer_discount_source
+    prev_expires = fresh.promo_offer_discount_expires_at
+    own_tariff_offer = bool(prev_source) and prev_source.startswith(
+        f'{TARIFF_SOURCE_PREFIX}{int(settings.PROMO_OFFER_TARIFF_ID)}|'
+    )
+    if not own_tariff_offer and (prev_percent or 0) > 0 and (prev_expires is None or prev_expires > datetime.now(UTC)):
+        return False
 
     existing = await new_db.execute(
         select(DiscountOffer.id)
@@ -2045,9 +2050,10 @@ async def _send_prepaid_tariff_offer(bot, new_db, template: PromoOfferTemplate, 
             parse_mode='HTML',
         )
     except Exception:
-        fresh.promo_offer_discount_percent = 0
-        fresh.promo_offer_discount_source = None
-        fresh.promo_offer_discount_expires_at = None
+        # Не доставили: возвращаем скидку, какой она была до этой отправки.
+        fresh.promo_offer_discount_percent = prev_percent or 0
+        fresh.promo_offer_discount_source = prev_source
+        fresh.promo_offer_discount_expires_at = prev_expires
         await new_db.commit()
         raise
     return True
