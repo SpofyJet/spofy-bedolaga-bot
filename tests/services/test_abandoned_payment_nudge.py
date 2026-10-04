@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.database.models import (
     Base,
+    CryptoBotPayment,
     HeleketPayment,
     PlategaPayment,
     SubscriptionEvent,
@@ -37,7 +38,16 @@ async def _session(monkeypatch):
     engine = create_async_engine('sqlite+aiosqlite:///:memory:')
     tables = [
         m.__table__
-        for m in (User, PlategaPayment, WataPayment, XRocketPayment, HeleketPayment, Transaction, SubscriptionEvent)
+        for m in (
+            User,
+            CryptoBotPayment,
+            PlategaPayment,
+            WataPayment,
+            XRocketPayment,
+            HeleketPayment,
+            Transaction,
+            SubscriptionEvent,
+        )
     ]
     async with engine.begin() as conn:
         await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=tables))
@@ -170,3 +180,26 @@ async def test_no_discount_line_without_discount(monkeypatch):
 
         await service.process_abandoned_payments(db)
     assert 'закреплена' not in sent.await_args.args[1]
+
+
+async def test_cryptobot_invoice_is_covered(monkeypatch):
+    async with _session(monkeypatch) as db:
+        db.add_all(
+            [
+                _user(),
+                CryptoBotPayment(
+                    user_id=1,
+                    invoice_id='inv1',
+                    amount='37.73',
+                    asset='USDT',
+                    status='active',
+                    payload='balance_1_315000',
+                    created_at=NOW - timedelta(minutes=15),
+                ),
+            ]
+        )
+        await db.commit()
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_payments(db) == 1
+    assert '3150 ₽' in sent.await_args.args[1]

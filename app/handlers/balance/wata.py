@@ -146,12 +146,18 @@ async def process_wata_payment_amount(
         result = None
 
     if not result or not result.get('payment_url'):
-        await message.answer(
-            texts.t(
-                'WATA_PAYMENT_ERROR',
-                '❌ Ошибка создания платежа WATA. Попробуйте позже или обратитесь в поддержку.',
+        from app.utils.payment_fallback import fallback_methods_keyboard, fallback_text
+
+        alternatives = fallback_methods_keyboard(amount_kopeks, db_user.language, 'wata')
+        if alternatives is not None:
+            await message.answer(fallback_text(db_user.language, amount_kopeks), reply_markup=alternatives)
+        else:
+            await message.answer(
+                texts.t(
+                    'WATA_PAYMENT_ERROR',
+                    '❌ Ошибка создания платежа WATA. Попробуйте позже или обратитесь в поддержку.',
+                )
             )
-        )
         await state.clear()
         return
 

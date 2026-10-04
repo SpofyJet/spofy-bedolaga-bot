@@ -2357,6 +2357,7 @@
   "QUEST_FRIEND_INVITER": "👥 <b>您的好友已连接！</b>已为您增加 <b>{days} 天</b>。",
   "QUEST_FRIEND_MORE": "每有一位新好友连接，再增加 {days} 天（最多 {max_friends} 位好友）。",
   "QUEST_BUTTON_INVITE": "👥 再邀请一位好友",
+  "PAYMENT_FAILED_ALTERNATIVES": "❌ <b>无法使用此方式创建付款。</b>\n\n金额不变 — <b>{amount} ₽</b>。请选择其他方式：",
   "REFERRAL_SHARE_TEXT": "嗨！推荐一个我自己在用的 VPN——速度快到飞起 🚀{bonus_block}",
   "CHANGE_DEVICES_PROMPT_TARIFF_FLAT": "📱 <b>修改设备数量</b>\n\n当前限制：{current_devices} 台设备\n每增加一台设备：{price}（一次性）\n请选择新的设备数量：\n\n💡 <b>重要：</b>\n• 增加——一次性补差价\n• 减少——不退还差价",
   "TARIFF_SWITCH_FULL_PRICE_DAYS_NOTE": "📅 套餐全价——将在剩余时长基础上额外计入 <b>{days} 天</b>。",

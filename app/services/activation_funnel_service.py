@@ -121,6 +121,14 @@ async def _record_event(db: AsyncSession, user_id: int, event_type: str, subscri
     await db.commit()
 
 
+def _cryptobot_payload_kopeks(payload: str | None) -> int:
+    """Сумма в копейках из payload счёта CryptoBot (``balance_<user>_<копейки>``), 0 если не разобрать."""
+    try:
+        return max(0, int(str(payload or '').rsplit('_', 1)[-1]))
+    except ValueError:
+        return 0
+
+
 async def _already_nudged_recently(db: AsyncSession, user_id: int) -> bool:
     """Глобальный анти-спам: любое касание воронки за последние N часов -> пропуск."""
     since = datetime.now(UTC) - timedelta(hours=NUDGE_GLOBAL_COOLDOWN_HOURS)
@@ -436,7 +444,7 @@ class ActivationFunnelService:
 
     async def _abandoned_payments(self, db: AsyncSession, since: datetime, until: datetime):
         """Неоплаченные платежи за окно: ``(user, amount_kopeks, created_at)`` по всем способам с суммой."""
-        from app.database.models import HeleketPayment, PlategaPayment, WataPayment, XRocketPayment
+        from app.database.models import CryptoBotPayment, HeleketPayment, PlategaPayment, WataPayment, XRocketPayment
 
         rows: list[tuple[User, int, datetime]] = []
         user_ok = and_(User.telegram_id.isnot(None), User.status == UserStatus.ACTIVE.value)
@@ -482,6 +490,23 @@ class ActivationFunnelService:
             .limit(BATCH_LIMIT)
         )
         rows += [(user, payment.amount_kopeks, payment.created_at) for payment, user in xrocket.all()]
+
+        # CryptoBot хранит сумму в монете, а рубли — в payload счёта: balance_<user>_<копейки>.
+        cryptobot = await db.execute(
+            select(CryptoBotPayment, User)
+            .join(User, User.id == CryptoBotPayment.user_id)
+            .where(
+                CryptoBotPayment.status == 'active',
+                CryptoBotPayment.created_at >= since,
+                CryptoBotPayment.created_at <= until,
+                user_ok,
+            )
+            .limit(BATCH_LIMIT)
+        )
+        for payment, user in cryptobot.all():
+            kopeks = _cryptobot_payload_kopeks(payment.payload)
+            if kopeks:
+                rows.append((user, kopeks, payment.created_at))
 
         heleket = await db.execute(
             select(HeleketPayment, User)

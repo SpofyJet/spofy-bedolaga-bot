@@ -2338,6 +2338,9 @@
 - `app/utils/panel_tag.py` — Python-модуль
   Классы: нет
   Функции: `normalize_panel_tag` — Привести тег к виду панели; пустое значение — «тега нет».
+- `app/utils/payment_fallback.py` — Python-модуль
+  Классы: нет
+  Функции: `fallback_methods_keyboard` — Кнопки способов на ту же сумму без упавшего провайдера; ``None``, если других способов нет., `fallback_text`
 - `app/utils/payment_logger.py` — Python-модуль
   Классы: нет
   Функции: `configure_payment_logger` — Configure the payment logger with the given handler., `get_payment_logger` — Return the payment logger instance.
@@ -4417,7 +4420,7 @@
 - `tests/services/reachability/`
 - `tests/services/test_abandoned_payment_nudge.py` — Python-модуль
   Классы: нет
-  Функции: `test_sends_after_ten_minutes_with_amount_and_methods`, `test_too_fresh_payment_is_left_alone`, `test_not_repeated_within_a_day`, `test_skips_user_who_paid_afterwards`, `test_paid_payment_is_not_abandoned`, `test_discount_is_really_locked_for_twenty_minutes`, `test_no_discount_line_without_discount`
+  Функции: `test_sends_after_ten_minutes_with_amount_and_methods`, `test_too_fresh_payment_is_left_alone`, `test_not_repeated_within_a_day`, `test_skips_user_who_paid_afterwards`, `test_paid_payment_is_not_abandoned`, `test_discount_is_really_locked_for_twenty_minutes`, `test_no_discount_line_without_discount`, `test_cryptobot_invoice_is_covered`
 - `tests/services/test_account_merge_service.py` — Python-модуль
   Классы: `TestComputeAuthMethods` (6 методов), `TestBuildSubscriptionPreview` (3 методов), `TestBuildUserPreview` (2 методов), `TestGetMergePreview` (4 методов), `TestExecuteMergeValidation` (6 методов), `TestExecuteMergeOAuthTransfer` (2 методов), `TestExecuteMergeTelegramTransfer` (2 методов), `TestExecuteMergeEmailTransfer` (2 методов), `TestExecuteMergeKeepsWhatThePagePromises` (11 методов), `TestExecuteMergeBalance` (3 методов), `TestExecuteMergePartnerStatus` (4 методов), `TestExecuteMergeReferralCommission` (2 методов), `TestExecuteMergeSecondaryDeleted` (3 методов), `TestExecuteMergeSubscription` (7 методов), `TestExecuteMergeSubscriptionMultiTariff` (2 методов), `TestExecuteMergeBulkUpdates` (1 методов), `TestExecuteMergeSelfReferralPrevention` (6 методов), `TestRemnawaveDeleteMode` (4 методов)
   Функции: нет
@@ -4745,6 +4748,9 @@
 - `tests/services/test_payment_common.py` — Python-модуль
   Классы: нет
   Функции: `anyio_backend`, `test_send_payment_success_notification_recovers_missing_greenlet`
+- `tests/services/test_payment_fallback.py` — Python-модуль
+  Классы: нет
+  Функции: `test_failed_provider_is_removed_and_others_stay`, `test_no_alternatives_returns_none`, `test_text_has_amount`, `test_cryptobot_payload_gives_kopeks`
 - `tests/services/test_payment_method_config_overpay.py` — Python-модуль
   Классы: нет
   Функции: `test_sub_options_without_int`, `test_sub_options_with_int`, `test_method_defaults_use_dynamic_sub_options`

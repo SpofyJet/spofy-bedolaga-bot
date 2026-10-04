@@ -2331,6 +2331,7 @@
   "QUEST_FRIEND_INVITER": "👥 <b>Your friend is connected!</b> You received <b>+{days} days</b>.",
   "QUEST_FRIEND_MORE": "For every new friend who connects, another +{days} days (up to {max_friends} friends).",
   "QUEST_BUTTON_INVITE": "👥 Invite another friend",
+  "PAYMENT_FAILED_ALTERNATIVES": "❌ <b>Could not create a payment with this method.</b>\n\nThe amount is the same — <b>{amount} ₽</b>. Choose another method:",
   "PAYMENT_PLATEGA_M13": "Crypto",
   "REFERRAL_SHARE_TEXT": "Hey! Recommending a VPN I use myself — everything just flies 🚀{bonus_block}",
   "CHANGE_DEVICES_PROMPT_TARIFF_FLAT": "📱 <b>Change device count</b>\n\nCurrent limit: {current_devices} devices\nPrice per extra device: {price} (one-time)\nSelect new device count:\n\n💡 <b>Note:</b>\n• Increase — one-time charge\n• Decrease — no refund",
