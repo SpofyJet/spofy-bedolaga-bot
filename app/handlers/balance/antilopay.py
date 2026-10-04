@@ -71,10 +71,15 @@ async def _create_antilopay_payment_and_respond(
             'PAYMENT_CREATE_ERROR',
             'Не удалось создать платёж. Попробуйте позже.',
         )
+        from app.utils.payment_fallback import fallback_methods_keyboard, fallback_text
+
+        failed_alternatives = fallback_methods_keyboard(amount_kopeks, db_user.language, 'antilopay')
+        if failed_alternatives is not None:
+            error_text = fallback_text(db_user.language, amount_kopeks)
         if edit_message:
             await message_or_callback.edit_text(
                 error_text,
-                reply_markup=get_back_keyboard(db_user.language),
+                reply_markup=failed_alternatives or get_back_keyboard(db_user.language),
                 parse_mode='HTML',
             )
         else:

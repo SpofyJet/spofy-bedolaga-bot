@@ -15,6 +15,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.payment_fallback import answer_creation_failed
 
 
 logger = structlog.get_logger(__name__)
@@ -228,11 +229,15 @@ async def process_cashera_payment_amount(
         result = None
 
     if not result or not result.get('payment_url'):
-        await message.answer(
+        await answer_creation_failed(
+            message,
+            db_user.language,
+            amount_kopeks,
+            'cashera',
             texts.t(
                 'CASHERA_PAYMENT_ERROR',
                 '❌ Ошибка создания платежа Cashera. Попробуйте позже или обратитесь в поддержку.',
-            )
+            ),
         )
         await state.clear()
         return

@@ -15,6 +15,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.payment_fallback import answer_creation_failed
 from app.utils.timezone import format_local_datetime
 
 
@@ -182,7 +183,14 @@ async def process_yookassa_payment_amount(
         )
 
         if not payment_result:
-            await message.answer('❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.')
+            await answer_creation_failed(
+                message,
+                db_user.language,
+                amount_kopeks,
+                'yookassa',
+                '❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.',
+                exact=True,
+            )
             await state.clear()
             return
 
@@ -269,7 +277,14 @@ async def process_yookassa_payment_amount(
 
     except Exception as e:
         logger.error('Ошибка создания YooKassa платежа', error=e)
-        await message.answer('❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.')
+        await answer_creation_failed(
+            message,
+            db_user.language,
+            amount_kopeks,
+            'yookassa',
+            '❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.',
+            exact=True,
+        )
         await state.clear()
 
 
@@ -342,7 +357,14 @@ async def process_yookassa_sbp_payment_amount(
         )
 
         if not payment_result:
-            await message.answer('❌ Ошибка создания платежа через СБП. Попробуйте позже или обратитесь в поддержку.')
+            await answer_creation_failed(
+                message,
+                db_user.language,
+                amount_kopeks,
+                'yookassa_sbp',
+                '❌ Ошибка создания платежа через СБП. Попробуйте позже или обратитесь в поддержку.',
+                exact=True,
+            )
             await state.clear()
             return
 
@@ -515,7 +537,14 @@ async def process_yookassa_sbp_payment_amount(
 
     except Exception as e:
         logger.error('Ошибка создания YooKassa СБП платежа', error=e)
-        await message.answer('❌ Ошибка создания платежа через СБП. Попробуйте позже или обратитесь в поддержку.')
+        await answer_creation_failed(
+            message,
+            db_user.language,
+            amount_kopeks,
+            'yookassa_sbp',
+            '❌ Ошибка создания платежа через СБП. Попробуйте позже или обратитесь в поддержку.',
+            exact=True,
+        )
         await state.clear()
 
 

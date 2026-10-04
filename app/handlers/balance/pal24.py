@@ -18,6 +18,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.payment_fallback import answer_creation_failed
 from app.utils.timezone import format_local_datetime
 
 
@@ -57,11 +58,15 @@ async def _send_pal24_payment_message(
         )
 
         if not payment_result:
-            await message.answer(
+            await answer_creation_failed(
+                message,
+                db_user.language,
+                amount_kopeks,
+                'pal24',
                 texts.t(
                     'PAL24_PAYMENT_ERROR',
                     '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
-                )
+                ),
             )
             await state.clear()
             return
@@ -71,11 +76,15 @@ async def _send_pal24_payment_message(
         fallback_url = payment_result.get('link_page_url') or payment_result.get('link_url')
 
         if not (sbp_url or card_url or fallback_url):
-            await message.answer(
+            await answer_creation_failed(
+                message,
+                db_user.language,
+                amount_kopeks,
+                'pal24',
                 texts.t(
                     'PAL24_PAYMENT_ERROR',
                     '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
-                )
+                ),
             )
             await state.clear()
             return
@@ -245,11 +254,15 @@ async def _send_pal24_payment_message(
 
     except Exception as error:
         logger.error('Ошибка создания PayPalych платежа', error=error)
-        await message.answer(
+        await answer_creation_failed(
+            message,
+            db_user.language,
+            amount_kopeks,
+            'pal24',
             texts.t(
                 'PAL24_PAYMENT_ERROR',
                 '❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.',
-            )
+            ),
         )
         await state.clear()
 

@@ -16,6 +16,7 @@ from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
+from app.utils.payment_fallback import answer_creation_failed
 
 
 logger = structlog.get_logger(__name__)
@@ -149,7 +150,14 @@ async def process_heleket_payment_amount(
     )
 
     if not result:
-        await message.answer('❌ Не удалось создать счёт в Heleket. Попробуйте позже или обратитесь в поддержку.')
+        await answer_creation_failed(
+            message,
+            db_user.language,
+            amount_kopeks,
+            'heleket',
+            '❌ Не удалось создать счёт в Heleket. Попробуйте позже или обратитесь в поддержку.',
+            exact=False,
+        )
         await state.clear()
         return
 

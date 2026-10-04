@@ -13,6 +13,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.payment_fallback import answer_creation_failed
 
 
 logger = structlog.get_logger(__name__)
@@ -152,7 +153,14 @@ async def process_xrocket_payment_amount(
 
     except Exception as e:
         logger.error('Ошибка создания xRocket платежа', error=e, exc_info=True)
-        await message.answer('❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.')
+        await answer_creation_failed(
+            message,
+            db_user.language,
+            amount_kopeks,
+            'xrocket',
+            '❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.',
+            exact=False,
+        )
         await state.clear()
 
 
@@ -261,7 +269,14 @@ async def _create_xrocket_invoice(
 
     except Exception as e:
         logger.error('Ошибка создания xRocket платежа', error=e, exc_info=True)
-        await message.answer('❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.')
+        await answer_creation_failed(
+            message,
+            db_user.language,
+            amount_kopeks,
+            'xrocket',
+            '❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.',
+            exact=False,
+        )
         await state.clear()
 
 
