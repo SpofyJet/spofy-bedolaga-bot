@@ -2030,6 +2030,7 @@ async def _send_prepaid_tariff_offer(bot, new_db, template: PromoOfferTemplate, 
                 InlineKeyboardButton(
                     text=template.button_text,
                     callback_data=f'tariff_select:{int(settings.PROMO_OFFER_TARIFF_ID)}',
+                    style='primary',
                 )
             ]
         ]
