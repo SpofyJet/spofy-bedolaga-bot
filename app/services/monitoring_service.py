@@ -201,6 +201,7 @@ class MonitoringService:
         self._last_cleanup = datetime.now(UTC)
         self._sla_task = None
         self._withdrawal_reminder_task = None
+        self._abandoned_payment_task = None
         self._user_reminder_task = None
         self._live_menu_task = None
         # In-memory fallback состояния уведомлений об ошибке автоплатежа (на случай
@@ -352,6 +353,8 @@ class MonitoringService:
         try:
             if not self._withdrawal_reminder_task or self._withdrawal_reminder_task.done():
                 self._withdrawal_reminder_task = asyncio.create_task(self._withdrawal_reminder_loop())
+            if not self._abandoned_payment_task or self._abandoned_payment_task.done():
+                self._abandoned_payment_task = asyncio.create_task(self._abandoned_payment_loop())
         except Exception as e:
             logger.error('Не удалось запустить напоминания о заявках на вывод', error=e)
         # Напоминания пользователям (раздел «Напоминания» в кабинете)
@@ -387,6 +390,8 @@ class MonitoringService:
             pass
         if self._withdrawal_reminder_task and not self._withdrawal_reminder_task.done():
             self._withdrawal_reminder_task.cancel()
+        if self._abandoned_payment_task and not self._abandoned_payment_task.done():
+            self._abandoned_payment_task.cancel()
         if self._user_reminder_task and not self._user_reminder_task.done():
             self._user_reminder_task.cancel()
         if self._live_menu_task and not self._live_menu_task.done():
@@ -3794,6 +3799,26 @@ class MonitoringService:
             except Exception:
                 interval_seconds = 60
             await asyncio.sleep(interval_seconds)
+
+    async def _abandoned_payment_loop(self):
+        """Напоминание о брошенной оплате: каждые 2 минуты, чтобы поймать 10-ю минуту после платежа."""
+        from app.services.activation_funnel_service import ActivationFunnelService
+
+        while self.is_running:
+            try:
+                if self.bot:
+                    funnel = ActivationFunnelService(bot=self.bot, send_func=self._send_message_with_logo)
+                    async with AsyncSessionLocal() as db:
+                        try:
+                            await funnel.process_abandoned_payments(db)
+                        except Exception as e:
+                            logger.warning('Сбой напоминаний о брошенной оплате', error=str(e))
+                            await db.rollback()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning('Ошибка в цикле напоминаний о брошенной оплате', error=str(e))
+            await asyncio.sleep(120)
 
     async def _user_reminder_loop(self):
         from app.services.user_reminders.dispatcher import bot_delivery, run_reminder_pass

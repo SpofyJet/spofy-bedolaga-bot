@@ -84,9 +84,13 @@ if ACTIVE_TRIAL_NUDGE_WINDOW_HOURS <= ACTIVE_TRIAL_NUDGE_HOURS:
     ACTIVE_TRIAL_NUDGE_WINDOW_HOURS = ACTIVE_TRIAL_NUDGE_HOURS + 24
 
 EVENT_ABANDONED_TOPUP = 'funnel_abandoned_topup'
-ABANDONED_TOPUP_MIN_AGE_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_MIN_AGE_HOURS', 4))
-ABANDONED_TOPUP_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_WINDOW_HOURS', 48))
+# Брошенная оплата: по данным 62% людей завершают платёж сами, но почти все — в первые 10 минут
+# (между 10 и 60 минутами сами доплачивают 6%), поэтому напоминаем на 10-й минуте, а не через часы.
+ABANDONED_TOPUP_MIN_AGE_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_MIN_AGE_MINUTES', 10))
+ABANDONED_TOPUP_WINDOW_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_WINDOW_MINUTES', 180))
 ABANDONED_TOPUP_RESEND_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_RESEND_HOURS', 24))
+# Если у человека действует скидка предложения и кончается раньше, продлеваем её до этого срока.
+ABANDONED_TOPUP_PRICE_LOCK_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_PRICE_LOCK_MINUTES', 20))
 NUDGE_GLOBAL_COOLDOWN_HOURS = int(getattr(settings, 'FUNNEL_GLOBAL_COOLDOWN_HOURS', 20))
 
 
@@ -171,7 +175,6 @@ class ActivationFunnelService:
             await self._nudge_idle_trial_2(db)
             await self._nudge_active_trial(db)
             await self._nudge_trial_ending(db)
-            await self._nudge_abandoned_topup(db)
             await self._nudge_expired_trial(db, EVENT_TRIAL_EXP_1, TRIAL_EXP1_HOURS, TRIAL_EXP1_PERCENT, wave=1)
             await self._nudge_expired_trial(db, EVENT_TRIAL_EXP_2, TRIAL_EXP2_HOURS, TRIAL_EXP2_PERCENT, wave=2)
         except Exception as error:
@@ -431,70 +434,101 @@ class ActivationFunnelService:
 
     # --- nudge: abandoned topup -------------------------------------------
 
-    async def _nudge_abandoned_topup(self, db: AsyncSession) -> None:
-        """Пользователь создал платёж, но не оплатил -> мягкое напоминание.
+    async def _abandoned_payments(self, db: AsyncSession, since: datetime, until: datetime):
+        """Неоплаченные платежи за окно: ``(user, amount_kopeks, created_at)`` по всем способам с суммой."""
+        from app.database.models import HeleketPayment, PlategaPayment, WataPayment, XRocketPayment
 
-        Покрывает Platega (рубли) и xRocket (крипта). Пропускает тех, кто
-        после этого пополнился любым способом, и не чаще раза в RESEND_HOURS.
+        rows: list[tuple[User, int, datetime]] = []
+        user_ok = and_(User.telegram_id.isnot(None), User.status == UserStatus.ACTIVE.value)
+
+        # Platega отменяет брошенный платёж сам (CANCELED), поэтому статус PENDING здесь не требуем.
+        platega = await db.execute(
+            select(PlategaPayment, User)
+            .join(User, User.id == PlategaPayment.user_id)
+            .where(
+                PlategaPayment.is_paid.is_(False),
+                PlategaPayment.status.in_(('PENDING', 'CANCELED')),
+                PlategaPayment.created_at >= since,
+                PlategaPayment.created_at <= until,
+                user_ok,
+            )
+            .limit(BATCH_LIMIT)
+        )
+        rows += [(user, payment.amount_kopeks, payment.created_at) for payment, user in platega.all()]
+
+        wata = await db.execute(
+            select(WataPayment, User)
+            .join(User, User.id == WataPayment.user_id)
+            .where(
+                WataPayment.is_paid.is_(False),
+                WataPayment.status.in_(('Opened', 'Declined')),
+                WataPayment.created_at >= since,
+                WataPayment.created_at <= until,
+                user_ok,
+            )
+            .limit(BATCH_LIMIT)
+        )
+        rows += [(user, payment.amount_kopeks, payment.created_at) for payment, user in wata.all()]
+
+        xrocket = await db.execute(
+            select(XRocketPayment, User)
+            .join(User, User.id == XRocketPayment.user_id)
+            .where(
+                XRocketPayment.status == 'active',
+                XRocketPayment.created_at >= since,
+                XRocketPayment.created_at <= until,
+                user_ok,
+            )
+            .limit(BATCH_LIMIT)
+        )
+        rows += [(user, payment.amount_kopeks, payment.created_at) for payment, user in xrocket.all()]
+
+        heleket = await db.execute(
+            select(HeleketPayment, User)
+            .join(User, User.id == HeleketPayment.user_id)
+            .where(
+                HeleketPayment.status.in_(('check', 'cancel')),
+                HeleketPayment.currency == 'RUB',
+                HeleketPayment.created_at >= since,
+                HeleketPayment.created_at <= until,
+                user_ok,
+            )
+            .limit(BATCH_LIMIT)
+        )
+        for payment, user in heleket.all():
+            try:
+                rows.append((user, round(float(payment.amount) * 100), payment.created_at))
+            except (TypeError, ValueError):
+                continue
+        return rows
+
+    async def process_abandoned_payments(self, db: AsyncSession) -> int:
+        """Брошенная оплата: через 10 минут одно короткое сообщение с выбором способа на ту же сумму.
+
+        Не пишем тем, кто с тех пор пополнился, и не чаще раза в сутки. Общий кулдаун воронки здесь
+        не применяется: это ответ на действие человека прямо сейчас, а не плановая рассылка.
         """
-        from app.database.models import PlategaPayment, Transaction, TransactionType, XRocketPayment
+        if not _funnel_enabled() or not self._send:
+            return 0
+        from app.database.models import Transaction, TransactionType
+        from app.keyboards.inline import get_payment_methods_keyboard
 
         now = datetime.now(UTC)
-        upper = now - timedelta(hours=ABANDONED_TOPUP_MIN_AGE_HOURS)
-        lower = now - timedelta(hours=ABANDONED_TOPUP_WINDOW_HOURS)
-
-        pending: list[tuple[User, int, str, str | None, datetime]] = []
-
-        platega_rows = (
-            await db.execute(
-                select(PlategaPayment, User)
-                .join(User, User.id == PlategaPayment.user_id)
-                .where(
-                    PlategaPayment.is_paid.is_(False),
-                    PlategaPayment.status == 'PENDING',
-                    PlategaPayment.created_at >= lower,
-                    PlategaPayment.created_at <= upper,
-                    User.telegram_id.isnot(None),
-                    User.status == UserStatus.ACTIVE.value,
-                )
-                .limit(BATCH_LIMIT)
-            )
-        ).all()
-        for payment, user in platega_rows:
-            pay_url = payment.redirect_url
-            if payment.expires_at is not None and payment.expires_at <= now:
-                pay_url = None
-            pending.append((user, payment.amount_kopeks, 'Platega', pay_url, payment.created_at))
-
-        xrocket_rows = (
-            await db.execute(
-                select(XRocketPayment, User)
-                .join(User, User.id == XRocketPayment.user_id)
-                .where(
-                    XRocketPayment.status == 'active',
-                    XRocketPayment.created_at >= lower,
-                    XRocketPayment.created_at <= upper,
-                    User.telegram_id.isnot(None),
-                    User.status == UserStatus.ACTIVE.value,
-                )
-                .limit(BATCH_LIMIT)
-            )
-        ).all()
-        for payment, user in xrocket_rows:
-            pending.append((user, payment.amount_kopeks, 'xRocket', payment.pay_url, payment.created_at))
-
+        pending = await self._abandoned_payments(
+            db,
+            since=now - timedelta(minutes=ABANDONED_TOPUP_WINDOW_MINUTES),
+            until=now - timedelta(minutes=ABANDONED_TOPUP_MIN_AGE_MINUTES),
+        )
         if not pending:
-            return
+            return 0
 
-        by_user: dict[int, tuple[User, int, str, str | None, datetime]] = {}
-        for row in pending:
-            if row[0].id not in by_user or row[4] > by_user[row[0].id][4]:
-                by_user[row[0].id] = row
+        latest: dict[int, tuple[User, int, datetime]] = {}
+        for user, amount_kopeks, created_at in pending:
+            if amount_kopeks > 0 and (user.id not in latest or created_at > latest[user.id][2]):
+                latest[user.id] = (user, amount_kopeks, created_at)
 
         sent_count = 0
-        for user, amount_kopeks, method_label, pay_url, created_at in by_user.values():
-            if await _already_nudged_recently(db, user.id):
-                continue
+        for user, amount_kopeks, created_at in latest.values():
             if getattr(user, 'restriction_topup', False):
                 continue
             paid_later = await db.execute(
@@ -523,49 +557,66 @@ class ActivationFunnelService:
 
             texts = get_texts(user.language)
             amount_rub = amount_kopeks // 100
-            text = texts.get(
-                'FUNNEL_ABANDONED_TOPUP',
-                (
-                    '💳 <b>Пополнение не завершено</b>\n\n'
-                    'Вы создали заявку на пополнение на <b>{amount}₽</b>, но оплата так и не прошла.\n\n'
-                    'Если что-то пошло не так — попробуйте другой способ: СБП, карта или криптовалюта. '
-                    'Оплата занимает меньше минуты.'
-                ),
-            ).format(amount=amount_rub, method=method_label)
+            lines = [
+                texts.t('FUNNEL_ABANDONED_TOPUP_TITLE', '💳 <b>Оплата не завершена</b>'),
+                '',
+                texts.t(
+                    'FUNNEL_ABANDONED_TOPUP_BODY',
+                    'Вы остановились на оплате <b>{amount} ₽</b>. Выберите способ, чтобы завершить её в один шаг.',
+                ).format(amount=amount_rub),
+            ]
 
-            buttons = []
-            if pay_url:
-                buttons.append(
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('FUNNEL_ABANDONED_TOPUP_PAY', '💳 Оплатить {amount}₽').format(
-                                amount=amount_rub
-                            ),
-                            url=pay_url,
-                        )
+            # Цена закреплена по-настоящему: действующая скидка продлевается до срока блокировки.
+            lock_until = now + timedelta(minutes=ABANDONED_TOPUP_PRICE_LOCK_MINUTES)
+            discount_expires = getattr(user, 'promo_offer_discount_expires_at', None)
+            if (
+                (getattr(user, 'promo_offer_discount_percent', 0) or 0) > 0
+                and discount_expires is not None
+                and now < discount_expires < lock_until
+            ):
+                user.promo_offer_discount_expires_at = lock_until
+                discount_expires = lock_until
+            if (getattr(user, 'promo_offer_discount_percent', 0) or 0) > 0 and discount_expires is not None:
+                minutes_left = max(1, int((discount_expires - now).total_seconds() // 60))
+                if discount_expires > now:
+                    lines += [
+                        '',
+                        texts.t(
+                            'FUNNEL_ABANDONED_TOPUP_LOCK',
+                            '🔒 Ваша скидка <b>{percent}%</b> закреплена за вами ещё <b>{minutes} мин</b>.',
+                        ).format(percent=user.promo_offer_discount_percent, minutes=minutes_left),
                     ]
-                )
-            buttons.append(
+            text = '\n'.join(lines)
+
+            # Кнопки способов на ту же сумму (topup_amount|метод|сумма) — без навигации пополнения.
+            rows = [
+                row
+                for row in get_payment_methods_keyboard(amount_kopeks, user.language).inline_keyboard
+                if row and all((button.callback_data or '').startswith('topup_amount|') for button in row)
+            ]
+            rows.append(
                 [
                     InlineKeyboardButton(
-                        text=texts.t('FUNNEL_ABANDONED_TOPUP_OTHER', '🔄 Другой способ оплаты'),
+                        text=texts.t('FUNNEL_ABANDONED_TOPUP_AMOUNT', '🔄 Другая сумма'),
                         callback_data='balance_topup',
                     )
                 ]
             )
-            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
             try:
-                sent = await self._send(user.telegram_id, text, reply_markup=keyboard, user=user)
-                if sent is not None:
-                    await _record_event(db, user.id, EVENT_ABANDONED_TOPUP)
-                    sent_count += 1
+                sent = await self._send(
+                    user.telegram_id, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), user=user
+                )
             except Exception as error:
-                logger.debug('Funnel abandoned-topup не доставлен', user_id=user.id, error=str(error))
-                await _record_event(db, user.id, EVENT_ABANDONED_TOPUP)
+                logger.debug('Брошенная оплата: сообщение не доставлено', user_id=user.id, error=str(error))
+                sent = None
+            await _record_event(db, user.id, EVENT_ABANDONED_TOPUP)  # и commit скидки
+            if sent is not None:
+                sent_count += 1
 
         if sent_count:
-            logger.info('🪝 Funnel: напоминания о брошенной оплате', count=sent_count)
+            logger.info('🪝 Брошенная оплата: отправлено напоминаний', count=sent_count)
+        return sent_count
 
     async def _nudge_trial_ending(self, db: AsyncSession) -> None:
         now = datetime.now(UTC)

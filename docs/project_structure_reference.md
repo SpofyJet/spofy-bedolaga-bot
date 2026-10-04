@@ -1474,7 +1474,7 @@
   Классы: нет
   Функции: `get_merge_preview` — Возвращает превью данных обоих аккаунтов для подтверждения мержа., `flush_remnawave_deletions` — Удаляет (или деактивирует как fallback) пользователей RemnaWave., `execute_merge` — Выполняет атомарный мерж двух аккаунтов. Caller отвечает за commit/rollback.
 - `app/services/activation_funnel_service.py` — Python-модуль
-  Классы: `ActivationFunnelService` (9 методов)
+  Классы: `ActivationFunnelService` (10 методов)
   Функции: нет
 - `app/services/admin_notification_service.py` — Python-модуль
   Классы: `NotificationCategory`, `AdminNotificationService` (51 методов)
@@ -1642,7 +1642,7 @@
   Классы: нет
   Функции: нет
 - `app/services/monitoring_service.py` — Python-модуль
-  Классы: `AutopayFailState` (2 методов), `MonitoringService` (57 методов)
+  Классы: `AutopayFailState` (2 методов), `MonitoringService` (58 методов)
   Функции: `decide_autopay_fail_notification` — Decide whether/what to send on a failed-autopay tick., `apply_autopay_fail_notification` — Mutate state to record that a notification with `reason` was just sent.
 - `app/services/mulenpay_service.py` — Python-модуль
   Классы: `MulenPayService` (10 методов)
@@ -4412,6 +4412,9 @@
 - `tests/services/dpichecker/`
 - `tests/services/panel_sync/`
 - `tests/services/reachability/`
+- `tests/services/test_abandoned_payment_nudge.py` — Python-модуль
+  Классы: нет
+  Функции: `test_sends_after_ten_minutes_with_amount_and_methods`, `test_too_fresh_payment_is_left_alone`, `test_not_repeated_within_a_day`, `test_skips_user_who_paid_afterwards`, `test_paid_payment_is_not_abandoned`, `test_discount_is_really_locked_for_twenty_minutes`, `test_no_discount_line_without_discount`
 - `tests/services/test_account_merge_service.py` — Python-модуль
   Классы: `TestComputeAuthMethods` (6 методов), `TestBuildSubscriptionPreview` (3 методов), `TestBuildUserPreview` (2 методов), `TestGetMergePreview` (4 методов), `TestExecuteMergeValidation` (6 методов), `TestExecuteMergeOAuthTransfer` (2 методов), `TestExecuteMergeTelegramTransfer` (2 методов), `TestExecuteMergeEmailTransfer` (2 методов), `TestExecuteMergeKeepsWhatThePagePromises` (11 методов), `TestExecuteMergeBalance` (3 методов), `TestExecuteMergePartnerStatus` (4 методов), `TestExecuteMergeReferralCommission` (2 методов), `TestExecuteMergeSecondaryDeleted` (3 методов), `TestExecuteMergeSubscription` (7 методов), `TestExecuteMergeSubscriptionMultiTariff` (2 методов), `TestExecuteMergeBulkUpdates` (1 методов), `TestExecuteMergeSelfReferralPrevention` (6 методов), `TestRemnawaveDeleteMode` (4 методов)
   Функции: нет
@@ -4816,7 +4819,7 @@
   Функции: `test_model_table_and_columns`, `test_create_and_fetch_round_trip` — create → get_by_platega_id / get_active_by_subscription → update → CANCELLED больше не активна.
 - `tests/services/test_platega_subscription_service.py` — Python-модуль
   Классы: нет
-  Функции: `test_create_subscription_posts_method_6`, `test_create_subscription_stays_on_v1_even_when_v2_configured` — Spofy: v2-эндпоинт для подписок отдаёт generic-инвойс вместо формы привязки СБП, `test_create_subscription_omits_description_when_not_provided`, `test_create_subscription_truncates_long_cyrillic_description`, `test_get_subscription_is_unversioned`, `test_list_subscriptions_builds_query_params`, `test_list_subscriptions_omits_none_params`, `test_cancel_subscription_posts_cancel`, `test_format_amount_integer_and_decimal`, `test_recurrent_gate`, `test_reconcile_unconfigured_platega_is_noop` — Неконфигурированный Platega (нет мерчанта/секрета) — no-op до БД., `test_reconcile_cancelled_sweep_runs_with_recurrent_flag_off` — Cancelled-свип (ретрай недошедших отмен) обязан работать и при, `test_reconcile_marks_stuck_pending_as_failed` — Safety net: a PENDING record that never got a platega_subscription_id back, `test_reconcile_recancels_remotely_active_cancelled_record` — Контрольный свип отменённых: локальный CANCELLED, но remote-статус, `test_reconcile_skips_cancelled_record_confirmed_remotely` — CANCELLED-запись, у которой remote-статус тоже cancelled, — свип не, `test_create_subscription_raises_actionable_error_on_val0001` — VAL_0001 с key=paymentMethod (формат запроса совпадает с доками) =, `test_create_subscription_transport_failure_returns_none` — Транспортный сбой (status=None) — прежний контракт: None, без исключения., `test_create_subscription_sends_payer_metadata` — СБП-подписка — тот же POST /transaction/process: metadata обязательна и здесь.
+  Функции: `test_create_subscription_posts_method_6`, `test_create_subscription_stays_on_v1_even_when_v2_configured` — Spofy: v2-эндпоинт для подписок отдаёт generic-инвойс вместо формы привязки СБП, `test_create_subscription_omits_description_when_not_provided`, `test_create_subscription_truncates_long_cyrillic_description`, `test_get_subscription_is_unversioned`, `test_list_subscriptions_builds_query_params`, `test_list_subscriptions_omits_none_params`, `test_cancel_subscription_posts_cancel`, `test_format_amount_integer_and_decimal`, `test_recurrent_gate`, `test_reconcile_unconfigured_platega_is_noop` — Неконфигурированный Platega (нет мерчанта/секрета) — no-op до БД., `test_reconcile_cancelled_sweep_runs_with_recurrent_flag_off` — Cancelled-свип (ретрай недошедших отмен) обязан работать и при, `test_reconcile_marks_stuck_pending_as_failed` — Safety net: a PENDING record that never got a platega_subscription_id back, `test_reconcile_recancels_remotely_active_cancelled_record` — Контрольный свип отменённых: локальный CANCELLED, но remote-статус, `test_reconcile_skips_cancelled_record_confirmed_remotely` — CANCELLED-запись, у которой remote-статус тоже cancelled, — свип не, `test_create_subscription_raises_actionable_error_on_val0001` — VAL_0001 с key=paymentMethod (формат запроса совпадает с доками) =, `test_create_subscription_transport_failure_returns_none` — Транспортный сбой (status=None) — прежний контракт: None, без исключения., `test_create_subscription_sends_payer_metadata` — СБП-подписка — тот же POST /transaction/process: metadata обязательна и здесь., `test_reconcile_stops_on_first_401_from_platega` — Метод Subscription не включён для мерчанта (401): проход прекращается после первой записи,
 - `tests/services/test_promo_group_auto_assign_notify_user.py` — Python-модуль
   Классы: нет
   Функции: `delivery`, `test_discounts_skip_zero_and_junk_periods_and_sort`, `test_telegram_user_gets_escaped_message_with_discounts`, `test_email_only_user_goes_through_router_without_bot`, `test_group_without_discounts_uses_neutral_text`, `test_switch_off_sends_nothing_and_failures_never_raise`, `test_locale_keys_exist_and_format`, `test_email_template_escapes_and_lists_discounts`, `test_email_type_is_editable_in_cabinet`, `test_assignment_notifies_user_once_and_recalculation_stays_silent`, `test_recalculation_passes_notify_user_false`
@@ -4993,7 +4996,7 @@
   Функции: `test_parse_positive_rubles_to_kopeks`, `test_parse_positive_rubles_to_kopeks_rejects_invalid_values`, `test_parse_positive_gb`, `test_parse_positive_gb_rejects_invalid_values`, `test_valid_custom_traffic_configuration_has_no_errors`, `test_invalid_custom_traffic_configuration_reports_specific_error`, `test_invalid_configuration_reports_all_independent_missing_fields`
 - `tests/services/test_tariff_discount_offer.py` — Python-модуль
   Классы: нет
-  Функции: `test_source_carries_the_tariff`, `test_ordinary_offer_source_is_unchanged`, `test_discount_only_for_its_tariff`, `test_ordinary_discount_is_unaffected`, `test_expired_discount_is_zero`
+  Функции: `test_source_carries_the_tariff`, `test_ordinary_offer_source_is_unchanged`, `test_discount_only_for_its_tariff`, `test_ordinary_discount_is_unaffected`, `test_expired_discount_is_zero`, `test_engine_discounts_ultima_only`, `test_engine_without_offer_has_no_discount`, `test_tariff_purchase_code_always_passes_the_tariff`
 - `tests/services/test_tariff_purchase_subscription_pinning.py` — Python-модуль
   Классы: нет
   Функции: `test_select_tariff_period_resolves_and_pins_target_subscription_id` — REGRESSION: ``select_tariff_period`` must resolve the existing, `test_confirm_tariff_purchase_reads_target_subscription_id_from_fsm` — REGRESSION: ``confirm_tariff_purchase`` must read, `test_confirm_tariff_purchase_guards_against_tariff_divergence` — If the FSM-pinned subscription's tariff_id no longer matches, `test_confirm_tariff_purchase_does_not_use_only_tariff_lookup` — Pre-fix shape: confirm_tariff_purchase ran a single
