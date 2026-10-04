@@ -1815,6 +1815,15 @@ class RemnaWaveWebhookService:
             except Exception as error:
                 logger.warning('Failed to record trial first_connected event', user_id=user.id, error=str(error))
 
+            # Друг по приглашению впервые подключился: дни ему и пригласившему (вместо общего напоминания).
+            try:
+                from app.services import trial_quest_service
+
+                if await trial_quest_service.on_first_connected(db, user, subscription, self.bot):
+                    return
+            except Exception as error:
+                logger.warning('Награда за приглашённого друга не выдана', user_id=user.id, error=str(error))
+
             if not settings.WEBHOOK_NOTIFY_USER_ENABLED:
                 logger.debug('Webhook user notifications disabled globally, skipping first_connected', user_id=user.id)
                 return
