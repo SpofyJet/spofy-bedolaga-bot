@@ -25,6 +25,11 @@ logger = structlog.get_logger(__name__)
 
 SUBPAGE_SOURCE = 'spofy_subpage'
 
+# The payment may be credited a hair differently from what was requested (provider rounding,
+# crypto rates); beyond this the purchase is NOT completed (the money stays on the balance).
+FUNDING_TOLERANCE = 0.02
+FUNDING_TOLERANCE_MIN_KOPEKS = 100
+
 
 def is_subpage_cart(cart: dict[str, Any] | None) -> bool:
     return bool(cart) and cart.get('source') == SUBPAGE_SOURCE
@@ -40,8 +45,40 @@ async def tag_current_cart_as_subpage(user_id: int) -> bool:
     return await user_cart_service.save_user_cart(user_id, cart)
 
 
-async def complete_subpage_carts_after_topup(db: AsyncSession, user: User, *, bot: Bot | None = None) -> bool:
-    """Complete only subscription-page carts. Returns True when a purchase went through."""
+async def bind_cart_to_payment(user_id: int, *, price_kopeks: int, requested_kopeks: int) -> bool:
+    """Remember what the page asked the customer to pay for this cart.
+
+    Completion later checks that the money that just arrived is THIS payment — so a purchase is
+    paid with its own payment and never with the customer's earlier balance, and an abandoned
+    page cart cannot be bought by an unrelated top-up.
+    """
+    cart = await user_cart_service.get_user_cart(user_id)
+    if not is_subpage_cart(cart):
+        return False
+    cart['spofy_price_kopeks'] = int(price_kopeks)
+    cart['spofy_requested_kopeks'] = int(requested_kopeks)
+    cart['return_to_cart'] = True
+    return await user_cart_service.save_user_cart(user_id, cart)
+
+
+def is_funded_by_payment(cart: dict[str, Any], credited_kopeks: int | None) -> bool:
+    """True only if the credited amount is this cart's own payment and covers its price."""
+    price = cart.get('spofy_price_kopeks')
+    requested = cart.get('spofy_requested_kopeks')
+    if not isinstance(price, int) or not isinstance(requested, int) or not isinstance(credited_kopeks, int):
+        return False
+    tolerance = max(FUNDING_TOLERANCE_MIN_KOPEKS, int(requested * FUNDING_TOLERANCE))
+    return credited_kopeks >= price and abs(credited_kopeks - requested) <= tolerance
+
+
+async def complete_subpage_carts_after_topup(
+    db: AsyncSession, user: User, *, bot: Bot | None = None, credited_kopeks: int | None = None
+) -> bool:
+    """Complete only subscription-page carts funded by the payment that just arrived.
+
+    Returns True when a purchase went through. At most ONE cart is bought per payment, and only
+    if the credited amount is that cart's own payment (see ``is_funded_by_payment``).
+    """
     if settings.is_auto_purchase_after_topup_enabled():
         # The standard auto-purchase already handled every cart, ours included.
         return False
@@ -65,17 +102,28 @@ async def complete_subpage_carts_after_topup(db: AsyncSession, user: User, *, bo
         logger.info('spofy subpage: cart found but no fresh top-up intent, skipping', user_id=user.id)
         return False
 
+    funded = [cart for cart in carts if is_funded_by_payment(cart, credited_kopeks)]
+    if not funded:
+        logger.info(
+            'spofy subpage: top-up is not the payment of any page cart, balance left untouched',
+            user_id=user.id,
+            credited=credited_kopeks,
+            carts=len(carts),
+        )
+        return False
+
     # Lazy import: subscription_auto_purchase_service imports payment helpers.
     from app.services.subscription_auto_purchase_service import _process_single_cart
 
     completed = False
-    for cart in carts:
+    for cart in funded:
         try:
             # Пометка для админ-уведомлений: покупка со страницы подписки.
             with subpage_purchase_context():
                 processed = await _process_single_cart(db, user, cart, bot=bot)
             if processed:
                 completed = True
+                break  # one payment buys one cart: never reach into the balance for a second
         except Exception as error:  # one cart must not block the others
             logger.error('spofy subpage: cart completion failed', user_id=user.id, error=error, exc_info=True)
 

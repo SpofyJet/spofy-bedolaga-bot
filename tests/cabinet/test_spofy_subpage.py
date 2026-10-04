@@ -404,6 +404,9 @@ async def test_unexpected_checkout_error_is_a_502_with_its_type(monkeypatch, aut
 from app.services import spofy_subpage_service as completion
 
 
+BOUND = {'source': 'spofy_subpage', 'spofy_price_kopeks': 49900, 'spofy_requested_kopeks': 49900}
+
+
 def _carts(monkeypatch, *, per_sub, global_cart, intent=True):
     svc = completion.user_cart_service
     monkeypatch.setattr(svc, 'get_all_subscription_carts', AsyncMock(return_value=per_sub))
@@ -419,35 +422,35 @@ def _carts(monkeypatch, *, per_sub, global_cart, intent=True):
 
 async def test_completion_only_processes_subpage_carts(monkeypatch):
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False, raising=False)
-    ours = {'source': 'spofy_subpage', 'cart_mode': 'extend', 'subscription_id': 1}
+    ours = {**BOUND, 'cart_mode': 'extend', 'subscription_id': 1}
     cabinet = {'source': 'cabinet', 'cart_mode': 'extend', 'subscription_id': 2}
     process = _carts(monkeypatch, per_sub=[ours, cabinet], global_cart=cabinet)
 
-    assert await completion.complete_subpage_carts_after_topup(None, _user()) is True
+    assert await completion.complete_subpage_carts_after_topup(None, _user(), credited_kopeks=49900) is True
     assert [c.args[2] for c in process.await_args_list] == [ours]
     completion.user_cart_service.clear_topup_intent.assert_awaited_once_with(5)
 
 
 async def test_completion_skips_when_global_switch_on(monkeypatch):
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True, raising=False)
-    process = _carts(monkeypatch, per_sub=[{'source': 'spofy_subpage', 'cart_mode': 'extend'}], global_cart=None)
-    assert await completion.complete_subpage_carts_after_topup(None, _user()) is False
+    process = _carts(monkeypatch, per_sub=[{**BOUND, 'cart_mode': 'extend'}], global_cart=None)
+    assert await completion.complete_subpage_carts_after_topup(None, _user(), credited_kopeks=49900) is False
     process.assert_not_awaited()  # the standard auto-purchase already ran
 
 
 async def test_completion_needs_fresh_intent(monkeypatch):
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False, raising=False)
     process = _carts(
-        monkeypatch, per_sub=[], global_cart={'source': 'spofy_subpage', 'cart_mode': 'add_traffic'}, intent=False
+        monkeypatch, per_sub=[], global_cart={**BOUND, 'cart_mode': 'add_traffic'}, intent=False
     )
-    assert await completion.complete_subpage_carts_after_topup(None, _user()) is False
+    assert await completion.complete_subpage_carts_after_topup(None, _user(), credited_kopeks=49900) is False
     process.assert_not_awaited()
 
 
 async def test_completion_ignores_plain_topups(monkeypatch):
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False, raising=False)
     process = _carts(monkeypatch, per_sub=[], global_cart={'source': 'cabinet', 'cart_mode': 'extend'})
-    assert await completion.complete_subpage_carts_after_topup(None, _user()) is False
+    assert await completion.complete_subpage_carts_after_topup(None, _user(), credited_kopeks=49900) is False
     process.assert_not_awaited()
 
 
@@ -459,3 +462,67 @@ async def test_tagging_rewrites_source_and_intent(monkeypatch):
     assert await completion.tag_current_cart_as_subpage(5) is True
     saved = save.await_args.args[1]
     assert saved['source'] == 'spofy_subpage' and saved['return_to_cart'] is True
+
+
+# ───────────── the purchase is paid by its own payment, never from the balance ─────────────
+
+
+async def _complete(monkeypatch, carts, credited):
+    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False, raising=False)
+    process = _carts(monkeypatch, per_sub=carts, global_cart=None)
+    result = await completion.complete_subpage_carts_after_topup(None, _user(), credited_kopeks=credited)
+    return result, process
+
+
+async def test_unbound_cart_is_never_completed(monkeypatch):
+    result, process = await _complete(monkeypatch, [{'source': 'spofy_subpage', 'cart_mode': 'extend'}], 49900)
+    assert result is False
+    process.assert_not_awaited()
+
+
+async def test_unrelated_topup_does_not_buy_an_abandoned_cart(monkeypatch):
+    # the customer abandoned a 499 ₽ renewal and tops up 1 000 ₽ in the bot
+    result, process = await _complete(monkeypatch, [{**BOUND, 'cart_mode': 'extend'}], 100_000)
+    assert result is False
+    process.assert_not_awaited()
+
+
+async def test_payment_smaller_than_price_never_reaches_into_balance(monkeypatch):
+    result, process = await _complete(monkeypatch, [{**BOUND, 'cart_mode': 'extend'}], 40_000)
+    assert result is False
+    process.assert_not_awaited()
+
+
+async def test_small_provider_rounding_is_tolerated(monkeypatch):
+    result, process = await _complete(monkeypatch, [{**BOUND, 'cart_mode': 'extend'}], 49900 + 150)
+    assert result is True
+    process.assert_awaited_once()
+
+
+async def test_two_identical_carts_one_payment_buys_only_one(monkeypatch):
+    a = {**BOUND, 'cart_mode': 'extend', 'subscription_id': 1}
+    b = {**BOUND, 'cart_mode': 'extend', 'subscription_id': 2}
+    result, process = await _complete(monkeypatch, [a, b], 49900)
+    assert result is True
+    assert process.await_count == 1
+
+
+async def test_checkout_binds_the_cart_to_its_payment(monkeypatch, auto_on, owner, topup):
+    monkeypatch.setattr(bridge, 'save_renewal_cart', AsyncMock(return_value=5000))
+    bind = AsyncMock(return_value=True)
+    monkeypatch.setattr(bridge, 'bind_cart_to_payment', bind)
+    body = bridge.CheckoutRequest(kind='renew', period_days=30, payment_method='yookassa')
+    await bridge.checkout('abcdefgh', body, db=None)
+    kwargs = bind.await_args.kwargs
+    assert kwargs['price_kopeks'] == 5000
+    assert kwargs['requested_kopeks'] == topup.await_args.kwargs['request'].amount_kopeks
+
+
+async def test_binding_marks_price_and_requested_amount(monkeypatch):
+    svc = completion.user_cart_service
+    monkeypatch.setattr(svc, 'get_user_cart', AsyncMock(return_value={'source': 'spofy_subpage'}))
+    save = AsyncMock(return_value=True)
+    monkeypatch.setattr(svc, 'save_user_cart', save)
+    assert await completion.bind_cart_to_payment(5, price_kopeks=4900, requested_kopeks=10000) is True
+    saved = save.await_args.args[1]
+    assert saved['spofy_price_kopeks'] == 4900 and saved['spofy_requested_kopeks'] == 10000

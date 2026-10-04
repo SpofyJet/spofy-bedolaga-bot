@@ -71,13 +71,20 @@ async def test_cart_completion_runs_inside_the_context(monkeypatch):
 
     monkeypatch.setattr('app.services.subscription_auto_purchase_service._process_single_cart', fake_process)
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
-    cart = {'source': completion.SUBPAGE_SOURCE, 'subscription_id': 1}
+    cart = {
+        'source': completion.SUBPAGE_SOURCE,
+        'subscription_id': 1,
+        'spofy_price_kopeks': 49900,
+        'spofy_requested_kopeks': 49900,
+    }
     monkeypatch.setattr(completion.user_cart_service, 'get_all_subscription_carts', AsyncMock(return_value=[cart]))
     monkeypatch.setattr(completion.user_cart_service, 'get_user_cart', AsyncMock(return_value=None))
     monkeypatch.setattr(completion.user_cart_service, 'has_topup_intent', AsyncMock(return_value=True))
     monkeypatch.setattr(completion.user_cart_service, 'clear_topup_intent', AsyncMock())
 
-    assert await completion.complete_subpage_carts_after_topup(MagicMock(), SimpleNamespace(id=5))
+    assert await completion.complete_subpage_carts_after_topup(
+        MagicMock(), SimpleNamespace(id=5), credited_kopeks=49900
+    )
     assert seen == [True]
     assert not ctx.is_subpage_purchase_context()
 

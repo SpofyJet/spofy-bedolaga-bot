@@ -44,7 +44,7 @@ from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
 from app.database.crud.user import get_user_by_id
 from app.database.models import Subscription, SubscriptionStatus, User, UserStatus
 from app.services.pricing_engine import pricing_engine
-from app.services.spofy_subpage_service import SUBPAGE_SOURCE, tag_current_cart_as_subpage
+from app.services.spofy_subpage_service import SUBPAGE_SOURCE, bind_cart_to_payment, tag_current_cart_as_subpage
 from app.services.user_cart_service import user_cart_service
 
 from ..dependencies import get_cabinet_db
@@ -472,6 +472,9 @@ async def _checkout(short_uuid: str, body: CheckoutRequest, db: AsyncSession) ->
     amount = max(price, method.min_amount_kopeks, MIN_TOPUP_KOPEKS)
     if amount > method.max_amount_kopeks:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Amount exceeds the payment method limit')
+
+    # The cart is bought only by THIS payment, never from the customer's balance.
+    await bind_cart_to_payment(user.id, price_kopeks=price, requested_kopeks=amount)
 
     topup = await create_topup(
         request=TopUpRequest(amount_kopeks=amount, payment_method=method.id, payment_option=body.payment_option),

@@ -441,7 +441,7 @@ async def send_cart_notification_after_topup(
                 # Spofy: purchases started on sub.spofyltd.ru complete even with the global switch off.
                 from app.services.spofy_subpage_service import complete_subpage_carts_after_topup
 
-                await complete_subpage_carts_after_topup(db, user, bot=bot)
+                await complete_subpage_carts_after_topup(db, user, bot=bot, credited_kopeks=amount_kopeks)
         except Exception as auto_error:
             logger.error(
                 'Ошибка автоматической покупки подписки для пользователя',
