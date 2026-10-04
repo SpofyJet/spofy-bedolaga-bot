@@ -3809,11 +3809,18 @@ class MonitoringService:
                 if self.bot:
                     funnel = ActivationFunnelService(bot=self.bot, send_func=self._send_message_with_logo)
                     async with AsyncSessionLocal() as db:
-                        try:
-                            await funnel.process_abandoned_payments(db)
-                        except Exception as e:
-                            logger.warning('Сбой напоминаний о брошенной оплате', error=str(e))
-                            await db.rollback()
+                        for step in (
+                            funnel.process_abandoned_payments,
+                            funnel.process_abandoned_carts,
+                            funnel.process_referral_prompt,
+                        ):
+                            try:
+                                await step(db)
+                            except Exception as e:
+                                logger.warning(
+                                    'Сбой напоминания (брошенная оплата, корзина, приглашение)', error=str(e)
+                                )
+                                await db.rollback()
             except asyncio.CancelledError:
                 break
             except Exception as e:

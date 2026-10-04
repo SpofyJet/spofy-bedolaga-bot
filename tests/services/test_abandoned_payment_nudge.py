@@ -203,3 +203,128 @@ async def test_cryptobot_invoice_is_covered(monkeypatch):
 
         assert await service.process_abandoned_payments(db) == 1
     assert '3150 ₽' in sent.await_args.args[1]
+
+
+# ───────────── брошенная покупка подписки (корзина) ─────────────
+
+
+def _cart_service(monkeypatch, carts, extended=None):
+    from app.services import user_cart_service as cart_module
+
+    async def listing():
+        return carts
+
+    async def extend(user_id, seconds):
+        if extended is not None:
+            extended.append((user_id, seconds))
+        return True
+
+    monkeypatch.setattr(cart_module.user_cart_service, 'list_global_carts', listing)
+    monkeypatch.setattr(cart_module.user_cart_service, 'extend_cart_ttl', extend)
+
+
+def _cart(**kw):
+    base = {
+        'cart_mode': 'tariff_purchase',
+        'tariff_id': 4,
+        'total_price': 500000,
+        'description': 'Покупка тарифа ULTIMA на 2222 дней',
+    }
+    return {**base, **kw}
+
+
+async def test_abandoned_cart_gets_one_message_and_is_extended(monkeypatch):
+    async with _session(monkeypatch) as db:
+        db.add(_user(balance_kopeks=100000))
+        await db.commit()
+        extended = []
+        _cart_service(monkeypatch, [(1, _cart(), 1000)], extended)  # корзине 16 минут
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_carts(db) == 1
+        assert await service.process_abandoned_carts(db) == 0  # второй раз не пишем
+    text = sent.await_args.args[1]
+    assert 'остановились на покупке' in text and '5000 ₽' in text and 'ULTIMA' in text
+    assert extended == [(1, 20 * 60)]  # корзину реально продлили на 20 минут
+    callbacks = [b.callback_data for row in sent.await_args.kwargs['reply_markup'].inline_keyboard for b in row]
+    assert callbacks[-1] == 'return_to_saved_cart'
+    assert callbacks[0].startswith('topup_amount|')  # недостающее можно оплатить сразу
+
+
+async def test_fresh_cart_is_left_alone(monkeypatch):
+    async with _session(monkeypatch) as db:
+        db.add(_user())
+        await db.commit()
+        _cart_service(monkeypatch, [(1, _cart(), 300)])  # 5 минут
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_carts(db) == 0
+    sent.assert_not_awaited()
+
+
+async def test_cart_without_missing_balance_has_only_resume_button(monkeypatch):
+    async with _session(monkeypatch) as db:
+        db.add(_user(balance_kopeks=900000))  # денег хватает
+        await db.commit()
+        _cart_service(monkeypatch, [(1, _cart(), 1000)])
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_carts(db) == 1
+    rows = sent.await_args.kwargs['reply_markup'].inline_keyboard
+    assert [b.callback_data for row in rows for b in row] == ['return_to_saved_cart']
+
+
+async def test_spofy_subpage_cart_is_not_nudged(monkeypatch):
+    async with _session(monkeypatch) as db:
+        db.add(_user())
+        await db.commit()
+        _cart_service(monkeypatch, [(1, _cart(source='spofy_subpage'), 1000)])
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_carts(db) == 0
+    sent.assert_not_awaited()
+
+
+# ───────────── приглашение друга после оплаты ─────────────
+
+
+async def test_referral_prompt_after_purchase_once(monkeypatch):
+    async with _session(monkeypatch) as db:
+        db.add(_user())
+        db.add(
+            Transaction(
+                user_id=1,
+                type=TransactionType.SUBSCRIPTION_PAYMENT.value,
+                amount_kopeks=-31500,
+                description='Покупка',
+                is_completed=True,
+                created_at=NOW - timedelta(minutes=5),
+            )
+        )
+        await db.commit()
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_referral_prompt(db) == 1
+        assert await service.process_referral_prompt(db) == 0  # раз в 30 дней
+    text = sent.await_args.args[1]
+    assert '+2 дн.' in text and 'Без ограничений' in text
+
+
+async def test_referral_prompt_waits_three_minutes(monkeypatch):
+    async with _session(monkeypatch) as db:
+        db.add(_user())
+        db.add(
+            Transaction(
+                user_id=1,
+                type=TransactionType.SUBSCRIPTION_PAYMENT.value,
+                amount_kopeks=-31500,
+                description='Покупка',
+                is_completed=True,
+                created_at=NOW - timedelta(minutes=1),
+            )
+        )
+        await db.commit()
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_referral_prompt(db) == 0
+    sent.assert_not_awaited()

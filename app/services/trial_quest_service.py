@@ -3,7 +3,7 @@
 Когда новый человек, пришедший по приглашению, впервые подключается:
 
 * ему +2 дня к пробному периоду;
-* пригласившему +2 дня к действующей подписке (не больше 4 друзей, то есть +8 дней).
+* пригласившему +2 дня к действующей подписке (пробной или платной), за каждого друга, без потолка.
 
 Награда выдаётся только по событию «первое подключение» из панели, поэтому честная: дни получают за
 настоящего пользователя, а не за регистрацию. Каждый шаг один раз на человека.
@@ -32,7 +32,6 @@ EVENT_INVITED_BONUS = 'quest_invited_bonus'  # у друга: получил д�
 EVENT_FRIEND_REWARD = 'quest_friend_reward'  # у пригласившего: получил дни за друга
 
 DAYS_FRIEND = 2  # и другу, и пригласившему
-FRIEND_MAX_FRIENDS = 4  # потолок наград пригласившему: не больше +8 дней
 NEW_USER_WINDOW_DAYS = 7  # «друг» — новый человек, иначе реферал-ферма из старых аккаунтов
 
 
@@ -101,8 +100,6 @@ async def _eligible_inviter(db: AsyncSession, friend: User, now: datetime) -> Us
     inviter = await db.get(User, inviter_id)
     if inviter is None or inviter.status != 'active':
         return None
-    if await _count_events(db, inviter.id, EVENT_FRIEND_REWARD) >= FRIEND_MAX_FRIENDS:
-        return None
     return inviter
 
 
@@ -166,8 +163,8 @@ async def on_first_connected(db: AsyncSession, user: User, subscription: Subscri
                 '',
                 inviter_texts.t(
                     'QUEST_FRIEND_MORE',
-                    'За каждого нового друга, который подключится, ещё +{days} дн. (до {max_friends} друзей).',
-                ).format(days=DAYS_FRIEND, max_friends=FRIEND_MAX_FRIENDS),
+                    'За каждого нового друга, который подключится, ещё +{days} дн. Без ограничений.',
+                ).format(days=DAYS_FRIEND),
             ]
         )
         await _send(

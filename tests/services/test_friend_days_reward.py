@@ -114,17 +114,31 @@ async def test_old_account_is_not_a_friend(monkeypatch):
     add_days.assert_not_awaited()
 
 
-async def test_inviter_cap_is_four_friends(monkeypatch):
+async def test_no_cap_on_number_of_friends(monkeypatch):
     async with _session(monkeypatch) as db:
-        friend_sub = _sub(9)
-        db.add_all([_user(1, age_days=100), _user(9, referred_by=1), _sub(1), friend_sub])
-        for _ in range(quest.FRIEND_MAX_FRIENDS):
-            db.add(SubscriptionEvent(user_id=1, event_type=quest.EVENT_FRIEND_REWARD, message='x', occurred_at=NOW))
+        db.add_all([_user(1, age_days=100), _sub(1)])
+        for n in range(2, 12):  # десять друзей подряд, и каждый получает награду
+            db.add_all([_user(n, referred_by=1), _sub(n)])
         await db.commit()
         add_days, bot = _setup(monkeypatch)
 
-        assert await quest.on_first_connected(db, await db.get(User, 9), friend_sub, bot) is False
-    add_days.assert_not_awaited()
+        for n in range(2, 12):
+            friend_sub = (await db.execute(Subscription.__table__.select().where(Subscription.user_id == n))).first()
+            sub = await db.get(Subscription, friend_sub.id)
+            assert await quest.on_first_connected(db, await db.get(User, n), sub, bot) is True
+    assert add_days.await_count == 20  # десять друзей и десять наград пригласившему, без потолка
+
+
+async def test_inviter_on_trial_is_rewarded_too(monkeypatch):
+    async with _session(monkeypatch) as db:
+        friend_sub = _sub(2)
+        db.add_all([_user(1, age_days=100), _user(2, referred_by=1), _sub(1, is_trial=True), friend_sub])
+        await db.commit()
+        add_days, bot = _setup(monkeypatch)
+
+        assert await quest.on_first_connected(db, await db.get(User, 2), friend_sub, bot) is True
+    assert add_days.await_count == 2
+    assert {call.kwargs['chat_id'] for call in bot.send_message.await_args_list} == {1001, 1002}
 
 
 async def test_inviter_without_active_subscription_gets_nothing_but_friend_does(monkeypatch):

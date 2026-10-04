@@ -426,6 +426,59 @@ class UserCartService:
 
         return results
 
+    async def list_global_carts(self) -> list[tuple[int, dict[str, Any], int]]:
+        """Все глобальные корзины: ``(user_id, данные, секунд жизни корзины до сих пор)``.
+
+        Возраст считается по оставшемуся TTL: корзина живёт ``CART_TTL_SECONDS`` с момента сохранения.
+        Ключи по подпискам (``user_cart:{id}:sub:{id}``) не берём: они дублируют глобальную.
+        """
+        client = self._get_redis_client()
+        if client is None:
+            return []
+        carts: list[tuple[int, dict[str, Any], int]] = []
+        try:
+            cursor: int | bytes = 0
+            while True:
+                cursor, keys = await client.scan(cursor=cursor, match='user_cart:*', count=200)
+                for raw_key in keys:
+                    key = raw_key.decode() if isinstance(raw_key, bytes) else raw_key
+                    parts = key.split(':')
+                    if len(parts) != 2 or not parts[1].isdigit():
+                        continue
+                    raw_data = await client.get(key)
+                    ttl = await client.ttl(key)
+                    if not raw_data or ttl is None or ttl <= 0:
+                        continue
+                    try:
+                        data = json.loads(raw_data)
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    carts.append((int(parts[1]), data, max(0, settings.CART_TTL_SECONDS - int(ttl))))
+                if not cursor or cursor == 0 or cursor == b'0':
+                    break
+        except Exception as e:
+            logger.error('Ошибка сканирования корзин', error=e)
+        return carts
+
+    async def extend_cart_ttl(self, user_id: int, seconds: int) -> bool:
+        """Продлить жизнь корзины минимум до ``seconds`` секунд (короче не делаем)."""
+        client = self._get_redis_client()
+        if client is None:
+            return False
+        try:
+            keys = [f'user_cart:{user_id}']
+            keys += [
+                k.decode() if isinstance(k, bytes) else k async for k in client.scan_iter(f'user_cart:{user_id}:sub:*')
+            ]
+            for key in keys:
+                ttl = await client.ttl(key)
+                if ttl is not None and 0 < ttl < seconds:
+                    await client.expire(key, seconds)
+            return True
+        except Exception as e:
+            logger.warning('Не удалось продлить корзину', user_id=user_id, error=e)
+            return False
+
 
 # Глобальный экземпляр сервиса (инициализация Redis отложена)
 user_cart_service = UserCartService()

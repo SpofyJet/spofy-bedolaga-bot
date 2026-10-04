@@ -91,6 +91,18 @@ ABANDONED_TOPUP_WINDOW_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_W
 ABANDONED_TOPUP_RESEND_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_RESEND_HOURS', 24))
 # Если у человека действует скидка предложения и кончается раньше, продлеваем её до этого срока.
 ABANDONED_TOPUP_PRICE_LOCK_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_PRICE_LOCK_MINUTES', 20))
+
+# Брошенная покупка подписки: корзина в Redis живёт час; напоминаем через 15 минут и держим ещё 20.
+EVENT_ABANDONED_CART = 'funnel_abandoned_cart'
+ABANDONED_CART_MIN_AGE_SECONDS = int(getattr(settings, 'FUNNEL_ABANDONED_CART_MIN_AGE_MINUTES', 15)) * 60
+ABANDONED_CART_LOCK_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_CART_LOCK_MINUTES', 20))
+ABANDONED_CART_RESEND_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_CART_RESEND_HOURS', 24))
+
+# После покупки приглашаем позвать друга (дни за каждого подключившегося).
+EVENT_REFERRAL_PROMPT = 'funnel_referral_prompt'
+REFERRAL_PROMPT_MIN_AGE_MINUTES = 3
+REFERRAL_PROMPT_WINDOW_MINUTES = 20
+REFERRAL_PROMPT_RESEND_DAYS = int(getattr(settings, 'FUNNEL_REFERRAL_PROMPT_RESEND_DAYS', 30))
 NUDGE_GLOBAL_COOLDOWN_HOURS = int(getattr(settings, 'FUNNEL_GLOBAL_COOLDOWN_HOURS', 20))
 
 
@@ -119,6 +131,30 @@ async def _record_event(db: AsyncSession, user_id: int, event_type: str, subscri
         )
     )
     await db.commit()
+
+
+def _lock_discount_line(texts, user: User, now: datetime, lock_minutes: int) -> str:
+    """Закрепление цены по-настоящему: действующая скидка предложения продлевается до ``lock_minutes``.
+
+    Возвращает строку для сообщения или пустую, если скидки нет. Коммит делает вызывающий.
+    """
+    percent = getattr(user, 'promo_offer_discount_percent', 0) or 0
+    expires = getattr(user, 'promo_offer_discount_expires_at', None)
+    if percent <= 0 or expires is None:
+        return ''
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    lock_until = now + timedelta(minutes=lock_minutes)
+    if now < expires < lock_until:
+        user.promo_offer_discount_expires_at = lock_until
+        expires = lock_until
+    if expires <= now:
+        return ''
+    minutes_left = max(1, int((expires - now).total_seconds() // 60))
+    return texts.t(
+        'FUNNEL_ABANDONED_TOPUP_LOCK',
+        '🔒 Ваша скидка <b>{percent}%</b> закреплена за вами ещё <b>{minutes} мин</b>.',
+    ).format(percent=percent, minutes=minutes_left)
 
 
 def _cryptobot_payload_kopeks(payload: str | None) -> int:
@@ -590,26 +626,9 @@ class ActivationFunnelService:
                 ).format(amount=amount_rub),
             ]
 
-            # Цена закреплена по-настоящему: действующая скидка продлевается до срока блокировки.
-            lock_until = now + timedelta(minutes=ABANDONED_TOPUP_PRICE_LOCK_MINUTES)
-            discount_expires = getattr(user, 'promo_offer_discount_expires_at', None)
-            if (
-                (getattr(user, 'promo_offer_discount_percent', 0) or 0) > 0
-                and discount_expires is not None
-                and now < discount_expires < lock_until
-            ):
-                user.promo_offer_discount_expires_at = lock_until
-                discount_expires = lock_until
-            if (getattr(user, 'promo_offer_discount_percent', 0) or 0) > 0 and discount_expires is not None:
-                minutes_left = max(1, int((discount_expires - now).total_seconds() // 60))
-                if discount_expires > now:
-                    lines += [
-                        '',
-                        texts.t(
-                            'FUNNEL_ABANDONED_TOPUP_LOCK',
-                            '🔒 Ваша скидка <b>{percent}%</b> закреплена за вами ещё <b>{minutes} мин</b>.',
-                        ).format(percent=user.promo_offer_discount_percent, minutes=minutes_left),
-                    ]
+            lock_line = _lock_discount_line(texts, user, now, ABANDONED_TOPUP_PRICE_LOCK_MINUTES)
+            if lock_line:
+                lines += ['', lock_line]
             text = '\n'.join(lines)
 
             # Кнопки способов на ту же сумму (topup_amount|метод|сумма) — без навигации пополнения.
@@ -640,6 +659,171 @@ class ActivationFunnelService:
 
         if sent_count:
             logger.info('🪝 Брошенная оплата: отправлено напоминаний', count=sent_count)
+        return sent_count
+
+    async def process_abandoned_carts(self, db: AsyncSession) -> int:
+        """Брошенная покупка подписки: корзина простояла 15 минут, человек не оплатил и не вернулся.
+
+        Корзину продлеваем на 20 минут по-настоящему и даём кнопки: оплатить недостающее и вернуться.
+        """
+        if not _funnel_enabled() or not self._send:
+            return 0
+        from app.keyboards.inline import get_payment_methods_keyboard
+        from app.services.user_cart_service import user_cart_service
+
+        now = datetime.now(UTC)
+        sent_count = 0
+        for user_id, cart, age_seconds in await user_cart_service.list_global_carts():
+            if age_seconds < ABANDONED_CART_MIN_AGE_SECONDS:
+                continue
+            if cart.get('source') == 'spofy_subpage' or cart.get('cart_mode') not in ('tariff_purchase', 'extend'):
+                continue
+            if not cart.get('tariff_id'):
+                continue
+            try:
+                price_kopeks = int(cart.get('total_price') or 0)
+            except (TypeError, ValueError):
+                continue
+            if price_kopeks <= 0:
+                continue
+            user = await db.get(User, user_id)
+            if (
+                user is None
+                or not user.telegram_id
+                or user.status != UserStatus.ACTIVE.value
+                or getattr(user, 'restriction_topup', False)
+            ):
+                continue
+            recent = await db.execute(
+                select(
+                    exists().where(
+                        SubscriptionEvent.user_id == user.id,
+                        or_(
+                            and_(
+                                SubscriptionEvent.event_type == EVENT_ABANDONED_CART,
+                                SubscriptionEvent.created_at > now - timedelta(hours=ABANDONED_CART_RESEND_HOURS),
+                            ),
+                            # уже напомнили о неоплаченном платеже: второе письмо подряд не нужно
+                            and_(
+                                SubscriptionEvent.event_type == EVENT_ABANDONED_TOPUP,
+                                SubscriptionEvent.created_at > now - timedelta(hours=1),
+                            ),
+                        ),
+                    )
+                )
+            )
+            if recent.scalar():
+                continue
+
+            texts = get_texts(user.language)
+            missing = max(0, price_kopeks - int(user.balance_kopeks or 0))
+            await user_cart_service.extend_cart_ttl(user.id, ABANDONED_CART_LOCK_MINUTES * 60)
+            lines = [
+                texts.t('FUNNEL_ABANDONED_CART_TITLE', '🛒 <b>Вы остановились на покупке</b>'),
+                '',
+                str(cart.get('description') or ''),
+                texts.t(
+                    'FUNNEL_ABANDONED_CART_BODY',
+                    'К оплате: <b>{price} ₽</b>. Корзина сохранена ещё <b>{minutes} мин</b>: продолжите в один шаг.',
+                ).format(price=price_kopeks // 100, minutes=ABANDONED_CART_LOCK_MINUTES),
+            ]
+            lock_line = _lock_discount_line(texts, user, now, ABANDONED_CART_LOCK_MINUTES)
+            if lock_line:
+                lines += ['', lock_line]
+            text = '\n'.join(line for line in lines if line is not None)
+
+            rows = []
+            if missing > 0:
+                rows = [
+                    row
+                    for row in get_payment_methods_keyboard(missing, user.language).inline_keyboard
+                    if row and all((button.callback_data or '').startswith('topup_amount|') for button in row)
+                ]
+            rows.append(
+                [InlineKeyboardButton(text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT, callback_data='return_to_saved_cart')]
+            )
+            try:
+                sent = await self._send(
+                    user.telegram_id, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), user=user
+                )
+            except Exception as error:
+                logger.debug('Брошенная корзина: сообщение не доставлено', user_id=user.id, error=str(error))
+                sent = None
+            await _record_event(db, user.id, EVENT_ABANDONED_CART)
+            if sent is not None:
+                sent_count += 1
+        if sent_count:
+            logger.info('🪝 Брошенная корзина: отправлено напоминаний', count=sent_count)
+        return sent_count
+
+    async def process_referral_prompt(self, db: AsyncSession) -> int:
+        """Через 3 минуты после оплаты подписки: «Позовите друга — +2 дня». Раз в 30 дней на человека."""
+        if not _funnel_enabled() or not self._send or not getattr(settings, 'REFERRAL_PROGRAM_ENABLED', True):
+            return 0
+        from app.database.models import Transaction, TransactionType
+        from app.services.trial_quest_service import DAYS_FRIEND
+
+        now = datetime.now(UTC)
+        rows = await db.execute(
+            select(Transaction.user_id)
+            .where(
+                Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                Transaction.amount_kopeks < 0,
+                Transaction.created_at >= now - timedelta(minutes=REFERRAL_PROMPT_WINDOW_MINUTES),
+                Transaction.created_at <= now - timedelta(minutes=REFERRAL_PROMPT_MIN_AGE_MINUTES),
+            )
+            .distinct()
+            .limit(BATCH_LIMIT)
+        )
+        sent_count = 0
+        for (user_id,) in rows.all():
+            user = await db.get(User, user_id)
+            if user is None or not user.telegram_id or user.status != UserStatus.ACTIVE.value:
+                continue
+            recent = await db.execute(
+                select(
+                    exists().where(
+                        SubscriptionEvent.user_id == user.id,
+                        SubscriptionEvent.event_type == EVENT_REFERRAL_PROMPT,
+                        SubscriptionEvent.created_at > now - timedelta(days=REFERRAL_PROMPT_RESEND_DAYS),
+                    )
+                )
+            )
+            if recent.scalar():
+                continue
+            texts = get_texts(user.language)
+            text = '\n'.join(
+                [
+                    texts.t('FUNNEL_REFERRAL_PROMPT_TITLE', '👥 <b>Позовите друга — получите +{days} дн.</b>').format(
+                        days=DAYS_FRIEND
+                    ),
+                    '',
+                    texts.t(
+                        'FUNNEL_REFERRAL_PROMPT_BODY',
+                        'За каждого друга, который подключит VPN по вашей ссылке, вам и другу по <b>+{days} дн.</b> '
+                        'Без ограничений: чем больше друзей, тем дольше доступ.',
+                    ).format(days=DAYS_FRIEND),
+                ]
+            )
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('QUEST_BUTTON_INVITE', '👥 Позвать друга'), callback_data='menu_referrals'
+                        )
+                    ]
+                ]
+            )
+            try:
+                sent = await self._send(user.telegram_id, text, reply_markup=keyboard, user=user)
+            except Exception as error:
+                logger.debug('Приглашение друга: сообщение не доставлено', user_id=user.id, error=str(error))
+                sent = None
+            await _record_event(db, user.id, EVENT_REFERRAL_PROMPT)
+            if sent is not None:
+                sent_count += 1
+        if sent_count:
+            logger.info('🪝 Приглашение друга после оплаты: отправлено', count=sent_count)
         return sent_count
 
     async def _nudge_trial_ending(self, db: AsyncSession) -> None:

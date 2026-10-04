@@ -1474,7 +1474,7 @@
   Классы: нет
   Функции: `get_merge_preview` — Возвращает превью данных обоих аккаунтов для подтверждения мержа., `flush_remnawave_deletions` — Удаляет (или деактивирует как fallback) пользователей RemnaWave., `execute_merge` — Выполняет атомарный мерж двух аккаунтов. Caller отвечает за commit/rollback.
 - `app/services/activation_funnel_service.py` — Python-модуль
-  Классы: `ActivationFunnelService` (10 методов)
+  Классы: `ActivationFunnelService` (12 методов)
   Функции: нет
 - `app/services/admin_notification_service.py` — Python-модуль
   Классы: `NotificationCategory`, `AdminNotificationService` (51 методов)
@@ -1906,7 +1906,7 @@
   Классы: нет
   Функции: `pick_avatar_file_id` — Самый маленький размер, который ещё не мылится в шапке; иначе самый крупный., `get_avatar_file_id` — file_id текущего фото профиля или None. Никогда не бросает: аватар — не повод ронять кабинет.
 - `app/services/user_cart_service.py` — Python-модуль
-  Классы: `UserCartService` (15 методов)
+  Классы: `UserCartService` (17 методов)
   Функции: нет
 - `app/services/user_reminders/`
 - `app/services/user_revival_service.py` — Python-модуль
@@ -2340,7 +2340,7 @@
   Функции: `normalize_panel_tag` — Привести тег к виду панели; пустое значение — «тега нет».
 - `app/utils/payment_fallback.py` — Python-модуль
   Классы: нет
-  Функции: `fallback_methods_keyboard` — Кнопки способов на ту же сумму без упавшего провайдера; ``None``, если других способов нет., `fallback_text`
+  Функции: `fallback_methods_keyboard` — Кнопки способов на ту же сумму без упавшего провайдера; ``None``, если других способов нет., `fallback_text`, `answer_creation_failed` — Ответ на сбой создания платежа: другие способы на ту же сумму или прежний текст ошибки.
 - `app/utils/payment_logger.py` — Python-модуль
   Классы: нет
   Функции: `configure_payment_logger` — Configure the payment logger with the given handler., `get_payment_logger` — Return the payment logger instance.
@@ -4420,7 +4420,7 @@
 - `tests/services/reachability/`
 - `tests/services/test_abandoned_payment_nudge.py` — Python-модуль
   Классы: нет
-  Функции: `test_sends_after_ten_minutes_with_amount_and_methods`, `test_too_fresh_payment_is_left_alone`, `test_not_repeated_within_a_day`, `test_skips_user_who_paid_afterwards`, `test_paid_payment_is_not_abandoned`, `test_discount_is_really_locked_for_twenty_minutes`, `test_no_discount_line_without_discount`, `test_cryptobot_invoice_is_covered`
+  Функции: `test_sends_after_ten_minutes_with_amount_and_methods`, `test_too_fresh_payment_is_left_alone`, `test_not_repeated_within_a_day`, `test_skips_user_who_paid_afterwards`, `test_paid_payment_is_not_abandoned`, `test_discount_is_really_locked_for_twenty_minutes`, `test_no_discount_line_without_discount`, `test_cryptobot_invoice_is_covered`, `test_abandoned_cart_gets_one_message_and_is_extended`, `test_fresh_cart_is_left_alone`, `test_cart_without_missing_balance_has_only_resume_button`, `test_spofy_subpage_cart_is_not_nudged`, `test_referral_prompt_after_purchase_once`, `test_referral_prompt_waits_three_minutes`
 - `tests/services/test_account_merge_service.py` — Python-модуль
   Классы: `TestComputeAuthMethods` (6 методов), `TestBuildSubscriptionPreview` (3 методов), `TestBuildUserPreview` (2 методов), `TestGetMergePreview` (4 методов), `TestExecuteMergeValidation` (6 методов), `TestExecuteMergeOAuthTransfer` (2 методов), `TestExecuteMergeTelegramTransfer` (2 методов), `TestExecuteMergeEmailTransfer` (2 методов), `TestExecuteMergeKeepsWhatThePagePromises` (11 методов), `TestExecuteMergeBalance` (3 методов), `TestExecuteMergePartnerStatus` (4 методов), `TestExecuteMergeReferralCommission` (2 методов), `TestExecuteMergeSecondaryDeleted` (3 методов), `TestExecuteMergeSubscription` (7 методов), `TestExecuteMergeSubscriptionMultiTariff` (2 методов), `TestExecuteMergeBulkUpdates` (1 методов), `TestExecuteMergeSelfReferralPrevention` (6 методов), `TestRemnawaveDeleteMode` (4 методов)
   Функции: нет
@@ -4576,7 +4576,7 @@
   Функции: `test_default_format_is_locale_independent` — The fallback shape must be ``DD.MM.YYYY, HH:MM`` — no month, `test_explicit_fmt_arg_overrides_settings` — Caller-provided ``fmt`` wins over the global setting — lets, `test_settings_override_takes_effect_without_restart` — An admin who updates ``EMAIL_DATE_FORMAT`` via system_settings, `test_empty_or_invalid_setting_falls_back_to_default` — Operator misconfiguration (empty / non-string) must not crash, `test_localizes_to_configured_timezone` — UTC datetime gets shifted to ``settings.TIMEZONE`` before formatting., `test_naive_datetime_is_treated_as_utc` — Some legacy paths still pass naive datetimes. Treat them as, `test_iso_string_is_parsed_and_reformatted` — Legacy callers that pre-isoformat'd their datetime get parsed, `test_unparseable_string_passes_through` — If the caller pre-formatted the string in some custom shape we, `test_empty_input_returns_placeholder` — ``None`` / empty must not render the literal Python repr or, `test_custom_placeholder_respected`, `test_non_datetime_non_string_input_returns_placeholder` — Garbage input (int, list, etc.) → placeholder. Defensive., `test_no_microseconds_in_output` — REGRESSION (2026-05-18): user saw, `test_no_offset_in_output` — Non-UTC TZ values also must not leak the offset into the email., `test_notification_delivery_service_uses_format_email_datetime` — ``notify_subscription_expiring`` and ``notify_autopay_success``, `test_auto_purchase_service_sends_machine_dates_to_the_cabinet` — Даты в WebSocket-событиях кабинета — не для человека., `test_helper_signature_is_stable` — The helper is called from 9+ production sites. Lock its
 - `tests/services/test_friend_days_reward.py` — Python-модуль
   Классы: нет
-  Функции: `test_both_get_days_when_friend_connects`, `test_reward_is_given_only_once`, `test_no_inviter_no_reward`, `test_old_account_is_not_a_friend`, `test_inviter_cap_is_four_friends`, `test_inviter_without_active_subscription_gets_nothing_but_friend_does`, `test_expired_friend_subscription_gets_nothing`
+  Функции: `test_both_get_days_when_friend_connects`, `test_reward_is_given_only_once`, `test_no_inviter_no_reward`, `test_old_account_is_not_a_friend`, `test_no_cap_on_number_of_friends`, `test_inviter_on_trial_is_rewarded_too`, `test_inviter_without_active_subscription_gets_nothing_but_friend_does`, `test_expired_friend_subscription_gets_nothing`
 - `tests/services/test_full_sync_lock.py` — Python-модуль
   Классы: нет
   Функции: `test_second_full_sync_is_refused_while_first_runs`, `test_lock_is_released_after_a_failure`, `test_scheduler_sees_a_manual_full_sync_as_running`
@@ -4750,7 +4750,7 @@
   Функции: `anyio_backend`, `test_send_payment_success_notification_recovers_missing_greenlet`
 - `tests/services/test_payment_fallback.py` — Python-модуль
   Классы: нет
-  Функции: `test_failed_provider_is_removed_and_others_stay`, `test_no_alternatives_returns_none`, `test_text_has_amount`, `test_cryptobot_payload_gives_kopeks`
+  Функции: `test_failed_provider_is_removed_and_others_stay`, `test_no_alternatives_returns_none`, `test_text_has_amount`, `test_cryptobot_payload_gives_kopeks`, `test_exact_mode_removes_only_that_method`, `test_answer_creation_failed_offers_other_methods`, `test_answer_creation_failed_falls_back_to_old_text`
 - `tests/services/test_payment_method_config_overpay.py` — Python-модуль
   Классы: нет
   Функции: `test_sub_options_without_int`, `test_sub_options_with_int`, `test_method_defaults_use_dynamic_sub_options`
