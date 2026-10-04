@@ -141,10 +141,12 @@ OFFER_TYPE_CONFIG = {
         'label_key': 'ADMIN_PROMO_OFFER_TARIFF',
         'default_label': 'Скидка на один тариф (ULTIMA)',
         'allowed_segments': [
+            ('all', '👥 Все пользователи'),
             ('paid_active', '🟢 Активные платные'),
             ('paid_expired', '🔴 Истёкшие платные'),
             ('trial_active', '🎁 Активные триалы'),
             ('trial_expired', '🥶 Истёкшие триалы'),
+            ('no_subscription', '⚪ Без подписки'),
         ],
         'effect_type': 'percent_discount',
     },
