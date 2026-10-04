@@ -1974,7 +1974,9 @@ def _build_connect_button_rows(user: User, texts) -> list[list[InlineKeyboardBut
     return rows
 
 
-async def _send_prepaid_tariff_offer(bot, new_db, template: PromoOfferTemplate, user: User, fallback_language) -> bool:
+async def _send_prepaid_tariff_offer(
+    bot, new_db, template: PromoOfferTemplate, user: User, fallback_language, active_minutes: int | None = None
+) -> bool:
     """Предложение «скидка на один тариф», активное сразу при отправке (без шага «Забрать»)."""
     from datetime import UTC, datetime, timedelta
 
@@ -2028,7 +2030,9 @@ async def _send_prepaid_tariff_offer(bot, new_db, template: PromoOfferTemplate, 
     now = datetime.now(UTC)
     fresh.promo_offer_discount_percent = int(template.discount_percent)
     fresh.promo_offer_discount_source = offer_discount_source(offer)
-    fresh.promo_offer_discount_expires_at = now + timedelta(hours=hours)
+    # active_minutes — точный срок для разовых рассылок (например, 30 минут); иначе часы шаблона.
+    lifetime = timedelta(minutes=active_minutes) if active_minutes else timedelta(hours=hours)
+    fresh.promo_offer_discount_expires_at = now + lifetime
     await mark_offer_claimed(new_db, offer, details={'context': 'prepaid_tariff_offer'})
 
     keyboard = InlineKeyboardMarkup(
@@ -2068,6 +2072,7 @@ async def _send_offer_to_users(
     *,
     squad_name: str | None,
     effect_type: str,
+    active_minutes: int | None = None,
 ) -> tuple[int, int]:
     from app.database.database import AsyncSessionLocal
 
@@ -2093,7 +2098,9 @@ async def _send_offer_to_users(
                 # Используем отдельную сессию для изоляции транзакции
                 async with AsyncSessionLocal() as new_db:
                     if template.offer_type == 'tariff_discount':
-                        return await _send_prepaid_tariff_offer(bot, new_db, template, user, db_user.language)
+                        return await _send_prepaid_tariff_offer(
+                            bot, new_db, template, user, db_user.language, active_minutes
+                        )
                     if settings.is_multi_tariff_enabled():
                         _user_subs = getattr(user, 'subscriptions', None) or []
                         _active_subs = [s for s in _user_subs if s.is_active]
