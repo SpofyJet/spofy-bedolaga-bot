@@ -1335,6 +1335,7 @@
   "REFERRAL_REWARD_COMMISSION": "•每次推荐充值的佣金：<b>{percent}%</b>",
   "REFERRAL_REWARD_COMMISSION_LIMITED": "•前{max_payments}次推荐充值的佣金：<b>{percent}%</b>",
   "REFERRAL_REWARD_INVITER": "•推荐首次充值时您将获得：<b>{bonus}</b>",
+  "REFERRAL_REWARD_FRIEND_DAYS": "🎁 <b>好友奖励天数：</b>每位通过您的链接连接 VPN 的好友，您和好友各得 <b>+{days} 天</b>。不设上限。",
   "REFERRAL_REWARD_NEW_USER": "•新用户首次充值<b>{minimum}</b>起将获得：<b>{bonus}</b>",
   "REFERRAL_SHARE_BUTTON": "📤分享",
   "REFERRAL_STATS_ACTIVE": "•活跃推荐：<b>{count}</b>",

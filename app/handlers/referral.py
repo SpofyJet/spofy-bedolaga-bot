@@ -187,6 +187,19 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
 
         referral_text += '\n' + commission_line + '\n\n'
 
+    # Дни за друзей (trial_quest_service): без этой строки экран обещает только деньги, а сообщения бота — дни.
+    if getattr(settings, 'TRIAL_QUESTS_ENABLED', True):
+        from app.services.trial_quest_service import DAYS_FRIEND
+
+        referral_text += (
+            texts.t(
+                'REFERRAL_REWARD_FRIEND_DAYS',
+                '🎁 <b>Дни за друзей:</b> за каждого друга, который подключит VPN по вашей ссылке, '
+                'вам и ему по <b>+{days} дн.</b> Без ограничений.',
+            ).format(days=DAYS_FRIEND)
+            + '\n\n'
+        )
+
     # Show bot link
     referral_text += (
         texts.t('REFERRAL_BOT_LINK_TITLE', '🤖 <b>Ссылка на бота:</b>') + f'\n{html_escape(bot_referral_link)}\n'

@@ -1400,6 +1400,7 @@
   "REFERRAL_REWARD_COMMISSION": "• Commission from each referral top-up: <b>{percent}%</b>",
   "REFERRAL_REWARD_COMMISSION_LIMITED": "• Commission from the first {max_payments} referral top-ups: <b>{percent}%</b>",
   "REFERRAL_REWARD_INVITER": "• You receive on the referral's first top-up: <b>{bonus}</b>",
+  "REFERRAL_REWARD_FRIEND_DAYS": "🎁 <b>Days for friends:</b> for every friend who connects VPN with your link, you and your friend each get <b>+{days} days</b>. No limit.",
   "REFERRAL_REWARD_NEW_USER": "• New user receives: <b>{bonus}</b> on the first top-up from <b>{minimum}</b>",
   "REFERRAL_SHARE_BUTTON": "📤 Forward invite",
   "REFERRAL_STATS_ACTIVE": "• Active referrals: <b>{count}</b>",

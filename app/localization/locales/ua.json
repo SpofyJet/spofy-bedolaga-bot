@@ -1337,6 +1337,7 @@
   "REFERRAL_REWARD_COMMISSION": "• Комісія з кожного поповнення реферала: <b>{percent}%</b>",
   "REFERRAL_REWARD_COMMISSION_LIMITED": "• Комісія з перших {max_payments} поповнень реферала: <b>{percent}%</b>",
   "REFERRAL_REWARD_INVITER": "• Ви отримуєте при першому поповненні реферала: <b>{bonus}</b>",
+  "REFERRAL_REWARD_FRIEND_DAYS": "🎁 <b>Дні за друзів:</b> за кожного друга, який підключить VPN за вашим посиланням, вам і йому по <b>+{days} дн.</b> Без обмежень.",
   "REFERRAL_REWARD_NEW_USER": "• Новий користувач отримує: <b>{bonus}</b> при першому поповненні від <b>{minimum}</b>",
   "REFERRAL_SHARE_BUTTON": "📤 Поділитися",
   "REFERRAL_STATS_ACTIVE": "• Активних рефералів: <b>{count}</b>",
