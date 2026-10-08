@@ -1078,6 +1078,8 @@
   "MENU_PROMO_GROUPS_INFO": "🎯消费折扣",
   "MENU_PUBLIC_OFFER": "📄服务条款",
   "MENU_REFERRALS": "🤝推荐计划",
+  "MENU_REFERRALS_DAYS": "🎁 好友 = +2 天",
+  "TRIAL_FRIEND_DAYS_TIP": "🎁 <b>邀请好友 +{days} 天：</b>好友连接 VPN 后，您和好友各得 <b>+{days} 天</b>。不设上限。",
   "MENU_RULES": "📜服务规则",
   "MENU_SERVER_STATUS": "📡服务器状态",
   "MENU_SUBSCRIPTION": "📱订阅",

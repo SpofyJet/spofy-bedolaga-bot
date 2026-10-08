@@ -868,11 +868,23 @@ class ActivationFunnelService:
                     '⚡ Это займёт 1 минуту.'
                 ),
             )
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
-                ]
-            )
+            rows = [[InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')]]
+            if settings.is_referral_program_enabled() and getattr(settings, 'TRIAL_QUESTS_ENABLED', True):
+                from app.services.trial_quest_service import DAYS_FRIEND
+
+                text += '\n\n' + texts.t(
+                    'TRIAL_FRIEND_DAYS_TIP',
+                    '🎁 <b>+{days} дня за друга:</b> позовите друга, и когда он подключит VPN, вам и ему по '
+                    '<b>+{days} дня</b>. Без ограничений.',
+                ).format(days=DAYS_FRIEND)
+                rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('MENU_REFERRALS_DAYS', '🎁 Друг = +2 дня'), callback_data='menu_referrals'
+                        )
+                    ]
+                )
+            keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
             try:
                 sent = await self._send(user.telegram_id, text, reply_markup=keyboard, user=user)
                 if sent is not None:

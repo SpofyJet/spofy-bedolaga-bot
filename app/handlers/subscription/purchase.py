@@ -790,6 +790,14 @@ def _trial_activated_text(texts) -> str:
             'TRIAL_ACTIVATED_BYPASS_NOTE',
             '📶 Обычные серверы — без лимита.\n🏴‍☠️ На серверы «Обход» — {gb} ГБ.',
         ).format(gb=settings.TRIAL_TRAFFIC_LIMIT_GB)
+    if settings.is_referral_program_enabled() and getattr(settings, 'TRIAL_QUESTS_ENABLED', True):
+        from app.services.trial_quest_service import DAYS_FRIEND
+
+        text += '\n\n' + texts.t(
+            'TRIAL_FRIEND_DAYS_TIP',
+            '🎁 <b>+{days} дня за друга:</b> позовите друга, и когда он подключит VPN, вам и ему по '
+            '<b>+{days} дня</b>. Без ограничений.',
+        ).format(days=DAYS_FRIEND)
     return text
 
 

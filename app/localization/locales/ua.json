@@ -1080,6 +1080,8 @@
   "MENU_PROMO_GROUPS_INFO": "🎯 Знижки за витрати",
   "MENU_PUBLIC_OFFER": "📄 Оферта",
   "MENU_REFERRALS": "🤝 Партнерка",
+  "MENU_REFERRALS_DAYS": "🎁 Друг = +2 дні",
+  "TRIAL_FRIEND_DAYS_TIP": "🎁 <b>+{days} дні за друга:</b> запросіть друга, і коли він підключить VPN, вам і йому по <b>+{days} дні</b>. Без обмежень.",
   "MENU_RULES": "📜 Правила сервісу",
   "MENU_SERVER_STATUS": "📡 Статус серверів",
   "MENU_SUBSCRIPTION": "📱 Підписка",

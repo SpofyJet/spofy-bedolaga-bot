@@ -1141,6 +1141,8 @@
   "MENU_PROMO_GROUPS_INFO": "🎯 Promo groups",
   "MENU_PUBLIC_OFFER": "📄 Offer",
   "MENU_REFERRALS": "🤝 Referral program",
+  "MENU_REFERRALS_DAYS": "🎁 Friend = +2 days",
+  "TRIAL_FRIEND_DAYS_TIP": "🎁 <b>+{days} days for a friend:</b> invite a friend, and when they connect VPN, you and your friend each get <b>+{days} days</b>. No limit.",
   "MENU_RULES": "📜 Rules",
   "MENU_SERVER_STATUS": "📡 Server status",
   "MENU_SUBSCRIPTION": "📱 Subscription",

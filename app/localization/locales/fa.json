@@ -1268,6 +1268,8 @@
   "MENU_PROMO_GROUPS_INFO": "🎯 تخفیف بر اساس هزینه",
   "MENU_PUBLIC_OFFER": "📄 شرایط استفاده",
   "MENU_REFERRALS": "🤝 دعوت دوستان",
+  "MENU_REFERRALS_DAYS": "🎁 دوست = +2 روز",
+  "TRIAL_FRIEND_DAYS_TIP": "🎁 <b>{days}+ روز برای دوست:</b> دوستی را دعوت کنید و وقتی VPN را وصل کرد، هر دوی شما <b>{days}+ روز</b> می‌گیرید. بدون محدودیت.",
   "MENU_RULES": "📜 قوانین سرویس",
   "MENU_SERVER_STATUS": "📡 وضعیت سرورها",
   "MENU_SUBSCRIPTION": "📱 اشتراک من",
