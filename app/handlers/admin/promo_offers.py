@@ -1980,12 +1980,9 @@ async def _send_prepaid_tariff_offer(
     """Предложение «скидка на один тариф», активное сразу при отправке (без шага «Забрать»)."""
     from datetime import UTC, datetime, timedelta
 
-    from sqlalchemy import select
-
     from app.database.crud.discount_offer import mark_offer_claimed
-    from app.database.models import DiscountOffer
     from app.utils.notification_prefs import is_promo_offers_enabled
-    from app.utils.promo_offer import TARIFF_SOURCE_PREFIX, offer_discount_source
+    from app.utils.promo_offer import offer_discount_source
 
     if not user.telegram_id or not settings.is_notifications_enabled() or not is_promo_offers_enabled(user):
         return False
@@ -1993,30 +1990,11 @@ async def _send_prepaid_tariff_offer(
     fresh = await new_db.get(User, user.id)
     if fresh is None:
         return False
-    # Действующую скидку не затираем, кроме скидки этого же тарифного предложения: её можно обновить.
+    # Защит от повтора нет: предложение уходит каждый раз, когда админ нажимает «отправить».
+    # Прежнюю скидку запоминаем только чтобы вернуть её, если сообщение не доставится.
     prev_percent = fresh.promo_offer_discount_percent
     prev_source = fresh.promo_offer_discount_source
     prev_expires = fresh.promo_offer_discount_expires_at
-    own_tariff_offer = bool(prev_source) and prev_source.startswith(
-        f'{TARIFF_SOURCE_PREFIX}{int(settings.PROMO_OFFER_TARIFF_ID)}|'
-    )
-    if not own_tariff_offer and (prev_percent or 0) > 0 and (prev_expires is None or prev_expires > datetime.now(UTC)):
-        return None  # пропуск, а не ошибка: у человека уже действует другая скидка
-
-    # Тому же человеку то же предложение повторно не шлём, пока не прошло PROMO_OFFER_RESEND_AFTER_DAYS дней
-    # (за это время скидка давно сгорела, и новую волну можно запускать снова).
-    resend_after = timedelta(days=int(getattr(settings, 'PROMO_OFFER_RESEND_AFTER_DAYS', 3)))
-    existing = await new_db.execute(
-        select(DiscountOffer.id)
-        .where(
-            DiscountOffer.user_id == fresh.id,
-            DiscountOffer.notification_type == f'promo_template_{template.id}',
-            DiscountOffer.created_at > datetime.now(UTC) - resend_after,
-        )
-        .limit(1)
-    )
-    if existing.scalar_one_or_none() is not None:
-        return None  # пропуск: недавно уже получал это предложение
 
     hours = int(template.active_discount_hours or template.valid_hours or 1)
     offer = await upsert_discount_offer(

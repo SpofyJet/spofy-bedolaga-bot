@@ -880,7 +880,7 @@ class ActivationFunnelService:
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('MENU_REFERRALS_DAYS', '🎁 Друг = +2 дня'), callback_data='menu_referrals'
+                            text=texts.t('QUEST_BUTTON_INVITE', '👥 Позвать друга'), callback_data='menu_referrals'
                         )
                     ]
                 )

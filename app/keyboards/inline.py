@@ -865,14 +865,15 @@ def get_main_menu_keyboard(
         row = paired_buttons[i : i + 2]
         keyboard.append(row)
 
-    # Рефералы — отдельной строкой (как было). С действующей подпиской (пробной или платной)
-    # подпись называет выгоду: дни получает пригласивший, у которого есть что продлевать.
+    # Рефералы — отдельной строкой (как было)
     if settings.is_referral_program_enabled():
-        if has_active_subscription and subscription_is_active and getattr(settings, 'TRIAL_QUESTS_ENABLED', True):
-            referral_label = texts.t('MENU_REFERRALS_DAYS', '🎁 Друг = +2 дня')
-        else:
-            referral_label = texts.t('MENU_REFERRALS', 'Пригласить друзей 👥')
-        keyboard.append([InlineKeyboardButton(text=referral_label, callback_data='menu_referrals')])
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('MENU_REFERRALS', 'Пригласить друзей 👥'), callback_data='menu_referrals'
+                )
+            ]
+        )
 
     if defer_balance:
         # n6-П1: баланс после социального CTA

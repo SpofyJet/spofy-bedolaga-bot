@@ -108,3 +108,49 @@ async def test_subscription_event_is_retried_in_a_fresh_session(monkeypatch):
 
     assert [call[0] for call in calls] == [broken_db, fresh_db]  # второй раз — в чистой сессии
     assert calls[1][1]['user_id'] == 7 and calls[1][1]['transaction_id'] == 9
+
+
+async def test_tariff_offer_is_sent_every_time_without_protections(monkeypatch):
+    """Админ отправляет сколько угодно раз: прежнее предложение и чужая скидка не мешают."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.config import Settings
+
+    monkeypatch.setattr(promo_offers.settings, 'PROMO_OFFER_TARIFF_ID', 4, raising=False)
+    monkeypatch.setattr(Settings, 'is_notifications_enabled', lambda self: True)
+    monkeypatch.setattr('app.utils.notification_prefs.is_promo_offers_enabled', lambda user: True)
+    offer = SimpleNamespace(id=1, notification_type='promo_template_4', extra_data={'offer_type': 'tariff_discount'})
+    monkeypatch.setattr(promo_offers, 'upsert_discount_offer', AsyncMock(return_value=offer))
+    monkeypatch.setattr('app.database.crud.discount_offer.mark_offer_claimed', AsyncMock())
+
+    other_discount_until = datetime.now(UTC) + timedelta(hours=5)
+    stored = SimpleNamespace(
+        id=7,
+        telegram_id=77,
+        language='ru',
+        promo_offer_discount_percent=15,  # чужая действующая скидка
+        promo_offer_discount_source='promo_template_3',
+        promo_offer_discount_expires_at=other_discount_until,
+    )
+    db = MagicMock()
+    db.get = AsyncMock(return_value=stored)
+    db.commit = AsyncMock()
+    bot = MagicMock()
+    bot.send_message = AsyncMock()
+    template = SimpleNamespace(
+        id=4,
+        name='ULTIMA',
+        offer_type='tariff_discount',
+        discount_percent=37,
+        active_discount_hours=1,
+        valid_hours=1,
+        message_text='текст',
+        button_text='Купить',
+        test_duration_hours=None,
+    )
+
+    for _ in range(3):  # три рассылки подряд тому же человеку
+        assert await promo_offers._send_prepaid_tariff_offer(bot, db, template, stored, 'ru') is True
+
+    assert bot.send_message.await_count == 3
+    assert stored.promo_offer_discount_percent == 37 and stored.promo_offer_discount_source.startswith('tariff:4|')
