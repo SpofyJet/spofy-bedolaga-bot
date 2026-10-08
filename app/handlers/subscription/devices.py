@@ -854,7 +854,10 @@ async def handle_device_management(
     if subscription is None:
         return
 
-    if not subscription or subscription.is_trial:
+    # Пробный период тоже управляет своими устройствами (список, имя, удаление): иначе при смене телефона
+    # место занято, освободить его нечем, и человек не доходит до подключения. Докупка мест (handle_change_devices)
+    # остаётся платной.
+    if not subscription:
         await callback.answer(
             texts.t('PAID_FEATURE_ONLY', '⚠️ Эта функция доступна только для платных подписок'),
             show_alert=True,

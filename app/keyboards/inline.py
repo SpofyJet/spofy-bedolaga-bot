@@ -11,7 +11,7 @@ from app.database.models import User
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
-from app.utils.miniapp_buttons import build_miniapp_or_callback_button
+from app.utils.miniapp_buttons import build_miniapp_or_callback_button, build_subscription_extend_button
 from app.utils.price_display import PriceInfo, format_price_button
 from app.utils.pricing_utils import (
     apply_percentage_discount,
@@ -595,6 +595,57 @@ def _build_cabinet_main_menu_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
 
+# За сколько дней до конца показывать в меню кнопку «Осталось N — продлить».
+RENEW_CTA_PAID_DAYS = 7
+RENEW_CTA_TRIAL_DAYS = 2
+
+
+def _time_left_label(texts, language: str, remaining) -> str:
+    """«3 дня» (или «5 ч», если осталось меньше суток) для кнопки в меню."""
+    from app.utils.formatters import format_days_declension
+
+    total_seconds = max(0, int(remaining.total_seconds()))
+    if total_seconds < 24 * 3600:
+        hours = max(1, -(-total_seconds // 3600))
+        return texts.t('MENU_HOURS_SHORT', '{hours} ч').format(hours=hours)
+    return format_days_declension(total_seconds // 86400, language)
+
+
+def _days_left_button(subscription, texts, language: str) -> InlineKeyboardButton | None:
+    """Кнопка «⏳ Осталось 3 дня — продлить» за неделю до конца платной подписки.
+
+    У триала «⏳ Пробный: осталось 1 день — оформить» за двое суток. Меню остальное время не меняется:
+    кнопка появляется именно тогда, когда продление нужнее всего, и даёт человеку срок, а не просто «Купить».
+    """
+    from datetime import UTC, datetime
+
+    end = getattr(subscription, 'end_date', None)
+    if subscription is None or end is None:
+        return None
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=UTC)
+    remaining = end - datetime.now(UTC)
+    is_trial = bool(getattr(subscription, 'is_trial', False))
+    limit_days = RENEW_CTA_TRIAL_DAYS if is_trial else RENEW_CTA_PAID_DAYS
+    if remaining.total_seconds() <= 0 or remaining.days >= limit_days:
+        return None
+
+    left = _time_left_label(texts, language, remaining)
+    if is_trial:
+        return InlineKeyboardButton(
+            text=texts.t('MENU_TRIAL_DAYS_LEFT', '⏳ Пробный: осталось {left} — оформить').format(left=left),
+            callback_data='menu_buy',
+            style='primary',
+        )
+    button = build_subscription_extend_button(
+        texts.t('MENU_RENEW_DAYS_LEFT', '⏳ Осталось {left} — продлить').format(left=left),
+        getattr(subscription, 'id', None),
+        style='primary',
+    )
+    # Вне режима кабинета помощник цвет не проставляет: синяя кнопка задаётся здесь явно.
+    return button if button.style else button.model_copy(update={'style': 'primary'})
+
+
 def get_main_menu_keyboard(
     language: str = DEFAULT_LANGUAGE,
     is_admin: bool = False,
@@ -710,8 +761,12 @@ def get_main_menu_keyboard(
             if settings.is_multi_tariff_enabled()
             else texts.MENU_SUBSCRIPTION
         )
+        # Конец близко: кнопка со сроком вместо общей «Купить» (триал) или над «Подпиской» (платная).
+        days_left_button = _days_left_button(subscription, texts, language)
+        if days_left_button is not None:
+            keyboard.append([days_left_button])
         # n6-П2: «Подписка» и покупка (для триала) — отдельными рядами, без слипания
-        if subscription and getattr(subscription, 'is_trial', False):
+        elif subscription and getattr(subscription, 'is_trial', False):
             keyboard.append(
                 [
                     InlineKeyboardButton(

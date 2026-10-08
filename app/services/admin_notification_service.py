@@ -254,19 +254,34 @@ class AdminNotificationService:
     ) -> None:
         """Persist subscription-related event for external dashboards."""
 
+        # Простые значения берём сразу, пока объекты живы: после сбоя сессии атрибуты недоступны.
         try:
+            user_id = user.id
+            subscription_id = subscription.id if subscription else None
+            transaction_id = transaction.id if transaction else None
+        except Exception:
+            user_id = subscription_id = transaction_id = None
+
+        event_kwargs = {
+            'event_type': event_type,
+            'amount_kopeks': amount_kopeks,
+            'currency': None,
+            'message': message,
+            'occurred_at': occurred_at,
+            'extra': extra or None,
+        }
+
+        try:
+            if user_id is None:
+                raise ValueError('нет id пользователя для события подписки')
             await create_subscription_event(
                 db,
-                user_id=user.id,
-                event_type=event_type,
-                subscription_id=subscription.id if subscription else None,
-                transaction_id=transaction.id if transaction else None,
-                amount_kopeks=amount_kopeks,
-                currency=None,
-                message=message,
-                occurred_at=occurred_at,
-                extra=extra or None,
+                user_id=user_id,
+                subscription_id=subscription_id,
+                transaction_id=transaction_id,
+                **event_kwargs,
             )
+            return
         except Exception:
             # PendingRollbackError fix: rollback ДО любого доступа к ORM-атрибутам —
             # после упавшего flush сессия сломана, и чтение user.id бросает
@@ -275,16 +290,29 @@ class AdminNotificationService:
                 await db.rollback()
             except Exception:
                 pass
+
+        # Сессия вызывающего сломана (у xRocket и CryptoBot — почти всегда): пишем событие в новой.
+        if user_id is not None:
             try:
-                _uid = user.id
+                from app.database.database import AsyncSessionLocal
+
+                async with AsyncSessionLocal() as fresh_db:
+                    await create_subscription_event(
+                        fresh_db,
+                        user_id=user_id,
+                        subscription_id=subscription_id,
+                        transaction_id=transaction_id,
+                        **event_kwargs,
+                    )
+                return
             except Exception:
-                _uid = 'unknown'
-            logger.error(
-                'Не удалось сохранить событие подписки для пользователя',
-                event_type=event_type,
-                user_id=_uid,
-                exc_info=True,
-            )
+                pass
+
+        logger.error(
+            'Не удалось сохранить событие подписки для пользователя',
+            event_type=event_type,
+            user_id=user_id if user_id is not None else 'unknown',
+        )
 
     def _format_promo_group_discounts(self, promo_group: PromoGroup) -> list[str]:
         discount_lines: list[str] = []
@@ -913,6 +941,39 @@ class AdminNotificationService:
 
         return refreshed_user, refreshed_transaction, subscription, promo_group
 
+    async def _build_topup_message_in_fresh_session(
+        self,
+        user_id: int | None,
+        transaction_id: int | None,
+        old_balance: int,
+        *,
+        topup_status: str,
+        referrer_info: str,
+    ) -> str | None:
+        """Текст уведомления о пополнении, собранный в новой сессии; ``None``, если собрать не удалось."""
+        if not user_id or not transaction_id:
+            return None
+        from app.database.database import AsyncSessionLocal
+
+        try:
+            async with AsyncSessionLocal() as fresh_db:
+                user = await get_user_by_id(fresh_db, user_id)
+                transaction = await get_transaction_by_id(fresh_db, transaction_id)
+                if user is None or transaction is None:
+                    return None
+                return self._build_balance_topup_message(
+                    user,
+                    transaction,
+                    old_balance,
+                    topup_status=topup_status,
+                    referrer_info=referrer_info,
+                    subscription=getattr(user, 'subscription', None),
+                    promo_group=await self._get_user_promo_group(fresh_db, user),
+                )
+        except Exception as error:
+            logger.error('Не удалось собрать уведомление о пополнении в новой сессии', error=error, exc_info=True)
+            return None
+
     def _is_lazy_loading_error(self, error: Exception) -> bool:
         message = str(error).lower()
         return (
@@ -947,6 +1008,9 @@ class AdminNotificationService:
         db: AsyncSession | None = None,
     ) -> bool:
         logger.info('Начинаем отправку уведомления о пополнении баланса')
+        # id берём сразу, пока объекты живы: после сбоя сессии доступ к атрибутам даёт MissingGreenlet.
+        user_id_early = getattr(user, 'id', None)
+        transaction_id_early = getattr(transaction, 'id', None)
 
         if db:
             try:
@@ -1029,12 +1093,25 @@ class AdminNotificationService:
                 ) = await self._reload_topup_notification_entities(db, user, transaction)
                 logger.info('Данные успешно перезагружены')
             except Exception as reload_error:
-                logger.error(
-                    'Ошибка повторной загрузки данных для уведомления о пополнении',
+                # Сессия вызывающего сломана (например, гонка опроса и вебхука): грузим заново в своей.
+                logger.warning(
+                    'Перезагрузка в сессии вызывающего не удалась, пробуем новую сессию',
                     reload_error=reload_error,
-                    exc_info=True,
                 )
-                return False
+                message = await self._build_topup_message_in_fresh_session(
+                    user_id_early,
+                    transaction_id_early,
+                    old_balance,
+                    topup_status=topup_status,
+                    referrer_info=referrer_info,
+                )
+                if message is None:
+                    return False
+                try:
+                    return await self._send_message(message, category=NotificationCategory.BALANCE)
+                except Exception as e:
+                    logger.error('Ошибка отправки уведомления о пополнении', error=e, exc_info=True)
+                    return False
 
             try:
                 logger.info('Пытаемся создать сообщение после перезагрузки данных')

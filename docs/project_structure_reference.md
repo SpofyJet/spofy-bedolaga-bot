@@ -1477,7 +1477,7 @@
   Классы: `ActivationFunnelService` (12 методов)
   Функции: нет
 - `app/services/admin_notification_service.py` — Python-модуль
-  Классы: `NotificationCategory`, `AdminNotificationService` (51 методов)
+  Классы: `NotificationCategory`, `AdminNotificationService` (52 методов)
   Функции: нет
 - `app/services/antilopay_service.py` — Python-модуль
   Классы: `AntilopayAPIError` (1 методов), `AntilopayService` (12 методов)
@@ -4673,6 +4673,9 @@
 - `tests/services/test_manual_topup_service.py` — Python-модуль
   Классы: нет
   Функции: `test_credits_balance_and_records_transaction`, `test_repeat_with_same_key_does_not_credit_twice` — Ретрай агента после таймаута не должен стать вторым начислением., `test_same_key_with_other_amount_is_a_conflict`, `test_same_key_for_another_user_is_a_conflict` — Ключи глобальны: переиспользованный номер тикета не должен «зачислить» чужому., `test_different_keys_credit_independently`, `test_without_key_every_call_credits` — Без ключа защиты нет — это осознанный режим, а не забытая проверка., `test_key_is_namespaced_and_does_not_clash_with_plain_manual_rows` — Обычные ручные корректировки пишут external_id=NULL и не мешают ключам., `test_rejects_non_positive_amount`, `test_notification_failure_does_not_fail_the_deposit` — Упавший Telegram не должен ни откатывать деньги, ни отдавать вызывающему ошибку., `test_bonuses_disabled_skips_post_topup_pipeline`, `test_notify_user_gate_is_respected`, `test_email_notification_not_duplicated_by_cart_helper` — Письмо шлёт _notify_user; общий пост-топап хелпер не должен слать второе., `test_external_id_fits_the_column` — Ключ из схемы (<=200) плюс префикс обязан влезать в external_id String(255)., `test_deposit_route_is_registered` — Роут должен реально висеть на users-роутере (он включается с префиксом /users)., `test_deposit_route_rejects_amount_above_limit`, `test_deposit_route_conflicts_on_key_reuse_with_other_amount` — Тот же ключ с другой суммой — ошибка вызывающего, а не тихий «дубликат».
+- `tests/services/test_menu_days_left_button.py` — Python-модуль
+  Классы: нет
+  Функции: `test_paid_renew_button_text`, `test_far_from_the_end_has_no_button`, `test_expired_has_no_button`, `test_trial_button_offers_subscription_and_appears_later`, `test_no_subscription_no_button`
 - `tests/services/test_menu_layout_service.py` — Python-модуль
   Классы: нет
   Функции: `test_build_button_connect_direct_mode_with_url` — Тест: кнопка connect с open_mode=direct и валидным URL должна создавать WebAppInfo., `test_build_button_connect_direct_mode_with_subscription_url` — Тест: кнопка connect с open_mode=direct должна получать URL из подписки., `test_build_button_connect_callback_mode` — Тест: кнопка connect с open_mode=callback должна создавать callback кнопку., `test_build_button_connect_direct_mode_fallback_to_callback` — Тест: кнопка connect с open_mode=direct без URL должна fallback на callback.
@@ -4838,6 +4841,9 @@
 - `tests/services/test_promo_group_recalculation_scheduler.py` — Python-модуль
   Классы: `Announcer` (2 методов), `GatedRunner` (2 методов)
   Функции: `test_schedule_runs_one_pass_and_announces_it`, `test_requests_during_a_pass_collapse_into_one_more_pass`, `test_runner_failure_is_recorded_and_still_announced`, `test_schedule_without_event_loop_is_refused_quietly`, `admin_chat`, `test_summary_is_silent_when_nobody_changed`, `test_summary_is_sent_once_when_someone_changed`, `test_summary_is_sent_when_the_pass_failed`, `test_summary_text_lists_failures_only_when_there_are_any`
+- `tests/services/test_promo_send_summary.py` — Python-модуль
+  Классы: нет
+  Функции: `test_skipped_users_are_counted_separately`, `test_topup_notification_survives_broken_session`, `test_subscription_event_is_retried_in_a_fresh_session`
 - `tests/services/test_promocode_rollback_keeps_user_usable.py` — Python-модуль
   Классы: нет
   Функции: `test_failed_trial_activation_keeps_user_attributes_loaded`
@@ -5039,6 +5045,9 @@
 - `tests/services/test_trial_abuse_rule.py` — Python-модуль
   Классы: нет
   Функции: `test_second_account_on_a_device_is_the_abuser_not_the_first`, `test_two_accounts_are_enough`, `test_same_bot_user_is_one_person`, `test_account_without_telegram_no_longer_hides_behind_one_telegram`, `test_paid_and_expired_accounts_are_never_punished`, `test_unknown_accounts_are_not_touched`, `test_new_device_of_a_second_account_is_punished_at_once`, `test_owner_connecting_again_is_not_punished`, `test_non_trial_accounts_skip_the_panel_lookup`, `test_bogus_hwid_is_not_checked`, `test_realtime_switch`, `test_device_webhook_schedules_the_check_and_still_notifies`, `test_who_shows_real_name_username_and_telegram`, `test_who_for_email_only_account_and_for_unknown_account`, `test_who_html_links_to_the_telegram_profile_and_escapes`, `test_reason_names_the_first_account_on_the_device`
+- `tests/services/test_trial_device_management.py` — Python-модуль
+  Классы: нет
+  Функции: `test_trial_user_sees_device_list`, `test_trial_still_cannot_buy_device_slots`
 - `tests/services/test_tribute_payment_not_lost.py` — Python-модуль
   Классы: нет
   Функции: `service_on` — TributeService над тестовой сессией; уведомления и рефералка заглушены., `test_failure_before_commit_leaves_nothing_and_retry_credits_once`, `test_unknown_user_raises_alert_and_writes_nothing`, `test_alert_logger_is_not_silenced_as_payment_logger` — Логгеры tribute_service отрезаны от админ-чата, журнала ошибок и файлов — тревога идёт мимо этих фильтров., `test_failure_after_commit_answers_ok_and_is_not_credited_twice` — Деньги уже на балансе — 5xx тут опасен: повтор Tribute с синтетическим ключом, пришедший, `test_event_without_money_does_not_raise_payment_alert`

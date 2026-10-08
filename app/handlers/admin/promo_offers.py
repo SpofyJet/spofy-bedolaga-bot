@@ -2001,15 +2001,22 @@ async def _send_prepaid_tariff_offer(
         f'{TARIFF_SOURCE_PREFIX}{int(settings.PROMO_OFFER_TARIFF_ID)}|'
     )
     if not own_tariff_offer and (prev_percent or 0) > 0 and (prev_expires is None or prev_expires > datetime.now(UTC)):
-        return False
+        return None  # пропуск, а не ошибка: у человека уже действует другая скидка
 
+    # Тому же человеку то же предложение повторно не шлём, пока не прошло PROMO_OFFER_RESEND_AFTER_DAYS дней
+    # (за это время скидка давно сгорела, и новую волну можно запускать снова).
+    resend_after = timedelta(days=int(getattr(settings, 'PROMO_OFFER_RESEND_AFTER_DAYS', 3)))
     existing = await new_db.execute(
         select(DiscountOffer.id)
-        .where(DiscountOffer.user_id == fresh.id, DiscountOffer.notification_type == f'promo_template_{template.id}')
+        .where(
+            DiscountOffer.user_id == fresh.id,
+            DiscountOffer.notification_type == f'promo_template_{template.id}',
+            DiscountOffer.created_at > datetime.now(UTC) - resend_after,
+        )
         .limit(1)
     )
     if existing.scalar_one_or_none() is not None:
-        return False  # без повторного предложения
+        return None  # пропуск: недавно уже получал это предложение
 
     hours = int(template.active_discount_hours or template.valid_hours or 1)
     offer = await upsert_discount_offer(
@@ -2078,6 +2085,7 @@ async def _send_offer_to_users(
 
     sent = 0
     failed = 0
+    already = 0  # пропущены: предложение уже было у человека или действует другая скидка
 
     # Ограничение на количество одновременных отправок
     semaphore = asyncio.Semaphore(20)
@@ -2213,7 +2221,9 @@ async def _send_offer_to_users(
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for result in results:
-            if isinstance(result, bool):  # Успешно или неуспешно
+            if result is None:  # пропуск: предложение уже было или есть другая скидка
+                already += 1
+            elif isinstance(result, bool):  # Успешно или неуспешно
                 if result:
                     sent += 1
                 else:
@@ -2224,7 +2234,7 @@ async def _send_offer_to_users(
         # Небольшая задержка между пакетами для снижения нагрузки на API
         await asyncio.sleep(0.1)
 
-    return sent, failed
+    return sent, failed, already
 
 
 @admin_required
@@ -2281,7 +2291,7 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
 
     skipped = initial_count - len(users)
     effect_type = config.get('effect_type', 'percent_discount')
-    sent, failed = await _send_offer_to_users(
+    sent, failed, already = await _send_offer_to_users(
         callback.bot,
         template,
         db_user,
@@ -2295,6 +2305,11 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
         'ADMIN_PROMO_OFFER_RESULT',
         '📬 Рассылка завершена\nОтправлено: {sent}\nОшибок: {failed}',
     ).format(sent=sent, failed=failed)
+    if already > 0:
+        summary += '\n' + texts.t(
+            'ADMIN_PROMO_OFFER_ALREADY',
+            'Уже получали это предложение (или у них действует другая скидка): {already}',
+        ).format(already=already)
     if skipped > 0:
         summary += '\n' + texts.t(
             'ADMIN_PROMO_OFFER_SKIPPED',
@@ -2373,7 +2388,7 @@ async def send_offer_to_user(callback: CallbackQuery, db_user: User, db: AsyncSe
     sent = 0
     failed = 0
     if users_to_send:
-        sent, failed = await _send_offer_to_users(
+        sent, failed, already = await _send_offer_to_users(
             callback.bot,
             template,
             db_user,
@@ -2394,6 +2409,14 @@ async def send_offer_to_user(callback: CallbackQuery, db_user: User, db: AsyncSe
             '📬 Рассылка завершена\nОтправлено: {sent}\nОшибок: {failed}',
         ).format(sent=sent, failed=failed),
     ]
+
+    if already:
+        summary_lines.append(
+            texts.t(
+                'ADMIN_PROMO_OFFER_ALREADY',
+                'Уже получали это предложение (или у них действует другая скидка): {already}',
+            ).format(already=already)
+        )
 
     if skipped:
         summary_lines.append(
