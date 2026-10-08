@@ -300,7 +300,15 @@ class WataPaymentMixin:
             try:
                 remote_link = await self.wata_service.get_payment_link(payment.payment_link_id)  # type: ignore[union-attr]
             except WataAPIError as error:
-                logger.error('Ошибка получения WATA ссылки', payment_link_id=payment.payment_link_id, error=error)
+                if 'rate limited' in str(error).lower():
+                    # WATA ограничивает частоту (429): платёж не теряется (оплата приходит вебхуком),
+                    # статус берём из базы. Это не ошибка, поэтому без error-записи в логе.
+                    logger.warning(
+                        'WATA ограничил частоту запросов, показываем статус из базы',
+                        payment_link_id=payment.payment_link_id,
+                    )
+                else:
+                    logger.error('Ошибка получения WATA ссылки', payment_link_id=payment.payment_link_id, error=error)
             except Exception as error:  # pragma: no cover - safety net
                 logger.exception('Непредвиденная ошибка при запросе WATA ссылки', error=error)
 
@@ -329,7 +337,10 @@ class WataPaymentMixin:
                             transaction_id
                         )
                     except WataAPIError as error:
-                        logger.error('Ошибка получения WATA транзакции', transaction_id=transaction_id, error=error)
+                        if 'rate limited' in str(error).lower():
+                            logger.warning('WATA ограничил частоту запросов транзакции', transaction_id=transaction_id)
+                        else:
+                            logger.error('Ошибка получения WATA транзакции', transaction_id=transaction_id, error=error)
                     except Exception as error:  # pragma: no cover - safety net
                         logger.exception(
                             'Непредвиденная ошибка при запросе WATA транзакции',
