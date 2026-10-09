@@ -2361,6 +2361,8 @@
   "QUEST_FRIEND_INVITER": "👥 <b>您的好友已连接！</b>已为您增加 <b>{days} 天</b>。",
   "QUEST_FRIEND_MORE": "每有一位新好友连接，再增加 {days} 天。不设上限。",
   "QUEST_BUTTON_INVITE": "👥 再邀请一位好友",
+  "ULTIMA_LINK_ACTIVE": "⏳ 优惠已开启，还剩 {minutes} 分钟。",
+  "ULTIMA_LINK_USED": "您已开启过此优惠。新的折扣将在 {hours} 小时后可用。ULTIMA 原价：",
   "FUNNEL_ABANDONED_CART_TITLE": "🛒 <b>您停在了购买步骤</b>",
   "FUNNEL_ABANDONED_CART_BODY": "应付：<b>{price} ₽</b>。购物车还为您保留 <b>{minutes} 分钟</b>：一步即可完成。",
   "FUNNEL_REFERRAL_PROMPT_TITLE": "👥 <b>邀请好友，获得 +{days} 天</b>",

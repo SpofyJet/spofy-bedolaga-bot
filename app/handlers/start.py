@@ -29,6 +29,7 @@ from app.database.crud.user import (
 from app.database.crud.user_message import get_random_active_message
 from app.database.models import GuestPurchase, PinnedMessage, SubscriptionStatus, UserStatus
 from app.handlers.subscription_deeplinks import SUBSCRIPTION_DEEPLINKS, open_subscription_deeplink
+from app.handlers.ultima_deeplink import is_ultima_deeplink, link_source, open_ultima_offer
 from app.keyboards.inline import (
     get_back_keyboard,
     get_language_selection_keyboard,
@@ -1389,6 +1390,18 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 return
         start_parameter = None
 
+    # /start ultima | ultima_<источник>: личное предложение ULTIMA из канала. Зарегистрированному выдаём сразу,
+    # новому после регистрации (см. ниже, pending_ultima). Без предложения в базе обычный /start.
+    if is_ultima_deeplink(start_parameter):
+        ultima_source = link_source(start_parameter)
+        user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
+        if user and user.status != UserStatus.DELETED.value:
+            if await open_ultima_offer(message, user, db, source=ultima_source):
+                return
+        else:
+            await state.update_data(pending_ultima=ultima_source)
+        start_parameter = None
+
     # Диплинк «активировать триал» из rich-меню: /start trial.
     # Зарегистрированному юзеру бесплатный триал выдаётся ниже
     # (_activate_pending_trial) перед показом меню — меню сразу отрисует новую
@@ -1623,8 +1636,19 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             await _redeem_pending_coupon(db, state, user, message.answer)
             await _activate_pending_trial(db, state, user, message.answer, message.bot)
             await _persist_pending_subid_after_registration(db, state, user)
+            # Пришёл по ссылке ULTIMA из канала: предложение сразу после регистрации.
+            pending_ultima = (await state.get_data()).get('pending_ultima')
+            if pending_ultima is not None:
+                try:
+                    await open_ultima_offer(message, user, db, source=str(pending_ultima))
+                except Exception as error:
+                    logger.warning('Предложение ULTIMA после регистрации не выдано', error=str(error))
             await state.update_data(
-                pending_gift_token=None, pending_coupon_token=None, pending_subid=None, pending_trial=None
+                pending_gift_token=None,
+                pending_coupon_token=None,
+                pending_subid=None,
+                pending_trial=None,
+                pending_ultima=None,
             )
             # Refresh user to pick up newly created subscriptions
             await db.refresh(user, attribute_names=['subscriptions'])

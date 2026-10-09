@@ -2336,6 +2336,8 @@
   "QUEST_FRIEND_INVITER": "👥 <b>Ваш друг подключился!</b> Вам зачислено <b>+{days} дн.</b>",
   "QUEST_FRIEND_MORE": "За каждого нового друга, который подключится, ещё +{days} дн. Без ограничений.",
   "QUEST_BUTTON_INVITE": "👥 Позвать ещё друга",
+  "ULTIMA_LINK_ACTIVE": "⏳ Предложение уже открыто, осталось {minutes} мин.",
+  "ULTIMA_LINK_USED": "Это предложение вы уже открывали. Новая скидка будет доступна через {hours} ч. Тариф ULTIMA по обычной цене:",
   "FUNNEL_ABANDONED_CART_TITLE": "🛒 <b>Вы остановились на покупке</b>",
   "FUNNEL_ABANDONED_CART_BODY": "К оплате: <b>{price} ₽</b>. Корзина сохранена ещё <b>{minutes} мин</b>: продолжите в один шаг.",
   "FUNNEL_REFERRAL_PROMPT_TITLE": "👥 <b>Позовите друга — получите +{days} дн.</b>",

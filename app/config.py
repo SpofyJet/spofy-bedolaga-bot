@@ -319,6 +319,8 @@ class Settings(BaseSettings):
     BYPASS_INCLUDE_TRIAL: bool = False
     # Тариф, на который действуют предложения типа tariff_discount (ULTIMA).
     PROMO_OFFER_TARIFF_ID: int = 4
+    # Повторная выдача скидки по ссылке /start ultima — не раньше чем через N часов (0 = без ограничений).
+    PROMO_LINK_COOLDOWN_HOURS: int = 12
     GRACE_ACCESS_RECONCILE_BATCH_SIZE: int = 200
 
     GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES: int = 30

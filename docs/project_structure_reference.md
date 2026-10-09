@@ -1006,6 +1006,9 @@
 - `app/handlers/tickets.py` — Python-модуль
   Классы: `TicketStates`
   Функции: `show_ticket_priority_selection` — Начать создание тикета без выбора приоритета: сразу просим заголовок, `handle_ticket_title_input`, `handle_ticket_message_input`, `show_my_tickets`, `show_my_tickets_closed`, `view_ticket` — Показать детали тикета с пагинацией, `send_ticket_attachments`, `user_delete_message`, `reply_to_ticket` — Начать ответ на тикет, `handle_ticket_reply`, `close_ticket` — Закрыть тикет, `cancel_ticket_creation` — Отменить создание тикета, `cancel_ticket_reply` — Отменить ответ на тикет, `close_ticket_notification` — Закрыть уведомление о тикете, `build_ticket_card_keyboard` — Клавиатура карточки тикета по роли получателя ('admin' / 'moderator' / 'group')., `notify_admins_about_new_ticket` — Уведомить админов о новом тикете, `notify_admins_about_ticket_reply` — Уведомить админов об ответе пользователя на тикет, `register_handlers` — Регистрация обработчиков тикетов
+- `app/handlers/ultima_deeplink.py` — Python-модуль
+  Классы: нет
+  Функции: `is_ultima_deeplink`, `link_source` — ``ultima_ch1`` → ``ch1``; просто ``ultima`` → пустая строка., `open_ultima_offer` — Выдать (или показать действующее) предложение ULTIMA. False — предложения нет, пусть идёт обычный /start.
 - `app/handlers/webhooks.py` — Python-модуль
   Классы: нет
   Функции: `set_webhook_bot` — Устанавливает экземпляр бота для отправки уведомлений об ошибках в webhook., `tribute_webhook`, `handle_successful_payment`, `handle_pre_checkout_query`
@@ -5054,6 +5057,9 @@
 - `tests/services/test_tribute_payment_not_lost.py` — Python-модуль
   Классы: нет
   Функции: `service_on` — TributeService над тестовой сессией; уведомления и рефералка заглушены., `test_failure_before_commit_leaves_nothing_and_retry_credits_once`, `test_unknown_user_raises_alert_and_writes_nothing`, `test_alert_logger_is_not_silenced_as_payment_logger` — Логгеры tribute_service отрезаны от админ-чата, журнала ошибок и файлов — тревога идёт мимо этих фильтров., `test_failure_after_commit_answers_ok_and_is_not_credited_twice` — Деньги уже на балансе — 5xx тут опасен: повтор Tribute с синтетическим ключом, пришедший, `test_event_without_money_does_not_raise_payment_alert`
+- `tests/services/test_ultima_deeplink.py` — Python-модуль
+  Классы: нет
+  Функции: `test_link_parsing`, `test_first_open_activates_and_records_the_source`, `test_second_open_while_active_shows_remaining_without_extending`, `test_reopen_after_expiry_inside_cooldown_gets_no_new_discount`, `test_cooldown_zero_allows_unlimited_reopening`, `test_without_a_template_the_link_falls_back_to_normal_start`
 - `tests/services/test_update_links_panel_identity.py` — Python-модуль
   Классы: нет
   Функции: `test_update_links_fresh_row_to_the_account_it_updated`, `test_update_leaves_row_unlinked_when_sibling_row_holds_the_account`, `test_link_is_noop_for_already_linked_row`

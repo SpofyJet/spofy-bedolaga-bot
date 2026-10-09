@@ -1975,7 +1975,13 @@ def _build_connect_button_rows(user: User, texts) -> list[list[InlineKeyboardBut
 
 
 async def _send_prepaid_tariff_offer(
-    bot, new_db, template: PromoOfferTemplate, user: User, fallback_language, active_minutes: int | None = None
+    bot,
+    new_db,
+    template: PromoOfferTemplate,
+    user: User,
+    fallback_language,
+    active_minutes: int | None = None,
+    ignore_preferences: bool = False,
 ) -> bool:
     """Предложение «скидка на один тариф», активное сразу при отправке (без шага «Забрать»)."""
     from datetime import UTC, datetime, timedelta
@@ -1984,7 +1990,10 @@ async def _send_prepaid_tariff_offer(
     from app.utils.notification_prefs import is_promo_offers_enabled
     from app.utils.promo_offer import offer_discount_source
 
-    if not user.telegram_id or not settings.is_notifications_enabled() or not is_promo_offers_enabled(user):
+    if not user.telegram_id:
+        return False
+    # ignore_preferences: человек сам нажал ссылку на предложение (канал), настройка рассылок тут не при чём.
+    if not ignore_preferences and (not settings.is_notifications_enabled() or not is_promo_offers_enabled(user)):
         return False
 
     fresh = await new_db.get(User, user.id)
