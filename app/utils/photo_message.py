@@ -12,6 +12,7 @@ from .message_patch import (
     LOGO_PATH,
     _cache_logo_file_id,
     append_privacy_hint,
+    banner_text_only,
     caption_exceeds_telegram_limit,
     get_logo_media,
     is_privacy_restricted_error,
@@ -146,7 +147,7 @@ async def edit_or_answer_photo(
         return
 
     # Если режим логотипа выключен или требуется текстовое сообщение — работаем текстом
-    if force_text or not settings.ENABLE_LOGO_MODE:
+    if force_text or banner_text_only() or not settings.ENABLE_LOGO_MODE:
         try:
             if callback.message.photo:
                 await callback.message.delete()

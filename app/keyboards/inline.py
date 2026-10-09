@@ -1339,19 +1339,10 @@ def get_subscription_keyboard(
                 )
                 autopay_row = [
                     InlineKeyboardButton(
-                        text=texts.t('AUTOPAY_BUTTON', '💳 Автоплатеж'),
+                        text=texts.t('AUTOPAY_BUTTON', '🔁 Автопродление'),
                         callback_data='subscription_autopay',
                     )
                 ]
-                # На тарифах в «Настройках» лежали только устройства и перевыпуск ссылки: прослойка
-                # стоила лишнего нажатия самым частым действиям (ей пользовались ~2000 раз в месяц).
-                if settings.is_tariffs_mode() and tariff is not None and settings.is_subscription_revoke_enabled():
-                    autopay_row.append(
-                        InlineKeyboardButton(
-                            text=texts.t('SUB_REVOKE_SHORT', '🔑 Новая ссылка'),
-                            callback_data='subscription_revoke',
-                        )
-                    )
                 keyboard.append(autopay_row)
 
             # Кнопка докупки трафика для платных подписок
@@ -3702,6 +3693,15 @@ def get_devices_management_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('DEVICE_ADD_SLOT_BUTTON', '➕ Добавить место для устройства'),
                     callback_data=add_slot_callback,
+                )
+            ]
+        )
+    if settings.is_subscription_revoke_enabled() and not settings.is_multi_tariff_enabled():
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('SUBSCRIPTION_REVOKE_BTN', '🔑 Перевыпустить подписку'),
+                    callback_data='subscription_revoke',
                 )
             ]
         )

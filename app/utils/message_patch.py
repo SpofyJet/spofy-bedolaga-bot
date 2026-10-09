@@ -173,6 +173,22 @@ _variant_file_ids: dict[str, tuple[str, str]] = {}  # вариант -> (file_id
 _variant_valid: dict[str, tuple[str, bool]] = {}  # вариант -> (отпечаток, файл годится)
 
 
+# Экраны без баннера (устройства, рефералы, платежи): текст компактнее, баннер остаётся на главной и подписке.
+_text_only: ContextVar[bool] = ContextVar('banner_text_only', default=False)
+
+
+def set_banner_text_only(flag: bool):
+    return _text_only.set(flag)
+
+
+def reset_banner_text_only(token) -> None:
+    _text_only.reset(token)
+
+
+def banner_text_only() -> bool:
+    return _text_only.get()
+
+
 def set_banner_variant(variant: str | None):
     return _banner_variant.set(variant)
 
@@ -350,7 +366,7 @@ def is_topic_required_error(error: Exception) -> bool:
 
 async def _answer_with_photo(self: Message, text: str = None, **kwargs):
     # Уважаем флаг в рантайме: если логотип выключен — не подменяем ответ
-    if not settings.ENABLE_LOGO_MODE:
+    if not settings.ENABLE_LOGO_MODE or _text_only.get():
         # Фото-сообщения не показывают web page preview, текстовые — показывают.
         # Подавляем превью чтобы поведение не менялось при переключении режима логотипа.
         kwargs.setdefault('disable_web_page_preview', True)
@@ -405,7 +421,7 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
 
 async def _edit_with_photo(self: Message, text: str, **kwargs):
     # Уважаем флаг в рантайме: если логотип выключен — не подменяем редактирование
-    if not settings.ENABLE_LOGO_MODE:
+    if not settings.ENABLE_LOGO_MODE or _text_only.get():
         kwargs.setdefault('disable_web_page_preview', True)
         # Медиа-сообщения (фото/видео из рассылки и т.д.) не имеют text — edit_text упадёт.
         # Удаляем старое сообщение и отправляем новое.

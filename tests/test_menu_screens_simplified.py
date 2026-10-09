@@ -69,7 +69,8 @@ def test_paid_subscription_screen_has_devices_and_their_count(monkeypatch):
     assert 'subscription_settings' not in _flat(kb)  # прослойка «Настройки» убрана
     assert ['subscription_manage_devices', 'instant_switch'] in cbs
     assert ['subscription_change_devices'] in cbs  # количество устройств видно сразу, без обходных путей
-    assert ['subscription_autopay', 'subscription_revoke'] in cbs
+    assert ['subscription_autopay'] in cbs
+    assert 'subscription_revoke' not in _flat(kb)  # перевыпуск ссылки живёт на экране устройств
     _assert_pairs_fit(kb)
 
 
@@ -145,3 +146,12 @@ def test_paying_subscriber_always_sees_balance_even_at_zero():
     )  # fmt: skip
     flat = _flat(kb)
     assert 'menu_balance' in flat and 'menu_promocode' not in flat
+
+
+def test_devices_screen_offers_link_reissue(monkeypatch):
+    from app.utils.pagination import paginate_list
+
+    monkeypatch.setattr(settings, 'SUBSCRIPTION_REVOKE_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False, raising=False)
+    kb = inline.get_devices_management_keyboard([], paginate_list([], 1, 5), 'ru')
+    assert 'subscription_revoke' in _flat(kb)

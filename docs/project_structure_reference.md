@@ -1434,7 +1434,7 @@
   Функции: нет
 - `app/middlewares/banner_variant.py` — Python-модуль
   Классы: `BannerVariantMiddleware` (1 методов)
-  Функции: `banner_variant_for` — Имя файла баннера (без .png) для человека; ``None`` — нужен общий баннер.
+  Функции: `is_text_only_screen`, `banner_variant_for` — Имя файла баннера (без .png) для человека; ``None`` — нужен общий баннер.
 - `app/middlewares/blacklist.py` — Python-модуль
   Классы: `BlacklistMiddleware` (1 методов)
   Функции: нет
@@ -2335,7 +2335,7 @@
   Функции: `get_cached_menu_layout` — Return the current layout config (DB overrides + defaults)., `load_menu_layout_cache` — Load menu layout from DB and refresh the module cache.
 - `app/utils/message_patch.py` — Python-модуль
   Классы: нет
-  Функции: `caption_exceeds_telegram_limit` — Check if text exceeds Telegram's caption limit (1024 parsed chars)., `set_banner_variant`, `reset_banner_variant`, `get_logo_media` — Возвращает кешированный file_id или FSInputFile для логотипа., `is_qr_message`, `append_privacy_hint`, `prepare_privacy_safe_kwargs`, `is_privacy_restricted_error`, `is_topic_required_error` — Проверяет, является ли ошибка связанной с топиками/форумами., `patch_message_methods`
+  Функции: `caption_exceeds_telegram_limit` — Check if text exceeds Telegram's caption limit (1024 parsed chars)., `set_banner_text_only`, `reset_banner_text_only`, `banner_text_only`, `set_banner_variant`, `reset_banner_variant`, `get_logo_media` — Возвращает кешированный file_id или FSInputFile для логотипа., `is_qr_message`, `append_privacy_hint`, `prepare_privacy_safe_kwargs`, `is_privacy_restricted_error`, `is_topic_required_error` — Проверяет, является ли ошибка связанной с топиками/форумами., `patch_message_methods`
 - `app/utils/miniapp_buttons.py` — Python-модуль
   Классы: нет
   Функции: `strip_leading_emoji` — Удалить ведущий юникод-emoji + следующий пробел. Безопасно для текста без emoji., `build_main_menu_button` — Always-callback button for "Main Menu" / "Главное меню" navigation., `build_cabinet_url` — Join ``MINIAPP_CUSTOM_URL`` with an optional *path* segment., `build_miniapp_or_callback_button` — Create a button that opens the cabinet miniapp or falls back to a callback., `build_subscription_extend_button` — Кнопка «Продлить подписку» для уведомлений — единая точка на весь бот., `build_miniapp_startapp_url` — Собрать t.me Mini App deep link, открывающий кабинет в ЛЮБОМ типе чата., `build_admin_ticket_cabinet_button` — Кнопка «открыть тикет в админ-кабинете» для уведомления о тикете.
@@ -3210,6 +3210,9 @@
 - `tests/middlewares/`
 - `tests/migrations/`
 - `tests/services/`
+- `tests/test_banner_text_only_screens.py` — Python-модуль
+  Классы: нет
+  Функции: `test_device_referral_and_payment_screens_have_no_banner`, `test_main_subscription_and_other_screens_keep_the_banner`, `test_amount_and_withdrawal_input_states_have_no_banner`, `test_answer_without_banner_sends_plain_text`, `test_editing_a_banner_message_into_a_text_screen_replaces_it`
 - `tests/test_banner_variants.py` — Python-модуль
   Классы: нет
   Функции: `test_variant_for_each_state`, `test_paid_wins_over_trial_and_language_suffix`, `test_unknown_user_or_broken_relation_means_generic_banner`, `banners`, `test_variant_file_is_used_and_cached_by_file_id`, `test_variants_do_not_share_file_ids`, `test_missing_or_broken_variant_falls_back_to_generic_banner`, `test_replacing_the_file_drops_the_cached_file_id`, `test_shipped_banners_are_valid_and_fit_telegram_limits`
@@ -3266,7 +3269,7 @@
   Функции: `test_new_user_has_no_empty_balance_but_has_promocode_and_support`, `test_balance_stays_for_people_with_money_or_paid_history`, `test_active_subscriber_gets_support_next_to_info_and_no_promocode`, `test_support_row_collapses_to_info_alone_when_support_is_off`, `test_free_trial_is_activated_in_one_tap`, `test_paid_trial_still_shows_the_offer_screen`
 - `tests/test_menu_screens_simplified.py` — Python-модуль
   Классы: нет
-  Функции: `test_info_menu_no_longer_duplicates_support`, `test_info_menu_keeps_support_in_cabinet_mode`, `test_paid_subscription_screen_has_devices_and_their_count`, `test_devices_count_hidden_when_tariff_cannot_sell_devices`, `test_old_settings_back_button_lands_on_the_subscription_screen` — «Назад» из устройств и перевыпуска ведёт на subscription_settings: на тарифах это экран подписки., `test_support_screen_starts_with_direct_chat`, `test_referral_screen_is_one_button_per_row_and_readable`, `test_main_menu_pairs_fit_a_phone`, `test_trial_user_without_money_can_still_reach_promocode`, `test_paying_subscriber_always_sees_balance_even_at_zero`
+  Функции: `test_info_menu_no_longer_duplicates_support`, `test_info_menu_keeps_support_in_cabinet_mode`, `test_paid_subscription_screen_has_devices_and_their_count`, `test_devices_count_hidden_when_tariff_cannot_sell_devices`, `test_old_settings_back_button_lands_on_the_subscription_screen` — «Назад» из устройств и перевыпуска ведёт на subscription_settings: на тарифах это экран подписки., `test_support_screen_starts_with_direct_chat`, `test_referral_screen_is_one_button_per_row_and_readable`, `test_main_menu_pairs_fit_a_phone`, `test_trial_user_without_money_can_still_reach_promocode`, `test_paying_subscriber_always_sees_balance_even_at_zero`, `test_devices_screen_offers_link_reissue`
 - `tests/test_menu_subscription_status.py` — Python-модуль
   Классы: `DummyTexts` (1 методов)
   Функции: `test_get_subscription_status_marks_trial_as_trial`, `complaint_clock`, `test_almost_two_days_left_is_not_tomorrow`, `test_two_hours_past_local_midnight_is_tomorrow`, `test_later_today_is_today`
