@@ -975,6 +975,9 @@
 - `app/handlers/polls.py` — Python-модуль
   Классы: нет
   Функции: `handle_poll_start`, `handle_poll_answer`, `register_handlers`
+- `app/handlers/promo_deeplink.py` — Python-модуль
+  Классы: нет
+  Функции: `is_promo_deeplink`, `promo_code_from`, `claim_promo_link` — Обработать ссылку. ``True`` — параметр был промокодом и дальше его не разбирать.
 - `app/handlers/promocode.py` — Python-модуль
   Классы: нет
   Функции: `show_promocode_menu`, `activate_promocode_for_registration` — Активирует промокод для пользователя., `process_promocode`, `handle_promo_subscription_select` — Handle subscription selection for promocode with days in multi-tariff., `register_handlers`
@@ -4838,6 +4841,9 @@
 - `tests/services/test_platega_subscription_service.py` — Python-модуль
   Классы: нет
   Функции: `test_create_subscription_posts_method_6`, `test_create_subscription_stays_on_v1_even_when_v2_configured` — Spofy: v2-эндпоинт для подписок отдаёт generic-инвойс вместо формы привязки СБП, `test_create_subscription_omits_description_when_not_provided`, `test_create_subscription_truncates_long_cyrillic_description`, `test_get_subscription_is_unversioned`, `test_list_subscriptions_builds_query_params`, `test_list_subscriptions_omits_none_params`, `test_cancel_subscription_posts_cancel`, `test_format_amount_integer_and_decimal`, `test_recurrent_gate`, `test_reconcile_unconfigured_platega_is_noop` — Неконфигурированный Platega (нет мерчанта/секрета) — no-op до БД., `test_reconcile_cancelled_sweep_runs_with_recurrent_flag_off` — Cancelled-свип (ретрай недошедших отмен) обязан работать и при, `test_reconcile_marks_stuck_pending_as_failed` — Safety net: a PENDING record that never got a platega_subscription_id back, `test_reconcile_recancels_remotely_active_cancelled_record` — Контрольный свип отменённых: локальный CANCELLED, но remote-статус, `test_reconcile_skips_cancelled_record_confirmed_remotely` — CANCELLED-запись, у которой remote-статус тоже cancelled, — свип не, `test_create_subscription_raises_actionable_error_on_val0001` — VAL_0001 с key=paymentMethod (формат запроса совпадает с доками) =, `test_create_subscription_transport_failure_returns_none` — Транспортный сбой (status=None) — прежний контракт: None, без исключения., `test_create_subscription_sends_payer_metadata` — СБП-подписка — тот же POST /transaction/process: metadata обязательна и здесь., `test_reconcile_stops_on_first_401_from_platega` — Метод Subscription не включён для мерчанта (401): проход прекращается после первой записи,, `test_reconcile_is_skipped_for_six_hours_after_401` — После 401 Subscription API закрыт для мерчанта: следующий цикл вообще не ходит в Platega.
+- `tests/services/test_promo_deeplink.py` — Python-модуль
+  Классы: нет
+  Функции: `test_link_parsing`, `env`, `test_new_user_code_is_kept_for_registration`, `test_registered_user_gets_it_applied_now`, `test_used_code_tells_the_person`, `test_unknown_code_falls_through_and_counts_as_a_guess`, `test_campaign_named_promo_is_not_counted_as_a_guess`, `test_blocked_guesser_is_ignored`, `test_bad_format_is_ignored`
 - `tests/services/test_promo_group_auto_assign_notify_user.py` — Python-модуль
   Классы: нет
   Функции: `delivery`, `test_discounts_skip_zero_and_junk_periods_and_sort`, `test_telegram_user_gets_escaped_message_with_discounts`, `test_email_only_user_goes_through_router_without_bot`, `test_group_without_discounts_uses_neutral_text`, `test_switch_off_sends_nothing_and_failures_never_raise`, `test_locale_keys_exist_and_format`, `test_email_template_escapes_and_lists_discounts`, `test_email_type_is_editable_in_cabinet`, `test_assignment_notifies_user_once_and_recalculation_stays_silent`, `test_recalculation_passes_notify_user_false`

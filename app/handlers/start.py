@@ -28,6 +28,7 @@ from app.database.crud.user import (
 )
 from app.database.crud.user_message import get_random_active_message
 from app.database.models import GuestPurchase, PinnedMessage, SubscriptionStatus, UserStatus
+from app.handlers.promo_deeplink import claim_promo_link, is_promo_deeplink
 from app.handlers.subscription_deeplinks import SUBSCRIPTION_DEEPLINKS, open_subscription_deeplink
 from app.handlers.ultima_deeplink import is_ultima_deeplink, link_source, open_ultima_offer
 from app.keyboards.inline import (
@@ -1401,6 +1402,14 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         else:
             await state.update_data(pending_ultima=ultima_source)
         start_parameter = None
+
+    # /start promo_<КОД>: код с подарочного билета применяется сам (новому — после регистрации).
+    if is_promo_deeplink(start_parameter):
+        promo_user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
+        if promo_user and promo_user.status == UserStatus.DELETED.value:
+            promo_user = None
+        if await claim_promo_link(message, state, promo_user, db, start_parameter):
+            start_parameter = None
 
     # Диплинк «активировать триал» из rich-меню: /start trial.
     # Зарегистрированному юзеру бесплатный триал выдаётся ниже
