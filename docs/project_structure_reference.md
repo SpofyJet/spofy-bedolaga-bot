@@ -3243,6 +3243,9 @@
 - `tests/test_logo_resize.py` — Python-модуль
   Классы: нет
   Функции: `test_small_logo_used_as_is`, `test_oversized_logo_is_resized_under_cap` — A 2000×2000 PNG (~well over _LOGO_MAX_DIMENSION) gets resized., `test_oversized_non_square_logo_keeps_aspect` — 1980×1267 (the literal `vpn_logo.png` shipped in the repo) keeps ratio., `test_cached_resized_copy_is_reused` — Subsequent calls on the same source must hit the cached resized file., `test_missing_pil_falls_back_to_original` — If Pillow chokes on the file for any reason we return the source path —, `test_size_thresholds_are_sane` — Guard against accidental edits that would render the resize a noop., `test_get_logo_media_uses_resized_copy` — End-to-end: get_logo_media() returns FSInputFile pointing at the resized copy.
+- `tests/test_main_menu_simplified.py` — Python-модуль
+  Классы: нет
+  Функции: `test_new_user_has_no_empty_balance_but_has_promocode_and_support`, `test_balance_stays_for_people_with_money_or_paid_history`, `test_active_subscriber_gets_support_next_to_info_and_no_promocode`, `test_support_row_collapses_to_info_alone_when_support_is_off`, `test_free_trial_is_activated_in_one_tap`, `test_paid_trial_still_shows_the_offer_screen`
 - `tests/test_menu_subscription_status.py` — Python-модуль
   Классы: `DummyTexts` (1 методов)
   Функции: `test_get_subscription_status_marks_trial_as_trial`, `complaint_clock`, `test_almost_two_days_left_is_not_tomorrow`, `test_two_hours_past_local_midnight_is_tomorrow`, `test_later_today_is_today`

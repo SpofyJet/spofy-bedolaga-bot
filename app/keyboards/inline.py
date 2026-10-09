@@ -644,6 +644,8 @@ def get_main_menu_keyboard(
 
     keyboard: list[list[InlineKeyboardButton]] = []
     paired_buttons: list[InlineKeyboardButton] = []
+    # «Оплата и баланс: 0 ₽» новому человеку ни к чему: платёж ему предложат при покупке сам.
+    show_balance_button = safe_balance > 0 or bool(has_had_paid_subscription)
 
     if has_active_subscription and subscription_is_active:
         connect_mode = settings.CONNECT_BUTTON_MODE
@@ -782,7 +784,7 @@ def get_main_menu_keyboard(
 
     # n6-П1: у нового пользователя (есть CTA-ряды) баланс уходит ниже рефералки
     defer_balance = bool(subscription_buttons)
-    if not defer_balance:
+    if not defer_balance and show_balance_button:
         keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data='menu_balance')])
 
     if simple_purchase_button:
@@ -820,7 +822,7 @@ def get_main_menu_keyboard(
             ]
         )
 
-    if defer_balance:
+    if defer_balance and show_balance_button:
         # n6-П1: баланс после социального CTA
         keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data='menu_balance')])
 
@@ -830,15 +832,22 @@ def get_main_menu_keyboard(
             [InlineKeyboardButton(text=texts.t('CONTESTS_BUTTON', '🎲 Конкурсы'), callback_data='contests_menu')]
         )
 
-    # Инфо
-    keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=texts.t('MENU_INFO', 'ℹ️ Инфо'),
-                callback_data='menu_info',
-            )
-        ]
-    )
+    # Нижний блок: «Промокод» (пока нет подписки; QR с билета применяет код сам, но можно и вручную),
+    # «Поддержка» (первое, что нужно, когда не подключается) и «Инфо» — по две кнопки в ряд.
+    bottom_buttons: list[InlineKeyboardButton] = []
+    if not (has_active_subscription and subscription_is_active):
+        bottom_buttons.append(InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode'))
+    try:
+        from app.services.support_settings_service import SupportSettingsService
+
+        support_enabled = SupportSettingsService.is_support_menu_enabled()
+    except Exception:
+        support_enabled = settings.SUPPORT_MENU_ENABLED
+    if support_enabled:
+        bottom_buttons.append(InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support'))
+    bottom_buttons.append(InlineKeyboardButton(text=texts.t('MENU_INFO', 'ℹ️ Инфо'), callback_data='menu_info'))
+    for i in range(0, len(bottom_buttons), 2):
+        keyboard.append(bottom_buttons[i : i + 2])
 
     # Активация (если включена)
     if settings.ACTIVATE_BUTTON_VISIBLE:

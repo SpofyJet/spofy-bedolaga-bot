@@ -675,6 +675,14 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
         await callback.answer()
         return
 
+    # Бесплатный пробный период включается одним нажатием: экран «Активировать?» только добавлял шаг,
+    # а условия (срок, обходы, устройства) человек видит в сообщении после активации.
+    from app.services.trial_activation_service import get_trial_activation_charge_amount
+
+    if get_trial_activation_charge_amount() <= 0:
+        await activate_trial(callback, db_user, db)
+        return
+
     # Получаем параметры триала (из тарифа или из глобальных настроек)
     trial_days = settings.TRIAL_DURATION_DAYS
     trial_traffic = settings.TRIAL_TRAFFIC_LIMIT_GB
