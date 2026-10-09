@@ -1163,7 +1163,7 @@
   "DEVICE_MANAGEMENT_ACTIONS": "\n💡 <b>عملیات:</b>\n• دستگاه برای بازنشانی انتخاب کنید\n• یا همه را بازنشانی کنید",
   "DEVICE_MANAGEMENT_CONNECTED_HEADER": "<b>دستگاه‌های متصل:</b>\n",
   "DEVICE_MANAGEMENT_LIST_ITEM": "• {device}\n",
-  "DEVICE_MANAGEMENT_OVERVIEW": "📱 <b>دستگاه‌ها</b>\n\nمتصل: <b>{total} از {limit}</b>\n\n\n",
+  "DEVICE_MANAGEMENT_OVERVIEW": "📱 <b>دستگاه‌ها</b>\n\nمتصل: <b>{total} از {limit}</b>\n\n",
   "DEVICE_NONE_CONNECTED": "ℹ️ دستگاه متصلی ندارید",
   "DEVICE_PAGE_LOAD_ERROR": "❌ خطا در بارگذاری صفحه. دوباره تلاش کنید یا با پشتیبانی تماس بگیرید.",
   "DEVICE_RESET_ALL_DONE": "ℹ️ همه دستگاه‌ها بازنشانی شد",

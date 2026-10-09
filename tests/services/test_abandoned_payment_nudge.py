@@ -5,6 +5,7 @@ import sys
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -24,6 +25,12 @@ from app.services import activation_funnel_service as funnel
 
 
 NOW = datetime.now(UTC)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_now(monkeypatch):
+    """Время считается заново перед каждым тестом: иначе к концу полного прогона «минуту назад» — это уже пять."""
+    monkeypatch.setattr(sys.modules[__name__], 'NOW', datetime.now(UTC))
 
 
 def _ensure_real_aiosqlite(monkeypatch):

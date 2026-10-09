@@ -974,7 +974,7 @@
   "DEVICE_MANAGEMENT_ACTIONS": "\n💡<b>操作：</b>\n•选择要重置的设备\n•或者立即重置所有设备",
   "DEVICE_MANAGEMENT_CONNECTED_HEADER": "<b>已连接设备：</b>\n",
   "DEVICE_MANAGEMENT_LIST_ITEM": "•{device}\n",
-  "DEVICE_MANAGEMENT_OVERVIEW": "📱 <b>设备</b>\n\n已连接：<b>{total} / {limit}</b>\n\n\n\n",
+  "DEVICE_MANAGEMENT_OVERVIEW": "📱 <b>设备</b>\n\n已连接：<b>{total} / {limit}</b>\n\n",
   "DEVICE_NONE_CONNECTED": "ℹ️您没有已连接的设备",
   "DEVICE_PAGE_LOAD_ERROR": "❌加载页面失败。请重试，或联系客服。",
   "DEVICE_RESET_ALL_DONE": "ℹ️所有设备已重置",

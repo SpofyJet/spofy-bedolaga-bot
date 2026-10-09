@@ -1163,7 +1163,7 @@
   "DEVICE_MANAGEMENT_ACTIONS": "\n\n✏️ — переименовать (имя видите только вы)\n🗑 — отключить: место освободится сразу",
   "DEVICE_MANAGEMENT_CONNECTED_HEADER": "<b>Подключенные устройства:</b>\n",
   "DEVICE_MANAGEMENT_LIST_ITEM": "• {device}\n",
-  "DEVICE_MANAGEMENT_OVERVIEW": "📱 <b>Устройства</b>\n\nПодключено: <b>{total} из {limit}</b>\n\n\n\n",
+  "DEVICE_MANAGEMENT_OVERVIEW": "📱 <b>Устройства</b>\n\nПодключено: <b>{total} из {limit}</b>\n\n",
   "DEVICE_NONE_CONNECTED": "📱 Пока ни одно устройство не подключено.\n\nНажмите «Подключиться» — займёт около минуты.",
   "DEVICE_PAGE_LOAD_ERROR": "❌ Ошибка загрузки страницы. Попробуйте ещё раз или напишите в поддержку.",
   "DEVICE_RESET_ALL_DONE": "ℹ️ Все устройства отключены",
