@@ -30,6 +30,7 @@ logger = structlog.get_logger(__name__)
 
 EVENT_INVITED_BONUS = 'quest_invited_bonus'  # у друга: получил дни за приглашение
 EVENT_FRIEND_REWARD = 'quest_friend_reward'  # у пригласившего: получил дни за друга
+EVENT_REWARD_BLOCKED = 'quest_reward_blocked'  # награду не выдали: у друга общее устройство с другим человеком
 
 DAYS_FRIEND = 2  # и другу, и пригласившему
 NEW_USER_WINDOW_DAYS = 7  # «друг» — новый человек, иначе реферал-ферма из старых аккаунтов
@@ -109,6 +110,25 @@ async def _best_subscription(db: AsyncSession, user_id: int, now: datetime) -> S
     return max(alive, key=lambda s: s.end_date) if alive else None
 
 
+async def _reward_is_suspicious(user: User, subscription: Subscription) -> bool:
+    if not getattr(settings, 'TRIAL_ABUSE_REWARD_GUARD', True):
+        return False
+    from app.services.trial_abuse_service import trial_abuse_service
+
+    raw = getattr(subscription, 'remnawave_id', None) or getattr(user, 'remnawave_id', None)
+    try:
+        panel_id = int(raw)
+    except (TypeError, ValueError):
+        return False  # панель этого человека не знает — проверять нечем
+    if panel_id in trial_abuse_service._punished:
+        logger.warning('Награда за друга не выдана: аккаунт уже пойман антиабузом', user_id=user.id)
+        return True
+    if await trial_abuse_service.shares_device_with_other_person(panel_id):
+        logger.warning('Награда за друга не выдана: у друга общее устройство с другим человеком', user_id=user.id)
+        return True
+    return False
+
+
 async def on_first_connected(db: AsyncSession, user: User, subscription: Subscription | None, bot) -> bool:
     """Друг впервые подключился. Возвращает True, если награда выдана и сообщение отправлено."""
     if not _enabled() or subscription is None:
@@ -118,6 +138,12 @@ async def on_first_connected(db: AsyncSession, user: User, subscription: Subscri
         return False
     inviter = await _eligible_inviter(db, user, now)
     if inviter is None:
+        return False
+
+    # Кружок своих аккаунтов (или уже пойманный абузер) наград не получает: иначе дни можно штамповать
+    # приглашением самого себя. Решение принимает антиабуз: общее устройство с другим человеком.
+    if await _reward_is_suspicious(user, subscription):
+        await _record(db, user.id, EVENT_REWARD_BLOCKED, subscription.id)
         return False
 
     # Друг: +дни к пробному периоду.

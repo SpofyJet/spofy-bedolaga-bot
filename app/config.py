@@ -1592,6 +1592,13 @@ class Settings(BaseSettings):
     TRIAL_ABUSE_REPORT_MODE: str = 'changes'
     TRIAL_ABUSE_WARNING_TEXT: str = ''
     TRIAL_ABUSE_EXCLUDE_TELEGRAM_IDS: str = ''
+    # Нашли нарушителя на устройстве — триал снимается у ВСЕХ триальных аккаунтов группы, включая первый.
+    # Платные аккаунты неприкосновенны в любом случае.
+    TRIAL_ABUSE_PUNISH_WHOLE_GROUP: bool = True
+    # Награда «за друга» не выдаётся, если у друга общее устройство с другим человеком (кружок своих аккаунтов).
+    TRIAL_ABUSE_REWARD_GUARD: bool = True
+    # Устройства, на которых N+ аккаунтов (раздача или перепродажа подписок), попадают в отчёт админу. Не наказываются.
+    TRIAL_ABUSE_BIG_GROUP_MIN: int = 6
 
     BACKUP_AUTO_ENABLED: bool = True
     BACKUP_INTERVAL_HOURS: int = 24

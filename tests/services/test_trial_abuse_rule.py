@@ -140,20 +140,54 @@ def _realtime_service(monkeypatch, users, index, *, has_trial=True):
     return svc
 
 
-async def test_new_device_of_a_second_account_is_punished_at_once(monkeypatch):
+async def test_new_device_of_a_second_account_punishes_both_accounts(monkeypatch):
     users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=0.01, tg=222)]
     svc = _realtime_service(monkeypatch, users, _index((10, [1], 111, False), (20, [2], 222, False)))
 
     assert await svc.check_new_device(2, HWID) is True
-    assert svc._apply_action.await_args.args[1].id == 2
-    assert 2 in svc._punished
+    assert {call.args[1].id for call in svc._apply_action.await_args_list} == {1, 2}  # и первый тоже
+    assert svc._punished == {1, 2}
 
 
-async def test_owner_connecting_again_is_not_punished(monkeypatch):
+async def test_paid_first_account_keeps_its_access_and_only_the_newcomer_is_punished(monkeypatch):
+    users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=0.01, tg=222)]
+    svc = _realtime_service(monkeypatch, users, _index((10, [1], 111, True), (20, [2], 222, False)))
+
+    assert await svc.check_new_device(2, HWID) is True
+    assert {call.args[1].id for call in svc._apply_action.await_args_list} == {2}
+
+
+async def test_whole_group_punishment_can_be_switched_off(monkeypatch):
+    monkeypatch.setattr(settings, 'TRIAL_ABUSE_PUNISH_WHOLE_GROUP', False, raising=False)
+    users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=0.01, tg=222)]
+    svc = _realtime_service(monkeypatch, users, _index((10, [1], 111, False), (20, [2], 222, False)))
+
+    assert await svc.check_new_device(2, HWID) is True
+    assert {call.args[1].id for call in svc._apply_action.await_args_list} == {2}
+
+
+async def test_whitelisted_account_is_skipped_but_the_other_one_is_punished(monkeypatch):
+    monkeypatch.setattr(settings, 'TRIAL_ABUSE_EXCLUDE_TELEGRAM_IDS', '111', raising=False)
+    users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=0.01, tg=222)]
+    svc = _realtime_service(monkeypatch, users, _index((10, [1], 111, False), (20, [2], 222, False)))
+
+    assert await svc.check_new_device(2, HWID) is True
+    assert {call.args[1].id for call in svc._apply_action.await_args_list} == {2}
+
+
+async def test_owner_connecting_again_catches_the_whole_group_too(monkeypatch):
     users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=1, tg=222)]
     svc = _realtime_service(monkeypatch, users, _index((10, [1], 111, False), (20, [2], 222, False)))
 
-    assert await svc.check_new_device(1, HWID) is False
+    assert await svc.check_new_device(1, HWID) is True
+    assert {call.args[1].id for call in svc._apply_action.await_args_list} == {1, 2}
+
+
+async def test_lone_owner_is_never_punished(monkeypatch):
+    users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=1, tg=222, status=UserStatus.EXPIRED)]
+    svc = _realtime_service(monkeypatch, users, _index((10, [1], 111, False), (20, [2], 222, False)))
+
+    assert await svc.check_new_device(1, HWID) is False  # второй аккаунт уже истёк — нарушителей нет
     svc._apply_action.assert_not_awaited()
 
 
@@ -239,3 +273,99 @@ def test_reason_names_the_first_account_on_the_device():
     reason = _abusers(users, _named_index())[2]
     assert 'первый — Иван Петров (@ivan_p, tg 111)' in reason
     assert 'id=1' not in reason
+
+
+# ==================== правило группы, защита наград, отчёт ====================
+
+
+def _targets(users, index, **settings_patch):
+    svc = TrialAbuseService()
+    by_id = {u.id: u for u in users}
+    return svc._group_targets(HWID, set(by_id), by_id, index, NOW)
+
+
+def test_group_targets_include_the_first_trial_account():
+    users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=1, tg=222), _panel(3, days_ago=0.5, tg=333)]
+    index = _index((10, [1], 111, False), (20, [2], 222, False), (30, [3], 333, False))
+
+    assert set(_targets(users, index)) == {1, 2, 3}
+
+
+def test_group_targets_leave_a_paid_first_account_alone_and_ignore_clean_groups():
+    users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=1, tg=222)]
+    assert set(_targets(users, _index((10, [1], 111, True), (20, [2], 222, False)))) == {2}
+    paid_newcomer = _index((10, [1], 111, False), (20, [2], 222, True))
+    assert _targets(users, paid_newcomer) == {}  # платный новичок — не нарушитель, первого трогать не за что
+
+
+def test_big_devices_are_reported_once_a_day():
+    svc = TrialAbuseService()
+    lines = svc._big_groups_lines([(73, 25, 'AAAA0000b9ea'), (6, 0, 'BBBB1111c0de')])
+    assert 'b9ea: 73 аккаунтов, из них платных 25' in '\n'.join(lines)
+    assert svc._big_groups_report_due(NOW) is True
+    assert svc._big_groups_report_due(NOW + timedelta(hours=6)) is False
+    assert svc._big_groups_report_due(NOW + timedelta(hours=25)) is True
+
+
+def _api_for_guard(monkeypatch, svc, *, my_devices, by_hwid, index):
+    api = MagicMock()
+    api.get_user_devices = AsyncMock(return_value={'devices': my_devices})
+    api.get_hwid_devices_by_hwid = AsyncMock(side_effect=lambda hwid: by_hwid.get(hwid, []))
+    client = MagicMock()
+    client.__aenter__ = AsyncMock(return_value=api)
+    client.__aexit__ = AsyncMock(return_value=False)
+    monkeypatch.setattr(
+        'app.services.trial_abuse_service.remnawave_service', SimpleNamespace(get_api_client=lambda: client)
+    )
+    monkeypatch.setattr(svc, '_load_bot_index', AsyncMock(return_value=index))
+    return api
+
+
+async def test_device_shared_with_another_person_is_suspicious(monkeypatch):
+    svc = TrialAbuseService()
+    index = _index((10, [1], 111, False), (20, [2], 222, False))
+    _api_for_guard(
+        monkeypatch, svc, my_devices=[{'hwid': HWID}], index=index,
+        by_hwid={HWID: [{'hwid': HWID, 'userId': 1}, {'hwid': HWID, 'userId': 2}]},
+    )  # fmt: skip
+    assert await svc.shares_device_with_other_person(1) is True
+
+
+async def test_second_account_of_the_same_person_is_not_suspicious(monkeypatch):
+    svc = TrialAbuseService()
+    index = _index((10, [1, 2], 111, False))  # оба аккаунта панели — один человек бота
+    _api_for_guard(
+        monkeypatch, svc, my_devices=[{'hwid': HWID}], index=index,
+        by_hwid={HWID: [{'hwid': HWID, 'userId': 1}, {'hwid': HWID, 'userId': 2}]},
+    )  # fmt: skip
+    assert await svc.shares_device_with_other_person(1) is False
+
+
+async def test_panel_failure_never_blocks_an_honest_reward(monkeypatch):
+    svc = TrialAbuseService()
+    monkeypatch.setattr(svc, '_load_bot_index', AsyncMock(side_effect=RuntimeError('панель недоступна')))
+    assert await svc.shares_device_with_other_person(1) is False
+
+
+async def test_friend_reward_is_blocked_for_a_shared_device(monkeypatch):
+    from app.services import trial_abuse_service as module, trial_quest_service as quest
+
+    guard = AsyncMock(return_value=True)
+    monkeypatch.setattr(module.trial_abuse_service, 'shares_device_with_other_person', guard)
+    monkeypatch.setattr(settings, 'TRIAL_ABUSE_REWARD_GUARD', True, raising=False)
+    user = SimpleNamespace(id=5, remnawave_id=77)
+    assert await quest._reward_is_suspicious(user, SimpleNamespace(remnawave_id=None)) is True
+    guard.assert_awaited_once_with(77)
+    monkeypatch.setattr(settings, 'TRIAL_ABUSE_REWARD_GUARD', False, raising=False)
+    assert await quest._reward_is_suspicious(user, SimpleNamespace(remnawave_id=None)) is False
+
+
+async def test_already_punished_account_gets_no_friend_reward(monkeypatch):
+    from app.services import trial_abuse_service as module, trial_quest_service as quest
+
+    monkeypatch.setattr(settings, 'TRIAL_ABUSE_REWARD_GUARD', True, raising=False)
+    monkeypatch.setattr(module.trial_abuse_service, '_punished', {77})
+    assert (
+        await quest._reward_is_suspicious(SimpleNamespace(id=5, remnawave_id=77), SimpleNamespace(remnawave_id=None))
+        is True
+    )
