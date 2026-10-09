@@ -86,6 +86,8 @@ services:
       - ./uploads:/app/uploads:rw
       # Логотип для сообщений
       - ./vpn_logo.png:/app/vpn_logo.png:ro
+      # Баннеры по состоянию человека (новый/пробный/платный/истёкший)
+      - ./banners:/app/banners:ro
     ports:
       - '${WEB_API_PORT:-8080}:8080'
     networks:

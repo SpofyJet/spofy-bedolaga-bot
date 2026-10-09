@@ -31,6 +31,8 @@
 
 # Статические файлы
 !vpn_logo.png
+!banners/
+!banners/*.png
 
 # ========== WHITELIST: разрешённые папки ==========
 

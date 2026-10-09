@@ -25,6 +25,7 @@
 - `alembic.ini` — файл
 - `app/`
 - `assets/`
+- `banners/`
 - `docker/`
 - `docker-compose.local.yml` — файл
 - `docker-compose.yml` — файл
@@ -1431,6 +1432,9 @@
 - `app/middlewares/auth.py` — Python-модуль
   Классы: `AuthMiddleware` (1 методов)
   Функции: нет
+- `app/middlewares/banner_variant.py` — Python-модуль
+  Классы: `BannerVariantMiddleware` (1 методов)
+  Функции: `banner_variant_for` — Имя файла баннера (без .png) для человека; ``None`` — нужен общий баннер.
 - `app/middlewares/blacklist.py` — Python-модуль
   Классы: `BlacklistMiddleware` (1 методов)
   Функции: нет
@@ -2331,7 +2335,7 @@
   Функции: `get_cached_menu_layout` — Return the current layout config (DB overrides + defaults)., `load_menu_layout_cache` — Load menu layout from DB and refresh the module cache.
 - `app/utils/message_patch.py` — Python-модуль
   Классы: нет
-  Функции: `caption_exceeds_telegram_limit` — Check if text exceeds Telegram's caption limit (1024 parsed chars)., `get_logo_media` — Возвращает кешированный file_id или FSInputFile для логотипа., `is_qr_message`, `append_privacy_hint`, `prepare_privacy_safe_kwargs`, `is_privacy_restricted_error`, `is_topic_required_error` — Проверяет, является ли ошибка связанной с топиками/форумами., `patch_message_methods`
+  Функции: `caption_exceeds_telegram_limit` — Check if text exceeds Telegram's caption limit (1024 parsed chars)., `set_banner_variant`, `reset_banner_variant`, `get_logo_media` — Возвращает кешированный file_id или FSInputFile для логотипа., `is_qr_message`, `append_privacy_hint`, `prepare_privacy_safe_kwargs`, `is_privacy_restricted_error`, `is_topic_required_error` — Проверяет, является ли ошибка связанной с топиками/форумами., `patch_message_methods`
 - `app/utils/miniapp_buttons.py` — Python-модуль
   Классы: нет
   Функции: `strip_leading_emoji` — Удалить ведущий юникод-emoji + следующий пробел. Безопасно для текста без emoji., `build_main_menu_button` — Always-callback button for "Main Menu" / "Главное меню" navigation., `build_cabinet_url` — Join ``MINIAPP_CUSTOM_URL`` with an optional *path* segment., `build_miniapp_or_callback_button` — Create a button that opens the cabinet miniapp or falls back to a callback., `build_subscription_extend_button` — Кнопка «Продлить подписку» для уведомлений — единая точка на весь бот., `build_miniapp_startapp_url` — Собрать t.me Mini App deep link, открывающий кабинет в ЛЮБОМ типе чата., `build_admin_ticket_cabinet_button` — Кнопка «открыть тикет в админ-кабинете» для уведомления о тикете.
@@ -2700,6 +2704,17 @@
 
 - `assets/bedolaga_app3.svg` — файл
 - `assets/logo2.svg` — файл
+
+## banners
+
+- `banners/expired.png` — файл
+- `banners/expired_en.png` — файл
+- `banners/new.png` — файл
+- `banners/new_en.png` — файл
+- `banners/paid.png` — файл
+- `banners/paid_en.png` — файл
+- `banners/trial.png` — файл
+- `banners/trial_en.png` — файл
 
 ## docker
 
@@ -3195,6 +3210,9 @@
 - `tests/middlewares/`
 - `tests/migrations/`
 - `tests/services/`
+- `tests/test_banner_variants.py` — Python-модуль
+  Классы: нет
+  Функции: `test_variant_for_each_state`, `test_paid_wins_over_trial_and_language_suffix`, `test_unknown_user_or_broken_relation_means_generic_banner`, `banners`, `test_variant_file_is_used_and_cached_by_file_id`, `test_variants_do_not_share_file_ids`, `test_missing_or_broken_variant_falls_back_to_generic_banner`, `test_replacing_the_file_drops_the_cached_file_id`, `test_shipped_banners_are_valid_and_fit_telegram_limits`
 - `tests/test_compose_postgres_service.py` — Python-модуль
   Классы: нет
   Функции: `test_postgres_18_with_new_volume_at_the_18_mount_point`, `test_guard_is_the_entrypoint_and_sees_the_old_volume_read_only`, `test_compose_files_agree_on_the_postgres_service`, `test_initdb_args_and_healthcheck_preserved`, `guard_env` — Окружение как в контейнере: PGDATA нового кластера, старый том, подставной entrypoint., `test_guard_starts_a_fresh_install`, `test_guard_refuses_empty_18_while_15_data_exists`, `test_guard_starts_after_migration_even_if_old_volume_remains`

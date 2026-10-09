@@ -2,6 +2,7 @@ import hashlib
 import html as html_module
 import re
 import tempfile
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -162,6 +163,48 @@ def _drop_logo_cache_if_file_changed() -> None:
         _logo_send_path = None
 
 
+# Баннер по состоянию человека (новый / пробный / платный / истёкший, ru и en): файлы лежат в banners/.
+# Выбранный вариант хранится в контексте текущего обновления, поэтому все вызовы get_logo_media() —
+# а их десятки по всему боту — получают нужную картинку без изменений на местах. Нет файла или он
+# битый — молча берётся общий баннер (vpn_logo.png).
+BANNERS_DIR = Path('banners')
+_banner_variant: ContextVar[str | None] = ContextVar('banner_variant', default=None)
+_variant_file_ids: dict[str, tuple[str, str]] = {}  # вариант -> (file_id, отпечаток файла)
+_variant_valid: dict[str, tuple[str, bool]] = {}  # вариант -> (отпечаток, файл годится)
+
+
+def set_banner_variant(variant: str | None):
+    return _banner_variant.set(variant)
+
+
+def reset_banner_variant(token) -> None:
+    _banner_variant.reset(token)
+
+
+def _variant_path() -> tuple[str, Path] | None:
+    variant = _banner_variant.get()
+    if not variant:
+        return None
+    path = BANNERS_DIR / f'{variant}.png'
+    fingerprint = logo_fingerprint(path)
+    if fingerprint in ('none', 'missing'):
+        return None
+    checked = _variant_valid.get(variant)
+    if checked is None or checked[0] != fingerprint:
+        ok = False
+        try:
+            from PIL import Image
+
+            with Image.open(path) as img:
+                img.verify()
+            ok = path.stat().st_size <= 10 * 1024 * 1024
+        except Exception as exc:
+            logger.warning('Баннер состояния не годится, используется общий', variant=variant, error=str(exc))
+        _variant_valid[variant] = (fingerprint, ok)
+        checked = _variant_valid[variant]
+    return (variant, path) if checked[1] else None
+
+
 def get_logo_media():
     """Возвращает кешированный file_id или FSInputFile для логотипа.
 
@@ -171,6 +214,13 @@ def get_logo_media():
     If the source file is too large or too high-resolution for Telegram, a
     cached resized copy is used instead (see Telegram bug #339184).
     """
+    resolved = _variant_path()
+    if resolved is not None:
+        variant, path = resolved
+        cached = _variant_file_ids.get(variant)
+        if cached and cached[1] == logo_fingerprint(path):
+            return cached[0]
+        return FSInputFile(path)
     _drop_logo_cache_if_file_changed()
     if _logo_file_id:
         return _logo_file_id
@@ -185,7 +235,15 @@ def get_logo_media():
 def _cache_logo_file_id(result: Message | None) -> None:
     """Извлекает и кеширует file_id логотипа из ответа Telegram."""
     global _logo_file_id, _logo_file_id_fingerprint
-    if _logo_file_id or result is None:
+    if result is None:
+        return
+    resolved = _variant_path()
+    if resolved is not None:
+        variant, path = resolved
+        if variant not in _variant_file_ids and hasattr(result, 'photo') and result.photo:
+            _variant_file_ids[variant] = (result.photo[-1].file_id, logo_fingerprint(path))
+        return
+    if _logo_file_id:
         return
     if hasattr(result, 'photo') and result.photo:
         _logo_file_id = result.photo[-1].file_id

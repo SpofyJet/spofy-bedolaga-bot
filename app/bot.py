@@ -68,6 +68,7 @@ from app.handlers.gift_activation import register_handlers as register_gift_acti
 from app.handlers.stars_payments import register_stars_handlers
 from app.handlers.subscription import register_gift_handlers
 from app.middlewares.auth import AuthMiddleware
+from app.middlewares.banner_variant import BannerVariantMiddleware
 from app.middlewares.blacklist import BlacklistMiddleware
 from app.middlewares.button_stats import ButtonStatsMiddleware
 from app.middlewares.chat_type_filter import ChatTypeFilterMiddleware
@@ -179,6 +180,9 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.message.middleware(AuthMiddleware())
     dp.callback_query.middleware(AuthMiddleware())
     dp.pre_checkout_query.middleware(AuthMiddleware())
+    # Баннер по состоянию человека (после Auth: нужен db_user)
+    dp.message.middleware(BannerVariantMiddleware())
+    dp.callback_query.middleware(BannerVariantMiddleware())
     display_name_restriction = DisplayNameRestrictionMiddleware()
     dp.message.middleware(display_name_restriction)
     dp.callback_query.middleware(display_name_restriction)
