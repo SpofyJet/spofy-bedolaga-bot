@@ -363,6 +363,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         get_referral_keyboard(
             db_user.language,
             share_url=_build_referral_share_url(bot_referral_link, texts),
+            copy_link=bot_referral_link,
         ),
     )
     await callback.answer()

@@ -6,6 +6,7 @@ from aiogram.enums import ParseMode
 
 from app.config import settings
 from app.middlewares.stale_callback_answer import StaleCallbackAnswerMiddleware
+from app.middlewares.success_effect_request import SuccessEffectRequestMiddleware
 from app.middlewares.tidy_text_request import TidyTextRequestMiddleware
 
 
@@ -32,4 +33,6 @@ def create_bot(token: str | None = None, **kwargs) -> Bot:
     bot.session.middleware(StaleCallbackAnswerMiddleware())
     # Ни одно сообщение не уходит с рваными пустыми строками (см. middleware).
     bot.session.middleware(TidyTextRequestMiddleware())
+    # Конфетти на сообщениях об успешной оплате (см. middleware).
+    bot.session.middleware(SuccessEffectRequestMiddleware())
     return bot

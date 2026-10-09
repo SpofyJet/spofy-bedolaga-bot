@@ -2412,5 +2412,9 @@
   "SUB_DEVICES_BUTTON": "📱 Devices",
   "SUB_REVOKE_SHORT": "🔑 New link",
   "SUB_ADD_DEVICES_BUTTON": "➕ Add devices",
-  "ADMIN_PROMO_OFFER_QUEUED": "📬 Mailing started: {count} recipients (job {job_id}).\nThe summary will arrive as a message. If the bot restarts, sending resumes by itself."
+  "ADMIN_PROMO_OFFER_QUEUED": "📬 Mailing started: {count} recipients (job {job_id}).\nThe summary will arrive as a message. If the bot restarts, sending resumes by itself.",
+  "COPY_LINK_SHORT": "📋 Link",
+  "COPY_REFERRAL_LINK": "📋 Copy link",
+  "STARS_RECURRING_BUTTON": "🔁 Every 30 days",
+  "STARS_RECURRING_NOTE": "\n\n🔁 “Every 30 days”: Telegram repeats the charge itself and your balance is topped up automatically. You can cancel in Telegram: Settings → Stars → Subscriptions."
 }

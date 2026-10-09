@@ -2412,5 +2412,9 @@
   "SUB_DEVICES_BUTTON": "📱 设备",
   "SUB_REVOKE_SHORT": "🔑 新链接",
   "SUB_ADD_DEVICES_BUTTON": "➕ 增加设备",
-  "ADMIN_PROMO_OFFER_QUEUED": "📬 群发已开始：{count} 位接收者（任务 {job_id}）。\n结果将以消息形式发送。机器人重启后会自动继续发送。"
+  "ADMIN_PROMO_OFFER_QUEUED": "📬 群发已开始：{count} 位接收者（任务 {job_id}）。\n结果将以消息形式发送。机器人重启后会自动继续发送。",
+  "COPY_LINK_SHORT": "📋 链接",
+  "COPY_REFERRAL_LINK": "📋 复制链接",
+  "STARS_RECURRING_BUTTON": "🔁 每 30 天",
+  "STARS_RECURRING_NOTE": "\n\n🔁 “每 30 天”：Telegram 会自动重复扣款，余额自动充值。可在 Telegram 中取消：设置 → 星星 → 订阅。"
 }
