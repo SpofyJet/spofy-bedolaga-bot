@@ -891,10 +891,7 @@ class ActivationFunnelService:
             texts = get_texts(user.language)
             text = texts.get(
                 'TRIAL_ENDING_1D',
-                (
-                    '⏳ <b>Пробный период закончится завтра</b>\n\n'
-                    'Оформите подписку сегодня: доступ не прервётся, настройки сохранятся.'
-                ),
+                ('⏳ <b>Пробный период закончится завтра</b>\n\nОформите подписку сегодня, и доступ не прервётся.'),
             )
             rows = [[InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')]]
             if settings.is_referral_program_enabled() and getattr(settings, 'TRIAL_QUESTS_ENABLED', True):

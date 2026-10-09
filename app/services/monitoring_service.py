@@ -2034,8 +2034,7 @@ class MonitoringService:
                 get_texts(user.language)
                 .t(
                     'SUBSCRIPTION_EXPIRED',
-                    '🔴 <b>Подписка{tariff_label} закончилась</b>\n\nVPN больше не подключается. Продлите — '
-                    'всё заработает на прежних настройках.',
+                    '🔴 <b>Подписка{tariff_label} закончилась</b>\n\nПродлите, и VPN снова заработает.',
                 )
                 .format(tariff_label=tariff_label)
             )
@@ -2204,7 +2203,7 @@ class MonitoringService:
                 'TRIAL_ENDING_SOON',
                 (
                     '⏰ <b>Пробный период закончится через 2 часа</b>\n\n'
-                    'Оформите подписку сейчас, и VPN продолжит работать без перенастройки.'
+                    'Оформите подписку сейчас, и VPN продолжит работать.'
                 ),
             )
 
