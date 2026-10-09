@@ -3212,7 +3212,7 @@
 - `tests/services/`
 - `tests/test_banner_text_only_screens.py` — Python-модуль
   Классы: нет
-  Функции: `test_device_referral_and_payment_screens_have_no_banner`, `test_main_subscription_and_other_screens_keep_the_banner`, `test_amount_and_withdrawal_input_states_have_no_banner`, `test_answer_without_banner_sends_plain_text`, `test_editing_a_banner_message_into_a_text_screen_replaces_it`
+  Функции: `test_device_referral_and_payment_screens_have_no_banner`, `test_main_subscription_and_other_screens_keep_the_banner`, `test_amount_and_withdrawal_input_states_have_no_banner`, `test_answer_without_banner_sends_plain_text`, `test_editing_a_banner_message_into_a_text_screen_replaces_it`, `test_middleware_sets_the_flag_only_for_the_handler`
 - `tests/test_banner_variants.py` — Python-модуль
   Классы: нет
   Функции: `test_variant_for_each_state`, `test_paid_wins_over_trial_and_language_suffix`, `test_unknown_user_or_broken_relation_means_generic_banner`, `banners`, `test_variant_file_is_used_and_cached_by_file_id`, `test_variants_do_not_share_file_ids`, `test_missing_or_broken_variant_falls_back_to_generic_banner`, `test_replacing_the_file_drops_the_cached_file_id`, `test_shipped_banners_are_valid_and_fit_telegram_limits`

@@ -376,7 +376,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 tariff_type_str = '🔄 Суточный' if is_daily else '📅 Периодный'
 
                 # Трафик и устройства ниже уже показаны в блоке подписки — здесь только название.
-                tariff_info_lines = [f'<b>📦 {html.escape(tariff.name)}</b>']
+                tariff_info_lines = [f'<b>{html.escape(tariff.name)}</b>']
                 if is_daily:
                     tariff_info_lines.append(f'Тип: {tariff_type_str}')
 

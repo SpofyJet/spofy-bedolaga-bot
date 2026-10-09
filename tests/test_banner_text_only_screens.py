@@ -59,3 +59,26 @@ async def test_editing_a_banner_message_into_a_text_screen_replaces_it(monkeypat
         message_patch.reset_banner_text_only(token)
     assert result == 'new text message'
     message.delete.assert_awaited_once()  # фото-сообщение с баннером заменено текстовым
+
+
+async def test_middleware_sets_the_flag_only_for_the_handler(monkeypatch):
+    from aiogram.types import CallbackQuery
+
+    from app.middlewares.banner_variant import BannerVariantMiddleware
+
+    seen = {}
+
+    async def handler(event, data):
+        seen['text_only'] = message_patch.banner_text_only()
+        return 'ok'
+
+    event = MagicMock(spec=CallbackQuery)
+    event.data = 'menu_referrals'
+    state = MagicMock(get_state=AsyncMock(return_value=None))
+    data = {'db_user': SimpleNamespace(subscriptions=[], language='ru'), 'state': state}
+    assert await BannerVariantMiddleware()(handler, event, data) == 'ok'
+    assert seen['text_only'] is True
+    assert message_patch.banner_text_only() is False  # после обработчика флаг сброшен
+    event.data = 'menu_subscription'
+    await BannerVariantMiddleware()(handler, event, data)
+    assert seen['text_only'] is False
