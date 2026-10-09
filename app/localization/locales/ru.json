@@ -1160,7 +1160,7 @@
   "DEVICE_GUIDE_MAC": "💻 macOS",
   "DEVICE_GUIDE_WINDOWS": "💻 Windows",
   "DEVICE_LIST_FETCH_ERROR": "❌ Ошибка получения списка устройств. Попробуйте ещё раз или напишите в поддержку.",
-  "DEVICE_MANAGEMENT_ACTIONS": "\n\n✏️ — переименовать (имя видите только вы)\n🗑 — отключить: место освободится сразу",
+  "DEVICE_MANAGEMENT_ACTIONS": "\n✏️ — переименовать (имя видите только вы)\n🗑 — отключить: место освободится сразу",
   "DEVICE_MANAGEMENT_CONNECTED_HEADER": "<b>Подключенные устройства:</b>\n",
   "DEVICE_MANAGEMENT_LIST_ITEM": "• {device}\n",
   "DEVICE_MANAGEMENT_OVERVIEW": "📱 <b>Устройства</b>\n\nПодключено: <b>{total} из {limit}</b>\n\n",

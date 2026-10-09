@@ -1033,7 +1033,7 @@
   "DEVICE_GUIDE_MAC": "💻 macOS",
   "DEVICE_GUIDE_WINDOWS": "💻 Windows",
   "DEVICE_LIST_FETCH_ERROR": "❌ Failed to load device list. Try again or contact support.",
-  "DEVICE_MANAGEMENT_ACTIONS": "\n\n✏️ — rename (only you see the name)\n🗑 — disconnect: the slot frees up right away",
+  "DEVICE_MANAGEMENT_ACTIONS": "\n✏️ — rename (only you see the name)\n🗑 — disconnect: the slot frees up right away",
   "DEVICE_MANAGEMENT_CONNECTED_HEADER": "<b>Connected devices:</b>\n",
   "DEVICE_MANAGEMENT_LIST_ITEM": "• {device}\n",
   "DEVICE_MANAGEMENT_OVERVIEW": "📱 <b>Devices</b>\n\nConnected: <b>{total} of {limit}</b>\n\n",
