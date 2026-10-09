@@ -1452,21 +1452,6 @@ def get_subscription_keyboard(
             ]
         )
 
-    # «Подключиться» + «📋 Ссылка»: ссылка копируется одним нажатием (copy_text) вместо «выделите и скопируйте»
-    if has_subscription and subscription is not None:
-        copy_link = get_display_subscription_link(subscription)
-        if copy_link and len(copy_link) <= 256:
-            connect_text = texts.t('CONNECT_BUTTON', '🔗 Подключиться')
-            for row in keyboard:
-                if len(row) == 1 and row[0].text == connect_text:
-                    row.append(
-                        InlineKeyboardButton(
-                            text=texts.t('COPY_LINK_SHORT', '📋 Ссылка'),
-                            copy_text=types.CopyTextButton(text=copy_link),
-                        )
-                    )
-                    break
-
     # n6-П3: из экрана подписки — сразу «🏠 В главное меню» (callback тот же)
     keyboard.append(
         [
