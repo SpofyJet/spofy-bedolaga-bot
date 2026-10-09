@@ -2411,5 +2411,6 @@
   "REFERRAL_INVITE_FRIEND_DAYS": "🤝 通过我的链接连接，再送你 {days} 天。",
   "SUB_DEVICES_BUTTON": "📱 设备",
   "SUB_REVOKE_SHORT": "🔑 新链接",
-  "SUB_ADD_DEVICES_BUTTON": "➕ 增加设备"
+  "SUB_ADD_DEVICES_BUTTON": "➕ 增加设备",
+  "ADMIN_PROMO_OFFER_QUEUED": "📬 群发已开始：{count} 位接收者（任务 {job_id}）。\n结果将以消息形式发送。机器人重启后会自动继续发送。"
 }

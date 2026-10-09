@@ -23,6 +23,7 @@ from app.database.constants import ALIVE_SUBSCRIPTION_STATUSES
 from app.database.crud.subscription import extend_subscription
 from app.database.models import Subscription, SubscriptionEvent, User
 from app.localization.texts import get_texts
+from app.services.decision_log import KIND_REWARD_BLOCKED, KIND_REWARD_GRANTED, record_decision
 from app.utils.timezone import format_local_datetime
 
 
@@ -144,11 +145,21 @@ async def on_first_connected(db: AsyncSession, user: User, subscription: Subscri
     # приглашением самого себя. Решение принимает антиабуз: общее устройство с другим человеком.
     if await _reward_is_suspicious(user, subscription):
         await _record(db, user.id, EVENT_REWARD_BLOCKED, subscription.id)
+        await record_decision(
+            KIND_REWARD_BLOCKED,
+            'Награда за друга не выдана: общее устройство с другим человеком или аккаунт уже пойман антиабузом',
+            user_id=user.id,
+            details={'inviter_id': inviter.id},
+        )
         return False
 
     # Друг: +дни к пробному периоду.
     await _add_days(db, subscription, DAYS_FRIEND)
     await _record(db, user.id, EVENT_INVITED_BONUS, subscription.id)
+    await record_decision(
+        KIND_REWARD_GRANTED, f'Друг подключился: +{DAYS_FRIEND} дн. ему и пригласившему', user_id=user.id,
+        details={'inviter_id': inviter.id, 'days': DAYS_FRIEND},
+    )
     texts = get_texts(user.language)
     friend_text = '\n'.join(
         [

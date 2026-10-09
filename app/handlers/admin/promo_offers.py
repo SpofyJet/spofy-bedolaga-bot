@@ -2189,9 +2189,15 @@ async def _send_offer_to_users(
                         parse_mode='HTML',
                     )
                     return True
-            except (TelegramForbiddenError, TelegramBadRequest) as exc:
+            except TelegramForbiddenError:
+                # Человек заблокировал бота: ожидаемо при массовой отправке (были тысячи трассировок за день).
+                logger.debug('Предложение не доставлено: бот заблокирован', telegram_id=user.telegram_id or user.id)
+                return False
+            except TelegramBadRequest as exc:
                 logger.warning(
-                    'Не удалось отправить предложение пользователю', telegram_id=user.telegram_id or user.id, exc=exc
+                    'Не удалось отправить предложение пользователю',
+                    telegram_id=user.telegram_id or user.id,
+                    error=str(exc)[:200],
                 )
                 return False
             except Exception as exc:  # pragma: no cover - defensive logging
@@ -2278,55 +2284,38 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
 
     skipped = initial_count - len(users)
     effect_type = config.get('effect_type', 'percent_discount')
-    sent, failed, already = await _send_offer_to_users(
-        callback.bot,
-        template,
-        db_user,
-        db,
-        users,
-        squad_name=squad_name,
+
+    # Отправка идёт фоновым заданием в базе: переживает перезапуск бота и не держит соединение обработчика.
+    from app.services.mass_send_service import mass_send_service
+
+    job_id = await mass_send_service.create_promo_offer_job(
+        template_id=template.id,
+        segment=segment,
+        admin_user_id=db_user.id,
+        chat_id=callback.message.chat.id,
+        language=db_user.language,
+        user_ids=[user.id for user in users],
         effect_type=effect_type,
+        squad_name=squad_name,
+        skipped=skipped,
     )
-
-    summary = texts.t(
-        'ADMIN_PROMO_OFFER_RESULT',
-        '📬 Рассылка завершена\nОтправлено: {sent}\nОшибок: {failed}',
-    ).format(sent=sent, failed=failed)
-    if already > 0:
-        summary += '\n' + texts.t(
-            'ADMIN_PROMO_OFFER_ALREADY',
-            'Уже получали это предложение (или у них действует другая скидка): {already}',
-        ).format(already=already)
-    if skipped > 0:
-        summary += '\n' + texts.t(
-            'ADMIN_PROMO_OFFER_SKIPPED',
-            'Пропущено: {skipped} (уже есть доступ)',
-        ).format(skipped=skipped)
-    refreshed = await get_promo_offer_template_by_id(db, template.id)
-    result_keyboard_rows: list[list[InlineKeyboardButton]] = []
-
-    if refreshed:
-        result_keyboard_rows.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_TEMPLATE', '↩️ К предложению'),
-                    callback_data=f'promo_offer_{refreshed.id}',
-                )
-            ]
-        )
-
-    result_keyboard_rows.append(
-        [
-            InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_LIST', '⬅️ К промопредложениям'),
-                callback_data='admin_promo_offers',
-            )
-        ]
-    )
-
+    started = texts.t(
+        'ADMIN_PROMO_OFFER_QUEUED',
+        '📬 Рассылка запущена: {count} получателей (задание {job_id}).\n'
+        'Итог придёт сообщением. Если бот перезапустится, отправка продолжится сама.',
+    ).format(count=len(users), job_id=job_id)
     await callback.message.edit_text(
-        summary,
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=result_keyboard_rows),
+        started,
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_LIST', '⬅️ К промопредложениям'),
+                        callback_data='admin_promo_offers',
+                    )
+                ]
+            ]
+        ),
         parse_mode='HTML',
     )
 

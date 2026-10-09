@@ -363,6 +363,12 @@ async def main():
         grace_access_runtime.bot = bot
         maintenance_service.set_bot(bot)
         broadcast_service.set_bot(bot)
+        from app.services.mass_send_service import mass_send_service
+
+        mass_send_service.set_bot(bot)
+        # Отправки, которые оборвал перезапуск, продолжаются с сохранённой позиции (в фоне, старт не ждёт)
+        asyncio.create_task(mass_send_service.resume_unfinished(), name='mass-send-resume')
+        asyncio.create_task(broadcast_service.resume_interrupted(), name='broadcast-resume')
         ban_notification_service.set_bot(bot)
         traffic_monitoring_scheduler.set_bot(bot)
         trial_abuse_service.set_bot(bot)

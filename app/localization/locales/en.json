@@ -2411,5 +2411,6 @@
   "REFERRAL_INVITE_FRIEND_DAYS": "🤝 Connect via my link and get {days} more days as a gift.",
   "SUB_DEVICES_BUTTON": "📱 Devices",
   "SUB_REVOKE_SHORT": "🔑 New link",
-  "SUB_ADD_DEVICES_BUTTON": "➕ Add devices"
+  "SUB_ADD_DEVICES_BUTTON": "➕ Add devices",
+  "ADMIN_PROMO_OFFER_QUEUED": "📬 Mailing started: {count} recipients (job {job_id}).\nThe summary will arrive as a message. If the bot restarts, sending resumes by itself."
 }

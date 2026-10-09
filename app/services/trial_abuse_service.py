@@ -47,6 +47,7 @@ from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import Subscription, User
 from app.external.remnawave_api import RemnaWaveUser, UserStatus
+from app.services.decision_log import KIND_ABUSE_BIG_DEVICES, KIND_ABUSE_TRIAL_REMOVED, record_decision
 from app.services.remnawave_service import remnawave_service
 
 
@@ -290,6 +291,7 @@ class TrialAbuseService:
                     punished_ok.append(label + (' 📨' if notified else ''))
                     stats['punished'] += 1
                     logger.warning(f'Антиабуз триалов: наказан {plain} -> {detail}')
+                    await self._journal(panel_user, bot_index, reason, detail, notified, source='scheduled')
                 else:
                     punished_fail.append(f'{label}: {html.escape(str(detail))}')
                     stats['errors'] += 1
@@ -522,6 +524,7 @@ class TrialAbuseService:
                         self._punished.add(target_id)
                         logger.warning(f'Антиабуз триалов: наказан при подключении {plain} -> {detail}')
                         done.append((label, plain, notified))
+                        await self._journal(target, bot_index, reason, detail, notified, source='realtime')
                     else:
                         logger.error(f'Антиабуз триалов: ошибка наказания при подключении {plain}: {detail}')
                         failed.append(f'{label}: {html.escape(str(detail))}')
@@ -727,6 +730,25 @@ class TrialAbuseService:
         )
         return list(result.scalars().all())
 
+    async def _journal(
+        self,
+        panel_user: RemnaWaveUser,
+        bot_index: dict[str, Any],
+        reason: str,
+        detail: str,
+        notified: bool,
+        *,
+        source: str,
+    ) -> None:
+        record = self._bot_record(panel_user, bot_index) or {}
+        await record_decision(
+            KIND_ABUSE_TRIAL_REMOVED,
+            f'{self._who(panel_user, bot_index)} — {reason}',
+            user_id=record.get('bot_user_id'),
+            panel_user_id=panel_user.id,
+            details={'action': detail, 'source': source, 'notified': notified},
+        )
+
     async def _send_warning(self, telegram_id: int) -> bool:
         if not self.bot:
             return False
@@ -749,6 +771,7 @@ class TrialAbuseService:
         only_big_groups: bool = False,
     ) -> None:
         if only_big_groups:
+            await self._journal_big_groups(big_groups or [])
             await self._notify_admin('\n'.join(self._big_groups_lines(big_groups or [])))
             return
         lines = [
@@ -771,9 +794,17 @@ class TrialAbuseService:
         if not punished_ok and not punished_fail:
             lines.append('\n✅ Нарушителей не найдено, всё чисто.')
         if big_groups and self._big_groups_report_due(datetime.now(UTC)):
+            await self._journal_big_groups(big_groups)
             lines.append('')
             lines.extend(self._big_groups_lines(big_groups))
         await self._notify_admin('\n'.join(lines))
+
+    async def _journal_big_groups(self, big_groups: list[tuple[int, int, str]]) -> None:
+        await record_decision(
+            KIND_ABUSE_BIG_DEVICES,
+            f'{len(big_groups)} устройств с {self.get_big_group_min()}+ аккаунтами',
+            details={'top': [{'accounts': a, 'paid': p, 'hwid_tail': h[-6:]} for a, p, h in big_groups[:8]]},
+        )
 
     def _big_groups_report_due(self, now: datetime) -> bool:
         """Подозрительные устройства — не чаще раза в сутки, иначе отчёт каждые 6 часов повторяет одно и то же."""

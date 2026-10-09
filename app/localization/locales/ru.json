@@ -2411,5 +2411,6 @@
   "REFERRAL_INVITE_FRIEND_DAYS": "🤝 Подключишься по моей ссылке — получишь ещё {days} дн. в подарок.",
   "SUB_DEVICES_BUTTON": "📱 Устройства",
   "SUB_REVOKE_SHORT": "🔑 Новая ссылка",
-  "SUB_ADD_DEVICES_BUTTON": "➕ Докупить устройства"
+  "SUB_ADD_DEVICES_BUTTON": "➕ Докупить устройства",
+  "ADMIN_PROMO_OFFER_QUEUED": "📬 Рассылка запущена: {count} получателей (задание {job_id}).\nИтог придёт сообщением. Если бот перезапустится, отправка продолжится сама."
 }

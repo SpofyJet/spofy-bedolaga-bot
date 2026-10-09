@@ -350,6 +350,9 @@ async def admin_commands_help(message: types.Message, db_user: User, db: AsyncSe
 • <code>/clear_rules</code> - очистить все правила
 • <code>/rules_stats</code> - статистика правил
 
+<b>🧾 Журнал решений:</b>
+• <code>/decisions</code> - что сделали антиабуз, награды, рассылки
+
 <b>ℹ️ Справка:</b>
 • <code>/admin_help</code> - это сообщение
 
@@ -389,3 +392,7 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(rules_stats_command, Command('rules_stats'))
 
     dp.message.register(admin_commands_help, Command('admin_help'))
+
+    from app.handlers.admin import decisions as decisions_handlers
+
+    decisions_handlers.register_handlers(dp)

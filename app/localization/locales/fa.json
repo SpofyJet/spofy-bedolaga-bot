@@ -2411,5 +2411,6 @@
   "REFERRAL_INVITE_FRIEND_DAYS": "🤝 با لینک من وصل شوی، {days} روز دیگر هدیه می‌گیری.",
   "SUB_DEVICES_BUTTON": "📱 دستگاه‌ها",
   "SUB_REVOKE_SHORT": "🔑 لینک جدید",
-  "SUB_ADD_DEVICES_BUTTON": "➕ افزودن دستگاه"
+  "SUB_ADD_DEVICES_BUTTON": "➕ افزودن دستگاه",
+  "ADMIN_PROMO_OFFER_QUEUED": "📬 ارسال شروع شد: {count} گیرنده (کار {job_id}).\nنتیجه به‌صورت پیام می‌رسد. اگر ربات دوباره راه‌اندازی شود، ارسال خودکار ادامه می‌یابد."
 }

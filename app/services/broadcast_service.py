@@ -4,7 +4,7 @@ import asyncio
 import functools
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import structlog
@@ -183,7 +183,7 @@ class BroadcastService:
         task_entry = self._tasks.get(broadcast_id)
         return bool(task_entry and not task_entry.task.done())
 
-    async def start_broadcast(self, broadcast_id: int, config: BroadcastConfig) -> None:
+    async def start_broadcast(self, broadcast_id: int, config: BroadcastConfig, *, resume: bool = False) -> None:
         if self._bot is None:
             logger.error('Невозможно запустить рассылку : бот не инициализирован', broadcast_id=broadcast_id)
             await self._mark_failed(broadcast_id)
@@ -197,7 +197,7 @@ class BroadcastService:
                 return
 
             task = asyncio.create_task(
-                self._run_broadcast(broadcast_id, config, cancel_event),
+                self._run_broadcast(broadcast_id, config, cancel_event, resume=resume),
                 name=f'broadcast-{broadcast_id}',
             )
             self._tasks[broadcast_id] = _BroadcastTask(task=task, cancel_event=cancel_event)
@@ -217,10 +217,13 @@ class BroadcastService:
         broadcast_id: int,
         config: BroadcastConfig,
         cancel_event: asyncio.Event,
+        *,
+        resume: bool = False,
     ) -> None:
         sent_count = 0
         failed_count = 0
         blocked_count = 0
+        cursor_offset = 0
 
         try:
             if cancel_event.is_set():
@@ -234,14 +237,26 @@ class BroadcastService:
                     return
 
                 broadcast.status = 'in_progress'
-                broadcast.sent_count = 0
-                broadcast.failed_count = 0
-                broadcast.blocked_count = 0
+                if resume:
+                    # Продолжение после перезапуска: счётчики и позиция остаются прежними
+                    sent_count = broadcast.sent_count or 0
+                    failed_count = broadcast.failed_count or 0
+                    blocked_count = broadcast.blocked_count or 0
+                    cursor_offset = broadcast.resume_cursor or 0
+                else:
+                    broadcast.sent_count = 0
+                    broadcast.failed_count = 0
+                    broadcast.blocked_count = 0
                 await session.commit()
 
             # _fetch_recipients теперь возвращает list[int] (telegram_id), а не ORM-объекты
-            if config.recipient_ids is not None:
-                recipient_ids: list[int] = list(config.recipient_ids)
+            if resume:
+                async with AsyncSessionLocal() as session:
+                    stored = await session.get(BroadcastHistory, broadcast_id)
+                    all_ids = [int(i) for i in (stored.recipient_ids or [])] if stored else []
+                recipient_ids: list[int] = all_ids[cursor_offset:]
+            elif config.recipient_ids is not None:
+                recipient_ids = list(config.recipient_ids)
             else:
                 recipient_ids = await self._fetch_recipients(config.target, config.category, config.audience)
 
@@ -251,7 +266,13 @@ class BroadcastService:
                     logger.error('Запись рассылки удалена до запуска', broadcast_id=broadcast_id)
                     return
 
-                broadcast.total_count = len(recipient_ids)
+                if not resume:
+                    broadcast.total_count = len(recipient_ids)
+                    # Получатели и настройки сохраняются: перезапуск бота не оборвёт рассылку насовсем
+                    if config.keyboard_factory is None:
+                        broadcast.recipient_ids = list(recipient_ids)
+                        broadcast.resume_cursor = 0
+                        broadcast.resume_config = self._serialize_config(config)
                 await session.commit()
 
             if cancel_event.is_set():
@@ -283,6 +304,8 @@ class BroadcastService:
                 config,
                 keyboard,
                 cancel_event,
+                initial_counts=(sent_count, failed_count, blocked_count),
+                cursor_offset=cursor_offset,
             )
 
             if cancelled_during_run:
@@ -312,6 +335,76 @@ class BroadcastService:
         except Exception as exc:
             logger.exception('Критическая ошибка при выполнении рассылки', broadcast_id=broadcast_id, exc=exc)
             await self._mark_failed(broadcast_id, sent_count, failed_count, blocked_count)
+
+    @staticmethod
+    def _serialize_config(config: BroadcastConfig) -> dict:
+        return {
+            'target': config.target,
+            'message_text': config.message_text,
+            'selected_buttons': list(config.selected_buttons or []),
+            'media': (
+                {'type': config.media.type, 'file_id': config.media.file_id, 'caption': config.media.caption}
+                if config.media
+                else None
+            ),
+            'initiator_name': config.initiator_name,
+            'custom_buttons': config.custom_buttons,
+            'category': config.category,
+        }
+
+    @staticmethod
+    def _deserialize_config(data: dict) -> BroadcastConfig:
+        media = data.get('media')
+        return BroadcastConfig(
+            target=data['target'],
+            message_text=data.get('message_text') or '',
+            selected_buttons=list(data.get('selected_buttons') or []),
+            media=BroadcastMediaConfig(**media) if media else None,
+            initiator_name=data.get('initiator_name'),
+            custom_buttons=data.get('custom_buttons'),
+            category=data.get('category') or 'system',
+        )
+
+    async def resume_interrupted(self, max_age_hours: int = 72) -> int:
+        """При старте бота: продолжить рассылки, которые оборвал перезапуск. Возвращает их число."""
+        from sqlalchemy import select
+
+        from app.services.decision_log import KIND_BROADCAST_RESUMED, record_decision
+
+        since = datetime.now(UTC) - timedelta(hours=max_age_hours)
+        async with AsyncSessionLocal() as session:
+            rows = await session.execute(
+                select(BroadcastHistory).where(
+                    BroadcastHistory.status == 'in_progress',
+                    BroadcastHistory.recipient_ids.isnot(None),
+                    BroadcastHistory.resume_config.isnot(None),
+                    BroadcastHistory.created_at >= since,
+                )
+            )
+            candidates = [
+                (b.id, b.resume_config, int(b.resume_cursor or 0), len(b.recipient_ids or []))
+                for b in rows.scalars().all()
+            ]
+        resumed = 0
+        for broadcast_id, stored_config, cursor, total in candidates:
+            if cursor >= total or self.is_running(broadcast_id):
+                continue
+            try:
+                config = self._deserialize_config(stored_config)
+            except Exception as error:
+                logger.warning('Рассылку не удалось восстановить', broadcast_id=broadcast_id, error=str(error))
+                continue
+            logger.warning(
+                'Продолжаем рассылку после перезапуска', broadcast_id=broadcast_id, cursor=cursor, total=total
+            )
+            await record_decision(
+                KIND_BROADCAST_RESUMED,
+                f'Рассылка {broadcast_id} продолжена после перезапуска бота: обработано {cursor} из {total}',
+                details={'broadcast_id': broadcast_id, 'cursor': cursor, 'total': total},
+            )
+            await self.start_broadcast(broadcast_id, config, resume=True)
+            resumed += 1
+        return resumed
 
     async def _fetch_recipients(
         self, target: str, category: str = 'system', audience: BroadcastAudience | None = None
@@ -349,6 +442,9 @@ class BroadcastService:
         config: BroadcastConfig,
         keyboard: InlineKeyboardMarkup | None,
         cancel_event: asyncio.Event,
+        *,
+        initial_counts: tuple[int, int, int] = (0, 0, 0),
+        cursor_offset: int = 0,
     ) -> tuple[int, int, int, bool]:
         """
         Единый метод рассылки для любого количества получателей.
@@ -359,15 +455,11 @@ class BroadcastService:
 
         Returns (sent_count, failed_count, blocked_count, was_cancelled).
         """
-        sent_count = 0
-        failed_count = 0
-        blocked_count = 0
+        sent_count, failed_count, blocked_count = initial_counts
         blocked_telegram_ids: list[int] = []
 
         # Глобальная пауза при FloodWait — все корутины ждут
         flood_wait_until: float = 0.0
-        last_progress_update: float = 0.0
-        last_progress_count: int = 0
         # Отказы Telegram (BadRequest) по тексту причины — для лога и сводки.
         bad_request_causes: dict[str, int] = {}
 
@@ -478,16 +570,10 @@ class BroadcastService:
                     failed_count += 1
                     logger.error('Необработанное исключение в рассылке', broadcast_id=broadcast_id, result=result)
 
-            # Обновляем прогресс в БД периодически
-            processed = sent_count + failed_count + blocked_count
-            now = asyncio.get_event_loop().time()
-            if (
-                processed - last_progress_count >= _PROGRESS_UPDATE_MESSAGES
-                or now - last_progress_update >= _PROGRESS_MIN_INTERVAL_SEC
-            ):
-                await self._update_progress(broadcast_id, sent_count, failed_count, blocked_count)
-                last_progress_count = processed
-                last_progress_update = now
+            # Прогресс и позиция в БД: после каждого батча, чтобы перезапуск потерял не больше одного батча
+            await self._update_progress(
+                broadcast_id, sent_count, failed_count, blocked_count, cursor=cursor_offset + i + len(batch)
+            )
 
             # Задержка между батчами для rate limiting
             await asyncio.sleep(_TG_BATCH_DELAY)
@@ -613,8 +699,9 @@ class BroadcastService:
         sent_count: int,
         failed_count: int,
         blocked_count: int = 0,
+        cursor: int | None = None,
     ) -> None:
-        """Периодически обновляет прогресс рассылки, чтобы держать соединение активным."""
+        """Обновляет прогресс рассылки и позицию (по ней рассылка продолжится после перезапуска бота)."""
 
         await self._safe_status_update(
             broadcast_id,
@@ -623,6 +710,7 @@ class BroadcastService:
             blocked_count,
             status='in_progress',
             update_completed_at=False,
+            cursor=cursor,
         )
 
     async def _safe_status_update(
@@ -634,6 +722,7 @@ class BroadcastService:
         *,
         status: str,
         update_completed_at: bool = True,
+        cursor: int | None = None,
     ) -> None:
         attempts = 0
 
@@ -648,6 +737,8 @@ class BroadcastService:
                     broadcast.failed_count = failed_count
                     broadcast.blocked_count = blocked_count
                     broadcast.status = status
+                    if cursor is not None:
+                        broadcast.resume_cursor = cursor
 
                     if update_completed_at:
                         broadcast.completed_at = datetime.now(UTC)

@@ -3934,6 +3934,11 @@ class BroadcastHistory(Base):
     email_subject = Column(String(255), nullable=True)
     email_html_content = Column(Text, nullable=True)
 
+    # Возобновление после перезапуска бота: кому и как слать, и сколько получателей уже обработано.
+    recipient_ids = Column(JSON, nullable=True)  # list[int] telegram_id в порядке отправки
+    resume_cursor = Column(Integer, nullable=False, default=0, server_default='0')
+    resume_config = Column(JSON, nullable=True)  # то, что нужно, чтобы собрать BroadcastConfig заново
+
     admin = relationship('User', back_populates='broadcasts')
 
 
@@ -5501,3 +5506,48 @@ class UserReminderState(Base):
     # Последний успех — по нему общий лимит «одно напоминание в сутки».
     last_success_at = Column(AwareDateTime(), nullable=True)
     dismissed_at = Column(AwareDateTime(), nullable=True)
+
+
+class MassSendJob(Base):
+    """Массовая отправка, которая переживает перезапуск бота: получатели и позиция лежат в базе.
+
+    Раньше рассылка предложений шла внутри обработчика кнопки админа и жила в памяти: перезапуск обрывал её на
+    полпути, а итоговое сообщение падало, когда за минуты отправки закрывалось соединение с базой.
+    """
+
+    __tablename__ = 'mass_send_jobs'
+    __table_args__ = (Index('ix_mass_send_jobs_status', 'status'),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    kind = Column(String(40), nullable=False)  # promo_offer
+    status = Column(String(20), nullable=False, default='queued', server_default='queued')
+    # queued | running | done | cancelled | failed
+    params = Column(JSON, nullable=False, default=dict)
+    recipient_ids = Column(JSON, nullable=False, default=list)  # list[int] — users.id в порядке отправки
+    cursor = Column(Integer, nullable=False, default=0, server_default='0')
+    total = Column(Integer, nullable=False, default=0, server_default='0')
+    sent = Column(Integer, nullable=False, default=0, server_default='0')
+    failed = Column(Integer, nullable=False, default=0, server_default='0')
+    already = Column(Integer, nullable=False, default=0, server_default='0')
+    error = Column(Text, nullable=True)
+    created_at = Column(AwareDateTime(), nullable=False, server_default=func.now())
+    updated_at = Column(AwareDateTime(), nullable=False, server_default=func.now(), onupdate=func.now())
+    finished_at = Column(AwareDateTime(), nullable=True)
+
+
+class DecisionLog(Base):
+    """Журнал решений: кто что сделал и почему (антиабуз, награды, рассылки). Читается запросом, не логами."""
+
+    __tablename__ = 'decision_log'
+    __table_args__ = (
+        Index('ix_decision_log_kind_created', 'kind', 'created_at'),
+        Index('ix_decision_log_user', 'user_id'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(AwareDateTime(), nullable=False, server_default=func.now())
+    kind = Column(String(60), nullable=False)
+    user_id = Column(Integer, nullable=True)  # users.id, без внешнего ключа: журнал не должен мешать удалению
+    panel_user_id = Column(Integer, nullable=True)
+    summary = Column(Text, nullable=False, default='')
+    details = Column(JSON, nullable=True)
