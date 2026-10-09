@@ -666,7 +666,7 @@ def _build_referral_share_url(bot_referral_link: str, texts) -> str:
 
     share_text = texts.t(
         'REFERRAL_SHARE_TEXT',
-        'Привет! Советую VPN, которым сам пользуюсь — всё летает 🚀{bonus_block}',
+        'Привет! Пользуюсь Spofy VPN и советую тебе.{bonus_block}',
     )
     try:
         share_text = share_text.format(bonus_block=share_bonus_block)
@@ -727,6 +727,13 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User, db
             'REFERRAL_INVITE_TRIAL',
             '🎁 Бесплатный пробный период на {days} дн. — без карты!',
         ).format(days=settings.TRIAL_DURATION_DAYS)
+        if getattr(settings, 'TRIAL_QUESTS_ENABLED', True):
+            from app.services.trial_quest_service import DAYS_FRIEND
+
+            trial_block += '\n' + texts.t(
+                'REFERRAL_INVITE_FRIEND_DAYS',
+                '🤝 Подключишься по моей ссылке — получишь ещё {days} дн. в подарок.',
+            ).format(days=DAYS_FRIEND)
 
     cabinet_block = ''
     if cabinet_referral_link:
@@ -734,7 +741,7 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User, db
 
     invite_template = texts.t(
         'REFERRAL_INVITE_TEXT',
-        'Привет! Советую VPN, которым сам пользуюсь — всё летает 🚀{bonus_block}{trial_block}\n\n'
+        'Привет! Пользуюсь Spofy VPN и советую тебе.{bonus_block}{trial_block}\n\n'
         '👇 Заходи по ссылке:\n'
         '{link}{cabinet_block}',
     )

@@ -1632,7 +1632,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             try:
                 await message.answer(
                     texts.t(
-                        'CAMPAIGN_EXISTING_USERL',
+                        'CAMPAIGN_EXISTING_USER',
                         'ℹ️ Эта рекламная ссылка доступна только новым пользователям.',
                     )
                 )

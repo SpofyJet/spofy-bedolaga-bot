@@ -1190,7 +1190,7 @@ async def _proceed_with_selected_tariff(
                 )
                 + texts.t(
                     'TARIFF_PURCHASE_CART_SAVED_HINT',
-                    '\n\n🛒 <i>Корзина сохранена! После пополнения баланса подписка будет оформлена автоматически.</i>',
+                    '\n\n🛒 <i>Корзина сохранена. После пополнения вернитесь к оформлению — всё останется как есть.</i>',
                 ),
                 reply_markup=get_daily_tariff_insufficient_balance_keyboard(
                     tariff_id, db_user.language, show_sbp=daily_discount <= 0, back_callback=back_callback
@@ -1917,7 +1917,7 @@ async def select_tariff_period(
             )
             + texts.t(
                 'TARIFF_PURCHASE_CART_SAVED_HINT',
-                '\n\n🛒 <i>Корзина сохранена! После пополнения баланса подписка будет оформлена автоматически.</i>',
+                '\n\n🛒 <i>Корзина сохранена. После пополнения вернитесь к оформлению — всё останется как есть.</i>',
             ),
             reply_markup=get_tariff_insufficient_balance_keyboard(
                 tariff_id, period, db_user.language, missing_kopeks=missing, show_sbp=total_discount <= 0
@@ -3182,7 +3182,7 @@ async def select_tariff_extend_period(
             )
             + texts.t(
                 'TARIFF_RENEW_CART_SAVED_HINT',
-                '\n\n🛒 <i>Корзина сохранена! После пополнения баланса подписка будет продлена автоматически.</i>',
+                '\n\n🛒 <i>Корзина сохранена. После пополнения вернитесь к продлению — всё останется как есть.</i>',
             ),
             reply_markup=get_tariff_extend_insufficient_balance_keyboard(
                 tariff_id,
