@@ -340,3 +340,87 @@ async def test_reminder_is_not_sent_long_after_the_payment(monkeypatch):
 
         assert await service.process_abandoned_payments(db) == 0
     sent.assert_not_awaited()
+
+
+# ───────────── письма для аккаунтов без Telegram ─────────────
+
+
+def _email_user(uid=5):
+    return User(
+        id=uid,
+        telegram_id=None,
+        username=f'e{uid}',
+        email=f'user{uid}@example.com',
+        email_verified=True,
+        status='active',
+        language='ru',
+    )
+
+
+async def test_email_only_user_gets_a_payment_email_not_a_telegram_message(monkeypatch):
+    sent_emails = []
+
+    async def fake_email(**kwargs):
+        sent_emails.append(kwargs)
+        return True
+
+    monkeypatch.setattr('app.services.payment_reminder_email.send_payment_reminder_email', fake_email)
+    async with _session(monkeypatch) as db:
+        db.add_all([_email_user(), _platega(5, 15)])
+        await db.commit()
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_payments(db) == 1
+        assert await service.process_abandoned_payments(db) == 0  # один раз в сутки и по почте
+    sent.assert_not_awaited()  # Telegram у человека нет
+    assert sent_emails[0]['kind'] == 'payment' and sent_emails[0]['amount_kopeks'] == 31500
+    assert sent_emails[0]['email'] == 'user5@example.com'
+
+
+async def test_email_only_user_with_unverified_email_gets_nothing(monkeypatch):
+    sent_emails = []
+
+    async def fake_email(**kwargs):
+        sent_emails.append(kwargs)
+        return True
+
+    monkeypatch.setattr('app.services.payment_reminder_email.send_payment_reminder_email', fake_email)
+    async with _session(monkeypatch) as db:
+        user = _email_user()
+        user.email_verified = False
+        db.add_all([user, _platega(5, 15)])
+        await db.commit()
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_payments(db) == 0
+    assert sent_emails == []
+
+
+async def test_email_only_user_gets_a_cart_email(monkeypatch):
+    sent_emails = []
+
+    async def fake_email(**kwargs):
+        sent_emails.append(kwargs)
+        return True
+
+    monkeypatch.setattr('app.services.payment_reminder_email.send_payment_reminder_email', fake_email)
+    async with _session(monkeypatch) as db:
+        db.add(_email_user())
+        await db.commit()
+        extended = []
+        _cart_service(monkeypatch, [(5, _cart(), 1000)], extended)
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_carts(db) == 1
+    sent.assert_not_awaited()
+    assert sent_emails[0]['kind'] == 'cart' and sent_emails[0]['amount_kopeks'] == 500000
+    assert extended == [(5, 20 * 60)]  # корзину продлили и для почтового напоминания
+
+
+def test_reminder_email_text_has_the_phrase():
+    from app.services.payment_reminder_email import render_reminder
+
+    subject, body, button, _ = render_reminder('payment', 'ru', amount_kopeks=31500)
+    assert subject == 'Оплата не завершена'
+    assert '315 ₽' in body and 'Не получилось оплатить? Попробуйте другой способ.' in body
+    assert button == 'Продолжить оплату'

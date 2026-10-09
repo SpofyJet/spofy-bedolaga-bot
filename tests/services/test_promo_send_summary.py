@@ -154,3 +154,45 @@ async def test_tariff_offer_is_sent_every_time_without_protections(monkeypatch):
 
     assert bot.send_message.await_count == 3
     assert stored.promo_offer_discount_percent == 37 and stored.promo_offer_discount_source.startswith('tariff:4|')
+
+
+async def test_xrocket_trade_api_is_skipped_after_it_died(monkeypatch):
+    """Мёртвый Trade API xRocket не опрашиваем на каждом платеже: после первого не-JSON ответа 6 часов пропуск."""
+    import time
+
+    from app.external.xrocket import XRocketService
+
+    calls = []
+
+    class FakeResponse:
+        status = 404
+
+        async def text(self):
+            return '<html>404 Not Found</html>'
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+    class FakeSession:
+        def get(self, url, **kwargs):
+            calls.append(url)
+            return FakeResponse()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+    monkeypatch.setattr('app.external.xrocket.aiohttp.ClientSession', lambda *a, **k: FakeSession())
+    monkeypatch.setattr(XRocketService, '_trade_dead_until', 0.0)
+    service = XRocketService.__new__(XRocketService)
+
+    assert await service._get_rate_xrocket_trade('USDT', 'RUB') is None
+    assert await service._get_rate_xrocket_trade('USDT', 'RUB') is None
+    assert len(calls) == 1  # второй раз в сеть не ходили
+    assert XRocketService._trade_dead_until > time.monotonic()
+    monkeypatch.setattr(XRocketService, '_trade_dead_until', 0.0)

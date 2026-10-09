@@ -161,8 +161,17 @@ class XRocketService:
         )
         return None
 
+    # Trade API с июля 2026 отдаёт 404: после первого не-JSON ответа не спрашиваем его 6 часов
+    # (экономит запрос на каждом платеже и убирает предупреждение из лога).
+    _trade_dead_until: float = 0.0
+    _TRADE_DEAD_SECONDS = 6 * 3600
+
     async def _get_rate_xrocket_trade(self, crypto: str, fiat: str) -> float | None:
         """Публичный Trade API xRocket (без авторизации). Content-type-safe."""
+        import time
+
+        if time.monotonic() < XRocketService._trade_dead_until:
+            return None
         url = f'{self.TRADE_URL}/rates/fiat/{crypto.upper()}/{fiat.upper()}'
         try:
             async with aiohttp.ClientSession() as session:
@@ -171,8 +180,9 @@ class XRocketService:
                     try:
                         data = json.loads(raw)
                     except (json.JSONDecodeError, ValueError):
+                        XRocketService._trade_dead_until = time.monotonic() + self._TRADE_DEAD_SECONDS
                         logger.warning(
-                            'xRocket Trade API: не-JSON ответ (эндпоинт недоступен?)',
+                            'xRocket Trade API: не-JSON ответ (эндпоинт недоступен?), курс берём из CryptoBot 6 часов',
                             status=response.status,
                             body=raw[:200],
                         )

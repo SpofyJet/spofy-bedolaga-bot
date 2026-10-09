@@ -2990,6 +2990,10 @@ class MonitoringService:
             service = PlategaService()
             if not service.is_configured:
                 return
+            # Subscription API закрыт для мерчанта (401/403): повторяем не чаще раза в 6 часов, а не каждый цикл.
+            blocked_until = getattr(MonitoringService, '_platega_subscription_blocked_until', None)
+            if blocked_until is not None and datetime.now(UTC) < blocked_until:
+                return
 
             records = await sub_crud.list_platega_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE'])
 
@@ -3000,8 +3004,11 @@ class MonitoringService:
                         if http_status in (401, 403):
                             # Метод Subscription не включён для мерчанта: остальные записи ответят так же.
                             logger.warning(
-                                'Platega Subscription API недоступен для мерчанта — сверка подписок пропущена',
+                                'Platega Subscription API недоступен для мерчанта — сверка подписок пропущена на 6 ч',
                                 http_status=http_status,
+                            )
+                            MonitoringService._platega_subscription_blocked_until = datetime.now(UTC) + timedelta(
+                                hours=6
                             )
                             return
                         # 404 = провайдер достоверно не знает подписку; None-статус =
@@ -3072,9 +3079,10 @@ class MonitoringService:
                     remote, http_status = await service.get_subscription_status(record.platega_subscription_id)
                     if http_status in (401, 403):
                         logger.warning(
-                            'Platega Subscription API недоступен для мерчанта — досверка отмен пропущена',
+                            'Platega Subscription API недоступен для мерчанта — досверка отмен пропущена на 6 ч',
                             http_status=http_status,
                         )
+                        MonitoringService._platega_subscription_blocked_until = datetime.now(UTC) + timedelta(hours=6)
                         return
                     remote_status = (
                         str(remote.get('status')).strip().lower()

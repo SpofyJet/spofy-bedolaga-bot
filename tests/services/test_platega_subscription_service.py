@@ -126,6 +126,14 @@ async def test_create_subscription_truncates_long_cyrillic_description(monkeypat
     assert description_in_body
 
 
+@pytest.fixture(autouse=True)
+def _reset_platega_block():
+    # Блокировка сверки на 6 часов (401 от Platega) живёт в классе: сбрасываем между тестами.
+    MonitoringService._platega_subscription_blocked_until = None
+    yield
+    MonitoringService._platega_subscription_blocked_until = None
+
+
 # --- get_subscription ---
 
 
@@ -505,3 +513,31 @@ async def test_reconcile_stops_on_first_401_from_platega(monkeypatch: pytest.Mon
 
     assert mock_status.await_count == 1
     mock_cancel.assert_not_awaited()
+
+
+async def test_reconcile_is_skipped_for_six_hours_after_401(monkeypatch: pytest.MonkeyPatch) -> None:
+    """После 401 Subscription API закрыт для мерчанта: следующий цикл вообще не ходит в Platega."""
+    from unittest.mock import AsyncMock
+
+    _configure(monkeypatch, PLATEGA_RECURRENT_ENABLED=True)
+    mock_status = AsyncMock(return_value=(None, 401))
+    monkeypatch.setattr(PlategaService, 'get_subscription_status', mock_status)
+
+    async with _memory_session(monkeypatch) as db:
+        await sub_crud.create_platega_subscription(
+            db,
+            user_id=1,
+            subscription_id=1,
+            tariff_id=None,
+            interval=3,
+            charge_days=30,
+            amount_kopeks=19900,
+            redirect_url=None,
+            platega_subscription_id='ps-block',
+            status='CANCELLED',
+        )
+        service = MonitoringService()
+        await service._reconcile_platega_subscriptions(db)
+        await service._reconcile_platega_subscriptions(db)  # второй цикл подряд
+
+    assert mock_status.await_count == 1  # второй раз Platega не трогали

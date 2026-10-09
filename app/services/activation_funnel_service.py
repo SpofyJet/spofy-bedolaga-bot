@@ -482,7 +482,11 @@ class ActivationFunnelService:
         from app.database.models import CryptoBotPayment, HeleketPayment, PlategaPayment, WataPayment, XRocketPayment
 
         rows: list[tuple[User, int, datetime]] = []
-        user_ok = and_(User.telegram_id.isnot(None), User.status == UserStatus.ACTIVE.value)
+        # Telegram или подтверждённая почта (кабинет без Telegram получает письмо).
+        user_ok = and_(
+            User.status == UserStatus.ACTIVE.value,
+            or_(User.telegram_id.isnot(None), and_(User.email.isnot(None), User.email_verified.is_(True))),
+        )
 
         # Platega отменяет брошенный платёж сам (CANCELED), поэтому статус PENDING здесь не требуем.
         platega = await db.execute(
@@ -615,6 +619,21 @@ class ActivationFunnelService:
             if recent.scalar():
                 continue
 
+            if not user.telegram_id:
+                from app.services.payment_reminder_email import send_payment_reminder_email
+
+                sent_email = await send_payment_reminder_email(
+                    email=user.email,
+                    language=user.language,
+                    user_id=user.id,
+                    kind='payment',
+                    amount_kopeks=amount_kopeks,
+                )
+                await _record_event(db, user.id, EVENT_ABANDONED_TOPUP)
+                if sent_email:
+                    sent_count += 1
+                continue
+
             texts = get_texts(user.language)
             amount_rub = amount_kopeks // 100
             lines = [
@@ -689,9 +708,9 @@ class ActivationFunnelService:
             user = await db.get(User, user_id)
             if (
                 user is None
-                or not user.telegram_id
                 or user.status != UserStatus.ACTIVE.value
                 or getattr(user, 'restriction_topup', False)
+                or not (user.telegram_id or (user.email and getattr(user, 'email_verified', False)))
             ):
                 continue
             recent = await db.execute(
@@ -713,6 +732,24 @@ class ActivationFunnelService:
                 )
             )
             if recent.scalar():
+                continue
+
+            if not user.telegram_id:
+                from app.services.payment_reminder_email import send_payment_reminder_email
+
+                await user_cart_service.extend_cart_ttl(user.id, ABANDONED_CART_LOCK_MINUTES * 60)
+                sent_email = await send_payment_reminder_email(
+                    email=user.email,
+                    language=user.language,
+                    user_id=user.id,
+                    kind='cart',
+                    amount_kopeks=price_kopeks,
+                    description=str(cart.get('description') or ''),
+                    minutes=ABANDONED_CART_LOCK_MINUTES,
+                )
+                await _record_event(db, user.id, EVENT_ABANDONED_CART)
+                if sent_email:
+                    sent_count += 1
                 continue
 
             texts = get_texts(user.language)

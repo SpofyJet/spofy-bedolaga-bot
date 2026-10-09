@@ -562,6 +562,12 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 )
 
             signature = request.headers.get('Crypto-Pay-API-Signature')
+            logger.info(
+                'CryptoBot webhook получен',
+                update_type=payload.get('update_type') if isinstance(payload, dict) else None,
+                has_signature=bool(signature),
+                size=len(raw_body),
+            )
             secret = settings.CRYPTOBOT_API_TOKEN
             if not secret:
                 logger.error('CryptoBot webhook received but API token is not configured, rejecting')
@@ -571,6 +577,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 )
 
             if not signature:
+                logger.warning('CryptoBot webhook отклонён: нет подписи')
                 return JSONResponse(
                     {'status': 'error', 'reason': 'missing_signature'},
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -579,6 +586,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             from app.external.cryptobot import CryptoBotService
 
             if not CryptoBotService().verify_webhook_signature(payload_text, signature):
+                logger.warning('CryptoBot webhook отклонён: подпись не совпала (проверьте токен приложения)')
                 return JSONResponse(
                     {'status': 'error', 'reason': 'invalid_signature'},
                     status_code=status.HTTP_401_UNAUTHORIZED,
