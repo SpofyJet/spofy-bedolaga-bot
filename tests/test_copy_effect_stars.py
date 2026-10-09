@@ -16,13 +16,9 @@ def _defaults(monkeypatch):
 # ---------------- «скопировать» ----------------
 
 
-def test_referral_screen_offers_to_copy_the_link():
-    kb = inline.get_referral_keyboard(
-        'ru', share_url='https://t.me/share', copy_link='https://t.me/spofyvpnbot?start=ref1'
-    )
-    copy_rows = [row for row in kb.inline_keyboard if row[0].copy_text]
-    assert copy_rows and copy_rows[0][0].copy_text.text.endswith('start=ref1')
-    assert len(copy_rows[0]) == 1  # одна кнопка в строке, как остальные на этом экране
+def test_referral_screen_has_no_copy_button():
+    kb = inline.get_referral_keyboard('ru', share_url='https://t.me/share')
+    assert not any(button.copy_text for row in kb.inline_keyboard for button in row)
 
 
 # ---------------- Stars: подписка ----------------

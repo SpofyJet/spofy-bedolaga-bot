@@ -2629,9 +2629,7 @@ def get_autopay_notification_keyboard(subscription_id: int, language: str = DEFA
     )
 
 
-def get_referral_keyboard(
-    language: str = DEFAULT_LANGUAGE, share_url: str | None = None, copy_link: str | None = None
-) -> InlineKeyboardMarkup:
+def get_referral_keyboard(language: str = DEFAULT_LANGUAGE, share_url: str | None = None) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
     keyboard = []
@@ -2641,15 +2639,6 @@ def get_referral_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('REFERRAL_SHARE_BUTTON', '📤 Переслать приглашение'),
                     url=share_url,
-                )
-            ]
-        )
-    if copy_link and len(copy_link) <= 256:
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('COPY_REFERRAL_LINK', '📋 Скопировать ссылку'),
-                    copy_text=types.CopyTextButton(text=copy_link),
                 )
             ]
         )

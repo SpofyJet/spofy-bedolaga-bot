@@ -1471,9 +1471,6 @@
 - `app/middlewares/subscription_checker.py` — Python-модуль
   Классы: `SubscriptionStatusMiddleware` (1 методов)
   Функции: нет
-- `app/middlewares/success_effect_request.py` — Python-модуль
-  Классы: `SuccessEffectRequestMiddleware` (1 методов)
-  Функции: `is_success_message`
 - `app/middlewares/throttling.py` — Python-модуль
   Классы: `ThrottlingMiddleware` (3 методов)
   Функции: нет
@@ -3245,7 +3242,7 @@
   Функции: `test_available_languages_default_contains_fa`, `test_available_languages_normalizes_and_deduplicates`
 - `tests/test_copy_effect_stars.py` — Python-модуль
   Классы: нет
-  Функции: `test_subscription_screen_copies_the_link_in_one_tap`, `test_no_link_means_no_copy_button`, `test_referral_screen_offers_to_copy_the_link`, `test_success_messages_are_recognized`, `test_other_messages_are_not`, `test_private_success_message_gets_the_effect`, `test_groups_other_texts_and_disabled_setting_get_no_effect`, `test_rejected_effect_falls_back_to_a_plain_message`, `test_stars_invoice_with_a_period_asks_telegram_for_a_recurring_charge`, `test_stars_subscription_is_off_by_default`
+  Функции: `test_referral_screen_has_no_copy_button`, `test_stars_invoice_with_a_period_asks_telegram_for_a_recurring_charge`, `test_stars_subscription_is_off_by_default`, `test_subscription_screen_has_no_copy_link_button`
 - `tests/test_coupon_deeplink_pins.py` — Python-модуль
   Классы: нет
   Функции: `test_cmd_start_parses_coupon_deep_link`, `test_coupon_redeem_called_at_every_gift_activation_site`, `test_coupon_branch_only_swallows_existing_coupons` — `start_parameter = None` must sit INSIDE the is_coupon_token() guard AND, `test_redeem_flips_status_before_remnawave_sync`, `test_redeem_claims_under_row_lock_and_rechecks`, `test_redeem_aborts_when_remnawave_sync_returns_none`, `test_revoke_confirm_registered_before_revoke_prefix`, `test_create_confirm_is_guarded_against_stale_buttons_and_double_taps`, `test_admin_states_for_coupon_creation_exist`
