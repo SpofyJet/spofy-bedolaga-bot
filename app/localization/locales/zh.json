@@ -2410,5 +2410,6 @@
   "WEBHOOK_BANDWIDTH_NOTE_REGULAR": " 如果不够用，可以在「我的订阅」中购买流量包，VPN 不会断开。",
   "REFERRAL_INVITE_FRIEND_DAYS": "🤝 通过我的链接连接，再送你 {days} 天。",
   "SUB_DEVICES_BUTTON": "📱 设备",
-  "SUB_REVOKE_SHORT": "🔑 新链接"
+  "SUB_REVOKE_SHORT": "🔑 新链接",
+  "SUB_ADD_DEVICES_BUTTON": "➕ 增加设备"
 }

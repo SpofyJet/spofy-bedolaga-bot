@@ -645,7 +645,14 @@ def get_main_menu_keyboard(
     keyboard: list[list[InlineKeyboardButton]] = []
     paired_buttons: list[InlineKeyboardButton] = []
     # «Оплата и баланс: 0 ₽» новому человеку ни к чему: платёж ему предложат при покупке сам.
-    show_balance_button = safe_balance > 0 or bool(has_had_paid_subscription)
+    # Платящий подписчик баланс видит всегда; скрываем только у новых и пробных с пустым счётом.
+    _paid_subscriber = bool(
+        has_active_subscription
+        and subscription_is_active
+        and subscription is not None
+        and not getattr(subscription, 'is_trial', False)
+    )
+    show_balance_button = safe_balance > 0 or bool(has_had_paid_subscription) or _paid_subscriber
 
     if has_active_subscription and subscription_is_active:
         connect_mode = settings.CONNECT_BUTTON_MODE
@@ -835,7 +842,9 @@ def get_main_menu_keyboard(
     # Нижний блок: «Промокод» (пока нет подписки; QR с билета применяет код сам, но можно и вручную),
     # «Поддержка» (первое, что нужно, когда не подключается) и «Инфо» — по две кнопки в ряд.
     bottom_buttons: list[InlineKeyboardButton] = []
-    if not (has_active_subscription and subscription_is_active):
+    # Промокод нужен тем, у кого нет платной подписки; на пробном периоде баланс скрыт,
+    # а «Баланс → Промокод» был единственным входом.
+    if not _paid_subscriber:
         bottom_buttons.append(InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode'))
     try:
         from app.services.support_settings_service import SupportSettingsService
@@ -1404,6 +1413,22 @@ def get_subscription_keyboard(
                         )
                     )
             keyboard.append(settings_row)
+
+            # Количество устройств — на самом экране подписки (раньше лежало за «Настройками»)
+            if (
+                settings.is_tariffs_mode()
+                and tariff is not None
+                and not is_legacy_subscription
+                and (getattr(tariff, 'device_price_kopeks', None) or 0) > 0
+            ):
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('SUB_ADD_DEVICES_BUTTON', '➕ Докупить устройства'),
+                            callback_data='subscription_change_devices',
+                        )
+                    ]
+                )
 
             # Кнопка докупки трафика для платных подписок
             # В режиме тарифов проверяем can_topup_traffic() у тарифа, в классическом - глобальные настройки
@@ -2632,19 +2657,17 @@ def get_referral_keyboard(language: str = DEFAULT_LANGUAGE, share_url: str | Non
                 text=texts.t('CREATE_INVITE_BUTTON', '📝 Создать приглашение'), callback_data='referral_create_invite'
             )
         ],
+        [InlineKeyboardButton(text=texts.t('SHOW_QR_BUTTON', '📱 Показать QR код'), callback_data='referral_show_qr')],
         [
             InlineKeyboardButton(
-                text=texts.t('SHOW_QR_BUTTON', '📱 Показать QR код'), callback_data='referral_show_qr'
-            ),
-            InlineKeyboardButton(
                 text=texts.t('REFERRAL_LIST_BUTTON', '👥 Список рефералов'), callback_data='referral_list'
-            ),
+            )
         ],
-    ]
-    analytics_row = [
-        InlineKeyboardButton(
-            text=texts.t('REFERRAL_ANALYTICS_BUTTON', '📊 Аналитика'), callback_data='referral_analytics'
-        )
+        [
+            InlineKeyboardButton(
+                text=texts.t('REFERRAL_ANALYTICS_BUTTON', '📊 Аналитика'), callback_data='referral_analytics'
+            )
+        ],
     ]
 
     # Кнопка появляется, только когда админ разрешил хотя бы одну из настроек:
@@ -2659,15 +2682,16 @@ def get_referral_keyboard(language: str = DEFAULT_LANGUAGE, share_url: str | Non
             ]
         )
 
-    # Аналитика и вывод (если включён) — одним рядом
+    # Добавляем кнопку вывода, если включена
     if settings.is_referral_withdrawal_enabled():
-        analytics_row.append(
-            InlineKeyboardButton(
-                text=texts.t('REFERRAL_WITHDRAWAL_BUTTON', '💸 Запросить вывод'),
-                callback_data='referral_withdrawal',
-            )
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('REFERRAL_WITHDRAWAL_BUTTON', '💸 Запросить вывод'),
+                    callback_data='referral_withdrawal',
+                )
+            ]
         )
-    keyboard.append(analytics_row)
 
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
 
@@ -2695,15 +2719,17 @@ def get_support_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
                 )
             ]
         )
-    # Тикеты — парой в один ряд
+    # Тикеты
     if tickets_enabled:
         rows.append(
             [
                 InlineKeyboardButton(
                     text=texts.t('CREATE_TICKET_BUTTON', '🎫 Создать тикет'), callback_data='create_ticket'
-                ),
-                InlineKeyboardButton(text=texts.t('MY_TICKETS_BUTTON', '📋 Мои тикеты'), callback_data='my_tickets'),
+                )
             ]
+        )
+        rows.append(
+            [InlineKeyboardButton(text=texts.t('MY_TICKETS_BUTTON', '📋 Мои тикеты'), callback_data='my_tickets')]
         )
     rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
     return InlineKeyboardMarkup(inline_keyboard=rows)

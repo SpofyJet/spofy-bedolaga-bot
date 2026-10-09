@@ -3121,6 +3121,12 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
         )
         return
 
+    # В режиме тарифов отдельного экрана «Настройки» нет: устройства, их количество и перевыпуск ссылки
+    # вынесены на экран подписки, а все старые «Назад» (devices.py, revoke.py) ведут сюда, к нему.
+    if settings.is_tariffs_mode() and tariff is not None:
+        await show_subscription_info(callback, db_user, db)
+        return
+
     show_devices = settings.is_devices_selection_enabled()
 
     if show_devices:

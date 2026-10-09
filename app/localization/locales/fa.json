@@ -2410,5 +2410,6 @@
   "WEBHOOK_BANDWIDTH_NOTE_REGULAR": " اگر کم آمد، بسته را در «اشتراک من» بخرید — VPN قطع نمی‌شود.",
   "REFERRAL_INVITE_FRIEND_DAYS": "🤝 با لینک من وصل شوی، {days} روز دیگر هدیه می‌گیری.",
   "SUB_DEVICES_BUTTON": "📱 دستگاه‌ها",
-  "SUB_REVOKE_SHORT": "🔑 لینک جدید"
+  "SUB_REVOKE_SHORT": "🔑 لینک جدید",
+  "SUB_ADD_DEVICES_BUTTON": "➕ افزودن دستگاه"
 }
