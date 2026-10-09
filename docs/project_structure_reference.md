@@ -1749,7 +1749,7 @@
   Классы: `PromoOfferService` (3 методов)
   Функции: нет
 - `app/services/promocode_service.py` — Python-модуль
-  Классы: `PromoCodeService` (7 методов)
+  Классы: `PromoCodeService` (9 методов)
   Функции: нет
 - `app/services/public_offer_service.py` — Python-модуль
   Классы: `PublicOfferService` (10 методов)
@@ -4853,6 +4853,9 @@
 - `tests/services/test_promocode_service.py` — Python-модуль
   Классы: нет
   Функции: `test_activate_promo_group_promocode_success` — Test successful activation of PROMO_GROUP type promocode, `test_activate_promo_group_user_already_has_group` — Test activation when user already has the promo group, `test_activate_promo_group_group_not_found` — Test activation when promo group doesn't exist (deleted/invalid), `test_activate_promo_group_assignment_error` — Test activation when promo group assignment fails, `test_activate_promo_group_assigned_by_value` — Test that assigned_by parameter is correctly set to 'promocode', `test_activate_promo_group_description_includes_group_name` — Test that result description includes promo group name, `test_promocode_data_includes_promo_group_id` — Test that returned promocode data includes promo_group_id, `test_activate_trial_promocode_uses_all_available_squads_when_tariff_has_no_restrictions`, `test_subscription_days_promo_keeps_trial_a_trial` — Bug #629889 (class): a days-promocode on a TRIAL must NOT flip is_trial., `test_subscription_days_promo_revives_expired_sub_in_multi_tariff` — A days-promo must revive an EXPIRED subscription in multi-tariff mode too., `test_activation_aborts_when_usage_slot_cannot_be_claimed` — F18/F17: the atomic conditional increment is the authoritative gate., `test_trial_promo_refunds_instead_of_fake_success_when_subscription_exists` — F15: a trial promo that can't create/extend must raise (refund), not fake success.
+- `tests/services/test_promocode_tariff_days.py` — Python-модуль
+  Классы: нет
+  Функции: `env`, `test_plain_days_code_has_no_tariff`, `test_user_without_subscription_gets_the_tariff`, `test_live_trial_is_converted_and_keeps_remaining_days`, `test_expired_subscription_does_not_carry_days`, `test_same_tariff_is_just_extended`, `test_higher_tariff_is_never_downgraded`, `test_lower_paid_tariff_is_upgraded`
 - `tests/services/test_purchase_register_handlers_lint.py` — Python-модуль
   Классы: нет
   Функции: `test_register_handlers_does_not_shadow_module_imports` — No name imported at module-level may also be bound inside register_handlers., `test_subscription_states_is_module_level_only` — Explicit narrow guard for the exact 2026-05-16 incident.

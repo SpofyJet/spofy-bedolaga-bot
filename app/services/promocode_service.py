@@ -331,6 +331,92 @@ class PromoCodeService:
             raise ValueError('no_subscription_for_days')
         return target_sub
 
+    async def _tariff_for_days(self, db: AsyncSession, promocode: PromoCode):
+        """Тариф, который выдаёт код на дни. ``None`` — код обычный: дни идут в текущую подписку."""
+        tariff_id = getattr(promocode, 'tariff_id', None)
+        if promocode.type != PromoCodeType.SUBSCRIPTION_DAYS.value or not tariff_id:
+            return None
+        from app.database.crud.tariff import get_tariff_by_id
+
+        tariff = await get_tariff_by_id(db, tariff_id)
+        if tariff is None or not getattr(tariff, 'is_active', True):
+            logger.warning('Тариф промокода на дни не найден, дни пойдут в текущую подписку', tariff_id=tariff_id)
+            return None
+        return tariff
+
+    async def _grant_tariff_days(self, db: AsyncSession, user: User, promocode: PromoCode, tariff) -> Subscription:
+        """Выдать дни на конкретном тарифе: завести подписку, продлить или перевести на него.
+
+        Это подарок, а не покупка: оставшиеся дни действующей подписки сохраняются и
+        складываются с днями кода, трафик и серверы берутся из тарифа.
+        """
+        from app.database.crud.server_squad import get_effective_tariff_squad_uuids
+        from app.database.crud.subscription import (
+            create_paid_subscription,
+            get_subscription_by_user_and_tariff,
+            replace_subscription,
+        )
+
+        days = promocode.subscription_days
+        multi = settings.is_multi_tariff_enabled()
+        existing = (
+            await get_subscription_by_user_and_tariff(db, user.id, tariff.id, include_inactive=True)
+            if multi
+            else await get_subscription_by_user_id(db, user.id)
+        )
+        squads = await get_effective_tariff_squad_uuids(db, tariff.allowed_squads)
+
+        if existing is not None and existing.tariff_id == tariff.id and not existing.is_trial:
+            await extend_subscription(db, existing, days)
+            await self.subscription_service.sync_remnawave_user(db, existing)
+            return existing
+
+        if existing is not None and not existing.is_trial and existing.tariff_id != tariff.id:
+            # Платный тариф выше выдаваемого (ULTIMA и т. п.) не понижаем: дни просто прибавляются к нему.
+            from app.database.crud.tariff import get_tariff_by_id
+
+            current = await get_tariff_by_id(db, existing.tariff_id) if existing.tariff_id else None
+            alive_now = existing.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.LIMITED.value)
+            if alive_now and current is not None and (current.tier_level or 0) > (tariff.tier_level or 0):
+                await extend_subscription(db, existing, days)
+                await self.subscription_service.sync_remnawave_user(db, existing)
+                return existing
+
+        if existing is None or (multi and existing.tariff_id != tariff.id):
+            subscription = await create_paid_subscription(
+                db=db,
+                user_id=user.id,
+                duration_days=days,
+                traffic_limit_gb=tariff.traffic_limit_gb,
+                device_limit=tariff.device_limit,
+                connected_squads=squads,
+                is_trial=False,
+                tariff_id=tariff.id,
+                update_server_counters=True,
+            )
+        else:
+            alive = existing.status in (
+                SubscriptionStatus.ACTIVE.value,
+                SubscriptionStatus.TRIAL.value,
+                SubscriptionStatus.LIMITED.value,
+            )
+            carried = existing.days_left if alive else 0
+            subscription = await replace_subscription(
+                db,
+                existing,
+                duration_days=carried + days,
+                traffic_limit_gb=tariff.traffic_limit_gb,
+                device_limit=tariff.device_limit,
+                connected_squads=squads,
+                is_trial=False,
+                tariff_id=tariff.id,
+                update_server_counters=True,
+            )
+        await self.subscription_service.sync_remnawave_user(
+            db, subscription, reset_traffic=True, reset_reason='promocode tariff'
+        )
+        return subscription
+
     async def _apply_promocode_effects(
         self, db: AsyncSession, user: User, promocode: PromoCode, *, subscription_id: int | None = None
     ) -> str:
@@ -409,7 +495,12 @@ class PromoCodeService:
             promocode.type in (PromoCodeType.SUBSCRIPTION_DAYS.value, PromoCodeType.BALANCE_AND_DAYS.value)
             and promocode.subscription_days > 0
         ):
-            target_sub = await self._pick_target_subscription(db, user, promocode, subscription_id)
+            tariff_grant = await self._tariff_for_days(db, promocode)
+            if tariff_grant is not None:
+                # Код привязан к тарифу: человек получает именно его, даже без подписки.
+                target_sub = await self._grant_tariff_days(db, user, promocode, tariff_grant)
+            else:
+                target_sub = await self._pick_target_subscription(db, user, promocode, subscription_id)
             # NB: a days-promocode is a FREE grant, not a purchase — do NOT flip
             # is_trial here (bug #629889 class). Converting a trial to is_trial=False
             # without a charge un-gated it from try_auto_extend_expired_after_topup,
@@ -418,8 +509,9 @@ class PromoCodeService:
             # status on its own (and never touches is_trial when called without a
             # tariff_id), so the promo days still apply while the subscription
             # correctly stays a trial and remains gated out of auto-renewal.
-            await extend_subscription(db, target_sub, promocode.subscription_days)
-            await self.subscription_service.update_remnawave_user(db, target_sub)
+            if tariff_grant is None:
+                await extend_subscription(db, target_sub, promocode.subscription_days)
+                await self.subscription_service.update_remnawave_user(db, target_sub)
 
             tariff_label = ''
             if settings.is_multi_tariff_enabled() and getattr(target_sub, 'tariff', None):
