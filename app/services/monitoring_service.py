@@ -171,27 +171,6 @@ logger = structlog.get_logger(__name__)
 
 LOGO_PATH = Path(settings.LOGO_FILE)
 
-# Subscription API закрыт для мерчанта (401/403). Каждый такой запрос после перезапуска бота совпадал с провалом
-# создания платежей Platega на 8–28 минут (/v2/transaction/process тоже отвечал 401), поэтому блокировка хранится
-# в Redis, а не в памяти процесса: перезапуски больше не повторяют запрос. Включили метод у провайдера: удалите
-# ключ redis `platega:subscription_api_blocked`.
-_PLATEGA_SUBSCRIPTION_BLOCK_KEY = 'platega:subscription_api_blocked'
-_PLATEGA_SUBSCRIPTION_BLOCK_TTL = timedelta(days=30)
-
-
-async def _platega_subscription_api_is_blocked() -> bool:
-    try:
-        return bool(await cache.exists(_PLATEGA_SUBSCRIPTION_BLOCK_KEY))
-    except Exception:  # Redis недоступен — как будто блокировки нет (память процесса всё равно ограничит частоту)
-        return False
-
-
-async def _block_platega_subscription_api() -> None:
-    try:
-        await cache.set(_PLATEGA_SUBSCRIPTION_BLOCK_KEY, 1, expire=_PLATEGA_SUBSCRIPTION_BLOCK_TTL)
-    except Exception as error:
-        logger.warning('Не удалось сохранить блокировку Platega Subscription API', error=str(error))
-
 
 async def _reload_subscription(db: AsyncSession, subscription_id: int) -> Subscription | None:
     result = await db.execute(
@@ -3013,8 +2992,6 @@ class MonitoringService:
             blocked_until = getattr(MonitoringService, '_platega_subscription_blocked_until', None)
             if blocked_until is not None and datetime.now(UTC) < blocked_until:
                 return
-            if await _platega_subscription_api_is_blocked():
-                return  # блокировка пережила перезапуск (хранится в Redis)
 
             records = await sub_crud.list_platega_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE'])
 
@@ -3031,7 +3008,6 @@ class MonitoringService:
                             MonitoringService._platega_subscription_blocked_until = datetime.now(UTC) + timedelta(
                                 hours=6
                             )
-                            await _block_platega_subscription_api()
                             return
                         # 404 = провайдер достоверно не знает подписку; None-статус =
                         # транспортный сбой — зависший PENDING хоронить рано.
@@ -3105,7 +3081,6 @@ class MonitoringService:
                             http_status=http_status,
                         )
                         MonitoringService._platega_subscription_blocked_until = datetime.now(UTC) + timedelta(hours=6)
-                        await _block_platega_subscription_api()
                         return
                     remote_status = (
                         str(remote.get('status')).strip().lower()
