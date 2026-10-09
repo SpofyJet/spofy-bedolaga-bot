@@ -1813,10 +1813,8 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
     data = await state.get_data() or {}
     if not data.get('language'):
-        if settings.is_language_selection_enabled():
-            await _prompt_language_selection(message, state)
-            return
-
+        # Язык при регистрации не спрашиваем: 99% пришедших русскоязычные, лишний шаг только отсекает.
+        # Сменить язык можно в «Инфо» (кнопка живёт, пока выбор языка включён в настройках).
         default_language = (
             (settings.DEFAULT_LANGUAGE or DEFAULT_LANGUAGE)
             if isinstance(settings.DEFAULT_LANGUAGE, str)
@@ -1826,7 +1824,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         data['language'] = normalized_default
         await state.set_data(data)
         logger.info(
-            '🌐 LANGUAGE: выбор языка отключен, устанавливаем язык по умолчанию',
+            '🌐 LANGUAGE: язык при регистрации не спрашиваем, ставим язык по умолчанию',
             normalized_default=normalized_default,
         )
 

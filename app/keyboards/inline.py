@@ -954,15 +954,17 @@ def get_info_menu_keyboard(
             ]
         )
 
-    # Spofy: Поддержка и Язык внутри Инфо (как было до обновления)
-    try:
-        from app.services.support_settings_service import SupportSettingsService
+    # «Поддержка» вынесена на главный экран; здесь её дублируем только в режиме кабинета,
+    # где главного меню бота с этой кнопкой нет.
+    if settings.is_cabinet_mode():
+        try:
+            from app.services.support_settings_service import SupportSettingsService
 
-        _support_on = SupportSettingsService.is_support_menu_enabled()
-    except Exception:
-        _support_on = settings.SUPPORT_MENU_ENABLED
-    if _support_on:
-        buttons.append([InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support')])
+            _support_on = SupportSettingsService.is_support_menu_enabled()
+        except Exception:
+            _support_on = settings.SUPPORT_MENU_ENABLED
+        if _support_on:
+            buttons.append([InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support')])
     if settings.is_language_selection_enabled():
         buttons.append([InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data='menu_language')])
 
@@ -1326,14 +1328,22 @@ def get_subscription_keyboard(
                 keyboard.append(
                     [InlineKeyboardButton(text=texts.MENU_EXTEND_SUBSCRIPTION, callback_data='subscription_extend')]
                 )
-                keyboard.append(
-                    [
+                autopay_row = [
+                    InlineKeyboardButton(
+                        text=texts.t('AUTOPAY_BUTTON', '💳 Автоплатеж'),
+                        callback_data='subscription_autopay',
+                    )
+                ]
+                # На тарифах в «Настройках» лежали только устройства и перевыпуск ссылки: прослойка
+                # стоила лишнего нажатия самым частым действиям (ей пользовались ~2000 раз в месяц).
+                if settings.is_tariffs_mode() and tariff is not None and settings.is_subscription_revoke_enabled():
+                    autopay_row.append(
                         InlineKeyboardButton(
-                            text=texts.t('AUTOPAY_BUTTON', '💳 Автоплатеж'),
-                            callback_data='subscription_autopay',
+                            text=texts.t('SUB_REVOKE_SHORT', '🔑 Новая ссылка'),
+                            callback_data='subscription_revoke',
                         )
-                    ]
-                )
+                    )
+                keyboard.append(autopay_row)
 
             # Кнопка докупки трафика для платных подписок
             # В режиме тарифов проверяем can_topup_traffic() у тарифа, в классическом - глобальные настройки
@@ -1354,13 +1364,21 @@ def get_subscription_keyboard(
                     ]
                 )
 
-            # Ряд: [Настройки] [Тариф] (если режим тарифов)
-            settings_row = [
-                InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_SETTINGS_BUTTON', '⚙️ Настройки'),
-                    callback_data='subscription_settings',
-                )
-            ]
+            # Ряд: [Устройства] [Тариф]; без тарифов (классика) — прежние «Настройки»
+            if settings.is_tariffs_mode() and tariff is not None and not is_legacy_subscription:
+                settings_row = [
+                    InlineKeyboardButton(
+                        text=texts.t('SUB_DEVICES_BUTTON', '📱 Устройства'),
+                        callback_data='subscription_manage_devices',
+                    )
+                ]
+            else:
+                settings_row = [
+                    InlineKeyboardButton(
+                        text=texts.t('SUBSCRIPTION_SETTINGS_BUTTON', '⚙️ Настройки'),
+                        callback_data='subscription_settings',
+                    )
+                ]
             if settings.is_tariffs_mode() and subscription and not is_legacy_subscription:
                 # На истёкшей/отключённой подписке смена тарифа недоступна (хендлер её
                 # блокирует) — раньше кнопка «Тариф» всё равно показывалась и вела в тупик.
@@ -2614,17 +2632,19 @@ def get_referral_keyboard(language: str = DEFAULT_LANGUAGE, share_url: str | Non
                 text=texts.t('CREATE_INVITE_BUTTON', '📝 Создать приглашение'), callback_data='referral_create_invite'
             )
         ],
-        [InlineKeyboardButton(text=texts.t('SHOW_QR_BUTTON', '📱 Показать QR код'), callback_data='referral_show_qr')],
         [
+            InlineKeyboardButton(
+                text=texts.t('SHOW_QR_BUTTON', '📱 Показать QR код'), callback_data='referral_show_qr'
+            ),
             InlineKeyboardButton(
                 text=texts.t('REFERRAL_LIST_BUTTON', '👥 Список рефералов'), callback_data='referral_list'
-            )
+            ),
         ],
-        [
-            InlineKeyboardButton(
-                text=texts.t('REFERRAL_ANALYTICS_BUTTON', '📊 Аналитика'), callback_data='referral_analytics'
-            )
-        ],
+    ]
+    analytics_row = [
+        InlineKeyboardButton(
+            text=texts.t('REFERRAL_ANALYTICS_BUTTON', '📊 Аналитика'), callback_data='referral_analytics'
+        )
     ]
 
     # Кнопка появляется, только когда админ разрешил хотя бы одну из настроек:
@@ -2639,16 +2659,15 @@ def get_referral_keyboard(language: str = DEFAULT_LANGUAGE, share_url: str | Non
             ]
         )
 
-    # Добавляем кнопку вывода, если включена
+    # Аналитика и вывод (если включён) — одним рядом
     if settings.is_referral_withdrawal_enabled():
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('REFERRAL_WITHDRAWAL_BUTTON', '💸 Запросить вывод'),
-                    callback_data='referral_withdrawal',
-                )
-            ]
+        analytics_row.append(
+            InlineKeyboardButton(
+                text=texts.t('REFERRAL_WITHDRAWAL_BUTTON', '💸 Запросить вывод'),
+                callback_data='referral_withdrawal',
+            )
         )
+    keyboard.append(analytics_row)
 
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
 
@@ -2666,19 +2685,7 @@ def get_support_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
         tickets_enabled = True
         contact_enabled = True
     rows: list[list[InlineKeyboardButton]] = []
-    # Tickets
-    if tickets_enabled:
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('CREATE_TICKET_BUTTON', '🎫 Создать тикет'), callback_data='create_ticket'
-                )
-            ]
-        )
-        rows.append(
-            [InlineKeyboardButton(text=texts.t('MY_TICKETS_BUTTON', '📋 Мои тикеты'), callback_data='my_tickets')]
-        )
-    # Direct contact
+    # Прямой чат — самый быстрый путь, поэтому первым
     if contact_enabled and settings.get_support_contact_url():
         rows.append(
             [
@@ -2686,6 +2693,16 @@ def get_support_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
                     text=texts.t('CONTACT_SUPPORT_BUTTON', '💬 Связаться с поддержкой'),
                     url=settings.get_support_contact_url() or 'https://t.me/',
                 )
+            ]
+        )
+    # Тикеты — парой в один ряд
+    if tickets_enabled:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('CREATE_TICKET_BUTTON', '🎫 Создать тикет'), callback_data='create_ticket'
+                ),
+                InlineKeyboardButton(text=texts.t('MY_TICKETS_BUTTON', '📋 Мои тикеты'), callback_data='my_tickets'),
             ]
         )
     rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])

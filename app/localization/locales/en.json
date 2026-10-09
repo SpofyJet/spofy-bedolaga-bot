@@ -965,8 +965,8 @@
   "CHANGE_DEVICES_SUCCESS_INCREASE": "\n✅ Device limit increased!\n\n📱 Was: {old_count} → Now: {new_count}\n💰 Charged: {amount}\n",
   "CHANGE_DEVICES_TITLE": "📱 Change device limit",
   "CHANNEL_CHECK_BUTTON": "✅ I have joined",
-  "CHANNEL_CHECK_NOT_SUBSCRIBED": "You are not subscribed to all required channels. Please subscribe and try again.",
-  "CHANNEL_REQUIRED_TEXT": "🔒 Please join the announcement channel to access the bot, then press the button below.",
+  "CHANNEL_CHECK_NOT_SUBSCRIBED": "Subscription not found yet. Join the channel with the button above, then press “I have joined” again.",
+  "CHANNEL_REQUIRED_TEXT": "🔒 To continue, please join the Spofy VPN channel — server status and news about blocks. Then press “✅ I have joined”.",
   "CHANNEL_SUBSCRIBE_BUTTON": "🔗 Subscribe",
   "CHANNEL_SUBSCRIBE_REQUIRED_ALERT": "❌ You haven't joined the channel!",
   "CHANNEL_SUBSCRIBE_THANKS": "✅ Thanks for subscribing",
@@ -2408,5 +2408,7 @@
   "DEVICE_LIMIT_FULL_HINT": "\n\n⚠️ <b>All slots are taken.</b> A new device won't connect until you disconnect one of these or add a slot.",
   "DEVICE_DISCONNECT_ROW": "🗑 {device}",
   "DEVICE_ADD_SLOT_BUTTON": "➕ Add a device slot",
-  "REFERRAL_INVITE_FRIEND_DAYS": "🤝 Connect via my link and get {days} more days as a gift."
+  "REFERRAL_INVITE_FRIEND_DAYS": "🤝 Connect via my link and get {days} more days as a gift.",
+  "SUB_DEVICES_BUTTON": "📱 Devices",
+  "SUB_REVOKE_SHORT": "🔑 New link"
 }

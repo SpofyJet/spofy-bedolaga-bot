@@ -375,12 +375,10 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 is_daily = getattr(tariff, 'is_daily', False)
                 tariff_type_str = '🔄 Суточный' if is_daily else '📅 Периодный'
 
-                tariff_info_lines = [
-                    f'<b>📦 {html.escape(tariff.name)}</b>',
-                    f'Тип: {tariff_type_str}',
-                    f'Трафик: {tariff.traffic_limit_gb} ГБ' if tariff.traffic_limit_gb > 0 else 'Трафик: ∞ Безлимит',
-                    f'Устройства: {Texts.format_device_limit(tariff.device_limit)}',
-                ]
+                # Трафик и устройства ниже уже показаны в блоке подписки — здесь только название.
+                tariff_info_lines = [f'<b>📦 {html.escape(tariff.name)}</b>']
+                if is_daily:
+                    tariff_info_lines.append(f'Тип: {tariff_type_str}')
 
                 if is_daily:
                     # Для суточного тарифа показываем цену с учётом скидки промогруппы + promo-offer
@@ -446,7 +444,10 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                         tariff_info_lines.append('')
                         tariff_info_lines.append('⏳ Первое списание скоро')
 
-                tariff_info_block = '\n<blockquote expandable>' + '\n'.join(tariff_info_lines) + '</blockquote>'
+                if len(tariff_info_lines) == 1:
+                    tariff_info_block = '\n' + tariff_info_lines[0]
+                else:
+                    tariff_info_block = '\n<blockquote expandable>' + '\n'.join(tariff_info_lines) + '</blockquote>'
 
         except Exception as e:
             logger.warning('Ошибка получения тарифа', error=e, exc_info=True)

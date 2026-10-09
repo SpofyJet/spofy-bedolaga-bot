@@ -1092,8 +1092,8 @@
   "LEGACY_ADDONS_UNAVAILABLE": "⚠️ Сначала перейдите на тариф — докупки для этой подписки недоступны",
   "TARIFF_SWITCH_LEGACY_CURRENT": "подписка без тарифа",
   "CHANNEL_CHECK_BUTTON": "✅ Я подписался",
-  "CHANNEL_CHECK_NOT_SUBSCRIBED": "Вы ещё не подписались на все каналы! Подпишитесь и попробуйте снова.",
-  "CHANNEL_REQUIRED_TEXT": "🔒 Для использования бота подпишитесь на новостной канал, а затем нажмите кнопку ниже.",
+  "CHANNEL_CHECK_NOT_SUBSCRIBED": "Подписка пока не найдена. Подпишитесь на канал по кнопке выше и нажмите «Я подписался» ещё раз.",
+  "CHANNEL_REQUIRED_TEXT": "🔒 Чтобы продолжить, подпишитесь на канал Spofy VPN: там статус серверов и новости о блокировках. Затем нажмите «✅ Я подписался».",
   "CHANNEL_SUBSCRIBE_BUTTON": "🔗 Подписаться",
   "CHANNEL_SUBSCRIBE_REQUIRED_ALERT": "❌ Вы не подписались на канал!",
   "CHANNEL_SUBSCRIBE_THANKS": "✅ Спасибо за подписку",
@@ -2408,5 +2408,7 @@
   "DEVICE_DISCONNECT_ROW": "🗑 {device}",
   "DEVICE_ADD_SLOT_BUTTON": "➕ Добавить место для устройства",
   "DEVICE_LIMIT_FULL_HINT": "\n\n⚠️ <b>Все места заняты.</b> Новое устройство не подключится, пока вы не отключите одно из этих или не добавите место.",
-  "REFERRAL_INVITE_FRIEND_DAYS": "🤝 Подключишься по моей ссылке — получишь ещё {days} дн. в подарок."
+  "REFERRAL_INVITE_FRIEND_DAYS": "🤝 Подключишься по моей ссылке — получишь ещё {days} дн. в подарок.",
+  "SUB_DEVICES_BUTTON": "📱 Устройства",
+  "SUB_REVOKE_SHORT": "🔑 Новая ссылка"
 }

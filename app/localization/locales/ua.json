@@ -906,8 +906,8 @@
   "CHANGE_DEVICES_SUCCESS_INCREASE": "\n   ✅ Кількість пристроїв збільшено!\n\n   📱 Було: {old_count} → Стало: {new_count}\n   💰 Списано: {amount}\n   ",
   "CHANGE_DEVICES_TITLE": "📱 Зміна кількості пристроїв",
   "CHANNEL_CHECK_BUTTON": "✅ Я підписався",
-  "CHANNEL_CHECK_NOT_SUBSCRIBED": "Ви ще не підписалися на всі канали! Підпишіться і спробуйте знову.",
-  "CHANNEL_REQUIRED_TEXT": "Будь ласка, підпишіться на обов'язкові канали та натисніть кнопку нижче.",
+  "CHANNEL_CHECK_NOT_SUBSCRIBED": "Підписку поки не знайдено. Підпишіться на канал за кнопкою вище й натисніть «Я підписався» ще раз.",
+  "CHANNEL_REQUIRED_TEXT": "🔒 Щоб продовжити, підпишіться на канал Spofy VPN: там статус серверів і новини про блокування. Потім натисніть «✅ Я підписався».",
   "CHANNEL_SUBSCRIBE_BUTTON": "🔗 Підписатися",
   "CHANNEL_SUBSCRIBE_REQUIRED_ALERT": "Будь ласка, підпишіться на всі обов'язкові канали!",
   "CHANNEL_SUBSCRIBE_THANKS": "✅ Дякуємо за підписку",
@@ -2408,5 +2408,7 @@
   "TRIAL_TRAFFIC_UNLIMITED_REGULAR": "без ліміту на звичайних серверах",
   "WEBHOOK_BANDWIDTH_NOTE_BYPASS": " Це квота на сервери «Обход». Коли вона закінчиться, вимкнуться лише вони — звичайні сервери працюватимуть без ліміту.",
   "WEBHOOK_BANDWIDTH_NOTE_REGULAR": " Якщо не вистачить — пакет можна докупити в «Моя підписка», VPN при цьому не вимкнеться.",
-  "REFERRAL_INVITE_FRIEND_DAYS": "🤝 Підключишся за моїм посиланням — отримаєш ще {days} дн. у подарунок."
+  "REFERRAL_INVITE_FRIEND_DAYS": "🤝 Підключишся за моїм посиланням — отримаєш ще {days} дн. у подарунок.",
+  "SUB_DEVICES_BUTTON": "📱 Пристрої",
+  "SUB_REVOKE_SHORT": "🔑 Нове посилання"
 }

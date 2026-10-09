@@ -904,8 +904,8 @@
   "CHANGE_DEVICES_SUCCESS_INCREASE": "\n  ✅设备数量已增加！\n\n  📱之前：{old_count}→现在：{new_count}\n  💰已扣除：{amount}\n  ",
   "CHANGE_DEVICES_TITLE": "📱更改设备数量",
   "CHANNEL_CHECK_BUTTON": "✅我已订阅",
-  "CHANNEL_CHECK_NOT_SUBSCRIBED": "您尚未订阅所有必需频道！请订阅后重试。",
-  "CHANNEL_REQUIRED_TEXT": "请订阅所有必需频道，然后点击下方按钮。",
+  "CHANNEL_CHECK_NOT_SUBSCRIBED": "尚未检测到关注。请先通过上方按钮关注频道，再点击检查按钮。",
+  "CHANNEL_REQUIRED_TEXT": "🔒 请先关注 Spofy VPN 频道（服务器状态与封锁动态），然后点击下方按钮。",
   "CHANNEL_SUBSCRIBE_BUTTON": "🔗订阅",
   "CHANNEL_SUBSCRIBE_REQUIRED_ALERT": "请先订阅所有必需频道！",
   "CHANNEL_SUBSCRIBE_THANKS": "✅感谢您的订阅",
@@ -2408,5 +2408,7 @@
   "TRIAL_TRAFFIC_UNLIMITED_REGULAR": "普通服务器不限流量",
   "WEBHOOK_BANDWIDTH_NOTE_BYPASS": " 这是「Обход」服务器的额度。用完后只会关闭这些服务器，普通服务器仍然不限流量。",
   "WEBHOOK_BANDWIDTH_NOTE_REGULAR": " 如果不够用，可以在「我的订阅」中购买流量包，VPN 不会断开。",
-  "REFERRAL_INVITE_FRIEND_DAYS": "🤝 通过我的链接连接，再送你 {days} 天。"
+  "REFERRAL_INVITE_FRIEND_DAYS": "🤝 通过我的链接连接，再送你 {days} 天。",
+  "SUB_DEVICES_BUTTON": "📱 设备",
+  "SUB_REVOKE_SHORT": "🔑 新链接"
 }

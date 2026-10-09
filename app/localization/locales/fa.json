@@ -1092,8 +1092,8 @@
   "LEGACY_ADDONS_UNAVAILABLE": "⚠️ ابتدا به یک تعرفه بروید — افزودنی‌ها برای این اشتراک در دسترس نیستند",
   "TARIFF_SWITCH_LEGACY_CURRENT": "اشتراک بدون تعرفه",
   "CHANNEL_CHECK_BUTTON": "✅ عضو شدم",
-  "CHANNEL_CHECK_NOT_SUBSCRIBED": "شما هنوز در همه کانال‌ها عضو نشده‌اید! لطفاً عضو شوید و دوباره امتحان کنید.",
-  "CHANNEL_REQUIRED_TEXT": "لطفاً در کانال‌های اجباری عضو شوید و سپس دکمه زیر را فشار دهید.",
+  "CHANNEL_CHECK_NOT_SUBSCRIBED": "عضویت شما هنوز پیدا نشد. با دکمه بالا در کانال عضو شوید و دوباره دکمه بررسی را بزنید.",
+  "CHANNEL_REQUIRED_TEXT": "🔒 برای ادامه، در کانال Spofy VPN عضو شوید (وضعیت سرورها و اخبار مسدودسازی)، سپس دکمه زیر را بزنید.",
   "CHANNEL_SUBSCRIBE_BUTTON": "📢 عضویت در کانال",
   "CHANNEL_SUBSCRIBE_REQUIRED_ALERT": "لطفاً ابتدا در همه کانال‌های اجباری عضو شوید!",
   "CHANNEL_SUBSCRIBE_THANKS": "✅ ممنون از عضویت",
@@ -2408,5 +2408,7 @@
   "TRIAL_TRAFFIC_UNLIMITED_REGULAR": "نامحدود روی سرورهای معمولی",
   "WEBHOOK_BANDWIDTH_NOTE_BYPASS": " این سهمیه سرورهای «Обход» است. وقتی تمام شود فقط آن‌ها خاموش می‌شوند و سرورهای معمولی بدون محدودیت کار می‌کنند.",
   "WEBHOOK_BANDWIDTH_NOTE_REGULAR": " اگر کم آمد، بسته را در «اشتراک من» بخرید — VPN قطع نمی‌شود.",
-  "REFERRAL_INVITE_FRIEND_DAYS": "🤝 با لینک من وصل شوی، {days} روز دیگر هدیه می‌گیری."
+  "REFERRAL_INVITE_FRIEND_DAYS": "🤝 با لینک من وصل شوی، {days} روز دیگر هدیه می‌گیری.",
+  "SUB_DEVICES_BUTTON": "📱 دستگاه‌ها",
+  "SUB_REVOKE_SHORT": "🔑 لینک جدید"
 }

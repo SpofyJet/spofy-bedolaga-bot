@@ -3246,6 +3246,9 @@
 - `tests/test_main_menu_simplified.py` — Python-модуль
   Классы: нет
   Функции: `test_new_user_has_no_empty_balance_but_has_promocode_and_support`, `test_balance_stays_for_people_with_money_or_paid_history`, `test_active_subscriber_gets_support_next_to_info_and_no_promocode`, `test_support_row_collapses_to_info_alone_when_support_is_off`, `test_free_trial_is_activated_in_one_tap`, `test_paid_trial_still_shows_the_offer_screen`
+- `tests/test_menu_screens_simplified.py` — Python-модуль
+  Классы: нет
+  Функции: `test_info_menu_no_longer_duplicates_support`, `test_info_menu_keeps_support_in_cabinet_mode`, `test_paid_subscription_screen_opens_devices_directly`, `test_support_screen_starts_with_direct_chat_and_pairs_tickets`, `test_referral_screen_uses_paired_rows`
 - `tests/test_menu_subscription_status.py` — Python-модуль
   Классы: `DummyTexts` (1 методов)
   Функции: `test_get_subscription_status_marks_trial_as_trial`, `complaint_clock`, `test_almost_two_days_left_is_not_tomorrow`, `test_two_hours_past_local_midnight_is_tomorrow`, `test_later_today_is_today`
