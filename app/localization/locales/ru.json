@@ -1270,8 +1270,6 @@
   "MENU_PUBLIC_OFFER": "📄 Оферта",
   "MENU_REFERRALS": "🤝 Пригласить друзей",
   "MENU_REFERRALS_DAYS": "🎁 Друг = +2 дня",
-  "MENU_RENEW_DAYS_LEFT": "⏳ Осталось {left} — продлить",
-  "MENU_HOURS_SHORT": "{hours} ч",
   "TRIAL_FRIEND_DAYS_TIP": "🎁 <b>+{days} дня за друга:</b> позовите друга, и когда он подключит VPN, вам и ему по <b>+{days} дня</b>. Без ограничений.",
   "MENU_RULES": "📜 Правила",
   "MENU_SERVER_STATUS": "📡 Статус серверов",
