@@ -43,11 +43,10 @@ def test_expired_has_no_button():
     assert _button(timedelta(hours=-1)) is None
 
 
-def test_trial_button_offers_subscription_and_appears_later():
-    button = _button(timedelta(days=1, hours=3), is_trial=True)
-    assert button.text == '⏳ Пробный: осталось 1 день — оформить'
-    assert button.callback_data == 'menu_buy'
-    assert _button(timedelta(days=3), is_trial=True) is None  # у триала — только за двое суток
+def test_trial_has_no_countdown_button():
+    # У триала в меню остаётся обычная «Купить подписку»: отсчёта дней нет ни за сутки, ни за час.
+    assert _button(timedelta(days=1, hours=3), is_trial=True) is None
+    assert _button(timedelta(hours=3), is_trial=True) is None
 
 
 def test_no_subscription_no_button():

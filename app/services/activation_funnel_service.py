@@ -87,7 +87,7 @@ EVENT_ABANDONED_TOPUP = 'funnel_abandoned_topup'
 # Брошенная оплата: по данным 62% людей завершают платёж сами, но почти все — в первые 10 минут
 # (между 10 и 60 минутами сами доплачивают 6%), поэтому напоминаем на 10-й минуте, а не через часы.
 ABANDONED_TOPUP_MIN_AGE_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_MIN_AGE_MINUTES', 10))
-ABANDONED_TOPUP_WINDOW_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_WINDOW_MINUTES', 180))
+ABANDONED_TOPUP_WINDOW_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_WINDOW_MINUTES', 30))
 ABANDONED_TOPUP_RESEND_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_RESEND_HOURS', 24))
 # Если у человека действует скидка предложения и кончается раньше, продлеваем её до этого срока.
 ABANDONED_TOPUP_PRICE_LOCK_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_PRICE_LOCK_MINUTES', 20))
@@ -622,7 +622,7 @@ class ActivationFunnelService:
                 '',
                 texts.t(
                     'FUNNEL_ABANDONED_TOPUP_BODY',
-                    'Вы остановились на оплате <b>{amount} ₽</b>. Выберите способ, чтобы завершить её в один шаг.',
+                    'Вы остановились на оплате <b>{amount} ₽</b>.\n\nНе получилось оплатить? Попробуйте другой способ.',
                 ).format(amount=amount_rub),
             ]
 

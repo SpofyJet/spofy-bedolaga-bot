@@ -98,6 +98,7 @@ async def test_sends_after_ten_minutes_with_amount_and_methods(monkeypatch):
 
     text = sent.await_args.args[1]
     assert '315 ₽' in text and 'Оплата не завершена' in text
+    assert 'Не получилось оплатить? Попробуйте другой способ.' in text
     rows = sent.await_args.kwargs['reply_markup'].inline_keyboard
     assert rows[0][0].callback_data.startswith('topup_amount|')  # способ на ту же сумму
     assert rows[-1][0].callback_data == 'balance_topup'  # «Другая сумма»
@@ -327,4 +328,15 @@ async def test_referral_prompt_waits_three_minutes(monkeypatch):
         service, sent = _service(monkeypatch)
 
         assert await service.process_referral_prompt(db) == 0
+    sent.assert_not_awaited()
+
+
+async def test_reminder_is_not_sent_long_after_the_payment(monkeypatch):
+    # Напоминание — про платёж, оставшийся неоплаченным 10 минут; через 45 минут уже поздно.
+    async with _session(monkeypatch) as db:
+        db.add_all([_user(), _platega(1, 45)])
+        await db.commit()
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_payments(db) == 0
     sent.assert_not_awaited()

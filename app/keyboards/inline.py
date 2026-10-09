@@ -595,9 +595,8 @@ def _build_cabinet_main_menu_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
 
-# За сколько дней до конца показывать в меню кнопку «Осталось N — продлить».
+# За сколько дней до конца платной подписки показывать в меню кнопку «Осталось N — продлить».
 RENEW_CTA_PAID_DAYS = 7
-RENEW_CTA_TRIAL_DAYS = 2
 
 
 def _time_left_label(texts, language: str, remaining) -> str:
@@ -614,8 +613,8 @@ def _time_left_label(texts, language: str, remaining) -> str:
 def _days_left_button(subscription, texts, language: str) -> InlineKeyboardButton | None:
     """Кнопка «⏳ Осталось 3 дня — продлить» за неделю до конца платной подписки.
 
-    У триала «⏳ Пробный: осталось 1 день — оформить» за двое суток. Меню остальное время не меняется:
-    кнопка появляется именно тогда, когда продление нужнее всего, и даёт человеку срок, а не просто «Купить».
+    У триала кнопки с отсчётом нет. Меню остальное время не меняется: кнопка появляется именно тогда,
+    когда продление нужнее всего, и даёт человеку срок, а не просто «Купить».
     """
     from datetime import UTC, datetime
 
@@ -625,18 +624,13 @@ def _days_left_button(subscription, texts, language: str) -> InlineKeyboardButto
     if end.tzinfo is None:
         end = end.replace(tzinfo=UTC)
     remaining = end - datetime.now(UTC)
-    is_trial = bool(getattr(subscription, 'is_trial', False))
-    limit_days = RENEW_CTA_TRIAL_DAYS if is_trial else RENEW_CTA_PAID_DAYS
-    if remaining.total_seconds() <= 0 or remaining.days >= limit_days:
+    # У триала отсчёта нет: в меню остаётся обычная «Купить подписку».
+    if getattr(subscription, 'is_trial', False):
+        return None
+    if remaining.total_seconds() <= 0 or remaining.days >= RENEW_CTA_PAID_DAYS:
         return None
 
     left = _time_left_label(texts, language, remaining)
-    if is_trial:
-        return InlineKeyboardButton(
-            text=texts.t('MENU_TRIAL_DAYS_LEFT', '⏳ Пробный: осталось {left} — оформить').format(left=left),
-            callback_data='menu_buy',
-            style='primary',
-        )
     button = build_subscription_extend_button(
         texts.t('MENU_RENEW_DAYS_LEFT', '⏳ Осталось {left} — продлить').format(left=left),
         getattr(subscription, 'id', None),
