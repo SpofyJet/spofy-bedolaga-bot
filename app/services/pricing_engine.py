@@ -237,6 +237,29 @@ class PricingEngine:
             return 0, 1
         return price, best_period
 
+    @staticmethod
+    def get_comparable_daily_rates(
+        current_tariff: Tariff, new_tariff: Tariff, remaining_days: int
+    ) -> tuple[tuple[int, int], tuple[int, int]]:
+        """Дневные ставки двух тарифов по ОДНОМУ общему периоду, ближайшему к остатку дней.
+
+        Раньше брался самый короткий период каждого тарифа: у «Стандартного» это 14 дней за 119 ₽
+        (8,5 ₽/день), у «С Обходами» 30 дней за 270 ₽ (9 ₽/день), и переход стоил копейки вместо
+        реальной разницы (≈3,7 ₽/день). На одном и том же периоде (30, 365 и т. д.) ставки сравнимы.
+        Если общего периода у тарифов нет, как раньше берётся самый короткий период каждого.
+        """
+        common = set(current_tariff.get_available_periods() or []) & set(new_tariff.get_available_periods() or [])
+        if common:
+            period = min(common, key=lambda days: (abs(days - remaining_days), days))
+            current_price = current_tariff.get_price_for_period(period)
+            new_price = new_tariff.get_price_for_period(period)
+            if current_price and new_price and period > 0:
+                return (current_price, period), (new_price, period)
+        return (
+            PricingEngine.get_tariff_daily_rate_fraction(current_tariff),
+            PricingEngine.get_tariff_daily_rate_fraction(new_tariff),
+        )
+
     def calculate_tariff_switch_cost(
         self,
         current_tariff: Tariff,
@@ -311,8 +334,9 @@ class PricingEngine:
         # raw_cost = (new_p/new_d - cur_p/cur_d) * remaining
         #          = (new_p * cur_d - cur_p * new_d) * remaining / (new_d * cur_d)
         # Floor division (//) округляет дробные копейки вниз — в пользу пользователя.
-        cur_price, cur_period = self.get_tariff_daily_rate_fraction(current_tariff)
-        new_price, new_period = self.get_tariff_daily_rate_fraction(new_tariff)
+        (cur_price, cur_period), (new_price, new_period) = self.get_comparable_daily_rates(
+            current_tariff, new_tariff, remaining_days
+        )
 
         numerator = (new_price * cur_period - cur_price * new_period) * remaining_days
         denominator = new_period * cur_period

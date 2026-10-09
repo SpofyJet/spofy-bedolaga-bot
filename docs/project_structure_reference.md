@@ -1725,7 +1725,7 @@
   Классы: нет
   Функции: `build_start_keyboard`, `send_poll_to_users`, `reward_user_for_poll`, `get_next_question`, `get_question_option`
 - `app/services/pricing_engine.py` — Python-модуль
-  Классы: `TariffBreakdown`, `ClassicBreakdown`, `RenewalPricing` (1 методов), `TariffSwitchResult` (2 методов), `PricingEngine` (20 методов)
+  Классы: `TariffBreakdown`, `ClassicBreakdown`, `RenewalPricing` (1 методов), `TariffSwitchResult` (2 методов), `PricingEngine` (21 методов)
   Функции: нет
 - `app/services/privacy_policy_service.py` — Python-модуль
   Классы: `PrivacyPolicyService` (9 методов)
@@ -5018,6 +5018,9 @@
 - `tests/services/test_tariff_purchase_subscription_pinning.py` — Python-модуль
   Классы: нет
   Функции: `test_select_tariff_period_resolves_and_pins_target_subscription_id` — REGRESSION: ``select_tariff_period`` must resolve the existing, `test_confirm_tariff_purchase_reads_target_subscription_id_from_fsm` — REGRESSION: ``confirm_tariff_purchase`` must read, `test_confirm_tariff_purchase_guards_against_tariff_divergence` — If the FSM-pinned subscription's tariff_id no longer matches, `test_confirm_tariff_purchase_does_not_use_only_tariff_lookup` — Pre-fix shape: confirm_tariff_purchase ran a single
+- `tests/services/test_tariff_switch_common_period.py` — Python-модуль
+  Классы: нет
+  Функции: `test_month_left_costs_the_real_monthly_difference`, `test_long_remainder_uses_the_annual_rates`, `test_cost_is_positive_and_below_the_new_tariff_full_price`, `test_cheaper_target_is_free`, `test_without_common_period_falls_back_to_shortest_rates`
 - `tests/services/test_tariff_switch_flows_use_policy.py` — Python-модуль
   Классы: нет
   Функции: `test_flow_computes_remaining_days_through_policy`, `test_flow_asks_policy_before_resetting_traffic`, `test_no_new_direct_readers_of_the_traffic_switch` — Новый читатель выключателя обязан объясниться здесь.
