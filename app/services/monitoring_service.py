@@ -2980,6 +2980,8 @@ class MonitoringService:
         Без живых записей проход стоит один дешёвый SELECT; неконфигурированный
         Platega отсекается ниже по is_configured.
         """
+        if not settings.PLATEGA_SUBSCRIPTION_API_ENABLED:
+            return
         try:
             from app.database.crud import platega_subscription as sub_crud
             from app.services.platega_recurrent import platega_reconcile_decision

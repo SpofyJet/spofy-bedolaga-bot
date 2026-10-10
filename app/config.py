@@ -871,6 +871,9 @@ class Settings(BaseSettings):
     PLATEGA_WEBHOOK_HOST: str = '0.0.0.0'
     PLATEGA_WEBHOOK_PORT: int = 8086
     PLATEGA_RECURRENT_ENABLED: bool = False  # Рекуррентные СБП-подписки Platega (автопродление)
+    # Фоновая сверка через Subscription API Platega (GET /subscription/*). Выключена: у мерчанта метод закрыт (401),
+    # а каждый такой запрос после рестарта бота сопровождался блокировкой ключа на минуты (платежи отвечали 401).
+    PLATEGA_SUBSCRIPTION_API_ENABLED: bool = False
 
     WATA_ENABLED: bool = False
     WATA_DISPLAY_NAME: str = 'Wata'

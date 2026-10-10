@@ -127,8 +127,10 @@ async def test_create_subscription_truncates_long_cyrillic_description(monkeypat
 
 
 @pytest.fixture(autouse=True)
-def _reset_platega_block():
+def _reset_platega_block(monkeypatch: pytest.MonkeyPatch):
     # Блокировка сверки на 6 часов (401 от Platega) живёт в классе: сбрасываем между тестами.
+    # Сама сверка в проде выключена (PLATEGA_SUBSCRIPTION_API_ENABLED=false) — здесь проверяем её логику включённой.
+    monkeypatch.setattr(settings, 'PLATEGA_SUBSCRIPTION_API_ENABLED', True, raising=False)
     MonitoringService._platega_subscription_blocked_until = None
     yield
     MonitoringService._platega_subscription_blocked_until = None
@@ -541,3 +543,11 @@ async def test_reconcile_is_skipped_for_six_hours_after_401(monkeypatch: pytest.
         await service._reconcile_platega_subscriptions(db)  # второй цикл подряд
 
     assert mock_status.await_count == 1  # второй раз Platega не трогали
+
+
+async def test_reconcile_does_not_touch_platega_subscription_api_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Subscription API выключен: ни выборки из БД, ни запросов к Platega (после рестарта они блокировали ключ)."""
+    monkeypatch.setattr(settings, 'PLATEGA_SUBSCRIPTION_API_ENABLED', False, raising=False)
+    assert type(settings).model_fields['PLATEGA_SUBSCRIPTION_API_ENABLED'].default is False
+    # db=None упал бы при первом обращении к БД.
+    await MonitoringService()._reconcile_platega_subscriptions(db=None)
