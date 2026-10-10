@@ -258,6 +258,75 @@ def get_tariffs_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+async def _personal_period_prices(db, db_user: User, tariff: Tariff) -> tuple[dict[int, int] | None, int]:
+    """Цены периодов с учётом устройств, уже имеющихся у человека сверх тарифа. (цены | None, число доп. устройств).
+
+    Ту же сумму потом покажет подтверждение: движок цены один. Без этого список обещал «1800», а на выборе
+    приходило «3000» (две доплаченные устройства по 50 ₽ в месяц) без единого слова о причине.
+    """
+    try:
+        if settings.is_multi_tariff_enabled():
+            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+            existing = await get_subscription_by_user_and_tariff(db, db_user.id, tariff.id)
+        else:
+            existing = await get_subscription_by_user_id(db, db_user.id)
+        if existing is None or existing.tariff_id != tariff.id:
+            return None, 0
+        device_limit = existing.device_limit or 0
+        included = tariff.device_limit or 0
+        if device_limit <= included or not (tariff.device_price_kopeks or 0):
+            return None, 0
+        from app.services.pricing_engine import pricing_engine
+
+        prices: dict[int, int] = {}
+        for period_str in tariff.period_prices or {}:
+            period = int(period_str)
+            result = await pricing_engine.calculate_tariff_purchase_price(
+                tariff, period, device_limit=device_limit, user=db_user
+            )
+            prices[period] = result.final_total
+        return prices, device_limit - included
+    except Exception as error:
+        logger.warning('Не удалось посчитать персональные цены периодов', tariff_id=tariff.id, error=str(error))
+        return None, 0
+
+
+def _price_breakdown_note(texts, tariff: Tariff, device_limit: int | None, result) -> str:
+    """Одна строка: из чего сложилась стоимость, когда в неё входят дополнительные устройства."""
+    included = tariff.device_limit or 0
+    extra = (device_limit or 0) - included
+    devices_price = getattr(result, 'devices_price', 0) or 0
+    if extra <= 0 or devices_price <= 0:
+        return ''
+    return texts.t(
+        'TARIFF_PURCHASE_DEVICES_BREAKDOWN',
+        '\n\n📱 <i>В стоимость входят {extra} доп. устройств: {devices_price} '
+        '({devices} устройств при {included} в тарифе).</i>',
+    ).format(
+        extra=extra,
+        devices_price=format_price_kopeks(devices_price),
+        devices=device_limit,
+        included=included,
+    )
+
+
+def _extra_devices_note(texts, tariff: Tariff, extra: int) -> str:
+    if extra <= 0 or getattr(tariff, 'device_price_flat', False):
+        return ''  # у тарифов с разовой ценой устройства «по X/мес» было бы неправдой
+    price = tariff.device_price_kopeks or 0
+    return texts.t(
+        'TARIFF_PERIOD_DEVICES_NOTE',
+        '\n\n📱 <i>У вас устройств: {devices} ({included} в тарифе + {extra} дополнительных по {price}/мес). '
+        'Их стоимость уже включена в цены периодов.</i>',
+    ).format(
+        devices=(tariff.device_limit or 0) + extra,
+        included=tariff.device_limit or 0,
+        extra=extra,
+        price=format_price_kopeks(price),
+    )
+
+
 def _period_button_text(tariff: Tariff, period: int, price: int, price_text: str, prices: dict, texts) -> str:
     """Единый текст кнопки периода: срок, цена, экономия к месячной цене и отметка выгодного периода.
 
@@ -284,8 +353,13 @@ def get_tariff_periods_keyboard(
     language: str,
     db_user: User | None = None,
     back_callback: str = 'menu_buy',
+    personal_prices: dict[int, int] | None = None,
 ) -> InlineKeyboardMarkup:
-    """Создает клавиатуру выбора периода для тарифа с учетом скидок по периодам."""
+    """Создает клавиатуру выбора периода для тарифа с учетом скидок по периодам.
+
+    ``personal_prices`` — готовые цены периодов для человека (с учётом его дополнительных устройств и скидок):
+    без них список показывал базовые цены тарифа, а при выборе приходила другая сумма.
+    """
     texts = get_texts(language)
     buttons = []
 
@@ -293,6 +367,14 @@ def get_tariff_periods_keyboard(
     for period_str in sorted(prices.keys(), key=int):
         period = int(period_str)
         price = prices[period_str]
+
+        if personal_prices and period in personal_prices:
+            price_text = format_price_kopeks(personal_prices[period])
+            button_text = _period_button_text(tariff, period, personal_prices[period], price_text, prices, texts)
+            buttons.append(
+                [InlineKeyboardButton(text=button_text, callback_data=f'tariff_period:{tariff.id}:{period}')]
+            )
+            continue
 
         # Получаем скидку для конкретного периода
         group_pct, offer_pct, discount_percent = 0, 0, 0
@@ -1262,11 +1344,17 @@ async def _proceed_with_selected_tariff(
                 parse_mode='HTML',
             )
         else:
-            # Для обычного тарифа показываем выбор периода
+            # Для обычного тарифа показываем выбор периода (цены — с учётом доп. устройств человека)
+            personal_prices, extra_devices = await _personal_period_prices(db, db_user, tariff)
             await callback.message.edit_text(
-                format_tariff_info_for_user(tariff, db_user.language),
+                format_tariff_info_for_user(tariff, db_user.language)
+                + _extra_devices_note(texts, tariff, extra_devices),
                 reply_markup=get_tariff_periods_keyboard(
-                    tariff, db_user.language, db_user=db_user, back_callback=back_callback
+                    tariff,
+                    db_user.language,
+                    db_user=db_user,
+                    back_callback=back_callback,
+                    personal_prices=personal_prices,
                 ),
                 parse_mode='HTML',
             )
@@ -1868,7 +1956,8 @@ async def select_tariff_period(
                 total=format_price_kopeks(final_price),
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - final_price),
-            ),
+            )
+            + _price_breakdown_note(texts, tariff, shown_device_limit, result),
             # Скидка на экране («Итого: 216 ₽») — кнопку автооплаты прячем:
             # подписка Platega спишет полную цену, а не скидочную.
             reply_markup=get_tariff_confirm_keyboard(
@@ -1915,6 +2004,7 @@ async def select_tariff_period(
                 balance=format_price_kopeks(user_balance),
                 missing=format_price_kopeks(missing),
             )
+            + _price_breakdown_note(texts, tariff, shown_device_limit, result)
             + texts.t(
                 'TARIFF_PURCHASE_CART_SAVED_HINT',
                 '\n\n🛒 <i>Корзина сохранена. После пополнения вернитесь к оформлению — всё останется как есть.</i>',

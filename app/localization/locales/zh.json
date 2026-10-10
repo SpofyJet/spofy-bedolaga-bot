@@ -2414,5 +2414,7 @@
   "SUB_ADD_DEVICES_BUTTON": "➕ 增加设备",
   "ADMIN_PROMO_OFFER_QUEUED": "📬 群发已开始：{count} 位接收者（任务 {job_id}）。\n结果将以消息形式发送。机器人重启后会自动继续发送。",
   "STARS_RECURRING_BUTTON": "🔁 每 30 天",
-  "STARS_RECURRING_NOTE": "\n\n🔁 “每 30 天”：Telegram 会自动重复扣款，余额自动充值。可在 Telegram 中取消：设置 → 星星 → 订阅。"
+  "STARS_RECURRING_NOTE": "\n\n🔁 “每 30 天”：Telegram 会自动重复扣款，余额自动充值。可在 Telegram 中取消：设置 → 星星 → 订阅。",
+  "TARIFF_PERIOD_DEVICES_NOTE": "\n\n📱 <i>您共有 {devices} 台设备（套餐含 {included} 台 + {extra} 台额外设备，每台 {price}/月）。其费用已包含在各周期价格中。</i>",
+  "TARIFF_PURCHASE_DEVICES_BREAKDOWN": "\n\n📱 <i>价格包含 {extra} 台额外设备：{devices_price}（共 {devices} 台，套餐含 {included} 台）。</i>"
 }

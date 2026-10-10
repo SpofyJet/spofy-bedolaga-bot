@@ -3336,6 +3336,9 @@
 - `tests/test_sync_bot_username.py` — Python-модуль
   Классы: нет
   Функции: `test_sync_overrides_stale_username`, `test_sync_keeps_config_on_get_me_failure`, `test_sync_noop_when_already_correct`
+- `tests/test_tariff_devices_price_note.py` — Python-модуль
+  Классы: нет
+  Функции: `test_year_price_includes_extra_devices`, `test_no_extra_devices_keeps_base_prices`, `test_breakdown_note_mentions_extra_devices_only_when_paid`, `test_period_note_skipped_for_flat_device_price`
 - `tests/test_tariff_highlight_period.py` — Python-модуль
   Классы: нет
   Функции: `test_highlighted_period_is_marked_in_every_keyboard`, `test_nothing_is_marked_without_a_highlight`, `test_stale_highlight_marks_nothing` — Период удалили, а число осталось: отмечать нечего, но и падать нельзя., `test_prices_stay_visible_next_to_the_badge` — Отметка добавляется к строке, а не вместо неё: цена обязана остаться., `test_resolve_keeps_only_existing_periods`, `test_highlight_survives_price_edit_only_if_the_period_survives` — Правка цен не должна оставлять метку на периоде, которого больше нет., `test_highlight_cannot_point_at_a_missing_period`, `test_highlighted_tariff_is_marked_in_the_list`, `test_purchased_mark_wins_over_the_badge` — Галочка «уже куплен» отвечает на другой вопрос и важнее подсказки о выгоде., `test_tariff_list_survives_objects_without_the_flag` — Старые вызовы передают тарифы без нового поля — список не должен падать., `test_tariff_highlight_is_stored_and_cleared`
