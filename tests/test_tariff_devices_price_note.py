@@ -14,31 +14,25 @@ def _tariff(**kw):
     return SimpleNamespace(**base)
 
 
-async def _prices(existing, tariff):
-    engine = MagicMock()
-    engine.calculate_tariff_purchase_price = AsyncMock(
-        side_effect=lambda t, p, device_limit, user: SimpleNamespace(
-            final_total=int(t.period_prices[str(p)]) + (device_limit - 3) * 5000 * (12 if p == 365 else 1)
-        )
+async def _extra(existing, tariff):
+    with patch.object(tp, 'get_subscription_by_user_id', AsyncMock(return_value=existing)):
+        return await tp._extra_device_count(None, SimpleNamespace(id=1), tariff)
+
+
+async def test_extra_devices_are_counted_beyond_the_tariff():
+    assert await _extra(SimpleNamespace(tariff_id=3, device_limit=5), _tariff()) == 2
+
+
+async def test_no_extra_devices_means_no_note():
+    assert await _extra(SimpleNamespace(tariff_id=3, device_limit=3), _tariff()) == 0
+    assert await _extra(None, _tariff()) == 0
+
+
+def test_period_keyboard_keeps_the_base_prices():
+    kb = tp.get_tariff_periods_keyboard(
+        _tariff(id=3, name='T', period_prices={'365': 180000}, highlight_period_days=None), 'ru'
     )
-    with (
-        patch.object(tp, 'get_subscription_by_user_id', AsyncMock(return_value=existing)),
-        patch('app.services.pricing_engine.pricing_engine', engine),
-    ):
-        return await tp._personal_period_prices(None, SimpleNamespace(id=1), tariff)
-
-
-async def test_year_price_includes_extra_devices():
-    sub = SimpleNamespace(tariff_id=3, device_limit=5)
-    prices, extra = await _prices(sub, _tariff())
-    assert extra == 2
-    assert prices[365] == 180000 + 2 * 5000 * 12  # 3000 ₽
-
-
-async def test_no_extra_devices_keeps_base_prices():
-    sub = SimpleNamespace(tariff_id=3, device_limit=3)
-    assert await _prices(sub, _tariff()) == (None, 0)
-    assert await _prices(None, _tariff()) == (None, 0)
+    assert '1800' in kb.inline_keyboard[0][0].text.replace(' ', '').replace('\u00a0', '')
 
 
 def test_breakdown_note_mentions_extra_devices_only_when_paid():

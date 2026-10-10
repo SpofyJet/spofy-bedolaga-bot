@@ -258,12 +258,8 @@ def get_tariffs_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-async def _personal_period_prices(db, db_user: User, tariff: Tariff) -> tuple[dict[int, int] | None, int]:
-    """Цены периодов с учётом устройств, уже имеющихся у человека сверх тарифа. (цены | None, число доп. устройств).
-
-    Ту же сумму потом покажет подтверждение: движок цены один. Без этого список обещал «1800», а на выборе
-    приходило «3000» (две доплаченные устройства по 50 ₽ в месяц) без единого слова о причине.
-    """
+async def _extra_device_count(db, db_user: User, tariff: Tariff) -> int:
+    """Сколько устройств у человека сверх включённых в тариф (0 — доплаты нет)."""
     try:
         if settings.is_multi_tariff_enabled():
             from app.database.crud.subscription import get_subscription_by_user_and_tariff
@@ -271,25 +267,12 @@ async def _personal_period_prices(db, db_user: User, tariff: Tariff) -> tuple[di
             existing = await get_subscription_by_user_and_tariff(db, db_user.id, tariff.id)
         else:
             existing = await get_subscription_by_user_id(db, db_user.id)
-        if existing is None or existing.tariff_id != tariff.id:
-            return None, 0
-        device_limit = existing.device_limit or 0
-        included = tariff.device_limit or 0
-        if device_limit <= included or not (tariff.device_price_kopeks or 0):
-            return None, 0
-        from app.services.pricing_engine import pricing_engine
-
-        prices: dict[int, int] = {}
-        for period_str in tariff.period_prices or {}:
-            period = int(period_str)
-            result = await pricing_engine.calculate_tariff_purchase_price(
-                tariff, period, device_limit=device_limit, user=db_user
-            )
-            prices[period] = result.final_total
-        return prices, device_limit - included
+        if existing is None or existing.tariff_id != tariff.id or not (tariff.device_price_kopeks or 0):
+            return 0
+        return max(0, (existing.device_limit or 0) - (tariff.device_limit or 0))
     except Exception as error:
-        logger.warning('Не удалось посчитать персональные цены периодов', tariff_id=tariff.id, error=str(error))
-        return None, 0
+        logger.warning('Не удалось посчитать дополнительные устройства', tariff_id=tariff.id, error=str(error))
+        return 0
 
 
 def _price_breakdown_note(texts, tariff: Tariff, device_limit: int | None, result) -> str:
@@ -317,8 +300,7 @@ def _extra_devices_note(texts, tariff: Tariff, extra: int) -> str:
     price = tariff.device_price_kopeks or 0
     return texts.t(
         'TARIFF_PERIOD_DEVICES_NOTE',
-        '\n\n📱 <i>У вас устройств: {devices} ({included} в тарифе + {extra} дополнительных по {price}/мес). '
-        'Их стоимость уже включена в цены периодов.</i>',
+        '\n\n📱 <i>У вас устройств: {devices} ({included} в тарифе + {extra} дополнительных по {price}/мес). Цены выше — за {included}; при оформлении к ним добавится доплата за дополнительные, а на экране оплаты можно оставить только {included}.</i>',
     ).format(
         devices=(tariff.device_limit or 0) + extra,
         included=tariff.device_limit or 0,
@@ -353,13 +335,8 @@ def get_tariff_periods_keyboard(
     language: str,
     db_user: User | None = None,
     back_callback: str = 'menu_buy',
-    personal_prices: dict[int, int] | None = None,
 ) -> InlineKeyboardMarkup:
-    """Создает клавиатуру выбора периода для тарифа с учетом скидок по периодам.
-
-    ``personal_prices`` — готовые цены периодов для человека (с учётом его дополнительных устройств и скидок):
-    без них список показывал базовые цены тарифа, а при выборе приходила другая сумма.
-    """
+    """Создает клавиатуру выбора периода для тарифа с учетом скидок по периодам."""
     texts = get_texts(language)
     buttons = []
 
@@ -367,14 +344,6 @@ def get_tariff_periods_keyboard(
     for period_str in sorted(prices.keys(), key=int):
         period = int(period_str)
         price = prices[period_str]
-
-        if personal_prices and period in personal_prices:
-            price_text = format_price_kopeks(personal_prices[period])
-            button_text = _period_button_text(tariff, period, personal_prices[period], price_text, prices, texts)
-            buttons.append(
-                [InlineKeyboardButton(text=button_text, callback_data=f'tariff_period:{tariff.id}:{period}')]
-            )
-            continue
 
         # Получаем скидку для конкретного периода
         group_pct, offer_pct, discount_percent = 0, 0, 0
@@ -1362,8 +1331,8 @@ async def _proceed_with_selected_tariff(
                 parse_mode='HTML',
             )
         else:
-            # Для обычного тарифа показываем выбор периода (цены — с учётом доп. устройств человека)
-            personal_prices, extra_devices = await _personal_period_prices(db, db_user, tariff)
+            # Для обычного тарифа показываем выбор периода (цены тарифа; про доплату за устройства — пояснение)
+            extra_devices = await _extra_device_count(db, db_user, tariff)
             await callback.message.edit_text(
                 format_tariff_info_for_user(tariff, db_user.language)
                 + _extra_devices_note(texts, tariff, extra_devices),
@@ -1372,7 +1341,6 @@ async def _proceed_with_selected_tariff(
                     db_user.language,
                     db_user=db_user,
                     back_callback=back_callback,
-                    personal_prices=personal_prices,
                 ),
                 parse_mode='HTML',
             )
