@@ -2416,5 +2416,6 @@
   "STARS_RECURRING_BUTTON": "🔁 هر ۳۰ روز",
   "STARS_RECURRING_NOTE": "\n\n🔁 «هر ۳۰ روز»: تلگرام خودش پرداخت را تکرار می‌کند و موجودی به‌طور خودکار شارژ می‌شود. لغو در تلگرام: تنظیمات ← ستاره‌ها ← اشتراک‌ها.",
   "TARIFF_PERIOD_DEVICES_NOTE": "\n\n📱 <i>شما {devices} دستگاه دارید ({included} در تعرفه + {extra} اضافه، هرکدام {price}/ماه). هزینه آن‌ها در قیمت دوره‌ها لحاظ شده است.</i>",
-  "TARIFF_PURCHASE_DEVICES_BREAKDOWN": "\n\n📱 <i>قیمت شامل {extra} دستگاه اضافه است: {devices_price} ({devices} دستگاه، {included} در تعرفه).</i>"
+  "TARIFF_PURCHASE_DEVICES_BREAKDOWN": "\n\n📱 <i>قیمت شامل {extra} دستگاه اضافه است: {devices_price} ({devices} دستگاه، {included} در تعرفه).</i>",
+  "TARIFF_TRIM_DEVICES_BUTTON": "📱 فقط {devices} دستگاه — {price}"
 }

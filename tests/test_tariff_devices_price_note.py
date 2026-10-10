@@ -52,3 +52,36 @@ def test_period_note_skipped_for_flat_device_price():
     texts = get_texts('ru')
     assert tp._extra_devices_note(texts, _tariff(device_price_flat=True), 2) == ''
     assert 'доп' in tp._extra_devices_note(texts, _tariff(), 2)
+
+
+def test_confirm_and_insufficient_keyboards_offer_the_trim_button():
+    row = tp._trim_devices_row(get_texts('ru'), _tariff(), 365, 180000)
+    for kb in (
+        tp.get_tariff_confirm_keyboard(3, 365, 'ru', show_sbp=False, trim_row=row),
+        tp.get_tariff_insufficient_balance_keyboard(3, 365, 'ru', missing_kopeks=0, show_sbp=False, trim_row=row),
+    ):
+        buttons = [b for r in kb.inline_keyboard for b in r]
+        assert any(b.callback_data == 'tariff_trim:3:365' and '1' in b.text and '800' in b.text for b in buttons)
+    plain = tp.get_tariff_confirm_keyboard(3, 365, 'ru', show_sbp=False)
+    assert not any((b.callback_data or '').startswith('tariff_trim') for r in plain.inline_keyboard for b in r)
+
+
+async def test_trim_lowers_the_limit_and_reopens_the_period_screen():
+    sub = SimpleNamespace(tariff_id=3, device_limit=5, remnawave_id=None)
+    user = SimpleNamespace(id=1, language='ru', remnawave_id=None)
+    db = MagicMock(commit=AsyncMock())
+    callback = MagicMock(data='tariff_trim:3:365')
+    callback.model_copy = MagicMock(return_value='reopened')
+    reopen = AsyncMock()
+    with (
+        patch.object(
+            tp, 'get_tariff_by_id', AsyncMock(return_value=SimpleNamespace(id=3, is_active=True, device_limit=3))
+        ),
+        patch.object(tp, 'get_subscription_by_user_id', AsyncMock(return_value=sub)),
+        patch.object(tp.settings, 'MULTI_TARIFF_ENABLED', False, create=True),
+        patch('app.services.subscription_service.SubscriptionService.update_remnawave_user', AsyncMock()),
+        patch.object(tp, 'select_tariff_period', reopen),
+    ):
+        await tp.trim_tariff_devices(callback, user, db, MagicMock())
+    assert sub.device_limit == 3
+    reopen.assert_awaited_once()

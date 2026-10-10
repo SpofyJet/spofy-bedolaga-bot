@@ -438,6 +438,7 @@ def get_tariff_confirm_keyboard(
     language: str,
     show_sbp: bool = True,
     sbp_price_kopeks: int | None = None,
+    trim_row: list[InlineKeyboardButton] | None = None,
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру подтверждения покупки тарифа.
 
@@ -501,8 +502,22 @@ def get_tariff_confirm_keyboard(
             )
         ],
     )
+    if trim_row:
+        buttons.append(trim_row)
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'tariff_select:{tariff_id}')])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def _trim_devices_row(texts, tariff: Tariff, period: int, price: int) -> list[InlineKeyboardButton]:
+    """Кнопка «оставить только устройства из тарифа»: цена периода без доплаты за дополнительные."""
+    return [
+        InlineKeyboardButton(
+            text=texts.t('TARIFF_TRIM_DEVICES_BUTTON', '📱 Только {devices} устр. — {price}').format(
+                devices=tariff.device_limit or 0, price=format_price_kopeks(price)
+            ),
+            callback_data=f'tariff_trim:{tariff.id}:{period}',
+        )
+    ]
 
 
 def get_tariff_insufficient_balance_keyboard(
@@ -511,6 +526,7 @@ def get_tariff_insufficient_balance_keyboard(
     language: str,
     missing_kopeks: int = 0,
     show_sbp: bool = True,
+    trim_row: list[InlineKeyboardButton] | None = None,
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру при недостаточном балансе.
 
@@ -529,6 +545,7 @@ def get_tariff_insufficient_balance_keyboard(
     # показываем: подписка спишет полную сумму, а не ту, что видит юзер.
     sbp_rows = _sbp_purchase_rows(tariff_id, texts, period_days=period) if show_sbp else []
 
+    trim_rows = [trim_row] if trim_row else []
     if settings.is_auto_purchase_after_topup_enabled() and missing_kopeks > 0:
         from app.keyboards.inline import get_payment_methods_keyboard
 
@@ -540,10 +557,11 @@ def get_tariff_insufficient_balance_keyboard(
             if row and all((button.callback_data or '').startswith('topup_amount|') for button in row)
         ]
         if payment_rows:
-            return InlineKeyboardMarkup(inline_keyboard=[*sbp_rows, *payment_rows, [back_button]])
+            return InlineKeyboardMarkup(inline_keyboard=[*trim_rows, *sbp_rows, *payment_rows, [back_button]])
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            *trim_rows,
             *sbp_rows,
             [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
             [back_button],
@@ -1872,6 +1890,62 @@ async def select_tariff_period_with_traffic(
 
 
 @error_handler
+async def trim_tariff_devices(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """«Только N устройств»: возвращает подписку к числу устройств из тарифа и пересчитывает покупку.
+
+    Лишние подключённые устройства отключаются (последние по дате), возврата нет — как при обычном уменьшении.
+    """
+    texts = get_texts(db_user.language)
+    parts = callback.data.split(':')
+    tariff_id, period = int(parts[1]), int(parts[2])
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not tariff.is_active:
+        await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
+        return
+
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+        sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff_id)
+    else:
+        sub = await get_subscription_by_user_id(db, db_user.id)
+
+    included = tariff.device_limit or 0
+    if sub and sub.tariff_id == tariff.id and (sub.device_limit or 0) > included > 0:
+        sub.device_limit = included
+        await db.commit()
+        from app.handlers.subscription.devices import _get_panel_user_id
+
+        panel_user_id = _get_panel_user_id(sub, db_user)
+        try:
+            from app.services.subscription_service import SubscriptionService
+
+            await SubscriptionService().update_remnawave_user(db, sub)
+            if panel_user_id:
+                from app.services.remnawave_service import RemnaWaveService
+
+                async with RemnaWaveService().get_api_client() as api:
+                    info = await api.get_user_devices(panel_user_id)
+                    devices = info.get('devices', []) if isinstance(info, dict) else []
+                    extra = sorted(devices, key=lambda d: d.get('updatedAt') or d.get('createdAt') or '')[included:]
+                    for device in extra:
+                        if device.get('hwid'):
+                            await api.remove_device(panel_user_id, device['hwid'])
+        except Exception as error:
+            logger.warning('Не удалось синхронизировать уменьшение устройств с панелью', error=str(error))
+        logger.info('Лишние устройства убраны перед покупкой', user_id=db_user.id, tariff_id=tariff_id, limit=included)
+
+    await select_tariff_period(
+        callback.model_copy(update={'data': f'tariff_period:{tariff_id}:{period}'}), db_user, db, state
+    )
+
+
+@error_handler
 async def select_tariff_period(
     callback: types.CallbackQuery,
     db_user: User,
@@ -1922,6 +1996,20 @@ async def select_tariff_period(
     )
     shown_device_limit = device_limit if device_limit is not None else tariff.device_limit
 
+    # Доплата за дополнительные устройства: предлагаем одним нажатием оставить только включённые в тариф.
+    trim_row = None
+    if (
+        _existing_sub
+        and device_limit is not None
+        and device_limit > (tariff.device_limit or 0)
+        and result.devices_price > 0
+    ):
+        trimmed = await pricing_engine.calculate_tariff_purchase_price(
+            tariff, period, device_limit=tariff.device_limit, user=db_user
+        )
+        if trimmed.final_total < final_price:
+            trim_row = _trim_devices_row(texts, tariff, period, trimmed.final_total)
+
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
@@ -1961,7 +2049,12 @@ async def select_tariff_period(
             # Скидка на экране («Итого: 216 ₽») — кнопку автооплаты прячем:
             # подписка Platega спишет полную цену, а не скидочную.
             reply_markup=get_tariff_confirm_keyboard(
-                tariff_id, period, db_user.language, show_sbp=total_discount <= 0, sbp_price_kopeks=original_price
+                tariff_id,
+                period,
+                db_user.language,
+                show_sbp=total_discount <= 0,
+                sbp_price_kopeks=original_price,
+                trim_row=trim_row,
             ),
             parse_mode='HTML',
         )
@@ -2010,7 +2103,12 @@ async def select_tariff_period(
                 '\n\n🛒 <i>Корзина сохранена. После пополнения вернитесь к оформлению — всё останется как есть.</i>',
             ),
             reply_markup=get_tariff_insufficient_balance_keyboard(
-                tariff_id, period, db_user.language, missing_kopeks=missing, show_sbp=total_discount <= 0
+                tariff_id,
+                period,
+                db_user.language,
+                missing_kopeks=missing,
+                show_sbp=total_discount <= 0,
+                trim_row=trim_row,
             ),
             parse_mode='HTML',
         )
@@ -6233,6 +6331,8 @@ def register_tariff_purchase_handlers(dp: Dispatcher):
 
     # Выбор периода
     dp.callback_query.register(select_tariff_period, F.data.startswith('tariff_period:'))
+
+    dp.callback_query.register(trim_tariff_devices, F.data.startswith('tariff_trim:'))
 
     # Подтверждение покупки
     dp.callback_query.register(confirm_tariff_purchase, F.data.startswith('tariff_confirm:'))
