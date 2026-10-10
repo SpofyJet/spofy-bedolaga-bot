@@ -54,6 +54,30 @@ class WataService:
         }
 
     _MAX_RETRIES = 2
+    # Статус ссылки/транзакции в процессе оплаты не меняется чаще раза в секунды, а люди жмут «проверить» подряд:
+    # держим ответ 15 с (только для неоконченных статусов), иначе поллинг упирается в 429.
+    _STATUS_CACHE_TTL = 15.0
+    _STATUS_CACHE_MAX = 500
+    _FINAL_STATUSES = frozenset({'paid', 'closed', 'declined', 'failed', 'canceled', 'cancelled', 'expired'})
+    _status_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+
+    async def _cached_get(self, key: str, path: str) -> dict[str, Any]:
+        import time
+
+        now = time.monotonic()
+        hit = WataService._status_cache.get(key)
+        if hit is not None and now - hit[0] < self._STATUS_CACHE_TTL:
+            return hit[1]
+        data = await self._request('GET', path)
+        status = str((data or {}).get('status') or '').lower() if isinstance(data, dict) else ''
+        if isinstance(data, dict) and status not in self._FINAL_STATUSES:
+            if len(WataService._status_cache) >= self._STATUS_CACHE_MAX:
+                WataService._status_cache.clear()
+            WataService._status_cache[key] = (now, data)
+        else:
+            WataService._status_cache.pop(key, None)
+        return data
+
     # Уважаем Retry-After, но НЕ блокируем запрос на десятки секунд: WATA может
     # прислать Retry-After=39..45с, а этот же _request зовётся при поллинге статуса
     # (в т.ч. в админском «проверить все»), и длинный sleep вешал хендлер на ~42с.
@@ -228,7 +252,7 @@ class WataService:
 
     async def get_payment_link(self, payment_link_id: str) -> dict[str, Any]:
         logger.debug('Запрашиваем WATA ссылку', payment_link_id=payment_link_id)
-        return await self._request('GET', f'/links/{payment_link_id}')
+        return await self._cached_get(f'link:{payment_link_id}', f'/links/{payment_link_id}')
 
     async def search_transactions(
         self,
@@ -256,4 +280,4 @@ class WataService:
 
     async def get_transaction(self, transaction_id: str) -> dict[str, Any]:
         logger.debug('Получаем WATA транзакцию', transaction_id=transaction_id)
-        return await self._request('GET', f'/transactions/{transaction_id}')
+        return await self._cached_get(f'tx:{transaction_id}', f'/transactions/{transaction_id}')

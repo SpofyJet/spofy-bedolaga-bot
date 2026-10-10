@@ -15,6 +15,7 @@ Usage::
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from typing import Any
 
@@ -132,6 +133,42 @@ def _auto_capture_exc_info(logger: Any, method_name: str, event_dict: dict[str, 
     return event_dict
 
 
+_SECRET_HEADER = re.compile(
+    r"""(['"]?(?:crypto-pay-api-token|x-secret|x-merchantid|rocket-pay-key|authorization|x-api-key|api-key|"""
+    r"""x-auth-token|cookie|set-cookie|sign|signature)['"]?\s*[:=]\s*)(['"])(.*?)\2""",
+    re.IGNORECASE,
+)
+# Токен Telegram-бота и Crypto Pay: <id>:<35 символов>
+_TOKEN_LIKE = re.compile(r'\b\d{6,12}:[A-Za-z0-9_-]{30,}\b')
+
+
+def redact_secrets(text: str) -> str:
+    """Скрывает значения секретных заголовков и токены в произвольной строке (лог, текст исключения)."""
+    if not text:
+        return text
+    text = _SECRET_HEADER.sub(lambda m: f'{m.group(1)}{m.group(2)}***{m.group(2)}', text)
+    return _TOKEN_LIKE.sub('***', text)
+
+
+def _redact_event_dict(
+    logger: Any, method_name: str, event_dict: structlog.types.EventDict
+) -> structlog.types.EventDict:
+    """Строки и исключения в полях события — без секретов, ДО отправки в файл/консоль/Telegram."""
+    for key, value in list(event_dict.items()):
+        if key == 'exc_info':
+            continue
+        if isinstance(value, str):
+            event_dict[key] = redact_secrets(value)
+        elif isinstance(value, BaseException):
+            event_dict[key] = f'{type(value).__name__}: {redact_secrets(str(value))}'
+    return event_dict
+
+
+def _redact_rendered(logger: Any, method_name: str, event: Any) -> Any:
+    """Последний рубеж: уже отрисованная строка (включая traceback с repr заголовков запроса)."""
+    return redact_secrets(event) if isinstance(event, str) else event
+
+
 def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
     """Configure structlog and return formatters + notifier.
 
@@ -163,6 +200,7 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
         # console, and Telegram all see the same traceback without requiring
         # every caller to pass exc_info=True.
         _auto_capture_exc_info,
+        _redact_event_dict,
         # TelegramNotifierProcessor MUST run while exc_info is still a raw
         # tuple so it can extract the traceback for Telegram notifications.
         # ConsoleRenderer handles exc_info formatting downstream (with Rich
@@ -197,6 +235,7 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
                 pad_level=False,
                 exception_formatter=structlog.dev.plain_traceback,
             ),
+            _redact_rendered,
         ],
     )
 
@@ -225,6 +264,7 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             _prefix_logger_name,
             structlog.dev.ConsoleRenderer(**console_renderer_kwargs),
+            _redact_rendered,
         ],
     )
 

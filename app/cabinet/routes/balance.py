@@ -573,8 +573,8 @@ async def create_topup(
                 payment_id = result.get('transaction_id') or str(result.get('local_payment_id', 'pending'))
             else:
                 raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create Platega payment',
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail='Platega is temporarily unavailable, please choose another payment method',
                 )
 
         elif request.payment_method == 'heleket':

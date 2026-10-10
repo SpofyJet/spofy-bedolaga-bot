@@ -45,7 +45,17 @@ class CryptoBotService:
                     url,
                     **request_kwargs,
                 ) as response:
-                    response_data = await response.json()
+                    raw = await response.text()
+                    try:
+                        response_data = json.loads(raw)
+                    except ValueError:
+                        logger.warning(
+                            'CryptoBot API вернул не JSON (временный сбой на стороне сервиса)',
+                            endpoint=endpoint,
+                            status=response.status,
+                            body=raw[:120],
+                        )
+                        return None
 
                     if response.status == 200 and response_data.get('ok'):
                         return response_data.get('result')
@@ -53,7 +63,7 @@ class CryptoBotService:
                     return None
 
         except Exception as e:
-            logger.error('Ошибка запроса к CryptoBot API', error=e)
+            logger.error('Ошибка запроса к CryptoBot API', endpoint=endpoint, error_type=type(e).__name__)
             return None
 
     async def get_me(self) -> dict[str, Any] | None:

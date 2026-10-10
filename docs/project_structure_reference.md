@@ -30,7 +30,6 @@
 - `docker-compose.local.yml` — файл
 - `docker-compose.yml` — файл
 - `docs/`
-- `locales/`
 - `main.py` — Python-модуль
   Классы: `GracefulExit` (2 методов)
   Функции: `main`
@@ -102,7 +101,7 @@
 - `app/localization/`
 - `app/logging_config.py` — Python-модуль
   Классы: нет
-  Функции: `setup_logging` — Configure structlog and return formatters + notifier.
+  Функции: `redact_secrets` — Скрывает значения секретных заголовков и токены в произвольной строке (лог, текст исключения)., `setup_logging` — Configure structlog and return formatters + notifier.
 - `app/logging_handler.py` — Python-модуль
   Классы: `TelegramNotifierProcessor` (8 методов)
   Функции: нет
@@ -1944,7 +1943,7 @@
   Классы: `VersionInfo` (6 методов), `VersionService` (11 методов)
   Функции: нет
 - `app/services/wata_service.py` — Python-модуль
-  Классы: `WataAPIError`, `WataService` (13 методов)
+  Классы: `WataAPIError`, `WataService` (14 методов)
   Функции: нет
 - `app/services/web_api_token_service.py` — Python-модуль
   Классы: `WebApiTokenService` (8 методов)
@@ -2765,14 +2764,6 @@
 - `docs/handoffs/handoff-2026-08-31-1659.md` — файл
 - `docs/handoffs/handoff-2026-08-31-1944.md` — файл
 
-## locales
-
-- `locales/en.json` — файл
-- `locales/fa.json` — файл
-- `locales/ru.json` — файл
-- `locales/ua.json` — файл
-- `locales/zh.json` — файл
-
 ## migrations
 
 - `migrations/alembic/`
@@ -3300,6 +3291,9 @@
 - `tests/test_no_undefined_names.py` — Python-модуль
   Классы: нет
   Функции: `test_no_new_undefined_names`, `test_baseline_does_not_rot` — Исправленное имя обязано выпадать из базы, иначе она копит ложь.
+- `tests/test_payment_hardening.py` — Python-модуль
+  Классы: нет
+  Функции: `test_header_dump_of_an_exception_is_masked`, `test_platega_and_bearer_headers_and_bot_tokens_are_masked`, `test_plain_text_is_left_alone`, `test_event_dict_masks_strings_and_exceptions_but_keeps_exc_info`, `test_wata_status_is_cached_briefly_unless_final`, `test_wata_cache_expires`
 - `tests/test_pg_upgrade_prompt.py` — Python-модуль
   Классы: нет
   Функции: `sandbox`, `test_y_with_crlf_enter_is_accepted`, `test_russian_da_is_accepted`, `test_no_cancels_without_touching_anything`, `test_without_terminal_requires_yes`
