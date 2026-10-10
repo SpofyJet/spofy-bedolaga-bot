@@ -298,13 +298,32 @@ def test_group_targets_leave_a_paid_first_account_alone_and_ignore_clean_groups(
     assert _targets(users, paid_newcomer) == {}  # платный новичок — не нарушитель, первого трогать не за что
 
 
-def test_big_devices_are_reported_once_a_day():
+def _many(n, paid_ids=()):
+    users = [_panel(i, days_ago=30 - i * 0.1, tg=1000 + i) for i in range(1, n + 1)]
+    records = [(i, [i], 1000 + i, i in paid_ids) for i in range(1, n + 1)]
+    return users, _index(*records)
+
+
+def test_big_device_with_a_noticeable_share_of_paid_accounts_is_left_alone():
+    users, index = _many(10, paid_ids={1, 2, 3})  # 30% платных: общее устройство, не ферма
     svc = TrialAbuseService()
-    lines = svc._big_groups_lines([(73, 25, 'AAAA0000b9ea'), (6, 0, 'BBBB1111c0de')])
-    assert 'b9ea: 73 аккаунтов, из них платных 25' in '\n'.join(lines)
-    assert svc._big_groups_report_due(NOW) is True
-    assert svc._big_groups_report_due(NOW + timedelta(hours=6)) is False
-    assert svc._big_groups_report_due(NOW + timedelta(hours=25)) is True
+    by_id = {u.id: u for u in users}
+    stats = {}
+    from collections import defaultdict
+
+    stats = defaultdict(int)
+    assert svc._group_targets(HWID, set(by_id), by_id, index, NOW, stats) == {}
+    assert stats['skipped_shared_device'] == 1
+
+
+def test_big_device_without_paid_accounts_is_still_a_farm():
+    users, index = _many(8)
+    assert len(_targets(users, index)) == 8
+
+
+def test_small_group_with_paid_account_keeps_the_old_rule():
+    users, index = _many(3, paid_ids={1})  # группа меньше порога: правило прежнее
+    assert set(_targets(users, index)) == {2, 3}
 
 
 def _api_for_guard(monkeypatch, svc, *, my_devices, by_hwid, index):

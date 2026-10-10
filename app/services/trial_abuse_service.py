@@ -47,7 +47,7 @@ from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import Subscription, User
 from app.external.remnawave_api import RemnaWaveUser, UserStatus
-from app.services.decision_log import KIND_ABUSE_BIG_DEVICES, KIND_ABUSE_TRIAL_REMOVED, record_decision
+from app.services.decision_log import KIND_ABUSE_TRIAL_REMOVED, record_decision
 from app.services.remnawave_service import remnawave_service
 
 
@@ -126,6 +126,9 @@ class TrialAbuseService:
 
     def get_big_group_min(self) -> int:
         return max(3, int(getattr(settings, 'TRIAL_ABUSE_BIG_GROUP_MIN', 6)))
+
+    def get_shared_device_paid_share(self) -> float:
+        return max(0.0, float(getattr(settings, 'TRIAL_ABUSE_SHARED_DEVICE_PAID_SHARE', 0.2)))
 
     def get_report_mode(self) -> str:
         mode = str(getattr(settings, 'TRIAL_ABUSE_REPORT_MODE', 'always')).strip().lower()
@@ -235,7 +238,6 @@ class TrialAbuseService:
 
             # candidates: panel_user_id -> причина
             candidates: dict[int, str] = {}
-            big_groups: list[tuple[int, int, str]] = []  # (аккаунтов, из них платных, hwid)
             min_accounts = self.get_min_accounts()
 
             for hwid, uids in groups.items():
@@ -244,9 +246,6 @@ class TrialAbuseService:
                 stats['hwid_groups'] += 1
                 abusers = self._group_targets(hwid, uids, users_by_id, bot_index, now, stats)
                 candidates.update(abusers)
-                if len(uids) >= self.get_big_group_min():
-                    paid = sum(1 for uid in uids if self._account_verdict(users_by_id[uid], bot_index, now) == 'paid')
-                    big_groups.append((len(uids), paid, hwid))
 
             # --- мультитриал по данным БД бота (2+ триальных подписок) ---
             for record in bot_index['records'].values():
@@ -298,15 +297,10 @@ class TrialAbuseService:
                     logger.error(f'Антиабуз триалов: ошибка наказания {plain}: {detail}')
                 await asyncio.sleep(0.3)  # не долбим API панели
 
-        big_groups.sort(reverse=True)
-        stats['big_groups'] = len(big_groups)
         report_mode = self.get_report_mode()
         should_report = report_mode == 'always' or (report_mode == 'changes' and (punished_ok or punished_fail))
         if should_report:
-            await self._send_admin_summary(stats, punished_ok, punished_fail, big_groups)
-        elif report_mode != 'never' and big_groups and self._big_groups_report_due(now):
-            # Подозрительные устройства сообщаем раз в сутки, даже если наказывать некого
-            await self._send_admin_summary(stats, [], [], big_groups, only_big_groups=True)
+            await self._send_admin_summary(stats, punished_ok, punished_fail)
 
         return dict(stats)
 
@@ -366,6 +360,10 @@ class TrialAbuseService:
         Раньше первый аккаунт считался законным владельцем и оставался с триалом. Но человек, заведший второй
         аккаунт на том же устройстве, получил два триала — снимаем оба. Платный первый аккаунт не трогаем.
         """
+        if self._is_shared_device(uids, users_by_id, bot_index, now):
+            if stats is not None:
+                stats['skipped_shared_device'] += 1
+            return {}
         targets = self._abusers_in_hwid_group(hwid, uids, users_by_id, bot_index, now, stats)
         if not targets or not self.punish_whole_group():
             return targets
@@ -378,6 +376,24 @@ class TrialAbuseService:
                 f'первый аккаунт на устройстве …{hwid[-6:]}: на нём появились ещё аккаунты ({len(targets)})'
             )
         return targets
+
+    def _is_shared_device(
+        self, uids: set[int], users_by_id: dict[int, RemnaWaveUser], bot_index: dict[str, Any], now: datetime
+    ) -> bool:
+        """Устройство, на котором много аккаунтов и заметная доля платных — не ферма триалов.
+
+        Ферма — это десятки свежих триалов без единого платного. Если же среди N+ аккаунтов на одном HWID
+        есть платные (раздача, перепродажа, общий «семейный» компьютер, клиент с одинаковым HWID у всех),
+        то наказание триалов бьёт по случайным людям. Такие группы не трогаем — админ видит их в журнале панели.
+        """
+        share = self.get_shared_device_paid_share()
+        if share <= 0 or len(uids) < self.get_big_group_min():
+            return False
+        members = [users_by_id[uid] for uid in uids if uid in users_by_id]
+        if not members:
+            return False
+        paid = sum(1 for member in members if self._account_verdict(member, bot_index, now) == 'paid')
+        return paid / len(members) >= share
 
     async def shares_device_with_other_person(self, panel_user_id: int) -> bool:
         """Есть ли у аккаунта устройство, на котором сидит другой человек. Для защиты наград «за друга».
@@ -767,13 +783,7 @@ class TrialAbuseService:
         stats: dict[str, int],
         punished_ok: list[str],
         punished_fail: list[str],
-        big_groups: list[tuple[int, int, str]] | None = None,
-        only_big_groups: bool = False,
     ) -> None:
-        if only_big_groups:
-            await self._journal_big_groups(big_groups or [])
-            await self._notify_admin('\n'.join(self._big_groups_lines(big_groups or [])))
-            return
         lines = [
             '🛡 <b>Антиабуз триалов: отчёт</b>',
             f'Пользователей в панели: {stats.get("panel_users", 0)}, устройств: {stats.get("devices", 0)}',
@@ -793,36 +803,9 @@ class TrialAbuseService:
             lines.extend(f'  • {item}' for item in punished_fail[:5])
         if not punished_ok and not punished_fail:
             lines.append('\n✅ Нарушителей не найдено, всё чисто.')
-        if big_groups and self._big_groups_report_due(datetime.now(UTC)):
-            await self._journal_big_groups(big_groups)
-            lines.append('')
-            lines.extend(self._big_groups_lines(big_groups))
+        if stats.get('skipped_shared_device'):
+            lines.append(f'\nℹ️ Общих устройств пропущено (много платных аккаунтов): {stats["skipped_shared_device"]}')
         await self._notify_admin('\n'.join(lines))
-
-    async def _journal_big_groups(self, big_groups: list[tuple[int, int, str]]) -> None:
-        await record_decision(
-            KIND_ABUSE_BIG_DEVICES,
-            f'{len(big_groups)} устройств с {self.get_big_group_min()}+ аккаунтами',
-            details={'top': [{'accounts': a, 'paid': p, 'hwid_tail': h[-6:]} for a, p, h in big_groups[:8]]},
-        )
-
-    def _big_groups_report_due(self, now: datetime) -> bool:
-        """Подозрительные устройства — не чаще раза в сутки, иначе отчёт каждые 6 часов повторяет одно и то же."""
-        last = getattr(self, '_big_groups_reported_at', None)
-        if last is not None and (now - last).total_seconds() < 24 * 3600:
-            return False
-        self._big_groups_reported_at = now
-        return True
-
-    def _big_groups_lines(self, big_groups: list[tuple[int, int, str]]) -> list[str]:
-        lines = [
-            f'🔎 <b>Устройства с {self.get_big_group_min()}+ аккаунтами</b> (раздача или перепродажа, не наказываются):'
-        ]
-        for accounts, paid, hwid in big_groups[:8]:
-            lines.append(f'  • …{html.escape(hwid[-6:])}: {accounts} аккаунтов, из них платных {paid}')
-        if len(big_groups) > 8:
-            lines.append(f'  … и ещё {len(big_groups) - 8}')
-        return lines
 
     async def _notify_admin(self, text: str) -> None:
         if not self.bot:

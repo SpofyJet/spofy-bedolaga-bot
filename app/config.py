@@ -1603,8 +1603,10 @@ class Settings(BaseSettings):
     TRIAL_ABUSE_PUNISH_WHOLE_GROUP: bool = True
     # Награда «за друга» не выдаётся, если у друга общее устройство с другим человеком (кружок своих аккаунтов).
     TRIAL_ABUSE_REWARD_GUARD: bool = True
-    # Устройства, на которых N+ аккаунтов (раздача или перепродажа подписок), попадают в отчёт админу. Не наказываются.
+    # Устройство с N+ аккаунтами считается «общим» (раздача, перепродажа, одинаковый HWID у клиента), если среди них
+    # доля платных не меньше TRIAL_ABUSE_SHARED_DEVICE_PAID_SHARE: такие группы антиабуз не трогает. 0 — выключить.
     TRIAL_ABUSE_BIG_GROUP_MIN: int = 6
+    TRIAL_ABUSE_SHARED_DEVICE_PAID_SHARE: float = 0.2
 
     BACKUP_AUTO_ENABLED: bool = True
     BACKUP_INTERVAL_HOURS: int = 24
