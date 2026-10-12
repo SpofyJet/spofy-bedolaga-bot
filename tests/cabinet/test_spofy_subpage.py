@@ -14,6 +14,7 @@ a minimal FastAPI app for the key check only.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -262,6 +263,58 @@ async def test_traffic_package_must_exist(monkeypatch, auto_on, owner, topup):
     assert topup.await_args.kwargs['request'].amount_kopeks == 10000  # 99 ₽ raised to the 100 ₽ minimum
 
 
+async def test_concurrent_same_checkout_replays_one_payment(monkeypatch, auto_on, owner, topup):
+    # Two tabs buying the same thing at the same time must share ONE payment: the second
+    # checkout waits for the first and replays its payment instead of overwriting the single
+    # cart slot (the overwrite used to unmatch the first payment — money hung on the balance).
+    monkeypatch.setattr(bridge, 'save_renewal_cart', AsyncMock(return_value=19900))
+    bound: list[str] = []
+
+    async def slow_bind(user_id: int, **kwargs: object) -> bool:
+        bound.append('bind')
+        await asyncio.sleep(0.05)
+        return True
+
+    monkeypatch.setattr(bridge, 'bind_cart_to_payment', slow_bind)
+    body = bridge.CheckoutRequest(kind='renew', period_days=30, payment_method='yookassa')
+
+    first, second = await asyncio.gather(
+        bridge.checkout('abcdefgh', body, db=None),
+        bridge.checkout('abcdefgh', body, db=None),
+    )
+
+    assert bound == ['bind']  # cart bound exactly once: no interleaved second checkout
+    assert topup.await_count == 1  # ...and exactly one payment created
+    assert second == first  # the second tab got the same payment, not a new one
+    assert second['payment_id'] == '17'
+
+
+async def test_concurrent_different_checkout_gets_409(monkeypatch, auto_on, owner, topup):
+    # A DIFFERENT cart while a checkout is in flight must not wait and overwrite the slot —
+    # it fails fast with 409 and can be retried once the first payment is created.
+    monkeypatch.setattr(bridge, 'save_renewal_cart', AsyncMock(return_value=19900))
+
+    async def slow_topup(**kwargs: object) -> object:
+        await asyncio.sleep(0.05)
+        return SimpleNamespace(
+            payment_url='https://pay.example/x', payment_id='17', qr_payload=None, expires_at=None
+        )
+
+    monkeypatch.setattr(bridge, 'create_topup', slow_topup)
+    first = asyncio.create_task(
+        bridge.checkout(
+            'abcdefgh', bridge.CheckoutRequest(kind='renew', period_days=30, payment_method='yookassa'), db=None
+        )
+    )
+    await asyncio.sleep(0)  # let the first checkout claim the slot
+    with pytest.raises(HTTPException) as error:
+        await bridge.checkout(
+            'abcdefgh', bridge.CheckoutRequest(kind='renew', period_days=90, payment_method='yookassa'), db=None
+        )
+    assert error.value.status_code == 409
+    assert (await first)['payment_id'] == '17'
+
+
 # ───────────── carts ─────────────
 
 
@@ -402,6 +455,13 @@ async def test_unexpected_checkout_error_is_a_502_with_its_type(monkeypatch, aut
 # ───────────── completion after top-up (app/services/spofy_subpage_service.py) ─────────────
 
 from app.services import spofy_subpage_service as completion
+
+
+@pytest.fixture(autouse=True)
+def fresh_checkout_serializer(monkeypatch):
+    # Successful checkouts are remembered for replay; every test gets an empty serializer
+    # so one test's remembered payment cannot be replayed into the next one.
+    monkeypatch.setattr(bridge, 'checkout_serializer', completion.CheckoutSerializer())
 
 
 BOUND = {'source': 'spofy_subpage', 'spofy_price_kopeks': 49900, 'spofy_requested_kopeks': 49900}

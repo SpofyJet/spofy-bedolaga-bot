@@ -44,7 +44,13 @@ from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
 from app.database.crud.user import get_user_by_id
 from app.database.models import Subscription, SubscriptionStatus, User, UserStatus
 from app.services.pricing_engine import pricing_engine
-from app.services.spofy_subpage_service import SUBPAGE_SOURCE, bind_cart_to_payment, tag_current_cart_as_subpage
+from app.services.spofy_subpage_service import (
+    SUBPAGE_SOURCE,
+    bind_cart_to_payment,
+    checkout_fingerprint,
+    checkout_serializer,
+    tag_current_cart_as_subpage,
+)
 from app.services.user_cart_service import user_cart_service
 
 from ..dependencies import get_cabinet_db
@@ -426,6 +432,42 @@ async def _checkout(short_uuid: str, body: CheckoutRequest, db: AsyncSession) ->
     restriction = _restricted(user)
     if restriction:
         raise HTTPException(status.HTTP_403_FORBIDDEN, restriction)
+
+    # Serialize per user: the bot keeps one «current cart» slot per user, so two parallel
+    # checkouts (two tabs) must not interleave into the slot. The same cart + method replays
+    # the same payment; a different cart while one is in flight gets 409 instead of
+    # overwriting the slot mid-checkout (that mismatch is what hung money on the balance).
+    fingerprint = checkout_fingerprint(short_uuid, body.model_dump())
+    decision, event = await checkout_serializer.begin(user.id, fingerprint)
+    if decision == 'busy':
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            'Another purchase is already being prepared for this account — finish or cancel it first',
+        )
+    if decision == 'wait':
+        assert event is not None  # 'wait' always returns the in-flight checkout's event
+        await event.wait()
+        replayed = checkout_serializer.replay(user.id, fingerprint)
+        if replayed is not None:
+            return replayed
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            'That checkout is still being prepared — please try again in a moment',
+        )
+    try:
+        replayed = checkout_serializer.replay(user.id, fingerprint)
+        if replayed is not None:
+            return replayed
+        result = await _checkout_payment(user, subscription, body, db)
+        checkout_serializer.remember(user.id, fingerprint, result)
+        return result
+    finally:
+        await checkout_serializer.end(user.id)
+
+
+async def _checkout_payment(
+    user: User, subscription: Subscription, body: CheckoutRequest, db: AsyncSession
+) -> dict[str, Any]:
     before = snapshot(subscription)
 
     # 1. price + cart (never touches the balance)
