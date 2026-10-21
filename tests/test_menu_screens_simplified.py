@@ -1,4 +1,4 @@
-"""Экраны второго уровня без лишних шагов: поддержка на главной, устройства и их количество сразу на подписке."""
+"""Экраны второго уровня без лишних шагов: поддержка в «Инфо», устройства и их количество сразу на подписке."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -35,10 +35,10 @@ def _bot_menu(monkeypatch):
     monkeypatch.setattr(settings, 'TRIAL_DISABLED_FOR', 'none', raising=False)
 
 
-def test_info_menu_no_longer_duplicates_support(monkeypatch):
+def test_info_menu_holds_support_and_language(monkeypatch):
     monkeypatch.setattr(settings, 'LANGUAGE_SELECTION_ENABLED', True, raising=False)
     flat = _flat(inline.get_info_menu_keyboard('ru', show_faq=True, show_rules=True))
-    assert 'menu_support' not in flat
+    assert 'menu_support' in flat
     assert 'menu_language' in flat  # язык при регистрации не спрашиваем, но сменить его можно здесь
 
 

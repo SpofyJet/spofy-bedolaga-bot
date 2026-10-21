@@ -2525,7 +2525,7 @@ async def confirm_tariff_purchase(
         ).format(
             name=html.escape(tariff.name),
             traffic=traffic,
-            devices=tariff.device_limit,
+            devices=(subscription.device_limit if subscription is not None else tariff.device_limit),
             period=format_period(period),
             price=format_price_kopeks(final_price),
         ),

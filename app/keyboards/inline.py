@@ -839,21 +839,14 @@ def get_main_menu_keyboard(
             [InlineKeyboardButton(text=texts.t('CONTESTS_BUTTON', '🎲 Конкурсы'), callback_data='contests_menu')]
         )
 
-    # Нижний блок: «Промокод» (пока нет подписки; QR с билета применяет код сам, но можно и вручную),
-    # «Поддержка» (первое, что нужно, когда не подключается) и «Инфо» — по две кнопки в ряд.
+    # Нижний блок: «Промокод» (пока нет подписки; QR с билета применяет код сам, но можно и вручную)
+    # и «Инфо» — по две кнопки в ряд. «Поддержка» в главном меню не показываем (по решению
+    # владельца) — она остаётся внутри «Инфо».
     bottom_buttons: list[InlineKeyboardButton] = []
     # Промокод нужен тем, у кого нет платной подписки; на пробном периоде баланс скрыт,
     # а «Баланс → Промокод» был единственным входом.
     if not _paid_subscriber:
         bottom_buttons.append(InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode'))
-    try:
-        from app.services.support_settings_service import SupportSettingsService
-
-        support_enabled = SupportSettingsService.is_support_menu_enabled()
-    except Exception:
-        support_enabled = settings.SUPPORT_MENU_ENABLED
-    if support_enabled:
-        bottom_buttons.append(InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support'))
     bottom_buttons.append(InlineKeyboardButton(text=texts.t('MENU_INFO', 'ℹ️ Инфо'), callback_data='menu_info'))
     for i in range(0, len(bottom_buttons), 2):
         keyboard.append(bottom_buttons[i : i + 2])
@@ -963,17 +956,15 @@ def get_info_menu_keyboard(
             ]
         )
 
-    # «Поддержка» вынесена на главный экран; здесь её дублируем только в режиме кабинета,
-    # где главного меню бота с этой кнопкой нет.
-    if settings.is_cabinet_mode():
-        try:
-            from app.services.support_settings_service import SupportSettingsService
+    # «Поддержка» живёт здесь (в главном меню не показываем — по решению владельца).
+    try:
+        from app.services.support_settings_service import SupportSettingsService
 
-            _support_on = SupportSettingsService.is_support_menu_enabled()
-        except Exception:
-            _support_on = settings.SUPPORT_MENU_ENABLED
-        if _support_on:
-            buttons.append([InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support')])
+        _support_on = SupportSettingsService.is_support_menu_enabled()
+    except Exception:
+        _support_on = settings.SUPPORT_MENU_ENABLED
+    if _support_on:
+        buttons.append([InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support')])
     if settings.is_language_selection_enabled():
         buttons.append([InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data='menu_language')])
 
