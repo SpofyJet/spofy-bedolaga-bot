@@ -25,6 +25,7 @@ Endpoints (under ``/cabinet``):
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import os
 import re
@@ -69,6 +70,10 @@ KEY_ENV = 'SPOFY_SUBPAGE_API_KEY'
 MIN_KEY_LENGTH = 32
 MIN_TOPUP_KOPEKS = 1000  # TopUpRequest: ge=1000
 SHORT_UUID_RE = re.compile(r'^[A-Za-z0-9_-]{6,64}$')
+# Ветка 'wait' ждёт чужой checkout не дольше этого: зависший первый запрос иначе
+# повесил бы второй (та же вкладка, тот же fingerprint) до разрыва соединения
+# клиентом. По таймауту второй получает тот же 409, что и ветка 'busy'.
+CHECKOUT_WAIT_TIMEOUT_S = 60
 
 _key_header = APIKeyHeader(name='X-Spofy-Subpage-Key', auto_error=False)
 
@@ -446,7 +451,14 @@ async def _checkout(short_uuid: str, body: CheckoutRequest, db: AsyncSession) ->
         )
     if decision == 'wait':
         assert event is not None  # 'wait' always returns the in-flight checkout's event
-        await event.wait()
+        try:
+            await asyncio.wait_for(event.wait(), timeout=CHECKOUT_WAIT_TIMEOUT_S)
+        except TimeoutError:
+            # Первый checkout завис: не держим второй запрос вечно — тот же 409, что у 'busy'.
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                'That checkout is still being prepared — please try again in a moment',
+            )
         replayed = checkout_serializer.replay(user.id, fingerprint)
         if replayed is not None:
             return replayed

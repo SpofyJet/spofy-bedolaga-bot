@@ -215,6 +215,34 @@ def _safe_int(value: object | None, default: int = 0) -> int:
         return default
 
 
+def _resolve_pinned_price(
+    bound_price_kopeks: int | None,
+    recomputed_kopeks: int,
+    *,
+    format_user_id: str,
+    cart_mode: str | None,
+) -> int:
+    """Цена, зафиксированная при оформлении на странице подписки.
+
+    Деньги пришли именно под bound-цену (см. ``is_funded_by_payment``), поэтому
+    покупка исполняется по ней, а не по пересчёту на момент исполнения: промо
+    могло истечь, пропорция за оставшиеся дни — измениться. Количественные
+    параметры (период, устройства, трафик) берутся из корзины — пиним ТОЛЬКО
+    денежную сумму списания. Без bound-цены поведение прежнее (пересчёт).
+    """
+    if not isinstance(bound_price_kopeks, int) or bound_price_kopeks <= 0:
+        return recomputed_kopeks
+    if bound_price_kopeks != recomputed_kopeks:
+        logger.info(
+            '🔁 Автопокупка: списываем цену, зафиксированную при оформлении (пересчёт отличается)',
+            format_user_id=format_user_id,
+            cart_mode=cart_mode,
+            bound_price_kopeks=bound_price_kopeks,
+            recomputed_kopeks=recomputed_kopeks,
+        )
+    return bound_price_kopeks
+
+
 async def _delete_cart_for_subscription(user_id: int, cart_data: dict) -> None:
     """Delete the correct cart key(s) for a processed cart entry.
 
@@ -519,6 +547,7 @@ async def _auto_extend_subscription(
     cart_data: dict,
     *,
     bot: Bot | None = None,
+    bound_price_kopeks: int | None = None,
 ) -> bool:
     # Lazy import to avoid circular dependency
     from app.cabinet.routes.websocket import notify_user_subscription_renewed
@@ -536,6 +565,15 @@ async def _auto_extend_subscription(
 
     if prepared is None:
         return False
+
+    # Покупка со страницы подписки: деньги пришли под цену оформления, пересчёт
+    # на момент исполнения (промо истекло, пропорция изменилась) её не меняет.
+    prepared.price_kopeks = _resolve_pinned_price(
+        bound_price_kopeks,
+        prepared.price_kopeks,
+        format_user_id=_format_user_id(user),
+        cart_mode=cart_data.get('cart_mode'),
+    )
 
     if prepared.price_kopeks > 0 and user.balance_kopeks < prepared.price_kopeks:
         logger.info(
@@ -833,6 +871,7 @@ async def _auto_purchase_tariff(
     cart_data: dict,
     *,
     bot: Bot | None = None,
+    bound_price_kopeks: int | None = None,
 ) -> bool:
     """Автоматическая покупка периодного тарифа из сохранённой корзины."""
     # Lazy imports to avoid circular dependency
@@ -933,6 +972,14 @@ async def _auto_purchase_tariff(
     )
     final_price = result.final_total
     consume_promo = result.promo_offer_discount > 0
+
+    # Покупка со страницы подписки: деньги пришли под цену оформления, по ней и списываем.
+    final_price = _resolve_pinned_price(
+        bound_price_kopeks,
+        final_price,
+        format_user_id=_format_user_id(user),
+        cart_mode=cart_data.get('cart_mode'),
+    )
 
     if final_price > 0 and user.balance_kopeks < final_price:
         logger.info(
@@ -1572,6 +1619,7 @@ async def _auto_add_devices(
     *,
     bot: Bot | None = None,
     manual: bool = False,
+    bound_price_kopeks: int | None = None,
 ) -> bool:
     """Auto-purchase devices from saved cart after balance topup."""
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -1691,6 +1739,14 @@ async def _auto_add_devices(
             devices_discount_percent=devices_discount_percent,
             days_left=days_left,
         )
+
+    # Покупка со страницы подписки: деньги пришли под цену оформления, по ней и списываем.
+    price_kopeks = _resolve_pinned_price(
+        bound_price_kopeks,
+        price_kopeks,
+        format_user_id=_format_user_id(user),
+        cart_mode=cart_data.get('cart_mode'),
+    )
 
     # Проверяем баланс (при 100% скидке — пропускаем)
     if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
@@ -1904,6 +1960,7 @@ async def _auto_add_traffic(
     *,
     bot: Bot | None = None,
     manual: bool = False,
+    bound_price_kopeks: int | None = None,
 ) -> bool:
     """Auto-purchase traffic from saved cart after balance topup."""
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -2055,6 +2112,14 @@ async def _auto_add_traffic(
             discounted_per_month=discounted_per_month,
             period_hint_days=period_hint_days,
         )
+
+    # Покупка со страницы подписки: деньги пришли под цену оформления, по ней и списываем.
+    price_kopeks = _resolve_pinned_price(
+        bound_price_kopeks,
+        price_kopeks,
+        format_user_id=_format_user_id(user),
+        cart_mode=cart_data.get('cart_mode'),
+    )
 
     # Verify balance (при 100% скидке — пропускаем)
     if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
@@ -3123,8 +3188,14 @@ async def _process_single_cart(
     *,
     bot: Bot | None = None,
     manual: bool = False,
+    bound_price_kopeks: int | None = None,
 ) -> bool:
-    """Process a single cart entry.  Returns True if purchase succeeded."""
+    """Process a single cart entry.  Returns True if purchase succeeded.
+
+    ``bound_price_kopeks`` — цена, зафиксированная при оформлении на странице
+    подписки: оплата пришла под неё, поэтому пересчёт исполнителя её не меняет
+    (актуально только для cart_mode из spofy-subpage; остальные пути передают None).
+    """
     from app.database.crud.transaction import get_user_transactions
 
     cart_mode = cart_data.get('cart_mode') or cart_data.get('mode')
@@ -3206,15 +3277,15 @@ async def _process_single_cart(
             )
 
     if cart_mode == 'extend':
-        return await _auto_extend_subscription(db, user, cart_data, bot=bot)
+        return await _auto_extend_subscription(db, user, cart_data, bot=bot, bound_price_kopeks=bound_price_kopeks)
     if cart_mode == 'tariff_purchase':
-        return await _auto_purchase_tariff(db, user, cart_data, bot=bot)
+        return await _auto_purchase_tariff(db, user, cart_data, bot=bot, bound_price_kopeks=bound_price_kopeks)
     if cart_mode == 'daily_tariff_purchase':
         return await _auto_purchase_daily_tariff(db, user, cart_data, bot=bot)
     if cart_mode == 'add_devices':
-        return await _auto_add_devices(db, user, cart_data, bot=bot, manual=manual)
+        return await _auto_add_devices(db, user, cart_data, bot=bot, manual=manual, bound_price_kopeks=bound_price_kopeks)
     if cart_mode == 'add_traffic':
-        return await _auto_add_traffic(db, user, cart_data, bot=bot, manual=manual)
+        return await _auto_add_traffic(db, user, cart_data, bot=bot, manual=manual, bound_price_kopeks=bound_price_kopeks)
 
     logger.warning(
         'Автопокупка: неизвестный cart_mode, пропускаем',

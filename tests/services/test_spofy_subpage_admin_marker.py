@@ -65,8 +65,8 @@ async def test_regular_purchases_are_untouched(monkeypatch):
 async def test_cart_completion_runs_inside_the_context(monkeypatch):
     seen = []
 
-    async def fake_process(db, user, cart, *, bot=None):
-        seen.append(ctx.is_subpage_purchase_context())
+    async def fake_process(db, user, cart, *, bot=None, bound_price_kopeks=None):
+        seen.append((ctx.is_subpage_purchase_context(), bound_price_kopeks))
         return True
 
     monkeypatch.setattr('app.services.subscription_auto_purchase_service._process_single_cart', fake_process)
@@ -85,7 +85,7 @@ async def test_cart_completion_runs_inside_the_context(monkeypatch):
     assert await completion.complete_subpage_carts_after_topup(
         MagicMock(), SimpleNamespace(id=5), credited_kopeks=49900
     )
-    assert seen == [True]
+    assert seen == [(True, 49900)]
     assert not ctx.is_subpage_purchase_context()
 
 

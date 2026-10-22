@@ -15,9 +15,11 @@ a minimal FastAPI app for the key check only.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import fnmatch
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -25,6 +27,7 @@ from fastapi.testclient import TestClient
 
 from app.cabinet.routes import spofy_subpage as bridge
 from app.config import Settings, settings
+from app.services.user_cart_service import UserCartService
 
 
 KEY = 'k' * 40
@@ -586,3 +589,241 @@ async def test_binding_marks_price_and_requested_amount(monkeypatch):
     assert await completion.bind_cart_to_payment(5, price_kopeks=4900, requested_kopeks=10000) is True
     saved = save.await_args.args[1]
     assert saved['spofy_price_kopeks'] == 4900 and saved['spofy_requested_kopeks'] == 10000
+
+
+# ───────────── BUG 1: оплата по «долгой» ссылке — TTL корзины и намерения ─────────────
+
+
+def test_cart_ttls_cover_payment_link_lifetime():
+    """Метка намерения не должна умирать раньше корзины, а корзина — раньше реальной
+    жизни платёжных ссылок (инвойсы YooKassa/CryptoBot/Heleket/XRocket живут сутки+)."""
+    assert settings.CART_AUTOPURCHASE_INTENT_TTL_SECONDS >= settings.CART_TTL_SECONDS
+    assert settings.CART_TTL_SECONDS >= 24 * 3600
+
+
+class _ClockedRedis:
+    """Минимальный фейк Redis с настоящими TTL: часы подаёт тест (прокрутка времени)."""
+
+    def __init__(self, clock):
+        self._clock = clock
+        self._data: dict[str, tuple[float, str]] = {}
+
+    def _live(self, key: str) -> bool:
+        item = self._data.get(key)
+        if item is None:
+            return False
+        if item[0] <= self._clock():
+            del self._data[key]
+            return False
+        return True
+
+    async def setex(self, key, ttl, value):
+        self._data[key] = (self._clock() + int(ttl), value)
+        return True
+
+    async def get(self, key):
+        if not self._live(key):
+            return None
+        return self._data[key][1]
+
+    async def delete(self, key):
+        existed = self._live(key)
+        self._data.pop(key, None)
+        return 1 if existed else 0
+
+    async def exists(self, key):
+        return 1 if self._live(key) else 0
+
+    async def scan(self, cursor=0, match=None, count=50):
+        keys = [key for key in list(self._data) if self._live(key)]
+        if match:
+            keys = [key for key in keys if fnmatch.fnmatch(key, match)]
+        return 0, keys
+
+
+@pytest.fixture
+def clocked_carts(monkeypatch):
+    """Настоящий UserCartService на фейковых часах — время в тесте крутим сами."""
+    clock = [0.0]
+    service = UserCartService()
+    service._redis_client = _ClockedRedis(lambda: clock[0])
+    service._initialized = True
+    monkeypatch.setattr(completion, 'user_cart_service', service)
+    return service, clock
+
+
+def _stuck_process(monkeypatch):
+    process = AsyncMock(return_value=True)
+    from app.services import subscription_auto_purchase_service
+
+    monkeypatch.setattr(subscription_auto_purchase_service, '_process_single_cart', process)
+    return process
+
+
+async def test_payment_two_hours_after_checkout_still_completes(monkeypatch, clocked_carts):
+    """Оплата пришла через 2 часа после оформления. Старые TTL (корзина 1 ч,
+    намерение 30 мин) уже убили бы и то и другое — деньги остались бы на балансе
+    без покупки и без единого слова. С TTL 24 ч покупка завершается."""
+    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False, raising=False)
+    service, clock = clocked_carts
+    cart = {**BOUND, 'cart_mode': 'extend', 'subscription_id': 1, 'return_to_cart': True}
+    await service.save_user_cart(5, cart)
+    assert await service.has_topup_intent(5) is True
+    clock[0] += 2 * 3600  # «прошло два часа» — юзер вернулся к ссылке и оплатил
+    process = _stuck_process(monkeypatch)
+
+    assert await completion.complete_subpage_carts_after_topup(None, _user(), credited_kopeks=49900) is True
+    process.assert_awaited_once()
+    assert await service.has_topup_intent(5) is False  # намерение погашено успехом
+
+
+async def test_old_short_ttls_reproduce_the_lost_purchase(monkeypatch, clocked_carts):
+    """Контроль к предыдущему тесту: со старыми TTL (1 ч / 30 мин) та же оплата
+    через 2 часа теряется — корзина и намерение мертвы, completion молчит."""
+    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False, raising=False)
+    monkeypatch.setattr(settings, 'CART_TTL_SECONDS', 3600, raising=False)
+    monkeypatch.setattr(settings, 'CART_AUTOPURCHASE_INTENT_TTL_SECONDS', 1800, raising=False)
+    service, clock = clocked_carts
+    cart = {**BOUND, 'cart_mode': 'extend', 'subscription_id': 1, 'return_to_cart': True}
+    await service.save_user_cart(5, cart)
+    clock[0] += 2 * 3600
+    process = _stuck_process(monkeypatch)
+
+    assert await completion.complete_subpage_carts_after_topup(None, _user(), credited_kopeks=49900) is False
+    process.assert_not_awaited()
+
+
+# ───────────── BUG 2: покупка исполняется по цене оформления, а не пересчёта ─────────────
+
+
+def test_pinned_price_preferred_over_recomputed():
+    from app.services.subscription_auto_purchase_service import _resolve_pinned_price
+
+    assert _resolve_pinned_price(4900, 5000, format_user_id='u5', cart_mode='extend') == 4900
+    assert _resolve_pinned_price(None, 5000, format_user_id='u5', cart_mode='extend') == 5000
+    assert _resolve_pinned_price(0, 5000, format_user_id='u5', cart_mode='extend') == 5000
+
+
+async def test_completion_passes_the_checkout_bound_price(monkeypatch):
+    """spofy_price_kopeks уходит в исполнителя: пересчёт (промо истекло, пропорция
+    изменилась) не имеет права поднять списание выше зачисленного платежа."""
+    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False, raising=False)
+    cart = {**BOUND, 'spofy_price_kopeks': 49000, 'spofy_requested_kopeks': 49900, 'cart_mode': 'extend'}
+    process = _carts(monkeypatch, per_sub=[cart], global_cart=None)
+
+    assert await completion.complete_subpage_carts_after_topup(None, _user(), credited_kopeks=49900) is True
+    assert process.await_args.kwargs['bound_price_kopeks'] == 49000
+
+
+# ───────────── BUG 3: деньги на балансе, а покупки нет — юзер должен узнать ─────────────
+
+
+def _telegram_user():
+    user = _user()
+    user.telegram_id = 777000
+    user.language = 'ru'
+    return user
+
+
+def _bot_mock():
+    bot = MagicMock()
+    bot.send_message = AsyncMock()
+    return bot
+
+
+def _keyboard_callbacks(bot):
+    return [
+        button.callback_data
+        for row in bot.send_message.await_args.kwargs['reply_markup'].inline_keyboard
+        for button in row
+    ]
+
+
+async def test_orphan_topup_without_intent_offers_return_to_cart(monkeypatch):
+    """Метка намерения протухла раньше корзины: покупку не исполняем, но деньги на
+    балансе — шлём уведомление с кнопкой «Вернуться к оформлению»."""
+    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False, raising=False)
+    process = _carts(monkeypatch, per_sub=[], global_cart={**BOUND, 'cart_mode': 'extend'}, intent=False)
+    bot = _bot_mock()
+
+    assert await completion.complete_subpage_carts_after_topup(
+        None, _telegram_user(), bot=bot, credited_kopeks=49900
+    ) is False
+
+    process.assert_not_awaited()
+    bot.send_message.assert_awaited_once()
+    kwargs = bot.send_message.await_args.kwargs
+    assert kwargs['chat_id'] == 777000
+    assert 'баланс' in kwargs['text']
+    callbacks = _keyboard_callbacks(bot)
+    assert callbacks[0] == 'return_to_saved_cart'
+    assert callbacks[-1] == 'back_to_menu'
+
+
+async def test_orphan_topup_without_any_cart_points_to_buy(monkeypatch):
+    """Корзины нет вовсе (истекла/перезаписана): деньги на балансе, ведём к покупке."""
+    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False, raising=False)
+    process = _carts(monkeypatch, per_sub=[], global_cart=None)
+    bot = _bot_mock()
+
+    assert await completion.complete_subpage_carts_after_topup(
+        None, _telegram_user(), bot=bot, credited_kopeks=49900
+    ) is False
+
+    process.assert_not_awaited()
+    bot.send_message.assert_awaited_once()
+    callbacks = _keyboard_callbacks(bot)
+    assert callbacks[0] == 'menu_buy'
+    assert callbacks[-1] == 'back_to_menu'
+
+
+async def test_completed_purchase_does_not_duplicate_notification(monkeypatch):
+    """Покупка состоялась — юзера уже уведомил исполнитель покупки, дубль не шлём."""
+    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False, raising=False)
+    process = _carts(monkeypatch, per_sub=[{**BOUND, 'cart_mode': 'extend'}], global_cart=None)
+    bot = _bot_mock()
+
+    assert await completion.complete_subpage_carts_after_topup(
+        None, _telegram_user(), bot=bot, credited_kopeks=49900
+    ) is True
+
+    process.assert_awaited_once()
+    bot.send_message.assert_not_awaited()
+
+
+async def test_orphan_notification_respects_the_notifications_switch(monkeypatch):
+    """Глобальный выключатель уведомлений гасит и orphan-уведомление (зеркало
+    механизма _send_payment_success_notification)."""
+    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False, raising=False)
+    monkeypatch.setattr(settings, 'ENABLE_NOTIFICATIONS', False, raising=False)
+    _carts(monkeypatch, per_sub=[], global_cart=None, intent=False)
+    bot = _bot_mock()
+
+    await completion.complete_subpage_carts_after_topup(None, _telegram_user(), bot=bot, credited_kopeks=49900)
+
+    bot.send_message.assert_not_awaited()
+
+
+# ───────────── BUG 4: зависший первый checkout не вешает второй запрос ─────────────
+
+
+async def test_wait_branch_times_out_with_409_instead_of_hanging(monkeypatch, auto_on, owner, topup):
+    """Первый checkout завис (платёжка не отвечает). Второй с тем же fingerprint раньше
+    ждал event.wait() бесконечно — теперь получает тот же 409, что и ветка 'busy'."""
+    monkeypatch.setattr(bridge, 'CHECKOUT_WAIT_TIMEOUT_S', 0.05)
+
+    async def stuck_checkout(*args, **kwargs):
+        await asyncio.sleep(60)
+
+    monkeypatch.setattr(bridge, 'save_renewal_cart', stuck_checkout)
+    body = bridge.CheckoutRequest(kind='renew', period_days=30, payment_method='yookassa')
+
+    first = asyncio.create_task(bridge.checkout('abcdefgh', body, db=None))
+    await asyncio.sleep(0)  # первый занял слот
+    with pytest.raises(HTTPException) as error:
+        await bridge.checkout('abcdefgh', body, db=None)
+    assert error.value.status_code == 409
+
+    first.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await first

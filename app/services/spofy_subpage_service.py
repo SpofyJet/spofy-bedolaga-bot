@@ -17,12 +17,15 @@ from typing import Any
 
 import structlog
 from aiogram import Bot
+from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.spofy_subpage_context import subpage_purchase_context
 from app.services.user_cart_service import user_cart_service
+from app.utils.miniapp_buttons import build_main_menu_button, build_miniapp_or_callback_button
 
 
 logger = structlog.get_logger(__name__)
@@ -171,6 +174,63 @@ def is_funded_by_payment(cart: dict[str, Any], credited_kopeks: int | None) -> b
     return credited_kopeks >= price and abs(credited_kopeks - requested) <= tolerance
 
 
+async def _notify_orphan_topup(
+    user: User, *, bot: Bot | None, credited_kopeks: int | None, has_saved_cart: bool
+) -> None:
+    """Пополнение пришло, а привязанной к нему покупки не случилось.
+
+    Раньше это была тишина: деньги на балансе, подписка не активирована, юзер не
+    понимал, что делать. Зеркалим отправку ``_send_payment_success_notification``
+    (app/services/payment/common.py): тот же гейт уведомлений, тот же кабинетный
+    ``build_miniapp_or_callback_button`` (MAIN_MENU_MODE=cabinet) и отдельная
+    callback-кнопка «Главное меню». Сбои глотаем — уведомление не должно ронять
+    webhook после зачисления денег.
+    """
+    if not settings.is_notifications_enabled():
+        return
+    if bot is None:
+        return
+    telegram_id = getattr(user, 'telegram_id', None)
+    if not telegram_id:
+        return
+
+    texts = get_texts(getattr(user, 'language', None) or 'ru')
+    amount = f' {settings.format_price(credited_kopeks)}' if isinstance(credited_kopeks, int) else ''
+    message = (
+        '💳 <b>Оплата получена, покупка не оформлена</b>\n\n'
+        f'Сумма{amount} зачислена на ваш баланс, но оплаченная подписка автоматически '
+        'не активировалась.\n\n'
+        'Ничего не потеряно — деньги на балансе, покупку можно завершить в один шаг.'
+    )
+    if has_saved_cart:
+        action = build_miniapp_or_callback_button(
+            text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+            callback_data='return_to_saved_cart',
+        )
+    else:
+        action = build_miniapp_or_callback_button(
+            text=texts.MENU_BUY_SUBSCRIPTION,
+            callback_data='menu_buy',
+        )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[action], [build_main_menu_button(texts.MAIN_MENU_BUTTON)]])
+
+    try:
+        await bot.send_message(chat_id=telegram_id, text=message, parse_mode='HTML', reply_markup=keyboard)
+    except Exception as error:
+        from aiogram.exceptions import TelegramForbiddenError, TelegramNetworkError, TelegramServerError
+
+        # Транзиентные сетевые / forbidden — warning. Деньги уже зачислены,
+        # уведомление — best-effort, не должно спамить админ-чат.
+        if isinstance(error, (TelegramNetworkError, TelegramServerError, TelegramForbiddenError)):
+            logger.warning(
+                'spofy subpage: orphan-topup notification not delivered (transient)',
+                telegram_id=telegram_id,
+                error=str(error)[:200],
+            )
+        else:
+            logger.error('spofy subpage: orphan-topup notification failed', telegram_id=telegram_id, error=error)
+
+
 async def complete_subpage_carts_after_topup(
     db: AsyncSession, user: User, *, bot: Bot | None = None, credited_kopeks: int | None = None
 ) -> bool:
@@ -196,10 +256,16 @@ async def complete_subpage_carts_after_topup(
         carts.append(global_cart)
 
     if not carts:
+        # Платёж не встретил НИ ОДНОЙ корзины страницы: деньги уже на балансе, покупки нет.
+        # Говорим об этом вместо тишины (иначе «оплатил — а подписки нет и никто не отвечает»).
+        await _notify_orphan_topup(user, bot=bot, credited_kopeks=credited_kopeks, has_saved_cart=bool(global_cart))
         return False
 
     if not await user_cart_service.has_topup_intent(user.id):
         logger.info('spofy subpage: cart found but no fresh top-up intent, skipping', user_id=user.id)
+        # Метка намерения протухла раньше корзины (оплата пришла по «старой» ссылке):
+        # покупку не исполняем, но деньги на балансе — предлагаем вернуться к оформлению.
+        await _notify_orphan_topup(user, bot=bot, credited_kopeks=credited_kopeks, has_saved_cart=True)
         return False
 
     funded = [cart for cart in carts if is_funded_by_payment(cart, credited_kopeks)]
@@ -219,8 +285,16 @@ async def complete_subpage_carts_after_topup(
     for cart in funded:
         try:
             # Пометка для админ-уведомлений: покупка со страницы подписки.
+            # Цена фиксируется при оформлении (spofy_price_kopeks): оплата пришла
+            # под неё, и пересчёт на момент исполнения её не меняет.
             with subpage_purchase_context():
-                processed = await _process_single_cart(db, user, cart, bot=bot)
+                processed = await _process_single_cart(
+                    db,
+                    user,
+                    cart,
+                    bot=bot,
+                    bound_price_kopeks=cart.get('spofy_price_kopeks'),
+                )
             if processed:
                 completed = True
                 break  # one payment buys one cart: never reach into the balance for a second
@@ -228,6 +302,7 @@ async def complete_subpage_carts_after_topup(
             logger.error('spofy subpage: cart completion failed', user_id=user.id, error=error, exc_info=True)
 
     if completed:
+        # Покупка состоялась — юзера уже уведомил исполнитель покупки, дубль не шлём.
         await user_cart_service.clear_topup_intent(user.id)
         logger.info('spofy subpage: purchase completed after top-up', user_id=user.id, carts=len(carts))
     return completed
