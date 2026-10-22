@@ -41,13 +41,16 @@ logger = structlog.get_logger(__name__)
 # Tunables (override via env through Settings if added there; safe defaults here)
 NUDGE1_HOURS = int(getattr(settings, 'FUNNEL_NUDGE1_HOURS', 2))
 NUDGE2_HOURS = int(getattr(settings, 'FUNNEL_NUDGE2_HOURS', 24))
+NUDGE3_HOURS = int(getattr(settings, 'FUNNEL_NUDGE3_HOURS', 72))
 IDLE_TRIAL_HOURS = int(getattr(settings, 'FUNNEL_IDLE_TRIAL_HOURS', 3))
 NUDGE1_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_NUDGE1_WINDOW_HOURS', 48))
 NUDGE2_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_NUDGE2_WINDOW_HOURS', 168))
+NUDGE3_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_NUDGE3_WINDOW_HOURS', 336))
 BATCH_LIMIT = int(getattr(settings, 'FUNNEL_BATCH_LIMIT', 50))
 
 EVENT_NO_TRIAL_1 = 'funnel_no_trial_1'
 EVENT_NO_TRIAL_2 = 'funnel_no_trial_2'
+EVENT_NO_TRIAL_3 = 'funnel_no_trial_3'
 EVENT_TRIAL_IDLE = 'funnel_trial_idle'
 EVENT_TRIAL_EXP_1 = 'funnel_trial_exp_1'
 EVENT_TRIAL_EXP_2 = 'funnel_trial_exp_2'
@@ -89,14 +92,19 @@ EVENT_ABANDONED_TOPUP = 'funnel_abandoned_topup'
 ABANDONED_TOPUP_MIN_AGE_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_MIN_AGE_MINUTES', 10))
 ABANDONED_TOPUP_WINDOW_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_WINDOW_MINUTES', 30))
 ABANDONED_TOPUP_RESEND_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_RESEND_HOURS', 24))
+# Вторая волна: через сутки после первого напоминания (возвращаемость первой ~27%, второй шанс — другой способ).
+EVENT_ABANDONED_TOPUP_2 = 'funnel_abandoned_topup_2'
+ABANDONED_TOPUP_2_DELAY_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_2_DELAY_HOURS', 24))
 # Если у человека действует скидка предложения и кончается раньше, продлеваем её до этого срока.
 ABANDONED_TOPUP_PRICE_LOCK_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_PRICE_LOCK_MINUTES', 20))
 
-# Брошенная покупка подписки: корзина в Redis живёт час; напоминаем через 15 минут и держим ещё 20.
+# Брошенная покупка подписки: корзина в Redis живёт сутки; напоминаем через 15 минут, второй раз — через сутки.
 EVENT_ABANDONED_CART = 'funnel_abandoned_cart'
+EVENT_ABANDONED_CART_2 = 'funnel_abandoned_cart_2'
 ABANDONED_CART_MIN_AGE_SECONDS = int(getattr(settings, 'FUNNEL_ABANDONED_CART_MIN_AGE_MINUTES', 15)) * 60
 ABANDONED_CART_LOCK_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_CART_LOCK_MINUTES', 20))
 ABANDONED_CART_RESEND_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_CART_RESEND_HOURS', 24))
+ABANDONED_CART_2_DELAY_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_CART_2_DELAY_HOURS', 24))
 
 # После покупки приглашаем позвать друга (дни за каждого подключившегося).
 EVENT_REFERRAL_PROMPT = 'funnel_referral_prompt'
@@ -215,6 +223,7 @@ class ActivationFunnelService:
             self._trial_days = await _resolve_trial_days(db)
             await self._nudge_no_trial(db, EVENT_NO_TRIAL_1, NUDGE1_HOURS, NUDGE1_WINDOW_HOURS, wave=1)
             await self._nudge_no_trial(db, EVENT_NO_TRIAL_2, NUDGE2_HOURS, NUDGE2_WINDOW_HOURS, wave=2)
+            await self._nudge_no_trial(db, EVENT_NO_TRIAL_3, NUDGE3_HOURS, NUDGE3_WINDOW_HOURS, wave=3)
             await self._nudge_idle_trial(db)
             await self._nudge_idle_trial_2(db)
             await self._nudge_active_trial(db)
@@ -235,6 +244,17 @@ class ActivationFunnelService:
 
         has_any_subscription = exists(select(Subscription.id).where(Subscription.user_id == User.id))
 
+        # Следующая волна — только после того, как ушла предыдущая.
+        prior_wave_clause = True
+        if wave == 2:
+            prior_wave_clause = _event_sent_clause(
+                EVENT_NO_TRIAL_1, min_age_hours=max(1, NUDGE2_HOURS - NUDGE1_HOURS - 2)
+            )
+        elif wave == 3:
+            prior_wave_clause = _event_sent_clause(
+                EVENT_NO_TRIAL_2, min_age_hours=max(1, NUDGE3_HOURS - NUDGE2_HOURS - 2)
+            )
+
         result = await db.execute(
             select(User)
             .where(
@@ -246,15 +266,17 @@ class ActivationFunnelService:
                     User.has_had_paid_subscription == False,
                     ~has_any_subscription,
                     ~_event_sent_clause(event_type),
-                    # wave 2 only after wave 1 actually went out
-                    _event_sent_clause(EVENT_NO_TRIAL_1, min_age_hours=max(1, NUDGE2_HOURS - NUDGE1_HOURS - 2))
-                    if wave == 2
-                    else True,
+                    prior_wave_clause,
                 )
             )
             .limit(BATCH_LIMIT)
         )
         users = result.scalars().all()
+
+        trial_days = self._trial_days or settings.TRIAL_DURATION_DAYS
+        devices = settings.TRIAL_DEVICE_LIMIT
+        traffic_gb = settings.TRIAL_TRAFFIC_LIMIT_GB
+        traffic = 'трафик без ограничений' if not traffic_gb else f'{traffic_gb} ГБ трафика'
 
         for user in users:
             if await _already_nudged_recently(db, user.id):
@@ -264,23 +286,40 @@ class ActivationFunnelService:
                 text = texts.get(
                     'FUNNEL_NO_TRIAL_1',
                     (
-                        '🎁 <b>Пробный доступ на {days} дн. ждёт вас</b>\n\n'
-                        'Платить не нужно. Включается одной кнопкой за несколько секунд.'
+                        '👋 Вы заходили к нам, но пробный период так и не включили\n\n'
+                        'Это {days} дней бесплатно. Карта не нужна — ничего оплачивать не придётся:\n'
+                        '📱 {devices} устройства — телефон и ноутбук одновременно\n'
+                        '📊 {traffic}\n\n'
+                        'Включается за минуту.'
                     ),
-                ).format(days=self._trial_days or settings.TRIAL_DURATION_DAYS)
-            else:
+                ).format(days=trial_days, devices=devices, traffic=traffic)
+            elif wave == 2:
                 text = texts.get(
                     'FUNNEL_NO_TRIAL_2',
                     (
-                        '⏳ <b>Пробный доступ всё ещё свободен</b>\n\n'
-                        'Подключитесь за минуту и проверьте, как всё работает. '
-                        'Не подойдёт — просто не продлевайте.'
+                        '🎁 Пробный период всё ещё ждёт вас\n\n'
+                        '{days} дней бесплатно, карта не нужна. Проверьте скорость на своём '
+                        'телефоне — не понравится, просто не продлевайте.'
                     ),
-                )
+                ).format(days=trial_days)
+            else:
+                text = texts.get(
+                    'FUNNEL_NO_TRIAL_3',
+                    (
+                        '⏳ Больше напоминать не будем\n\n'
+                        '{days} дней VPN бесплатно по-прежнему доступны. Карта не нужна — '
+                        'включите, когда будет минутка.'
+                    ),
+                ).format(days=trial_days)
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text=texts.MENU_TRIAL, callback_data='menu_trial')],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('FUNNEL_TRIAL_CTA_BUTTON', '🎁 Попробовать бесплатно'),
+                            callback_data='menu_trial',
+                        )
+                    ],
                 ]
             )
             try:
@@ -785,6 +824,185 @@ class ActivationFunnelService:
                 sent_count += 1
         if sent_count:
             logger.info('🪝 Брошенная корзина: отправлено напоминаний', count=sent_count)
+        return sent_count
+
+    async def process_abandoned_payments_wave2(self, db: AsyncSession) -> int:
+        """Вторая волна по брошенной оплате: через сутки после первого напоминания.
+
+        Первая возвращает ~27%. Вторая — не дубль: короткое «попробуйте другой способ»,
+        потому что чаще всего упёрлось именно в способ оплаты, а не в желание.
+        """
+        if not _funnel_enabled() or not self._send:
+            return 0
+        from app.database.models import Transaction, TransactionType
+        from app.keyboards.inline import get_payment_methods_keyboard
+
+        now = datetime.now(UTC)
+        pending = await self._abandoned_payments(
+            db,
+            since=now - timedelta(hours=ABANDONED_TOPUP_2_DELAY_HOURS + 24),
+            until=now - timedelta(hours=ABANDONED_TOPUP_2_DELAY_HOURS),
+        )
+        if not pending:
+            return 0
+
+        latest: dict[int, tuple[User, int, datetime]] = {}
+        for user, amount_kopeks, created_at in pending:
+            if amount_kopeks > 0 and (user.id not in latest or created_at > latest[user.id][2]):
+                latest[user.id] = (user, amount_kopeks, created_at)
+
+        sent_count = 0
+        for user, amount_kopeks, created_at in latest.values():
+            if getattr(user, 'restriction_topup', False):
+                continue
+            paid_later = await db.execute(
+                select(
+                    exists().where(
+                        Transaction.user_id == user.id,
+                        Transaction.type == TransactionType.DEPOSIT.value,
+                        Transaction.is_completed.is_(True),
+                        Transaction.created_at > created_at,
+                    )
+                )
+            )
+            if paid_later.scalar():
+                continue
+            # Вторая волна — только если первая уходила, и не дважды.
+            waves = await db.execute(
+                select(SubscriptionEvent.event_type, SubscriptionEvent.created_at).where(
+                    SubscriptionEvent.user_id == user.id,
+                    SubscriptionEvent.event_type.in_([EVENT_ABANDONED_TOPUP, EVENT_ABANDONED_TOPUP_2]),
+                )
+            )
+            wave1_at = wave2_sent = None
+            for event_type, created in waves.all():
+                if event_type == EVENT_ABANDONED_TOPUP:
+                    wave1_at = max(wave1_at or created, created)
+                else:
+                    wave2_sent = True
+            if wave2_sent or wave1_at is None or wave1_at > now - timedelta(hours=ABANDONED_TOPUP_2_DELAY_HOURS):
+                continue
+
+            if not user.telegram_id:
+                continue  # письмо в первой волне; вторая — только Telegram
+
+            texts = get_texts(user.language)
+            amount_rub = amount_kopeks // 100
+            lines = [
+                texts.t('FUNNEL_ABANDONED_TOPUP_2_TITLE', '💳 <b>Оплата так и не прошла</b>'),
+                '',
+                texts.t(
+                    'FUNNEL_ABANDONED_TOPUP_2_BODY',
+                    'Вы начинали пополнять баланс на {amount} ₽. Попробуйте другой способ — '
+                    'иногда банк не пропускает первую попытку.',
+                ).format(amount=amount_rub),
+            ]
+            text = '\n'.join(lines)
+            rows = [
+                row
+                for row in get_payment_methods_keyboard(amount_kopeks, user.language).inline_keyboard
+                if row and all((button.callback_data or '').startswith('topup_amount|') for button in row)
+            ]
+            try:
+                sent = await self._send(
+                    user.telegram_id, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), user=user
+                )
+            except Exception as error:
+                logger.debug('Брошенная оплата (волна 2): сообщение не доставлено', user_id=user.id, error=str(error))
+                sent = None
+            await _record_event(db, user.id, EVENT_ABANDONED_TOPUP_2)
+            if sent is not None:
+                sent_count += 1
+
+        if sent_count:
+            logger.info('🪝 Брошенная оплата (волна 2): отправлено напоминаний', count=sent_count)
+        return sent_count
+
+    async def process_abandoned_carts_wave2(self, db: AsyncSession) -> int:
+        """Вторая волна по брошенной корзине: через сутки после первого напоминания.
+
+        Корзина живёт сутки (CART_TTL_SECONDS), так что к моменту второй волны она ещё
+        на месте — человек может закончить покупку в один шаг. Первую волну не дублируем.
+        """
+        if not _funnel_enabled() or not self._send:
+            return 0
+        from app.keyboards.inline import get_payment_methods_keyboard
+        from app.services.user_cart_service import user_cart_service
+
+        now = datetime.now(UTC)
+        sent_count = 0
+        for user_id, cart, age_seconds in await user_cart_service.list_global_carts():
+            if age_seconds < ABANDONED_CART_2_DELAY_HOURS * 3600:
+                continue
+            if cart.get('source') == 'spofy_subpage' or cart.get('cart_mode') not in ('tariff_purchase', 'extend'):
+                continue
+            if not cart.get('tariff_id'):
+                continue
+            try:
+                price_kopeks = int(cart.get('total_price') or 0)
+            except (TypeError, ValueError):
+                continue
+            if price_kopeks <= 0:
+                continue
+            user = await db.get(User, user_id)
+            if (
+                user is None
+                or user.status != UserStatus.ACTIVE.value
+                or getattr(user, 'restriction_topup', False)
+                or not user.telegram_id
+            ):
+                continue
+            waves = await db.execute(
+                select(SubscriptionEvent.event_type, SubscriptionEvent.created_at).where(
+                    SubscriptionEvent.user_id == user.id,
+                    SubscriptionEvent.event_type.in_([EVENT_ABANDONED_CART, EVENT_ABANDONED_CART_2]),
+                )
+            )
+            wave1_at = wave2_sent = None
+            for event_type, created in waves.all():
+                if event_type == EVENT_ABANDONED_CART:
+                    wave1_at = max(wave1_at or created, created)
+                else:
+                    wave2_sent = True
+            if wave2_sent or wave1_at is None or wave1_at > now - timedelta(hours=ABANDONED_CART_2_DELAY_HOURS):
+                continue
+
+            texts = get_texts(user.language)
+            missing = max(0, price_kopeks - int(user.balance_kopeks or 0))
+            await user_cart_service.extend_cart_ttl(user.id, ABANDONED_CART_LOCK_MINUTES * 60)
+            lines = [
+                texts.t('FUNNEL_ABANDONED_CART_2_TITLE', '🛒 <b>Покупка не оформлена</b>'),
+                '',
+                str(cart.get('description') or ''),
+                texts.t(
+                    'FUNNEL_ABANDONED_CART_2_BODY',
+                    'К оплате: <b>{price} ₽</b>. Осталось нажать «Продолжить» — всё сохранено.',
+                ).format(price=price_kopeks // 100),
+            ]
+            text = '\n'.join(line for line in lines if line is not None)
+
+            rows = []
+            if missing > 0:
+                rows = [
+                    row
+                    for row in get_payment_methods_keyboard(missing, user.language).inline_keyboard
+                    if row and all((button.callback_data or '').startswith('topup_amount|') for button in row)
+                ]
+            rows.append(
+                [InlineKeyboardButton(text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT, callback_data='return_to_saved_cart')]
+            )
+            try:
+                sent = await self._send(
+                    user.telegram_id, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), user=user
+                )
+            except Exception as error:
+                logger.debug('Брошенная корзина (волна 2): сообщение не доставлено', user_id=user.id, error=str(error))
+                sent = None
+            await _record_event(db, user.id, EVENT_ABANDONED_CART_2)
+            if sent is not None:
+                sent_count += 1
+        if sent_count:
+            logger.info('🪝 Брошенная корзина (волна 2): отправлено напоминаний', count=sent_count)
         return sent_count
 
     async def process_referral_prompt(self, db: AsyncSession) -> int:

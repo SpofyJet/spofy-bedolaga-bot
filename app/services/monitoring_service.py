@@ -198,6 +198,7 @@ class MonitoringService:
         self.subscription_service = SubscriptionService()
         self.bot = bot
         self._notified_users: set[str] = set()
+        self._last_abandoned_wave2 = datetime.min.replace(tzinfo=UTC)  # вторые волны сразу при старте
         self._last_cleanup = datetime.now(UTC)
         self._sla_task = None
         self._withdrawal_reminder_task = None
@@ -2080,12 +2081,36 @@ class MonitoringService:
             texts = get_texts(user.language)
             days_text = format_days_declension(days, user.language)
 
+            # Если автоплатёж включен, но баланса заведомо не хватит — говорим прямо,
+            # пока есть время пополниться: постфактум (при отказе списания) люди
+            # узнают слишком поздно. Базовая цена периода — верхняя граница: скидки
+            # только уменьшают итог, поэтому «баланс < базовой цены» = точный сигнал,
+            # а ложных тревог не будет.
+            low_balance_action = None
+            if subscription.autopay_enabled:
+                tariff_for_price = getattr(subscription, 'tariff', None)
+                prices = getattr(tariff_for_price, 'period_prices', None) or {}
+                if prices:
+                    period_days = (
+                        getattr(subscription, 'autopay_period_days', None)
+                        or getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0)
+                        or (tariff_for_price.get_shortest_period() if tariff_for_price else None)
+                        or 30
+                    )
+                    base_price = prices.get(str(period_days))
+                    if base_price and (user.balance_kopeks or 0) < base_price:
+                        low_balance_action = texts.t(
+                            'AUTOPAY_ACTION_LOW_BALANCE',
+                            '⚠️ Для автопродления нужно {cost}, на балансе {balance}. '
+                            'Пополните заранее — иначе подписка остановится.',
+                        ).format(cost=texts.format_price(base_price), balance=texts.format_price(user.balance_kopeks))
+
             if subscription.autopay_enabled and has_saved_card:
                 autopay_status = texts.t(
                     'AUTOPAY_STATUS_CARD_ACTIVE',
                     '✅ Включен — будет автоматическое списание с карты',
                 )
-                action_text = texts.t(
+                action_text = low_balance_action or texts.t(
                     'AUTOPAY_ACTION_CHECK_BALANCE',
                     '💰 Убедитесь, что на балансе достаточно средств: {balance}',
                 ).format(balance=texts.format_price(user.balance_kopeks))
@@ -2094,7 +2119,7 @@ class MonitoringService:
                     'AUTOPAY_STATUS_NO_CARD',
                     '✅ Включен — подписка продлится автоматически',
                 )
-                action_text = texts.t(
+                action_text = low_balance_action or texts.t(
                     'AUTOPAY_ACTION_CHECK_BALANCE',
                     '💰 Убедитесь, что на балансе достаточно средств: {balance}',
                 ).format(balance=texts.format_price(user.balance_kopeks))
@@ -3829,6 +3854,18 @@ class MonitoringService:
                                     'Сбой напоминания (брошенная оплата, корзина, приглашение)', error=str(e)
                                 )
                                 await db.rollback()
+                        # Вторые волны — реже: раз в 30 минут достаточно (задержка у них ~сутки).
+                        if datetime.now(UTC) >= self._last_abandoned_wave2 + timedelta(minutes=30):
+                            self._last_abandoned_wave2 = datetime.now(UTC)
+                            for step in (
+                                funnel.process_abandoned_payments_wave2,
+                                funnel.process_abandoned_carts_wave2,
+                            ):
+                                try:
+                                    await step(db)
+                                except Exception as e:
+                                    logger.warning('Сбой напоминания (вторая волна)', error=str(e))
+                                    await db.rollback()
             except asyncio.CancelledError:
                 break
             except Exception as e:

@@ -2310,8 +2310,8 @@
   "TOPUP_OTHER_AMOUNT": "💰 其他金额",
   "TRIAL_ENDING_1D": "⏳ <b>试用明天结束</b>\n\n今天订阅，访问不会中断。",
   "ENABLE_AUTOPAY_BUTTON": "🔄 开启自动续费",
-  "FUNNEL_NO_TRIAL_1": "🎁 <b>{days} 天试用在等您</b>\n\n无需付款，一键开启，只需几秒。",
-  "FUNNEL_NO_TRIAL_2": "⏳ <b>试用仍可领取</b>\n\n一分钟内连接，亲自体验。不合适就不要续费。",
+  "FUNNEL_NO_TRIAL_1": "👋 您来过，但还没有开启试用\n\n免费 {days} 天。无需银行卡——不会产生任何费用：\n📱 {devices} 台设备——手机和电脑同时使用\n📊 {traffic}\n\n一分钟即可开启。",
+  "FUNNEL_NO_TRIAL_2": "🎁 免费试用仍在等您\n\n免费 {days} 天，无需银行卡。用手机试试速度——不满意就不续费。",
   "FUNNEL_TRIAL_IDLE": "🔌 <b>VPN 已开启，但尚未连接</b>\n\n选择您的设备并点击“连接”，只需一分钟。遇到问题请联系客服，我们一起连接。",
   "FUNNEL_TRIAL_EXPIRED_1": "🎁 <b>首次订阅 {percent}% 折扣已为您保留</b>\n\n试用期已结束。点击按钮，折扣即可用于任意套餐和时长。\n\n⏰ 有效期至 <b>{expires_at}</b>。",
   "FUNNEL_TRIAL_EXPIRED_2": "⏳ <b>您的 {percent}% 优惠即将失效</b>\n\n我们仍为您保留，但在 <b>{expires_at}</b> 之后只剩原价。",
@@ -2420,5 +2420,12 @@
   "TARIFF_PERIOD_DEVICES_INCLUDED": "\n\n📱 <i>价格已包含您的 {devices} 台设备。</i>",
   "TARIFF_PURCHASE_TRIM_AFTER_PAYMENT_NOTE": "\n\n📱 <i>支付后将断开多余设备（仅保留套餐内的 {devices} 台）。</i>",
   "ADMIN_PROMO_OFFER_TARIFF": "单个套餐折扣 (ULTIMA)",
-  "ADMIN_PROMO_OFFER_TARIFF_2": "单个套餐折扣 (ULTIMA) #2"
+  "ADMIN_PROMO_OFFER_TARIFF_2": "单个套餐折扣 (ULTIMA) #2",
+  "FUNNEL_NO_TRIAL_3": "⏳ 不再提醒您了\n\n{days} 天免费 VPN 仍然可用。无需银行卡——有空时开启即可。",
+  "FUNNEL_TRIAL_CTA_BUTTON": "🎁 免费试用",
+  "FUNNEL_ABANDONED_TOPUP_2_TITLE": "💳 <b>付款仍未完成</b>",
+  "FUNNEL_ABANDONED_TOPUP_2_BODY": "您曾开始充值 {amount} ₽。请尝试其他支付方式——有时银行会拦截第一次付款。",
+  "FUNNEL_ABANDONED_CART_2_TITLE": "🛒 <b>订单未完成</b>",
+  "FUNNEL_ABANDONED_CART_2_BODY": "应付：<b>{price} ₽</b>。点击「继续」即可完成——所有内容已保存。",
+  "AUTOPAY_ACTION_LOW_BALANCE": "⚠️ 自动续费需要 {cost}，当前余额 {balance}。请提前充值——否则订阅将停止。"
 }

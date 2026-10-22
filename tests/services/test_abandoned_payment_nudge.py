@@ -431,3 +431,155 @@ def test_reminder_email_text_has_the_phrase():
     assert subject == 'Оплата не завершена'
     assert '315 ₽' in body and 'Не получилось оплатить? Попробуйте другой способ.' in body
     assert button == 'Продолжить оплату'
+
+
+# ───────────── вторые волны (через сутки после первой) ─────────────
+
+
+def _event(uid, event_type, hours_ago):
+    moment = NOW - timedelta(hours=hours_ago)
+    return SubscriptionEvent(
+        user_id=uid,
+        event_type=event_type,
+        message=f'{event_type}:test',
+        created_at=moment,
+        occurred_at=moment,
+    )
+
+
+async def test_abandoned_topup_wave2_sends_a_day_after_wave1(monkeypatch):
+    async with _session(monkeypatch) as db:
+        db.add_all([_user(), _platega(1, 30 * 60), _event(1, funnel.EVENT_ABANDONED_TOPUP, 25)])
+        await db.commit()
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_payments_wave2(db) == 1
+        assert await service.process_abandoned_payments_wave2(db) == 0  # не дублируем
+
+    text = sent.await_args.args[1]
+    assert 'Оплата так и не прошла' in text and '315 ₽' in text
+    rows = sent.await_args.kwargs['reply_markup'].inline_keyboard
+    assert rows[0][0].callback_data.startswith('topup_amount|')
+
+
+async def test_abandoned_topup_wave2_needs_wave1_first(monkeypatch):
+    async with _session(monkeypatch) as db:
+        db.add_all([_user(), _platega(1, 30 * 60)])  # волна 1 не уходила — не лезем вперёд
+        await db.commit()
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_payments_wave2(db) == 0
+    sent.assert_not_awaited()
+
+
+async def test_abandoned_topup_wave2_skips_user_who_paid_afterwards(monkeypatch):
+    async with _session(monkeypatch) as db:
+        db.add_all([_user(), _platega(1, 30 * 60), _event(1, funnel.EVENT_ABANDONED_TOPUP, 25)])
+        db.add(
+            Transaction(
+                user_id=1,
+                type=TransactionType.DEPOSIT.value,
+                amount_kopeks=31500,
+                description='Пополнение',
+                is_completed=True,
+                created_at=NOW - timedelta(hours=20),
+            )
+        )
+        await db.commit()
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_payments_wave2(db) == 0
+    sent.assert_not_awaited()
+
+
+async def test_abandoned_cart_wave2_sends_a_day_after_wave1(monkeypatch):
+    async with _session(monkeypatch) as db:
+        db.add(_user(balance_kopeks=100000))
+        await db.commit()
+        extended = []
+        # корзине 25 часов — волна 1 ушла 25 часов назад
+        _cart_service(monkeypatch, [(1, _cart(), 25 * 3600)], extended)
+        service, sent = _service(monkeypatch)
+
+        # событие волны 1 записываем в базу — как в проде
+        db.add(_event(1, funnel.EVENT_ABANDONED_CART, 25))
+        await db.commit()
+
+        assert await service.process_abandoned_carts_wave2(db) == 1
+        assert await service.process_abandoned_carts_wave2(db) == 0
+
+    text = sent.await_args.args[1]
+    assert 'Покупка не оформлена' in text and '5000 ₽' in text and 'ULTIMA' in text
+    callbacks = [b.callback_data for row in sent.await_args.kwargs['reply_markup'].inline_keyboard for b in row]
+    assert callbacks[-1] == 'return_to_saved_cart'
+
+
+async def test_abandoned_cart_wave2_ignores_fresh_cart(monkeypatch):
+    async with _session(monkeypatch) as db:
+        db.add(_user(balance_kopeks=100000))
+        await db.commit()
+        _cart_service(monkeypatch, [(1, _cart(), 1000)])  # корзине 16 минут
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_carts_wave2(db) == 0
+    sent.assert_not_awaited()
+
+
+# ───────────── триал: третья волна напоминания ─────────────
+
+
+async def test_no_trial_wave3_sends_after_wave2(monkeypatch):
+    from app.database.models import Subscription
+
+    _ensure_real_aiosqlite(monkeypatch)
+    engine = create_async_engine('sqlite+aiosqlite:///:memory:')
+    async with engine.begin() as conn:
+        await conn.run_sync(
+            lambda c: Base.metadata.create_all(c, tables=[User.__table__, Subscription.__table__, SubscriptionEvent.__table__])
+        )
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            user = _user(has_had_paid_subscription=False)
+            user.created_at = datetime.now(UTC) - timedelta(hours=80)
+            session.add(user)
+            session.add(_event(1, funnel.EVENT_NO_TRIAL_2, 50))
+            await session.commit()
+            service, sent = _service(monkeypatch)
+            service._trial_days = 3
+
+            await service._nudge_no_trial(
+                session, funnel.EVENT_NO_TRIAL_3, funnel.NUDGE3_HOURS, funnel.NUDGE3_WINDOW_HOURS, wave=3
+            )
+
+            text = sent.await_args.args[1]
+            assert 'Больше напоминать не будем' in text and '3 дней' in text
+            buttons = [b for row in sent.await_args.kwargs['reply_markup'].inline_keyboard for b in row]
+            assert any(b.callback_data == 'menu_trial' and 'Попробовать бесплатно' in b.text for b in buttons)
+    finally:
+        await engine.dispose()
+
+
+async def test_no_trial_wave3_waits_for_wave2(monkeypatch):
+    from app.database.models import Subscription
+
+    _ensure_real_aiosqlite(monkeypatch)
+    engine = create_async_engine('sqlite+aiosqlite:///:memory:')
+    async with engine.begin() as conn:
+        await conn.run_sync(
+            lambda c: Base.metadata.create_all(c, tables=[User.__table__, Subscription.__table__, SubscriptionEvent.__table__])
+        )
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            user = _user(has_had_paid_subscription=False)
+            user.created_at = datetime.now(UTC) - timedelta(hours=80)
+            session.add(user)
+            await session.commit()  # волны 1–2 не было — третья не лезет вперёд
+            service, sent = _service(monkeypatch)
+            service._trial_days = 3
+
+            await service._nudge_no_trial(
+                session, funnel.EVENT_NO_TRIAL_3, funnel.NUDGE3_HOURS, funnel.NUDGE3_WINDOW_HOURS, wave=3
+            )
+            sent.assert_not_awaited()
+    finally:
+        await engine.dispose()
