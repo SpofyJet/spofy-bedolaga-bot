@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import settings
-from app.database.models import Base, PromoOfferTemplate, SubscriptionEvent
+from app.database.models import Base, PromoOfferTemplate, Subscription, SubscriptionEvent
 from app.handlers import ultima_deeplink as link
 from app.handlers.admin import promo_offers
 
@@ -34,7 +34,9 @@ async def _session(monkeypatch):
     engine = create_async_engine('sqlite+aiosqlite:///:memory:')
     async with engine.begin() as conn:
         await conn.run_sync(
-            lambda c: Base.metadata.create_all(c, tables=[PromoOfferTemplate.__table__, SubscriptionEvent.__table__])
+            lambda c: Base.metadata.create_all(
+                c, tables=[PromoOfferTemplate.__table__, SubscriptionEvent.__table__, Subscription.__table__]
+            )
         )
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as session:
@@ -138,6 +140,27 @@ async def test_without_a_template_the_link_falls_back_to_normal_start(monkeypatc
         await db.execute(PromoOfferTemplate.__table__.delete())
         await db.commit()
         assert await link.open_ultima_offer(_message(), _user(), db, source='') is False
+
+
+async def test_already_owned_tariff_skips_the_offer(monkeypatch):
+    """ULTIMA уже куплен — скидка на его покупку бесполезна, идём в обычный /start."""
+    send = AsyncMock(return_value=True)
+    monkeypatch.setattr(promo_offers, '_send_prepaid_tariff_offer', send)
+    async with _session(monkeypatch) as db:
+        db.add(
+            Subscription(
+                id=1,
+                user_id=7,
+                tariff_id=4,
+                status='active',
+                is_trial=False,
+                end_date=datetime.now(UTC) + timedelta(days=30),
+            )
+        )
+        await db.commit()
+        assert await link.open_ultima_offer(_message(), _user(), db, source='ch1') is False
+        assert await _events(db) == ['already_owned:ch1']
+    send.assert_not_awaited()
 
 
 @pytest.fixture(autouse=True)
