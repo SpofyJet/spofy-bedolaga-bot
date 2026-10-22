@@ -294,19 +294,14 @@ def _price_breakdown_note(texts, tariff: Tariff, device_limit: int | None, resul
     )
 
 
-def _extra_devices_note(texts, tariff: Tariff, extra: int) -> str:
-    if extra <= 0 or getattr(tariff, 'device_price_flat', False):
-        return ''  # у тарифов с разовой ценой устройства «по X/мес» было бы неправдой
-    price = tariff.device_price_kopeks or 0
+def _devices_included_note(texts, tariff: Tariff, device_limit: int | None) -> str:
+    """Короткая нейтральная строка под клавиатурой периода: цены уже с учётом докупленных устройств."""
+    if not device_limit or device_limit <= (tariff.device_limit or 0):
+        return ''
     return texts.t(
-        'TARIFF_PERIOD_DEVICES_NOTE',
-        '\n\n📱 <i>У вас устройств: {devices} ({included} в тарифе + {extra} дополнительных по {price}/мес). Цены выше — за {included}; при оформлении к ним добавится доплата за дополнительные, а на экране оплаты можно оставить только {included}.</i>',
-    ).format(
-        devices=(tariff.device_limit or 0) + extra,
-        included=tariff.device_limit or 0,
-        extra=extra,
-        price=format_price_kopeks(price),
-    )
+        'TARIFF_PERIOD_DEVICES_INCLUDED',
+        '\n\n📱 <i>Цены с учётом ваших {devices} устройств.</i>',
+    ).format(devices=device_limit)
 
 
 def _period_button_text(tariff: Tariff, period: int, price: int, price_text: str, prices: dict, texts) -> str:
@@ -335,26 +330,50 @@ def get_tariff_periods_keyboard(
     language: str,
     db_user: User | None = None,
     back_callback: str = 'menu_buy',
+    device_limit: int | None = None,
 ) -> InlineKeyboardMarkup:
-    """Создает клавиатуру выбора периода для тарифа с учетом скидок по периодам."""
+    """Создает клавиатуру выбора периода для тарифа с учетом скидок по периодам.
+
+    ``device_limit`` больше включённых в тариф: на кнопках — честные итоги
+    периода с доплатой за устройства (тот же расчёт, что у
+    get_tariff_extend_keyboard), а не базовые цены тарифа. Иначе человек с
+    докупленными устройствами видел тут заниженную цену, а на подтверждении —
+    уже выше, и уходил без покупки.
+    """
     texts = get_texts(language)
     buttons = []
+
+    # Доплата появляется только когда у человека устройств реально больше,
+    # чем в тарифе, И за них платят — без этого поведение как раньше.
+    has_extra_devices = (
+        device_limit is not None
+        and device_limit > (tariff.device_limit or 0)
+        and (tariff.device_price_kopeks or 0) > 0
+    )
+    promo_group = None
+    if has_extra_devices and db_user:
+        from app.services.pricing_engine import PricingEngine
+
+        promo_group = PricingEngine.resolve_promo_group(db_user)
 
     prices = tariff.period_prices or {}
     for period_str in sorted(prices.keys(), key=int):
         period = int(period_str)
         price = prices[period_str]
 
-        # Получаем скидку для конкретного периода
-        group_pct, offer_pct, discount_percent = 0, 0, 0
-        if db_user:
-            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period, tariff.id)
-
-        if discount_percent > 0:
-            price = _apply_promo_discount(price, group_pct, offer_pct)
-            price_text = format_price_kopeks(price)  # Spofy: компактная цена периода (скидка в шапке)
+        if has_extra_devices:
+            # Честная цена периода: база + доп. устройства, скидки по категориям.
+            price = _period_price_with_devices(tariff, period, price, device_limit, promo_group, db_user)
         else:
-            price_text = format_price_kopeks(price)
+            # Получаем скидку для конкретного периода
+            group_pct, offer_pct, discount_percent = 0, 0, 0
+            if db_user:
+                group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period, tariff.id)
+
+            if discount_percent > 0:
+                price = _apply_promo_discount(price, group_pct, offer_pct)
+
+        price_text = format_price_kopeks(price)  # Spofy: компактная цена периода (скидка в шапке)
 
         button_text = _period_button_text(tariff, period, price, price_text, prices, texts)
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_period:{tariff.id}:{period}')])
@@ -1142,7 +1161,9 @@ async def _proceed_with_selected_tariff(
     texts = get_texts(db_user.language)
     back_callback = 'back_to_menu' if skip_selection else 'menu_buy'
     # Признак нужен последующим перерисовкам в других хендлерах.
-    await state.update_data(tariff_selection_skipped=skip_selection)
+    # Флаг тримма сбрасываем: зашли на экран периода заново (выбор тарифа) —
+    # прошлое намерение «оставить только N устройств» больше не актуально.
+    await state.update_data(tariff_selection_skipped=skip_selection, trim_devices_to_included=False)
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff or not tariff.is_active:
@@ -1331,16 +1352,28 @@ async def _proceed_with_selected_tariff(
                 parse_mode='HTML',
             )
         else:
-            # Для обычного тарифа показываем выбор периода (цены тарифа; про доплату за устройства — пояснение)
-            extra_devices = await _extra_device_count(db, db_user, tariff)
+            # Для обычного тарифа показываем выбор периода. У человека с
+            # докупленными устройствами на кнопках — честные цены периода с
+            # доплатой (device_limit), а не базовые цены тарифа.
+            _existing_device_limit = None
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+                _period_sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff_id)
+            else:
+                _period_sub = await get_subscription_by_user_id(db, db_user.id)
+            if _period_sub and _period_sub.tariff_id == tariff.id:
+                _existing_device_limit = _period_sub.device_limit
+
             await callback.message.edit_text(
                 format_tariff_info_for_user(tariff, db_user.language)
-                + _extra_devices_note(texts, tariff, extra_devices),
+                + _devices_included_note(texts, tariff, _existing_device_limit),
                 reply_markup=get_tariff_periods_keyboard(
                     tariff,
                     db_user.language,
                     db_user=db_user,
                     back_callback=back_callback,
+                    device_limit=_existing_device_limit,
                 ),
                 parse_mode='HTML',
             )
@@ -1857,6 +1890,39 @@ async def select_tariff_period_with_traffic(
     await callback.answer()
 
 
+async def _remove_excess_panel_devices(
+    db: AsyncSession,
+    subscription,
+    db_user: User,
+    included: int,
+) -> None:
+    """Синкает урезанный лимит устройств в панель и отключает лишние (последние по дате).
+
+    Вызывается ТОЛЬКО после успешной оплаты: до неё лишние устройства не
+    трогаем — иначе человек терял их без покупки (кнопка «Только N устр.»
+    жива и на экране нехватки средств).
+    """
+    from app.handlers.subscription.devices import _get_panel_user_id
+
+    panel_user_id = _get_panel_user_id(subscription, db_user)
+    try:
+        from app.services.subscription_service import SubscriptionService
+
+        await SubscriptionService().update_remnawave_user(db, subscription)
+        if panel_user_id:
+            from app.services.remnawave_service import RemnaWaveService
+
+            async with RemnaWaveService().get_api_client() as api:
+                info = await api.get_user_devices(panel_user_id)
+                devices = info.get('devices', []) if isinstance(info, dict) else []
+                extra = sorted(devices, key=lambda d: d.get('updatedAt') or d.get('createdAt') or '')[included:]
+                for device in extra:
+                    if device.get('hwid'):
+                        await api.remove_device(panel_user_id, device['hwid'])
+    except Exception as error:
+        logger.warning('Не удалось синхронизировать уменьшение устройств с панелью', error=str(error))
+
+
 @error_handler
 async def trim_tariff_devices(
     callback: types.CallbackQuery,
@@ -1866,7 +1932,11 @@ async def trim_tariff_devices(
 ):
     """«Только N устройств»: возвращает подписку к числу устройств из тарифа и пересчитывает покупку.
 
-    Лишние подключённые устройства отключаются (последние по дате), возврата нет — как при обычном уменьшении.
+    До оплаты НИЧЕГО не отключаем: ставим флаг в FSM и пересчитываем превью по
+    числу устройств из тарифа. Лимит подписки и лишние устройства на панели
+    убирает confirm_tariff_purchase ПОСЛЕ успешной оплаты — раньше кнопка
+    мгновенно резала device_limit и физически отключала устройства, и человек
+    мог потерять их, так и не купив ничего.
     """
     texts = get_texts(db_user.language)
     parts = callback.data.split(':')
@@ -1876,37 +1946,11 @@ async def trim_tariff_devices(
         await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
         return
 
-    if settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-        sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff_id)
-    else:
-        sub = await get_subscription_by_user_id(db, db_user.id)
-
-    included = tariff.device_limit or 0
-    if sub and sub.tariff_id == tariff.id and (sub.device_limit or 0) > included > 0:
-        sub.device_limit = included
-        await db.commit()
-        from app.handlers.subscription.devices import _get_panel_user_id
-
-        panel_user_id = _get_panel_user_id(sub, db_user)
-        try:
-            from app.services.subscription_service import SubscriptionService
-
-            await SubscriptionService().update_remnawave_user(db, sub)
-            if panel_user_id:
-                from app.services.remnawave_service import RemnaWaveService
-
-                async with RemnaWaveService().get_api_client() as api:
-                    info = await api.get_user_devices(panel_user_id)
-                    devices = info.get('devices', []) if isinstance(info, dict) else []
-                    extra = sorted(devices, key=lambda d: d.get('updatedAt') or d.get('createdAt') or '')[included:]
-                    for device in extra:
-                        if device.get('hwid'):
-                            await api.remove_device(panel_user_id, device['hwid'])
-        except Exception as error:
-            logger.warning('Не удалось синхронизировать уменьшение устройств с панелью', error=str(error))
-        logger.info('Лишние устройства убраны перед покупкой', user_id=db_user.id, tariff_id=tariff_id, limit=included)
+    await state.update_data(
+        selected_tariff_id=tariff_id,
+        selected_period=period,
+        trim_devices_to_included=True,
+    )
 
     await select_tariff_period(
         callback.model_copy(update={'data': f'tariff_period:{tariff_id}:{period}'}), db_user, db, state
@@ -1943,6 +1987,21 @@ async def select_tariff_period(
     device_limit = None
     if _existing_sub and _existing_sub.tariff_id == tariff.id:
         device_limit = _existing_sub.device_limit
+
+    # «Только N устр.»: юзер уже нажал кнопку тримма — считаем по числу
+    # устройств из тарифа; сами устройства отключим только после оплаты
+    # (confirm_tariff_purchase по этому же флагу).
+    _state_data = await state.get_data()
+    trim_devices_to_included = bool(_state_data.get('trim_devices_to_included'))
+    if trim_devices_to_included:
+        device_limit = tariff.device_limit
+
+    trim_note = ''
+    if trim_devices_to_included:
+        trim_note = texts.t(
+            'TARIFF_PURCHASE_TRIM_AFTER_PAYMENT_NOTE',
+            '\n\n📱 <i>После оплаты лишние устройства будут отключены (останется {devices} из тарифа).</i>',
+        ).format(devices=tariff.device_limit or 0)
 
     # Цена — тем же PricingEngine, что и confirm_tariff_purchase: ручной расчёт от
     # period_prices не видел доплату за устройства сверх включённых в тариф, превью
@@ -2013,7 +2072,8 @@ async def select_tariff_period(
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - final_price),
             )
-            + _price_breakdown_note(texts, tariff, shown_device_limit, result),
+            + _price_breakdown_note(texts, tariff, shown_device_limit, result)
+            + trim_note,
             # Скидка на экране («Итого: 216 ₽») — кнопку автооплаты прячем:
             # подписка Platega спишет полную цену, а не скидочную.
             reply_markup=get_tariff_confirm_keyboard(
@@ -2066,6 +2126,7 @@ async def select_tariff_period(
                 missing=format_price_kopeks(missing),
             )
             + _price_breakdown_note(texts, tariff, shown_device_limit, result)
+            + trim_note
             + texts.t(
                 'TARIFF_PURCHASE_CART_SAVED_HINT',
                 '\n\n🛒 <i>Корзина сохранена. После пополнения вернитесь к оформлению — всё останется как есть.</i>',
@@ -2146,10 +2207,10 @@ async def confirm_tariff_purchase(
     # We fall back to the tariff-level lookup only if FSM has no
     # pinned ID (old session / direct deep-link / state lost) so
     # legacy flows continue to work.
+    _state_data = await state.get_data() if state else {}
     if settings.is_multi_tariff_enabled():
         from app.database.crud.subscription import get_subscription_by_user_and_tariff
 
-        _state_data = await state.get_data() if state else {}
         _pinned_sub_id = _state_data.get('target_subscription_id')
 
         existing_sub = None
@@ -2176,6 +2237,13 @@ async def confirm_tariff_purchase(
     if existing_sub and existing_sub.tariff_id == tariff.id:
         device_limit = existing_sub.device_limit
 
+    # «Только N устр.» из превью: считаем и списываем по числу устройств из
+    # тарифа — иначе confirm списал бы дороже, чем показано в превью. Сами
+    # устройства отключаем после успешной оплаты (см. блок ниже).
+    trim_devices_to_included = bool(_state_data.get('trim_devices_to_included'))
+    if trim_devices_to_included:
+        device_limit = tariff.device_limit
+
     result = await pricing_engine.calculate_tariff_purchase_price(
         tariff,
         period,
@@ -2183,12 +2251,90 @@ async def confirm_tariff_purchase(
         user=db_user,
     )
     final_price = result.final_total
+    original_price = result.original_total
+    total_discount = result.promo_group_discount + result.promo_offer_discount
+    discount_percent = (
+        round((1 - final_price / original_price) * 100) if original_price > 0 and total_discount > 0 else 0
+    )
+    shown_device_limit = device_limit if device_limit is not None else tariff.device_limit
+
+    # Ряд «Только N устр.» — зеркало превью (select_tariff_period): одно
+    # нажатие оставляет только устройства из тарифа (без доплаты за доп.).
+    trim_row = None
+    if (
+        existing_sub
+        and device_limit is not None
+        and device_limit > (tariff.device_limit or 0)
+        and result.devices_price > 0
+    ):
+        trimmed = await pricing_engine.calculate_tariff_purchase_price(
+            tariff, period, device_limit=tariff.device_limit, user=db_user
+        )
+        if trimmed.final_total < final_price:
+            trim_row = _trim_devices_row(texts, tariff, period, trimmed.final_total)
 
     # Проверяем баланс (user already locked, balance is fresh)
     user_balance = db_user.balance_kopeks or 0
     if final_price > 0 and user_balance < final_price:
         await callback.answer(
             texts.t('MINIAPP_PURCHASE_STATUS_INSUFFICIENT', 'Недостаточно средств на балансе'), show_alert=True
+        )
+        # Мёртвый конец «подтвердить без денег» — раньше тут оставался экран
+        # confirm без единой кнопки пополнения. Перерисовываем тот же экран
+        # нехватки, что и превью: сохраняем корзину и даём способы довнести
+        # недостающее (пополнение / СБП / «Только N устр.»).
+        missing = final_price - user_balance
+
+        # Сохраняем данные корзины для автопокупки после пополнения (той же
+        # формы, что в превью — select_tariff_period).
+        cart_data = {
+            'cart_mode': 'tariff_purchase',
+            'tariff_id': tariff_id,
+            'period_days': period,
+            'total_price': final_price,
+            'user_id': db_user.id,
+            'saved_cart': True,
+            'missing_amount': missing,
+            'return_to_cart': True,
+            'description': f'Покупка тарифа {tariff.name} на {period} дней',
+            'traffic_limit_gb': tariff.traffic_limit_gb,
+            'device_limit': shown_device_limit,
+            'allowed_squads': tariff.allowed_squads or [],
+            'discount_percent': discount_percent,
+            'subscription_id': existing_sub.id if existing_sub else None,
+        }
+        await user_cart_service.save_user_cart(db_user.id, cart_data)
+
+        await callback.message.edit_text(
+            texts.t(
+                'TARIFF_PURCHASE_INSUFFICIENT',
+                '❌ <b>Недостаточно средств</b>\n\n'
+                '📦 Тариф: <b>{name}</b>\n'
+                '📅 Период: {period}\n'
+                '💰 Стоимость: {price}\n\n'
+                '💳 Ваш баланс: {balance}\n'
+                '⚠️ Не хватает: <b>{missing}</b>',
+            ).format(
+                name=html.escape(tariff.name),
+                period=format_period(period),
+                price=format_price_kopeks(final_price),
+                balance=format_price_kopeks(user_balance),
+                missing=format_price_kopeks(missing),
+            )
+            + _price_breakdown_note(texts, tariff, shown_device_limit, result)
+            + texts.t(
+                'TARIFF_PURCHASE_CART_SAVED_HINT',
+                '\n\n🛒 <i>Корзина сохранена. После пополнения вернитесь к оформлению — всё останется как есть.</i>',
+            ),
+            reply_markup=get_tariff_insufficient_balance_keyboard(
+                tariff_id,
+                period,
+                db_user.language,
+                missing_kopeks=missing,
+                show_sbp=result.promo_offer_discount <= 0,
+                trim_row=trim_row,
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -2466,6 +2612,27 @@ async def confirm_tariff_purchase(
             user_id=db_user.id,
             action='create' if _should_create else 'update',
         )
+
+    # «Только N устр.»: оплата прошла — теперь можно вернуть подписку к числу
+    # устройств из тарифа и отключить лишние на панели. До оплаты ничего не
+    # трогали, чтобы человек не терял устройства без покупки.
+    if trim_devices_to_included:
+        try:
+            await state.update_data(trim_devices_to_included=False)
+        except Exception:
+            pass
+        if existing_subscription and existing_subscription.tariff_id == tariff.id and subscription is not None:
+            included = tariff.device_limit or 0
+            if (subscription.device_limit or 0) > included:
+                subscription.device_limit = included
+                await db.commit()
+                await _remove_excess_panel_devices(db, subscription, db_user, included)
+                logger.info(
+                    'Лишние устройства убраны после оплаты (только N устр.)',
+                    user_id=db_user.id,
+                    tariff_id=tariff_id,
+                    limit=included,
+                )
 
     # Создаем транзакцию
     try:
@@ -2874,6 +3041,37 @@ def _calc_extra_devices_cost(tariff: Tariff, subscription_device_limit: int, per
     return additional * device_price * months
 
 
+def _period_price_with_devices(
+    tariff: Tariff,
+    period: int,
+    base_price: int,
+    device_limit: int | None,
+    promo_group,
+    db_user: User | None,
+) -> int:
+    """Итог периода с доплатой за устройства и скидками (единый расчёт кнопок периода).
+
+    Скидки по категориям (period и devices — отдельно), промо-оффер поверх
+    субтотала; та же целочисленная floor-арифметика, что в PricingEngine.
+    """
+    from app.services.pricing_engine import PricingEngine
+
+    # Стоимость дополнительных устройств
+    devices_cost = 0
+    if device_limit is not None:
+        devices_cost = _calc_extra_devices_cost(tariff, device_limit, period)
+
+    # Per-category group discounts (period + devices separately, like PricingEngine)
+    period_pct = promo_group.get_discount_percent('period', period) if promo_group else 0
+    devices_pct = promo_group.get_discount_percent('devices', period) if promo_group else 0
+    offer_pct = get_user_active_promo_discount_percent(db_user, tariff.id) if db_user else 0
+
+    discounted_base = PricingEngine.apply_discount(base_price, period_pct)
+    discounted_devices = PricingEngine.apply_discount(devices_cost, devices_pct)
+    subtotal = discounted_base + discounted_devices
+    return PricingEngine.apply_discount(subtotal, offer_pct)
+
+
 def get_tariff_extend_keyboard(
     tariff: Tariff,
     language: str,
@@ -2894,20 +3092,9 @@ def get_tariff_extend_keyboard(
         period = int(period_str)
         base_price = prices[period_str]
 
-        # Стоимость дополнительных устройств
-        devices_cost = 0
-        if subscription_device_limit is not None:
-            devices_cost = _calc_extra_devices_cost(tariff, subscription_device_limit, period)
-
-        # Per-category group discounts (period + devices separately, like PricingEngine)
-        period_pct = promo_group.get_discount_percent('period', period) if promo_group else 0
-        devices_pct = promo_group.get_discount_percent('devices', period) if promo_group else 0
-        offer_pct = get_user_active_promo_discount_percent(db_user, tariff.id) if db_user else 0
-
-        discounted_base = PricingEngine.apply_discount(base_price, period_pct)
-        discounted_devices = PricingEngine.apply_discount(devices_cost, devices_pct)
-        subtotal = discounted_base + discounted_devices
-        price = PricingEngine.apply_discount(subtotal, offer_pct)
+        price = _period_price_with_devices(
+            tariff, period, base_price, subscription_device_limit, promo_group, db_user
+        )
 
         # Spofy: компактная цена периода — размер скидки показан в шапке экрана
         price_text = format_price_kopeks(price)

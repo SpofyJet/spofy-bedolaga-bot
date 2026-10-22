@@ -2415,7 +2415,10 @@
   "ADMIN_PROMO_OFFER_QUEUED": "📬 群发已开始：{count} 位接收者（任务 {job_id}）。\n结果将以消息形式发送。机器人重启后会自动继续发送。",
   "STARS_RECURRING_BUTTON": "🔁 每 30 天",
   "STARS_RECURRING_NOTE": "\n\n🔁 “每 30 天”：Telegram 会自动重复扣款，余额自动充值。可在 Telegram 中取消：设置 → 星星 → 订阅。",
-  "TARIFF_PERIOD_DEVICES_NOTE": "\n\n📱 <i>您共有 {devices} 台设备（套餐含 {included} 台 + {extra} 台额外设备，每台 {price}/月）。上方价格对应 {included} 台；结算时会加上额外设备的费用，您也可以在支付页面只保留 {included} 台。</i>",
   "TARIFF_PURCHASE_DEVICES_BREAKDOWN": "\n\n📱 <i>价格包含 {extra} 台额外设备：{devices_price}（共 {devices} 台，套餐含 {included} 台）。</i>",
-  "TARIFF_TRIM_DEVICES_BUTTON": "📱 仅 {devices} 台设备 — {price}"
+  "TARIFF_TRIM_DEVICES_BUTTON": "📱 仅 {devices} 台设备 — {price}",
+  "TARIFF_PERIOD_DEVICES_INCLUDED": "\n\n📱 <i>价格已包含您的 {devices} 台设备。</i>",
+  "TARIFF_PURCHASE_TRIM_AFTER_PAYMENT_NOTE": "\n\n📱 <i>支付后将断开多余设备（仅保留套餐内的 {devices} 台）。</i>",
+  "ADMIN_PROMO_OFFER_TARIFF": "单个套餐折扣 (ULTIMA)",
+  "ADMIN_PROMO_OFFER_TARIFF_2": "单个套餐折扣 (ULTIMA) #2"
 }

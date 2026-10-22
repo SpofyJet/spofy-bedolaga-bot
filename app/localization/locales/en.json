@@ -2415,7 +2415,10 @@
   "ADMIN_PROMO_OFFER_QUEUED": "📬 Mailing started: {count} recipients (job {job_id}).\nThe summary will arrive as a message. If the bot restarts, sending resumes by itself.",
   "STARS_RECURRING_BUTTON": "🔁 Every 30 days",
   "STARS_RECURRING_NOTE": "\n\n🔁 “Every 30 days”: Telegram repeats the charge itself and your balance is topped up automatically. You can cancel in Telegram: Settings → Stars → Subscriptions.",
-  "TARIFF_PERIOD_DEVICES_NOTE": "\n\n📱 <i>You have {devices} devices ({included} in the plan + {extra} extra at {price}/month). Prices above are for {included}; at checkout the extra devices are added, and you can keep only {included} on the payment screen.</i>",
   "TARIFF_PURCHASE_DEVICES_BREAKDOWN": "\n\n📱 <i>The price includes {extra} extra devices: {devices_price} ({devices} devices, {included} included in the plan).</i>",
-  "TARIFF_TRIM_DEVICES_BUTTON": "📱 Only {devices} devices — {price}"
+  "TARIFF_TRIM_DEVICES_BUTTON": "📱 Only {devices} devices — {price}",
+  "TARIFF_PERIOD_DEVICES_INCLUDED": "\n\n📱 <i>Prices include your {devices} devices.</i>",
+  "TARIFF_PURCHASE_TRIM_AFTER_PAYMENT_NOTE": "\n\n📱 <i>After payment, extra devices will be disconnected (only {devices} from the plan will remain).</i>",
+  "ADMIN_PROMO_OFFER_TARIFF": "Discount on one tariff (ULTIMA)",
+  "ADMIN_PROMO_OFFER_TARIFF_2": "Discount on one tariff (ULTIMA) #2"
 }

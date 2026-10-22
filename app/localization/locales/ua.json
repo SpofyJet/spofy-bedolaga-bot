@@ -2415,7 +2415,10 @@
   "ADMIN_PROMO_OFFER_QUEUED": "📬 Розсилку запущено: {count} отримувачів (завдання {job_id}).\nПідсумок прийде повідомленням. Якщо бот перезапуститься, відправка продовжиться сама.",
   "STARS_RECURRING_BUTTON": "🔁 Кожні 30 днів",
   "STARS_RECURRING_NOTE": "\n\n🔁 «Кожні 30 днів»: Telegram повторює списання сам, баланс поповнюється автоматично. Скасувати можна в Telegram: Налаштування → Зірки → Підписки.",
-  "TARIFF_PERIOD_DEVICES_NOTE": "\n\n📱 <i>У вас пристроїв: {devices} ({included} у тарифі + {extra} додаткових по {price}/міс). Ціни вище — за {included}; при оформленні додасться доплата за додаткові, а на екрані оплати можна залишити лише {included}.</i>",
   "TARIFF_PURCHASE_DEVICES_BREAKDOWN": "\n\n📱 <i>У вартість входять {extra} дод. пристроїв: {devices_price} ({devices} пристроїв при {included} у тарифі).</i>",
-  "TARIFF_TRIM_DEVICES_BUTTON": "📱 Лише {devices} пристр. — {price}"
+  "TARIFF_TRIM_DEVICES_BUTTON": "📱 Лише {devices} пристр. — {price}",
+  "TARIFF_PERIOD_DEVICES_INCLUDED": "\n\n📱 <i>Ціни з урахуванням ваших {devices} пристроїв.</i>",
+  "TARIFF_PURCHASE_TRIM_AFTER_PAYMENT_NOTE": "\n\n📱 <i>Після оплати зайві пристрої буде відключено (залишиться {devices} з тарифу).</i>",
+  "ADMIN_PROMO_OFFER_TARIFF": "Знижка на один тариф (ULTIMA)",
+  "ADMIN_PROMO_OFFER_TARIFF_2": "Знижка на один тариф (ULTIMA) #2"
 }

@@ -2415,7 +2415,10 @@
   "ADMIN_PROMO_OFFER_QUEUED": "📬 ارسال شروع شد: {count} گیرنده (کار {job_id}).\nنتیجه به‌صورت پیام می‌رسد. اگر ربات دوباره راه‌اندازی شود، ارسال خودکار ادامه می‌یابد.",
   "STARS_RECURRING_BUTTON": "🔁 هر ۳۰ روز",
   "STARS_RECURRING_NOTE": "\n\n🔁 «هر ۳۰ روز»: تلگرام خودش پرداخت را تکرار می‌کند و موجودی به‌طور خودکار شارژ می‌شود. لغو در تلگرام: تنظیمات ← ستاره‌ها ← اشتراک‌ها.",
-  "TARIFF_PERIOD_DEVICES_NOTE": "\n\n📱 <i>شما {devices} دستگاه دارید ({included} در تعرفه + {extra} اضافه، هرکدام {price}/ماه). قیمت‌های بالا برای {included} دستگاه است؛ هنگام ثبت سفارش هزینه دستگاه‌های اضافه افزوده می‌شود و در صفحه پرداخت می‌توانید فقط {included} دستگاه نگه دارید.</i>",
   "TARIFF_PURCHASE_DEVICES_BREAKDOWN": "\n\n📱 <i>قیمت شامل {extra} دستگاه اضافه است: {devices_price} ({devices} دستگاه، {included} در تعرفه).</i>",
-  "TARIFF_TRIM_DEVICES_BUTTON": "📱 فقط {devices} دستگاه — {price}"
+  "TARIFF_TRIM_DEVICES_BUTTON": "📱 فقط {devices} دستگاه — {price}",
+  "TARIFF_PERIOD_DEVICES_INCLUDED": "\n\n📱 <i>قیمت‌ها شامل {devices} دستگاه شماست.</i>",
+  "TARIFF_PURCHASE_TRIM_AFTER_PAYMENT_NOTE": "\n\n📱 <i>پس از پرداخت، دستگاه‌های اضافه قطع می‌شوند (فقط {devices} دستگاه تعرفه باقی می‌ماند).</i>",
+  "ADMIN_PROMO_OFFER_TARIFF": "تخفیف برای یک تعرفه (ULTIMA)",
+  "ADMIN_PROMO_OFFER_TARIFF_2": "تخفیف برای یک تعرفه (ULTIMA) #2"
 }
