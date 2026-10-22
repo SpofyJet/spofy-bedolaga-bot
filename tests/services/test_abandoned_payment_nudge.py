@@ -457,7 +457,7 @@ async def test_abandoned_topup_wave2_sends_a_day_after_wave1(monkeypatch):
         assert await service.process_abandoned_payments_wave2(db) == 0  # не дублируем
 
     text = sent.await_args.args[1]
-    assert 'Оплата так и не прошла' in text and '315 ₽' in text
+    assert 'Оплата не прошла' in text and '315 ₽' in text
     rows = sent.await_args.kwargs['reply_markup'].inline_keyboard
     assert rows[0][0].callback_data.startswith('topup_amount|')
 
@@ -552,7 +552,7 @@ async def test_no_trial_wave3_sends_after_wave2(monkeypatch):
             )
 
             text = sent.await_args.args[1]
-            assert 'Больше напоминать не будем' in text and '3 дней' in text
+            assert 'Больше напоминать не будем' in text and '3 дн.' in text
             buttons = [b for row in sent.await_args.kwargs['reply_markup'].inline_keyboard for b in row]
             assert any(b.callback_data == 'menu_trial' and 'Попробовать бесплатно' in b.text for b in buttons)
     finally:

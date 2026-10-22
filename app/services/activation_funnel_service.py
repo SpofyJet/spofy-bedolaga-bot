@@ -274,9 +274,6 @@ class ActivationFunnelService:
         users = result.scalars().all()
 
         trial_days = self._trial_days or settings.TRIAL_DURATION_DAYS
-        devices = settings.TRIAL_DEVICE_LIMIT
-        traffic_gb = settings.TRIAL_TRAFFIC_LIMIT_GB
-        traffic = 'трафик без ограничений' if not traffic_gb else f'{traffic_gb} ГБ трафика'
 
         for user in users:
             if await _already_nudged_recently(db, user.id):
@@ -286,20 +283,17 @@ class ActivationFunnelService:
                 text = texts.get(
                     'FUNNEL_NO_TRIAL_1',
                     (
-                        '👋 Вы заходили к нам, но пробный период так и не включили\n\n'
-                        'Это {days} дней бесплатно. Карта не нужна — ничего оплачивать не придётся:\n'
-                        '📱 {devices} устройства — телефон и ноутбук одновременно\n'
-                        '📊 {traffic}\n\n'
-                        'Включается за минуту.'
+                        '👋 Вы были у нас, но пробный период так и не включили\n\n'
+                        'Это {days} дн. бесплатно, карта не нужна. Включается за минуту, списаний не будет.'
                     ),
-                ).format(days=trial_days, devices=devices, traffic=traffic)
+                ).format(days=trial_days)
             elif wave == 2:
                 text = texts.get(
                     'FUNNEL_NO_TRIAL_2',
                     (
-                        '🎁 Пробный период всё ещё ждёт вас\n\n'
-                        '{days} дней бесплатно, карта не нужна. Проверьте скорость на своём '
-                        'телефоне — не понравится, просто не продлевайте.'
+                        '🎁 Пробный период никуда не делся\n\n'
+                        '{days} дн. бесплатно, карта не нужна. Проверьте скорость на телефоне — '
+                        'не зайдёт, просто не продлевайте.'
                     ),
                 ).format(days=trial_days)
             else:
@@ -307,8 +301,7 @@ class ActivationFunnelService:
                     'FUNNEL_NO_TRIAL_3',
                     (
                         '⏳ Больше напоминать не будем\n\n'
-                        '{days} дней VPN бесплатно по-прежнему доступны. Карта не нужна — '
-                        'включите, когда будет минутка.'
+                        '{days} дн. бесплатно всё ещё доступны. Включите, когда пригодится.'
                     ),
                 ).format(days=trial_days)
 
@@ -889,7 +882,7 @@ class ActivationFunnelService:
             texts = get_texts(user.language)
             amount_rub = amount_kopeks // 100
             lines = [
-                texts.t('FUNNEL_ABANDONED_TOPUP_2_TITLE', '💳 <b>Оплата так и не прошла</b>'),
+                texts.t('FUNNEL_ABANDONED_TOPUP_2_TITLE', '💳 <b>Оплата не прошла</b>'),
                 '',
                 texts.t(
                     'FUNNEL_ABANDONED_TOPUP_2_BODY',
@@ -976,7 +969,7 @@ class ActivationFunnelService:
                 str(cart.get('description') or ''),
                 texts.t(
                     'FUNNEL_ABANDONED_CART_2_BODY',
-                    'К оплате: <b>{price} ₽</b>. Осталось нажать «Продолжить» — всё сохранено.',
+                    'К оплате: <b>{price} ₽</b>. Осталось нажать «Продолжить».',
                 ).format(price=price_kopeks // 100),
             ]
             text = '\n'.join(line for line in lines if line is not None)
