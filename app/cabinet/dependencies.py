@@ -32,6 +32,46 @@ logger = structlog.get_logger(__name__)
 
 security = HTTPBearer(auto_error=False)
 
+_AUDIT_REDACTED = '[REDACTED]'
+_AUDIT_SENSITIVE_KEY_MARKERS = (
+    'password',
+    'passphrase',
+    'secret',
+    'token',
+    'authorization',
+    'api_key',
+    'apikey',
+    'private_key',
+    'cookie',
+)
+
+
+def _sanitize_audit_payload(value, *, request_path: str = ''):
+    """Remove credentials before request data is persisted in the admin audit log."""
+    if isinstance(value, dict):
+        sanitized = {
+            key: _AUDIT_REDACTED
+            if any(marker in str(key).lower() for marker in _AUDIT_SENSITIVE_KEY_MARKERS)
+            else _sanitize_audit_payload(item)
+            for key, item in value.items()
+        }
+    elif isinstance(value, list):
+        sanitized = [_sanitize_audit_payload(item) for item in value]
+    else:
+        sanitized = value
+
+    # Settings updates use {"value": ...}; the setting name is in the URL,
+    # so key-based recursive redaction alone cannot protect their secrets.
+    path_parts = request_path.rstrip('/').split('/')
+    if isinstance(sanitized, dict) and 'value' in sanitized and len(path_parts) >= 2:
+        if path_parts[-2] == 'settings':
+            from app.services.system_settings_service import bot_configuration_service
+
+            if bot_configuration_service.is_secret_key(path_parts[-1]):
+                sanitized['value'] = _AUDIT_REDACTED
+
+    return sanitized
+
 
 async def get_cabinet_db() -> AsyncSession:
     """Get database session for cabinet operations."""
@@ -455,14 +495,16 @@ def require_permission(*permissions: str):
         }
         query_params = dict(request.query_params)
         if query_params:
-            details['query_params'] = query_params
+            details['query_params'] = _sanitize_audit_payload(query_params)
         if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
             try:
                 body = await request.body()
                 if body:
                     import json
 
-                    details['request_body'] = json.loads(body)
+                    details['request_body'] = _sanitize_audit_payload(
+                        json.loads(body), request_path=str(request.url.path)
+                    )
             except Exception:
                 pass
 

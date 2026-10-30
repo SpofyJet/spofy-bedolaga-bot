@@ -1,10 +1,11 @@
 """Тесты для MenuLayoutService."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiogram.types import InlineKeyboardButton
 
+from app.config import settings
 from app.services.menu_layout.context import MenuContext
 from app.services.menu_layout.service import MenuLayoutService
 
@@ -137,3 +138,49 @@ async def test_build_button_connect_direct_mode_fallback_to_callback():
         assert isinstance(button, InlineKeyboardButton)
         # Должен fallback на callback_data, так как URL не найден
         assert button.callback_data == 'subscription_connect'
+
+
+@pytest.mark.anyio
+async def test_saved_connect_layout_allows_inactive_subscription_with_exact_link():
+    """Старые active-only конфиги не должны скрывать существующую саб-ссылку."""
+    subscription = MagicMock(
+        id=42,
+        subscription_url='https://example.invalid/sub/42',
+        subscription_crypto_link=None,
+    )
+    context = MenuContext(
+        has_active_subscription=False,
+        subscription_is_active=False,
+        subscription=subscription,
+    )
+    config = MenuLayoutService.get_default_config()
+
+    with (
+        patch.object(MenuLayoutService, 'get_config', new=AsyncMock(return_value=config)),
+        patch.object(type(settings), 'is_multi_tariff_enabled', return_value=True),
+    ):
+        keyboard = await MenuLayoutService.build_keyboard(MagicMock(), context)
+
+    connect_buttons = [button for row in keyboard.inline_keyboard for button in row if button.text == '🔗 Подключиться']
+    assert len(connect_buttons) == 1
+    assert connect_buttons[0].callback_data == 'sl:42'
+
+
+@pytest.mark.anyio
+async def test_saved_connect_layout_hides_inactive_subscription_without_link():
+    subscription = MagicMock(
+        id=42,
+        subscription_url=None,
+        subscription_crypto_link=None,
+    )
+    context = MenuContext(
+        has_active_subscription=False,
+        subscription_is_active=False,
+        subscription=subscription,
+    )
+    config = MenuLayoutService.get_default_config()
+
+    with patch.object(MenuLayoutService, 'get_config', new=AsyncMock(return_value=config)):
+        keyboard = await MenuLayoutService.build_keyboard(MagicMock(), context)
+
+    assert all(button.text != '🔗 Подключиться' for row in keyboard.inline_keyboard for button in row)

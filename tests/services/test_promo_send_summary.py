@@ -50,10 +50,17 @@ async def test_topup_notification_survives_broken_session(monkeypatch):
     send = AsyncMock(return_value=True)
     monkeypatch.setattr(service, '_send_message', send)
 
+    # Новый апстримовый флоу: после сбоя записи события данные перезагружаются
+    # через CRUD из той же сессии — подменяем их, «сессия» тут MagicMock.
+    import app.services.admin_notification_service as ans_module
+
     db = MagicMock()
     db.rollback = AsyncMock()
     user = SimpleNamespace(id=7, balance_kopeks=10000)
     transaction = SimpleNamespace(id=9, amount_kopeks=10000, completed_at=None, created_at=None)
+    monkeypatch.setattr(ans_module, 'get_user_by_id', AsyncMock(return_value=user))
+    monkeypatch.setattr(ans_module, 'get_transaction_by_id', AsyncMock(return_value=transaction))
+    monkeypatch.setattr(service, '_get_user_promo_group', AsyncMock(return_value=None))
 
     result = await service._send_balance_topup_notification(
         user,

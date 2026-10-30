@@ -1,4 +1,5 @@
 import html
+from decimal import Decimal, InvalidOperation
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -21,6 +22,7 @@ from app.localization.texts import get_texts
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
 from app.utils.timezone import format_local_datetime
+from app.utils.topup_retry import MAX_MANUAL_TOPUP_RUBLES, MIN_MANUAL_TOPUP_RUBLES, format_topup_amount_retry
 
 
 logger = structlog.get_logger(__name__)
@@ -594,18 +596,25 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
             await message.answer(texts.INVALID_AMOUNT, reply_markup=get_back_keyboard(db_user.language))
             return
 
-        amount_rubles = float(amount_text.replace(',', '.'))
+        amount_rubles = Decimal(amount_text.replace(',', '.'))
+        if not amount_rubles.is_finite():
+            await message.answer(texts.INVALID_AMOUNT, reply_markup=get_back_keyboard(db_user.language))
+            return
 
-        if amount_rubles < 1:
+        if amount_rubles < MIN_MANUAL_TOPUP_RUBLES:
             await message.answer(
-                'Минимальная сумма пополнения: 1 ₽\n\nОтправьте новую сумму пополнения числом в сообщении.',
+                format_topup_amount_retry(
+                    db_user.language, MIN_MANUAL_TOPUP_RUBLES * 100, MAX_MANUAL_TOPUP_RUBLES * 100, too_low=True
+                ),
                 reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
             )
             return
 
-        if amount_rubles > 50000:
+        if amount_rubles > MAX_MANUAL_TOPUP_RUBLES:
             await message.answer(
-                'Максимальная сумма пополнения: 50,000 ₽\n\nОтправьте новую сумму пополнения числом в сообщении.',
+                format_topup_amount_retry(
+                    db_user.language, MIN_MANUAL_TOPUP_RUBLES * 100, MAX_MANUAL_TOPUP_RUBLES * 100, too_low=False
+                ),
                 reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
             )
             return
@@ -616,22 +625,25 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
 
         if payment_method in ['yookassa', 'yookassa_sbp']:
             if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
-                min_rubles = f'{settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100:.2f}'.rstrip('0').rstrip('.')
-                example_rubles = max(1, (settings.YOOKASSA_MIN_AMOUNT_KOPEKS + 99) // 100)
-                retry_hint = f'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не меньше {min_rubles} ₽.'
-                if example_rubles <= 50000 and example_rubles * 100 <= settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
-                    retry_hint += f'\n\nНапример, отправьте: {example_rubles}'
                 await message.answer(
-                    f'❌ Минимальная сумма пополнения через YooKassa — {min_rubles} ₽.\n\n{retry_hint}',
+                    format_topup_amount_retry(
+                        db_user.language,
+                        settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
+                        settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
+                        too_low=True,
+                    ),
                     reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
                 )
                 return
 
             if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
-                max_rubles = f'{settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100:.2f}'.rstrip('0').rstrip('.')
                 await message.answer(
-                    f'❌ Максимальная сумма пополнения через YooKassa — {max_rubles} ₽.\n\n'
-                    f'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не больше {max_rubles} ₽.',
+                    format_topup_amount_retry(
+                        db_user.language,
+                        settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
+                        settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
+                        too_low=False,
+                    ),
                     reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
                 )
                 return
@@ -639,7 +651,7 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
         if not await route_payment_by_method(message, db_user, amount_kopeks, state, payment_method):
             await message.answer('Неизвестный способ оплаты')
 
-    except ValueError:
+    except (ValueError, InvalidOperation):
         await message.answer(texts.INVALID_AMOUNT, reply_markup=get_back_keyboard(db_user.language))
 
 

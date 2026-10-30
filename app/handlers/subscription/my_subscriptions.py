@@ -7,6 +7,8 @@ Only active when MULTI_TARIFF_ENABLED=True.
 
 from __future__ import annotations
 
+import html
+
 import structlog
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
@@ -20,6 +22,7 @@ from app.database.crud.subscription import (
 from app.database.models import Subscription, SubscriptionStatus, User
 from app.localization.texts import Texts, get_texts
 from app.utils.legacy_subscription import is_legacy_subscription
+from app.utils.subscription_utils import get_display_subscription_link
 from app.utils.timezone import format_local_datetime
 
 
@@ -127,16 +130,18 @@ def _build_subscriptions_keyboard(
 def _build_subscription_detail_keyboard(sub_id: int, sub=None, language: str = 'ru') -> types.InlineKeyboardMarkup:
     """Build keyboard for single subscription management.
 
-    For expired/disabled subscriptions, only 'Renew' and 'Back' are shown —
-    connection link and traffic/device management are irrelevant.
+    Expired/disabled subscriptions keep the connection entry when a subscription
+    link exists: it opens the subscription page and can still be added to an app.
+    Traffic, device management and autopay remain available only for live access.
     """
     # n6-П12: подписи из локалей, единый словарь эмодзи
     texts = get_texts(language)
     is_inactive = sub is not None and sub.actual_status in ('expired', 'disabled')
+    subscription_link = get_display_subscription_link(sub) if sub else None
 
     buttons = []
 
-    if not is_inactive:
+    if not is_inactive or subscription_link:
         buttons.append(
             [
                 types.InlineKeyboardButton(
@@ -196,6 +201,7 @@ async def show_my_subscriptions(
     texts = get_texts(db_user.language)
     gift_enabled = True
     subscriptions = await get_all_subscriptions_by_user_id(db, db_user.id)
+    subscriptions = [sub for sub in subscriptions if not sub.is_pending_trial]
 
     if not subscriptions:
         text = '📋 <b>Мои подписки</b>\n\nУ вас нет подписок.'
@@ -248,7 +254,7 @@ async def show_subscription_detail(
     sub_id = int(parts[1])
     subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
 
-    if not subscription:
+    if not subscription or subscription.is_pending_trial:
         await callback.answer('Подписка не найдена', show_alert=True)
         return
 
@@ -276,8 +282,9 @@ async def show_subscription_detail(
         f'📅 До: {end_date}\n'
     )
 
-    if subscription.subscription_url and not settings.should_hide_subscription_link():
-        text += f'\n🔗 <code>{subscription.subscription_url}</code>'
+    subscription_link = get_display_subscription_link(subscription)
+    if subscription_link and not settings.should_hide_subscription_link():
+        text += f'\n🔗 <code>{html.escape(subscription_link)}</code>'
 
     keyboard = _build_subscription_detail_keyboard(sub_id, sub=subscription, language=db_user.language)
 

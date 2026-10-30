@@ -94,6 +94,37 @@ def test_autopay_button_hidden_on_disabled_subscription() -> None:
     assert 'subscription_autopay' not in _callbacks(keyboard)
 
 
+@pytest.mark.parametrize('status', ['expired', 'disabled'])
+def test_inactive_subscription_with_link_keeps_exact_connect_callback(status: str) -> None:
+    sub = SimpleNamespace(
+        actual_status=status,
+        subscription_url='https://example.invalid/sub/42',
+        subscription_crypto_link=None,
+    )
+
+    keyboard = _build_subscription_detail_keyboard(sub_id=42, sub=sub)
+    callbacks = _callbacks(keyboard)
+
+    assert 'sl:42' in callbacks
+    assert 'se:42' in callbacks
+    assert 'subscription_autopay' not in callbacks
+    assert 'st:42' not in callbacks
+    assert 'sd:42' not in callbacks
+
+
+def test_inactive_subscription_without_link_has_no_dead_connect() -> None:
+    sub = SimpleNamespace(
+        actual_status='expired',
+        subscription_url=None,
+        subscription_crypto_link=None,
+    )
+
+    keyboard = _build_subscription_detail_keyboard(sub_id=42, sub=sub)
+
+    assert 'sl:42' not in _callbacks(keyboard)
+    assert 'se:42' in _callbacks(keyboard)
+
+
 def test_autopay_button_present_when_status_unknown() -> None:
     """When sub=None, the keyboard treats the subscription as active (is_inactive=False).
     The autopay button must be there too — symmetry with traffic/devices buttons that
@@ -117,6 +148,7 @@ async def test_show_subscription_detail_writes_active_subscription_id_to_fsm(
     sub_id = 77
     subscription = SimpleNamespace(
         id=sub_id,
+        is_pending_trial=False,
         actual_status='active',
         tariff=SimpleNamespace(name='X'),
         traffic_limit_gb=10,

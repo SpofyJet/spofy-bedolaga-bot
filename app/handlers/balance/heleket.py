@@ -17,6 +17,7 @@ from app.states import BalanceStates
 from app.utils.decorators import error_handler
 from app.utils.miniapp_buttons import strip_leading_emoji
 from app.utils.payment_fallback import answer_creation_failed
+from app.utils.topup_retry import format_topup_amount_retry
 
 
 logger = structlog.get_logger(__name__)
@@ -127,15 +128,15 @@ async def process_heleket_payment_amount(
 
     if amount_rubles < 100:
         await message.answer(
-            'Минимальная сумма пополнения: 100 ₽\n\nОтправьте новую сумму пополнения числом в сообщении.',
-            reply_markup=get_back_keyboard(db_user.language),
+            format_topup_amount_retry(db_user.language, 10000, 10000000, too_low=True),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
     if amount_rubles > 100000:
         await message.answer(
-            'Максимальная сумма пополнения: 100,000 ₽\n\nОтправьте новую сумму пополнения числом в сообщении.',
-            reply_markup=get_back_keyboard(db_user.language),
+            format_topup_amount_retry(db_user.language, 10000, 10000000, too_low=False),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 

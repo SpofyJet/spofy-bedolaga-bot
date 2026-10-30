@@ -61,8 +61,9 @@ def _period_button(kb, period_days: int) -> str:
 def test_period_keyboard_shows_the_honest_price_with_extra_devices():
     kb = tp.get_tariff_periods_keyboard(_tariff(), 'ru', device_limit=5)
     text = _period_button(kb, 365).replace(' ', '').replace('\u00a0', '')
-    # 180000 база + 2 доп. устройства × 5000 × 12 мес = 300000
-    assert '3000' in text
+    # 180000 база + 2 доп. устройства × 5000 × 365//30 (пропорция дням, upstream)
+    # = 180000 + 121666 = 301666 → 3016.66 ₽
+    assert '3016' in text
 
 
 def test_period_keyboard_keeps_base_prices_without_extra_devices():

@@ -19,23 +19,32 @@ logger = structlog.get_logger(__name__)
 # and refreshed whenever the cabinet edits a method, keeping bot button labels in sync
 # with the cabinet. Bot and cabinet run in the same process, so refresh is immediate.
 _display_name_overrides: dict[str, str] = {}
+_display_sort_orders: dict[str, int] = {}
+
+
+def _config_method_id(method_id: str) -> str:
+    return {'stars': 'telegram_stars', 'yookassa_sbp': 'yookassa'}.get(method_id, method_id)
 
 
 async def refresh_display_name_overrides(db: AsyncSession) -> None:
-    """Reload the method_id -> display_name override cache from the DB."""
-    global _display_name_overrides
+    """Reload names and saved order for synchronous Telegram keyboards."""
+    global _display_name_overrides, _display_sort_orders
     result = await db.execute(
-        select(PaymentMethodConfig.method_id, PaymentMethodConfig.display_name).where(
-            PaymentMethodConfig.display_name.isnot(None)
-        )
+        select(PaymentMethodConfig.method_id, PaymentMethodConfig.display_name, PaymentMethodConfig.sort_order)
     )
-    _display_name_overrides = {method_id: name for method_id, name in result.all() if name and name.strip()}
+    rows = result.all()
+    _display_name_overrides = {method_id: name for method_id, name, _ in rows if name and name.strip()}
+    _display_sort_orders = {method_id: order for method_id, _, order in rows}
     logger.debug('Кэш имён платёжных методов обновлён', count=len(_display_name_overrides))
 
 
 def get_display_name_override(method_id: str) -> str | None:
     """Sync read of a cabinet-set display name for a method, or None if not set."""
-    return _display_name_overrides.get(method_id)
+    return _display_name_overrides.get(_config_method_id(method_id))
+
+
+def get_display_sort_order(method_id: str) -> int | None:
+    return _display_sort_orders.get(_config_method_id(method_id))
 
 
 # ============ Default method definitions ============
@@ -598,6 +607,7 @@ async def update_sort_order(db: AsyncSession, ordered_method_ids: list[str]) -> 
             config.sort_order = index
 
     await db.commit()
+    await refresh_display_name_overrides(db)
 
 
 async def get_all_promo_groups(db: AsyncSession) -> list[PromoGroup]:
@@ -695,7 +705,14 @@ async def get_enabled_methods_for_user(
         # Build options (filter by sub_options config)
         options = None
         available_sub_options = method_def.get('available_sub_options')
-        if available_sub_options and config.sub_options:
+        if method_id == 'antilopay' and available_sub_options:
+            # Preserve the distinction between default options and all disabled.
+            # Cabinet checkout must never fall back to the provider's unrestricted form.
+            configured_options = config.sub_options or {}
+            options = [opt for opt in available_sub_options if configured_options.get(opt['id'], True)]
+            if not options:
+                continue
+        elif available_sub_options and config.sub_options:
             enabled_options = []
             for opt in available_sub_options:
                 opt_id = opt['id']

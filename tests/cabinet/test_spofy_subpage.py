@@ -601,12 +601,32 @@ def test_cart_ttls_cover_payment_link_lifetime():
     assert settings.CART_TTL_SECONDS >= 24 * 3600
 
 
+class _ClockedPipeline:
+    """MULTI/EXEC поверх _ClockedRedis: setex копятся, execute применяет с теми же TTL."""
+
+    def __init__(self, redis):
+        self._redis = redis
+        self._ops = []
+
+    def setex(self, key, ttl, value):
+        self._ops.append((key, ttl, value))
+        return self
+
+    async def execute(self):
+        for key, ttl, value in self._ops:
+            self._redis._data[key] = (self._redis._clock() + int(ttl), value)
+        return True
+
+
 class _ClockedRedis:
     """Минимальный фейк Redis с настоящими TTL: часы подаёт тест (прокрутка времени)."""
 
     def __init__(self, clock):
         self._clock = clock
         self._data: dict[str, tuple[float, str]] = {}
+
+    def pipeline(self, transaction=True):
+        return _ClockedPipeline(self)
 
     def _live(self, key: str) -> bool:
         item = self._data.get(key)

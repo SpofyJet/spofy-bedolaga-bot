@@ -644,6 +644,20 @@ def get_main_menu_keyboard(
 
     keyboard: list[list[InlineKeyboardButton]] = []
     paired_buttons: list[InlineKeyboardButton] = []
+
+    # Незавершённый заказ — это продолжение собственного выбора, а не рядовой
+    # пункт меню. Возвращаем его первым CTA независимо от остальных состояний.
+    if show_resume_checkout or has_saved_cart:
+        resume_callback = 'return_to_saved_cart' if has_saved_cart else 'subscription_resume_checkout'
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                    callback_data=resume_callback,
+                )
+            ]
+        )
+
     # «Оплата и баланс: 0 ₽» новому человеку ни к чему: платёж ему предложат при покупке сам.
     # Платящий подписчик баланс видит всегда; скрываем только у новых и пробных с пустым счётом.
     _paid_subscriber = bool(
@@ -654,14 +668,27 @@ def get_main_menu_keyboard(
     )
     show_balance_button = safe_balance > 0 or bool(has_had_paid_subscription) or _paid_subscriber
 
-    if has_active_subscription and subscription_is_active:
+    has_live_access = has_active_subscription and subscription_is_active
+    subscription_link = get_display_subscription_link(subscription) if subscription else None
+    # Саб-ссылка остаётся полезной и после окончания доступа: через неё можно
+    # открыть страницу подписки, купить доступ там или добавить ссылку в приложение.
+    # Без ссылки неактивной подписки мёртвую кнопку не показываем.
+    show_connect = has_live_access or bool(subscription_link)
+
+    if show_connect:
         connect_mode = settings.CONNECT_BUTTON_MODE
-        subscription_link = get_display_subscription_link(subscription)
+        connect_callback = 'subscription_connect'
+        if not has_live_access and settings.is_multi_tariff_enabled():
+            subscription_id = getattr(subscription, 'id', None)
+            if subscription_id is not None:
+                # Generic callback выбирает только активные подписки. Для истёкшей
+                # передаём конкретный ID, чтобы открыть именно её, а не другую активную.
+                connect_callback = f'sl:{subscription_id}'
 
         def _fallback_connect_button() -> InlineKeyboardButton:
             return InlineKeyboardButton(
                 text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
-                callback_data='subscription_connect',
+                callback_data=connect_callback,
             )
 
         if connect_mode == 'miniapp_subscription':
@@ -699,9 +726,7 @@ def get_main_menu_keyboard(
                         InlineKeyboardButton(
                             text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                             callback_data=(
-                                'subscription_connect'
-                                if settings.is_multi_tariff_enabled()
-                                else 'open_subscription_link'
+                                connect_callback if settings.is_multi_tariff_enabled() else 'open_subscription_link'
                             ),
                         )
                     ]
@@ -720,7 +745,7 @@ def get_main_menu_keyboard(
             else texts.MENU_SUBSCRIPTION
         )
         # n6-П2: «Подписка» и покупка (для триала) — отдельными рядами, без слипания
-        if subscription and getattr(subscription, 'is_trial', False):
+        if has_live_access and subscription and getattr(subscription, 'is_trial', False):
             keyboard.append(
                 [
                     InlineKeyboardButton(
@@ -734,7 +759,7 @@ def get_main_menu_keyboard(
         # В режиме тарифов проверяем tariff_id (детальная проверка в хендлере)
         # В классическом режиме проверяем глобальные настройки
         show_traffic_topup = False
-        if subscription and not subscription.is_trial and (subscription.traffic_limit_gb or 0) > 0:
+        if has_live_access and subscription and not subscription.is_trial and (subscription.traffic_limit_gb or 0) > 0:
             if settings.is_tariffs_mode() and getattr(subscription, 'tariff_id', None):
                 # n13: скрываем кнопку, если тариф не поддерживает докупку (безлимит/выключено)
                 show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE and traffic_topup_tariff_allowed is not False
@@ -799,15 +824,6 @@ def get_main_menu_keyboard(
             keyboard.append([simple_purchase_button])
         else:
             paired_buttons.append(simple_purchase_button)
-
-    if show_resume_checkout or has_saved_cart:
-        resume_callback = 'return_to_saved_cart' if has_saved_cart else 'subscription_resume_checkout'
-        paired_buttons.append(
-            InlineKeyboardButton(
-                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                callback_data=resume_callback,
-            )
-        )
 
     if custom_buttons:
         for button in custom_buttons:
@@ -1412,26 +1428,8 @@ def get_subscription_keyboard(
                     ]
                 )
 
-            # Кнопка докупки трафика для платных подписок
-            # В режиме тарифов проверяем can_topup_traffic() у тарифа, в классическом - глобальные настройки
-            show_traffic_topup = False
-            if subscription and (subscription.traffic_limit_gb or 0) > 0:
-                if settings.is_tariffs_mode() and tariff:
-                    show_traffic_topup = tariff.can_topup_traffic()
-                elif is_legacy_subscription:
-                    # Старая подписка: классические пакеты трафика ей не продаём — сперва переход на тариф.
-                    show_traffic_topup = False
-                elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
-                    show_traffic_topup = True
-
-            if show_traffic_topup:
-                keyboard.append(
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('BUY_TRAFFIC_BUTTON', '📈 Докупить трафик'), callback_data='buy_traffic'
-                        )
-                    ]
-                )
+            # Дубль блока докупки трафика удалён (раньше «Докупить трафик» добавлялся
+            # дважды: после главной CTA и после ряда настроек — условия идентичны).
 
     if gift_enabled:
         keyboard.append(
@@ -1822,30 +1820,50 @@ def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def _apply_payment_name_overrides(keyboard: list[list[InlineKeyboardButton]]) -> None:
-    """Replace payment-method button labels with cabinet-set display names.
+def _payment_callback_method(data: str) -> str:
+    if data.startswith('topup_amount|'):
+        parts = data.split('|')
+        return parts[1] if len(parts) > 1 else ''
+    return data[len('topup_') :] if data.startswith('topup_') else ''
 
-    Bot keyboards build labels from locale strings / ``*_DISPLAY_NAME`` settings,
-    which ignore the per-method overrides operators set in the cabinet
-    (``PaymentMethodConfig.display_name``). Here we decode the method_id from each
-    ``topup_*`` callback and, when an override exists, show it — so bot button
-    labels stay in sync with the cabinet. No override -> the original label is kept.
-    """
+
+def _apply_payment_name_overrides(
+    keyboard: list[list[InlineKeyboardButton]],
+    language: str = DEFAULT_LANGUAGE,
+) -> None:
+    """Apply configured names without erasing the distinction between YooKassa rails."""
     from app.services.payment_method_config_service import get_display_name_override
 
+    texts = get_texts(language)
     for row in keyboard:
         for idx, button in enumerate(row):
-            data = button.callback_data or ''
-            if data.startswith('topup_amount|'):
-                parts = data.split('|')
-                method = parts[1] if len(parts) > 1 else ''
-            elif data.startswith('topup_'):
-                method = data[len('topup_') :]
-            else:
-                continue
+            method = _payment_callback_method(button.callback_data or '')
             override = get_display_name_override(method) if method else None
             if override:
+                if method == 'yookassa_sbp':
+                    override = texts.t('PAYMENT_SBP_PROVIDER').format(provider=override)
+                elif method == 'yookassa':
+                    override = texts.t('PAYMENT_CARD_PROVIDER').format(provider=override)
                 row[idx] = button.model_copy(update={'text': override})
+
+
+def _apply_payment_method_order(keyboard: list[list[InlineKeyboardButton]]) -> None:
+    """Use saved provider order, preserving sub-option order and non-payment controls."""
+    from app.services.payment_method_config_service import get_display_sort_order
+
+    rows = [
+        (index, row)
+        for index, row in enumerate(keyboard)
+        if len(row) == 1 and _payment_callback_method(row[0].callback_data or '') not in ('', 'support')
+    ]
+
+    def key(row):
+        order = get_display_sort_order(_payment_callback_method(row[0].callback_data or ''))
+        return order is None, order if order is not None else 0
+
+    ordered = sorted((row for _, row in rows), key=key)
+    for (index, _), row in zip(rows, ordered, strict=True):
+        keyboard[index] = row
 
 
 def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
@@ -2577,7 +2595,8 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
 
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
-    _apply_payment_name_overrides(keyboard)
+    _apply_payment_name_overrides(keyboard, language)
+    _apply_payment_method_order(keyboard)
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 

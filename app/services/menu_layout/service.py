@@ -880,6 +880,40 @@ class MenuLayoutService:
 
         return True
 
+    @staticmethod
+    def _is_connect_button(button_config: dict[str, Any]) -> bool:
+        return button_config.get('action') == 'subscription_connect'
+
+    @staticmethod
+    def _can_open_connection(context: MenuContext) -> bool:
+        """Live access may use the guide fallback; inactive access needs a real link."""
+        if context.has_active_subscription and context.subscription_is_active:
+            return True
+        if not context.subscription:
+            return False
+        from app.utils.subscription_utils import get_display_subscription_link
+
+        return bool(get_display_subscription_link(context.subscription))
+
+    @classmethod
+    def _evaluate_connect_conditions(
+        cls,
+        conditions: dict[str, Any] | None,
+        context: MenuContext,
+    ) -> bool:
+        """Keep legacy active-only layout configs compatible with link access.
+
+        Only the two built-in active-access gates are relaxed for the connect
+        action. Any additional conditions configured by an administrator still
+        apply, and an inactive subscription without a link never gets a button.
+        """
+        if not cls._can_open_connection(context):
+            return False
+        remaining_conditions = dict(conditions or {})
+        remaining_conditions.pop('has_active_subscription', None)
+        remaining_conditions.pop('subscription_is_active', None)
+        return cls._evaluate_conditions(remaining_conditions, context)
+
     @classmethod
     def _check_visibility(
         cls,
@@ -1020,6 +1054,15 @@ class MenuLayoutService:
             or action == 'subscription_connect'
             or 'connect' in str(action).lower()
         )
+        callback_action = action
+        if (
+            action == 'subscription_connect'
+            and settings.is_multi_tariff_enabled()
+            and not (context.has_active_subscription and context.subscription_is_active)
+        ):
+            subscription_id = getattr(context.subscription, 'id', None)
+            if subscription_id is not None:
+                callback_action = f'sl:{subscription_id}'
 
         if is_connect_button:
             logger.info(
@@ -1095,10 +1138,12 @@ class MenuLayoutService:
                 value='есть' if context.subscription else 'нет',
             )
             # Fallback на callback_data
-            return InlineKeyboardButton(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
+            return InlineKeyboardButton(text=text, callback_data=callback_action, icon_custom_emoji_id=custom_emoji_id)
         # Стандартный callback_data
-        logger.debug('Кнопка connect: open_mode=, используем callback_data', open_mode=open_mode, action=action)
-        return InlineKeyboardButton(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
+        logger.debug(
+            'Кнопка connect: open_mode=, используем callback_data', open_mode=open_mode, action=callback_action
+        )
+        return InlineKeyboardButton(text=text, callback_data=callback_action, icon_custom_emoji_id=custom_emoji_id)
 
     # --- Построение клавиатуры ---
 
@@ -1117,9 +1162,20 @@ class MenuLayoutService:
         buttons_config = config.get('buttons', {})
 
         for row_config in rows_config:
-            # Проверяем условия строки
+            # Отдельная строка connect наследует правило саб-ссылки даже из
+            # ранее сохранённой конфигурации с active-only условиями.
+            row_button_ids = row_config.get('buttons', [])
+            is_connect_row = bool(row_button_ids) and all(
+                button_id in buttons_config and cls._is_connect_button(buttons_config[button_id])
+                for button_id in row_button_ids
+            )
             row_conditions = row_config.get('conditions')
-            if not cls._evaluate_conditions(row_conditions, context):
+            row_conditions_pass = (
+                cls._evaluate_connect_conditions(row_conditions, context)
+                if is_connect_row
+                else cls._evaluate_conditions(row_conditions, context)
+            )
+            if not row_conditions_pass:
                 continue
 
             row_buttons: list[InlineKeyboardButton] = []
@@ -1135,14 +1191,24 @@ class MenuLayoutService:
                 if not button_cfg.get('enabled', True):
                     continue
 
+                is_connect = cls._is_connect_button(button_cfg)
+
                 # Проверяем видимость
                 visibility = button_cfg.get('visibility', 'all')
-                if not cls._check_visibility(visibility, context):
+                visibility_pass = cls._check_visibility(visibility, context) or (
+                    is_connect and visibility == 'subscribers' and cls._can_open_connection(context)
+                )
+                if not visibility_pass:
                     continue
 
                 # Проверяем условия кнопки
                 button_conditions = button_cfg.get('conditions')
-                if not cls._evaluate_conditions(button_conditions, context):
+                button_conditions_pass = (
+                    cls._evaluate_connect_conditions(button_conditions, context)
+                    if is_connect
+                    else cls._evaluate_conditions(button_conditions, context)
+                )
+                if not button_conditions_pass:
                     continue
 
                 # Строим кнопку (передаём button_id для кастомных кнопок)
@@ -1172,8 +1238,18 @@ class MenuLayoutService:
         buttons_config = config.get('buttons', {})
 
         for row_config in rows_config:
+            row_button_ids = row_config.get('buttons', [])
+            is_connect_row = bool(row_button_ids) and all(
+                button_id in buttons_config and cls._is_connect_button(buttons_config[button_id])
+                for button_id in row_button_ids
+            )
             row_conditions = row_config.get('conditions')
-            if not cls._evaluate_conditions(row_conditions, context):
+            row_conditions_pass = (
+                cls._evaluate_connect_conditions(row_conditions, context)
+                if is_connect_row
+                else cls._evaluate_conditions(row_conditions, context)
+            )
+            if not row_conditions_pass:
                 continue
 
             row_buttons: list[dict[str, Any]] = []
@@ -1188,12 +1264,21 @@ class MenuLayoutService:
                 if not button_cfg.get('enabled', True):
                     continue
 
+                is_connect = cls._is_connect_button(button_cfg)
                 visibility = button_cfg.get('visibility', 'all')
-                if not cls._check_visibility(visibility, context):
+                visibility_pass = cls._check_visibility(visibility, context) or (
+                    is_connect and visibility == 'subscribers' and cls._can_open_connection(context)
+                )
+                if not visibility_pass:
                     continue
 
                 button_conditions = button_cfg.get('conditions')
-                if not cls._evaluate_conditions(button_conditions, context):
+                button_conditions_pass = (
+                    cls._evaluate_connect_conditions(button_conditions, context)
+                    if is_connect
+                    else cls._evaluate_conditions(button_conditions, context)
+                )
+                if not button_conditions_pass:
                     continue
 
                 text_config = button_cfg.get('text', {})

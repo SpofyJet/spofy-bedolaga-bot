@@ -31,9 +31,29 @@ DEVICES_TO_ADD = 2
 BOUND_PRICE = DEVICE_PRICE * DEVICES_TO_ADD
 
 
+class _MockPipeline:
+    """Минимальный MULTI/EXEC поверх _MockRedis: setex копятся, execute применяет."""
+
+    def __init__(self, redis):
+        self._redis = redis
+        self._ops = []
+
+    def setex(self, key, ttl, value):
+        self._ops.append((key, value))
+        return self
+
+    async def execute(self):
+        for key, value in self._ops:
+            self._redis.storage[key] = value
+        return True
+
+
 class _MockRedis:
     def __init__(self):
         self.storage: dict[str, str] = {}
+
+    def pipeline(self, transaction=True):
+        return _MockPipeline(self)
 
     async def setex(self, key, ttl, value):
         self.storage[key] = value
@@ -207,6 +227,8 @@ async def test_orphan_topup_sends_notification_on_real_path(monkeypatch, cart_se
         cart = _spofy_devices_cart()
         await cart_service.save_user_cart(USER_ID, cart)
         await cart_service._redis_client.delete(f'cart_topup_intent:{USER_ID}')
+        # Апстрим хранит метку намерения и в пер- подпискочном ключе — вырезаем и его.
+        await cart_service._redis_client.delete(f'cart_topup_intent:{USER_ID}:sub:{SUB_ID}')
 
         completed = await completion.complete_subpage_carts_after_topup(
             db, user, bot=bot, credited_kopeks=BOUND_PRICE

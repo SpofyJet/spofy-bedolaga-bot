@@ -1539,13 +1539,26 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
         if extra_block:
             base_text = _insert_random_message(base_text, extra_block, action_prompt)
 
+    # При незавершённом оформлении главный CTA — продолжить собственный выбор.
+    # Случайная вставка не должна размывать этот сценарий. Реальные промо- и
+    # test-access подсказки выше сохраняются: у них есть конкретные условия.
+    has_pending_checkout = False
     try:
-        random_message = await get_random_active_message(db)
-        if random_message:
-            return _insert_random_message(base_text, random_message, action_prompt)
-
+        draft_exists = await has_subscription_checkout_draft(user.id)
+        has_pending_checkout = should_offer_checkout_resume(user, draft_exists)
+        if not has_pending_checkout:
+            has_pending_checkout = await user_cart_service.has_user_cart(user.id)
     except Exception as e:
-        logger.error('Ошибка получения случайного сообщения', error=e)
+        logger.debug('Не удалось проверить незавершённое оформление для главного меню', error=e)
+
+    if not has_pending_checkout:
+        try:
+            random_message = await get_random_active_message(db)
+            if random_message:
+                return _insert_random_message(base_text, random_message, action_prompt)
+
+        except Exception as e:
+            logger.error('Ошибка получения случайного сообщения', error=e)
 
     return base_text
 

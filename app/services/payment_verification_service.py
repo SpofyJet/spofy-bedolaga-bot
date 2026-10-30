@@ -67,9 +67,10 @@ class PendingPayment:
     status: str
     is_paid: bool
     created_at: datetime
-    user: User
+    user: User | None
     payment: Any
     expires_at: datetime | None = None
+    source: str = 'provider'
 
     def is_recent(self, max_age: timedelta = PENDING_MAX_AGE) -> bool:
         return (datetime.now(UTC) - self.created_at) <= max_age
@@ -1421,7 +1422,7 @@ async def _fetch_platega_recurring_charges(db: AsyncSession, cutoff: datetime) -
             PaymentMethod.PLATEGA_RECURRENT,
             transaction,
             identifier=transaction.external_id or str(transaction.id),
-            amount_kopeks=transaction.amount_kopeks,
+            amount_kopeks=abs(transaction.amount_kopeks),
             status='paid' if transaction.is_completed else 'pending',
             is_paid=bool(transaction.is_completed),
         )
@@ -1473,6 +1474,10 @@ async def list_recent_pending_payments(
     for batch in tasks:
         records.extend(batch)
 
+    from app.services.landing_payment_records import exclude_landing_duplicates, fetch_landing_payments
+
+    records.extend(await fetch_landing_payments(db, cutoff))
+    records = await exclude_landing_duplicates(db, records)
     records.sort(key=lambda item: item.created_at, reverse=True)
     return records
 
@@ -1481,8 +1486,17 @@ async def get_payment_record(
     db: AsyncSession,
     method: PaymentMethod,
     local_payment_id: int,
+    *,
+    source: str = 'provider',
 ) -> PendingPayment | None:
     """Load single payment record and normalize it to :class:`PendingPayment`."""
+
+    if source == 'landing':
+        from app.services.landing_payment_records import get_landing_payment
+
+        return await get_landing_payment(db, method, local_payment_id)
+    if source != 'provider':
+        return None
 
     cutoff = datetime.now(UTC) - PENDING_MAX_AGE
 
@@ -1891,7 +1905,7 @@ async def get_payment_record(
             method,
             transaction,
             identifier=transaction.external_id or str(transaction.id),
-            amount_kopeks=transaction.amount_kopeks,
+            amount_kopeks=abs(transaction.amount_kopeks),
             status='paid' if transaction.is_completed else 'pending',
             is_paid=bool(transaction.is_completed),
         )

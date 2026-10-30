@@ -6,8 +6,12 @@ from app.utils import formatters
 from tests.fixtures.local_day import reset_local_timezone_cache, use_timezone  # noqa: F401
 
 
-def test_format_datetime_handles_iso_strings(fixed_datetime: datetime) -> None:
-    """ISO-строка должна корректно преобразовываться в отформатированный текст."""
+def test_format_datetime_handles_iso_strings(fixed_datetime: datetime, monkeypatch) -> None:
+    """ISO-строка должна корректно преобразовываться в отформатированный текст.
+
+    Вывод идёт в часовом поясе оператора (settings.TIMEZONE) — фиксируем UTC.
+    """
+    use_timezone(monkeypatch, 'UTC')
     iso_value = fixed_datetime.isoformat()
     assert formatters.format_datetime(iso_value) == fixed_datetime.strftime('%d.%m.%Y %H:%M')
 
