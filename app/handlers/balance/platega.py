@@ -21,6 +21,15 @@ from app.utils.topup_retry import format_topup_amount_retry
 logger = structlog.get_logger(__name__)
 
 
+def _format_amount_label(amount_kopeks: int, method_code: int) -> str:
+    """Сумма для экранов метода. Международные карты списываются не в рублях —
+    знак ₽ рядом с суммой вводит в заблуждение, показываем число без валюты."""
+    label = settings.format_price(amount_kopeks)
+    if method_code == 12:
+        label = label.replace('\u00a0₽', '').replace(' ₽', '').rstrip()
+    return label
+
+
 def _get_active_methods() -> list[int]:
     return settings.get_platega_active_methods()
 
@@ -61,9 +70,11 @@ async def _prompt_amount(
             )
         return
 
-    min_amount_label = settings.format_price(settings.PLATEGA_MIN_AMOUNT_KOPEKS)
+    min_amount_label = _format_amount_label(settings.PLATEGA_MIN_AMOUNT_KOPEKS, method_code)
     max_amount_kopeks = settings.PLATEGA_MAX_AMOUNT_KOPEKS
-    max_amount_label = settings.format_price(max_amount_kopeks) if max_amount_kopeks and max_amount_kopeks > 0 else ''
+    max_amount_label = (
+        _format_amount_label(max_amount_kopeks, method_code) if max_amount_kopeks and max_amount_kopeks > 0 else ''
+    )
 
     default_prompt_body = (
         'Введите сумму для пополнения от {min_amount} до {max_amount}.\n'
@@ -406,7 +417,7 @@ async def process_platega_payment_amount(
     invoice_message = await message.answer(
         instructions_template.format(
             method=method_title,
-            amount=settings.format_price(amount_kopeks),
+            amount=_format_amount_label(amount_kopeks, method_code),
             transaction=transaction_id or local_payment_id,
             support=settings.get_support_contact_display_html(),
         ),
