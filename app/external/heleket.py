@@ -175,5 +175,6 @@ class HeleketService:
         is_valid = hmac.compare_digest(expected, str(signature))
 
         if not is_valid:
-            logger.error('Неверная подпись Heleket webhook', expected=expected, signature=signature)
+            # Без ожидаемой подписи в логе: она подписала бы поддельное тело.
+            logger.error('Неверная подпись Heleket webhook')
         return is_valid

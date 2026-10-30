@@ -162,14 +162,12 @@ class CryptoBotService:
                 logger.info('CryptoBot webhook подпись валидна (ascii-escaped)')
                 return True
 
+            # Ожидаемую подпись не логируем: для поддельного тела она становится
+            # валидной подписью — кто читает логи, провёл бы зачисление без оплаты.
             logger.error(
                 'Неверная подпись CryptoBot webhook',
-                received_signature=signature,
-                expected_raw=expected,
-                expected_reserialized=expected_reserialized,
                 body_length=len(body),
                 token_length=len(token),
-                token_prefix=token[:4] + '...',
             )
             return False
 
