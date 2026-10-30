@@ -8,17 +8,18 @@
 владельца бота есть Telegram Premium.
 """
 
-from aiogram.types import InlineKeyboardMarkup
-
 BUTTON_ICONS: dict[str, str] = {
     '💎': '5963312935148195483',
     '🤝': '5915556996215476302',
     '👥': '5915556996215476302',
     '👤': '5771887475421090729',
+    '👋': '5994750571041525522',
     '💰': '5811989245761426317',
     '🪙': '5992430854909989581',
     '💳': '5967548335542767952',
     '💸': '5974217466270716579',
+    '💵': '5974217466270716579',
+    '👛': '5769403330761593044',
     '🎁': '6032937473162614352',
     '🎟️': '5854776233950188167',
     '🎟': '5854776233950188167',
@@ -27,52 +28,100 @@ BUTTON_ICONS: dict[str, str] = {
     '⚙️': '5877260593903177342',
     '⚙': '5877260593903177342',
     '💬': '5886666250158870040',
+    '📢': '5771695636411847302',
+    '🔔': '5909201569898827582',
     '🛡️': '5926783847453692661',
     '🛡': '5926783847453692661',
     '🧪': '5897607722295103204',
     '📊': '5877485980901971030',
+    '📈': '5776219138917668486',
     '⭐️': '5958376256788502078',
     '⭐': '5958376256788502078',
     '⚡️': '5843553939672274145',
     '⚡': '5843553939672274145',
     '🚀': '5843553939672274145',
     '📱': '5985833664884250583',
+    '📲': '5931250188239770853',
     '👑': '5807868868886009920',
+    '🏆': '5961051261204696786',
+    '🥇': '5961051261204696786',
     '🏠': '5967822972931542886',
+    '🌐': '5879585266426973039',
+    '🗺': '5883955653348692941',
     '🔗': '5877465816030515018',
+    '🔑': '6005570495603282482',
+    '📞': '5897567714674741148',
+    '☎️': '5967591100532134862',
     '⬅️': '5875082500023258804',
     '⬅': '5875082500023258804',
     'ℹ️': '5879785854284599288',
     'ℹ': '5879785854284599288',
+    '❓': '5873121512445187130',
+    '❗️': '5879813604068298387',
+    '✅': '5776375003280838798',
+    '✔️': '5825794181183836432',
+    '❌': '5778527486270770928',
+    '🗑': '5879896690210639947',
+    '✏️': '5879841310902324730',
+    '🔄': '5839200986022812209',
     '📝': '5886330010054168711',
     '📤': '5877540355187937244',
     '🛠': '5988023995125993550',
     '🛠️': '5988023995125993550',
+    '🚪': '5877341274863832725',
+    '🆕': '5886306834410640699',
+    '➕': '5877219383691972108',
+    '🪟': '5915980888012755151',
+    '🍏': '5818920837645867167',
 }
 
 _EMOJI_KEYS = sorted(BUTTON_ICONS, key=len, reverse=True)
 
 
-def apply_button_icons(markup: InlineKeyboardMarkup) -> InlineKeyboardMarkup:
+def _icon_for(text: str) -> tuple[str, str] | None:
+    """(новый_текст, custom_emoji_id) для текста кнопки или None."""
+    stripped = text.strip()
+    for sym in _EMOJI_KEYS:
+        if not stripped.startswith(sym) and not stripped.endswith(sym):
+            continue
+        new_text = stripped.replace(sym, '').strip()
+        if not new_text:
+            return None
+        return new_text, BUTTON_ICONS[sym]
+    return None
+
+
+def apply_button_icons(markup):
     """Ставит icon_custom_emoji_id кнопкам с известным эмодзи и чистит текст.
 
     Эмодзи ищется в начале текста, затем в конце; найденный символ (все его
-    вхождения) удаляется из текста, чтобы не дублировать иконку. Если после
-    очистки текст пуст — кнопка остаётся как есть.
+    вхождения) удаляется из текста, чтобы не дублировать иконку. Кнопки, у
+    которых иконка уже задана, и кнопки из одного эмодзи не трогаются.
+    Покрывает InlineKeyboardMarkup и ReplyKeyboardMarkup (строковые кнопки
+    reply-клавиатур при необходимости превращаются в KeyboardButton).
     """
-    for row in markup.inline_keyboard:
-        for button in row:
+    from aiogram.types import InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+
+    if isinstance(markup, InlineKeyboardMarkup):
+        rows = markup.inline_keyboard
+    elif isinstance(markup, ReplyKeyboardMarkup):
+        rows = markup.keyboard
+    else:
+        return markup
+
+    for row in rows:
+        for idx, button in enumerate(row):
+            if isinstance(markup, ReplyKeyboardMarkup) and isinstance(button, str):
+                found = _icon_for(button)
+                if found is None:
+                    continue
+                new_text, icon = found
+                row[idx] = KeyboardButton(text=new_text, icon_custom_emoji_id=icon)
+                continue
             if getattr(button, 'icon_custom_emoji_id', None):
                 continue
-            text = button.text or ''
-            stripped = text.strip()
-            for sym in _EMOJI_KEYS:
-                if not stripped.startswith(sym) and not stripped.endswith(sym):
-                    continue
-                new_text = stripped.replace(sym, '').strip()
-                if not new_text:
-                    break
-                button.text = new_text
-                button.icon_custom_emoji_id = BUTTON_ICONS[sym]
-                break
+            found = _icon_for(button.text or '')
+            if found is None:
+                continue
+            button.text, button.icon_custom_emoji_id = found
     return markup

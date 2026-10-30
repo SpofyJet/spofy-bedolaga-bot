@@ -5,6 +5,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from app.config import settings
+from app.middlewares.button_icons_middleware import ButtonIconsMiddleware
 from app.middlewares.stale_callback_answer import StaleCallbackAnswerMiddleware
 from app.middlewares.tidy_text_request import TidyTextRequestMiddleware
 
@@ -28,6 +29,8 @@ def create_bot(token: str | None = None, **kwargs) -> Bot:
 
     kwargs.setdefault('default', DefaultBotProperties(parse_mode=ParseMode.HTML))
     bot = Bot(token=token or settings.BOT_TOKEN, session=session, **kwargs)
+    # Иконки кнопок на всём исходящем трафике (см. middleware).
+    bot.session.middleware(ButtonIconsMiddleware())
     # Поздний ответ на нажатие кнопки — предупреждение, а не исключение (см. middleware).
     bot.session.middleware(StaleCallbackAnswerMiddleware())
     # Ни одно сообщение не уходит с рваными пустыми строками (см. middleware).
