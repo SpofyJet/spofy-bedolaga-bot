@@ -1,12 +1,18 @@
 """Support tickets schemas for cabinet."""
 
+import re
 from datetime import datetime
 
 from pydantic import BaseModel, Field, model_validator
 
+from .media import TELEGRAM_FILE_ID_PATTERN
+
 
 ALLOWED_MEDIA_TYPES = {'photo', 'video', 'document'}
 MAX_MEDIA_ITEMS = 10
+
+
+_FILE_ID_RE = re.compile(TELEGRAM_FILE_ID_PATTERN)
 
 
 class TicketMediaItem(BaseModel):
@@ -31,6 +37,14 @@ def _validate_media_bundle(
     media_items: list[TicketMediaItem] | None,
 ) -> None:
     """Shared validator for media-attached request bodies."""
+    # Значение file_id сервер подписывает в media_token; произвольная строка
+    # (например «dpichecker:report:1») превращала тикет в оракул подписи
+    # для других подписанных ссылок. Пропускаем только формат Telegram file_id.
+    file_ids = [media_file_id] if media_file_id else []
+    file_ids += [item.file_id for item in media_items or []]
+    if any(not _FILE_ID_RE.fullmatch(file_id) for file_id in file_ids):
+        raise ValueError('invalid Telegram file_id')
+
     if media_items is not None:
         if len(media_items) == 0:
             raise ValueError('media_items must not be empty (send null instead)')
