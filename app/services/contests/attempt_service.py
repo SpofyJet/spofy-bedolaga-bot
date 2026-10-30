@@ -255,7 +255,14 @@ class ContestAttemptService:
         if not is_winner:
             return False
 
-        stmt = select(ContestRound).where(ContestRound.id == round_id).with_for_update()
+        # populate_existing: раунд уже загружен в сессию — без него блокировка вернула бы
+        # закешированный winners_count, и параллельные ответы превышали max_winners.
+        stmt = (
+            select(ContestRound)
+            .where(ContestRound.id == round_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         result = await db.execute(stmt)
         round_obj = result.scalar_one()
 

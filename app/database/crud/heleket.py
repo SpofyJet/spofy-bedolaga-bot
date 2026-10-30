@@ -92,7 +92,14 @@ async def get_heleket_payment_by_id(
 
 
 async def get_heleket_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> HeleketPayment | None:
-    result = await db.execute(select(HeleketPayment).where(HeleketPayment.id == payment_id).with_for_update())
+    # populate_existing: иначе FOR UPDATE вернёт уже загруженный в сессию объект со
+    # статусом до блокировки, и вебхук с опросом увидят устаревший transaction_id.
+    result = await db.execute(
+        select(HeleketPayment)
+        .where(HeleketPayment.id == payment_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     return result.scalar_one_or_none()
 
 
