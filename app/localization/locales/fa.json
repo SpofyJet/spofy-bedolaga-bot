@@ -1437,7 +1437,7 @@
   "LOW_BALANCE_ALERT": "⚠️ <b>موجودی کم است</b>\n\nموجودی فعلی: {balance} ₽.\n\nزودتر شارژ کنید تا تمدید خودکار انجام شود و اشتراک قطع نشود.",
   "MAINTENANCE_MODE_ACTIVE": "\n🔧 تعمیرات فنی!\n\nسرویس موقتاً در دسترس نیست. در حال بهبود کیفیت خدمات هستیم.\n\n⏰ زمان تقریبی اتمام: نامشخص\n🔄 بعداً تلاش کنید\n\nبابت ناراحتی عذرخواهی می‌کنیم.\n",
   "MAINTENANCE_MODE_API_ERROR": "\n🔧 تعمیرات فنی!\n\nسرویس به دلیل مشکل اتصال به سرورها موقتاً در دسترس نیست.\n\n⏰ در حال رفع مشکل هستیم. چند دقیقه بعد تلاش کنید.\n\n🔄 آخرین بررسی: {last_check}\n",
-  "MAIN_MENU": "<tg-emoji emoji-id='5440539497383087970'>🪙</tg-emoji> <b>{user_name} عزیز، به منوی اصلی خوش آمدید!</b>\n\n<tg-emoji emoji-id='5467686551142046616'>📱</tg-emoji> <b>اشتراک:</b>\n<blockquote>{subscription_status}</blockquote>\n\n{website_line}<b>یک گزینه را انتخاب کنید:</b>",
+  "MAIN_MENU": "<tg-emoji emoji-id='5440539497383087970'>🪙</tg-emoji> <b>به منوی اصلی خوش آمدید!</b>\n\n<tg-emoji emoji-id='5467686551142046616'>📱</tg-emoji> <b>اشتراک:</b>\n<blockquote>{subscription_status}</blockquote>\n\n{website_line}<b>یک گزینه را انتخاب کنید:</b>",
   "MAIN_MENU_ACTION_PROMPT": "عملیات را انتخاب کنید:",
   "MAIN_MENU_BUTTON": "🏠 منوی اصلی",
   "MAIN_MENU_RICH_BALANCE": "💰 موجودی: {balance}",
