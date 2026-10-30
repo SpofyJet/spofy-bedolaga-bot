@@ -417,7 +417,7 @@ async def process_platega_payment_amount(
     invoice_message = await message.answer(
         instructions_template.format(
             method=method_title,
-            amount=_format_amount_label(amount_kopeks, method_code),
+            amount=settings.format_price(amount_kopeks),
             transaction=transaction_id or local_payment_id,
             support=settings.get_support_contact_display_html(),
         ),
