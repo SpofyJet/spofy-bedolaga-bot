@@ -480,3 +480,30 @@ async def test_activation_failure_rolls_back_cleanly(monkeypatch):
         ):
             with pytest.raises(GuestPurchaseError):
                 await claim_gift_for_user(db, claimant_user_id=claimant1.id, claim_input=token)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('allow_legacy_short', [True, False])
+async def test_underscore_wildcard_code_does_not_match_foreign_gift(monkeypatch, allow_legacy_short):
+    """`_` в коде — литерал, а не LIKE-wildcard: код из подчёркиваний не забирает чужой подарок."""
+    async with memory_session(monkeypatch, _TABLES) as db:
+        tariff, buyer, claimant1, _ = await _seed_setup(db)
+        quote = await quote_gift_purchase(db, buyer=buyer, tariff_id=tariff.id, period_days=30)
+        p_res = await purchase_gift_from_balance(
+            db,
+            buyer_id=buyer.id,
+            tariff_id=tariff.id,
+            period_days=30,
+            expected_price_kopeks=quote.final_price_kopeks,
+            idempotency_key='wildcard_probe',
+        )
+        token = p_res.purchase.token
+        probe = token[0] + '_' * (7 if allow_legacy_short else 47)
+
+        with pytest.raises(GiftClaimNotFoundError):
+            await claim_gift_for_user(
+                db, claimant_user_id=claimant1.id, claim_input=probe, allow_legacy_short=allow_legacy_short
+            )
+
+        await db.refresh(p_res.purchase)
+        assert p_res.purchase.user_id is None

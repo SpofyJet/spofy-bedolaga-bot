@@ -25,6 +25,9 @@ class GiftScalars:
     def first(self):
         return self.value
 
+    def all(self):
+        return [] if self.value is None else [self.value]
+
 
 class GiftResult:
     def __init__(self, value):

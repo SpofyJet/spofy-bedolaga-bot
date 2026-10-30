@@ -79,7 +79,9 @@ async def claim_gift_for_user(
     if len(token_candidate) >= 64:
         token_filter = GuestPurchase.token == token_candidate
     else:
-        token_filter = GuestPurchase.token.startswith(token_candidate)
+        # autoescape: `_` проходит валидацию токена, а в LIKE это «любой символ» —
+        # без экранирования код из подчёркиваний совпадал с чужими подарками.
+        token_filter = GuestPurchase.token.startswith(token_candidate, autoescape=True)
 
     result = await db.execute(
         select(GuestPurchase)
@@ -93,8 +95,11 @@ async def claim_gift_for_user(
             GuestPurchase.is_gift.is_(True),
         )
         .with_for_update()
+        .limit(2)
     )
-    purchase = result.scalars().first()
+    matches = result.scalars().all()
+    # Префикс обязан указывать ровно на один подарок.
+    purchase = matches[0] if len(matches) == 1 else None
 
     if purchase is None or not purchase.is_gift:
         raise GiftClaimNotFoundError('Gift not found')
