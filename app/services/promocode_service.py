@@ -13,7 +13,7 @@ from app.database.crud.promocode import (
     get_promocode_by_code,
 )
 from app.database.crud.subscription import extend_subscription, get_subscription_by_user_id
-from app.database.crud.user import add_user_balance, get_user_by_id
+from app.database.crud.user import add_user_balance, get_user_by_id, lock_user_for_pricing
 from app.database.crud.user_promo_group import add_user_to_promo_group, has_user_promo_group
 from app.database.models import PromoCode, PromoCodeType, PromoCodeUse, Subscription, SubscriptionStatus, User
 from app.services.remnawave_service import RemnaWaveService
@@ -832,6 +832,10 @@ class PromoCodeService:
             user = await get_user_by_id(db, user_id)
             if not user:
                 return {'success': False, 'error': 'user_not_found'}
+            # Та же блокировка, что у покупок (lock_user_for_pricing): иначе отмена
+            # параллельно с покупкой, уже применившей скидку, возвращала промокод
+            # в оборот — «одноразовая» скидка использовалась по кругу.
+            user = await lock_user_for_pricing(db, user_id)
 
             current_discount = getattr(user, 'promo_offer_discount_percent', 0) or 0
             source = getattr(user, 'promo_offer_discount_source', None)

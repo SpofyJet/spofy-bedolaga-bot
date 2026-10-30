@@ -32,6 +32,15 @@ def _patch_service(monkeypatch, result: dict) -> None:
     fake_service = AsyncMock()
     fake_service.activate_promocode = AsyncMock(return_value=result)
     monkeypatch.setattr(promocode_route, 'PromoCodeService', lambda: fake_service)
+    _patch_rate_limit(monkeypatch, limited=False)
+
+
+def _patch_rate_limit(monkeypatch, *, limited: bool) -> None:
+    limiter = AsyncMock()
+    limiter.is_rate_limited = AsyncMock(return_value=limited)
+    limiter.is_ip_rate_limited = AsyncMock(return_value=False)
+    monkeypatch.setattr(promocode_route, 'RateLimitCache', limiter)
+    monkeypatch.setattr(promocode_route, 'get_client_ip', lambda request: '203.0.113.7')
 
 
 @pytest.mark.parametrize(
@@ -55,7 +64,7 @@ async def test_activate_returns_structured_error_code(monkeypatch, error_code):
     user = User(id=1, telegram_id=123)
 
     with pytest.raises(HTTPException) as exc_info:
-        await promocode_route.activate_promocode(request=request, user=user, db=AsyncMock())
+        await promocode_route.activate_promocode(request=request, raw_request=None, user=user, db=AsyncMock())
 
     assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
     assert isinstance(exc_info.value.detail, dict)
@@ -71,6 +80,21 @@ async def test_unknown_error_code_falls_back_to_server_error(monkeypatch):
     user = User(id=1, telegram_id=123)
 
     with pytest.raises(HTTPException) as exc_info:
-        await promocode_route.activate_promocode(request=request, user=user, db=AsyncMock())
+        await promocode_route.activate_promocode(request=request, raw_request=None, user=user, db=AsyncMock())
 
     assert exc_info.value.detail['code'] == 'something_new'
+
+
+@pytest.mark.asyncio
+async def test_activation_attempts_are_rate_limited(monkeypatch):
+    """Перебор кодов упирается в лимит до обращения к сервису промокодов."""
+    _patch_service(monkeypatch, {'success': True})
+    _patch_rate_limit(monkeypatch, limited=True)
+    request = promocode_route.PromocodeActivateRequest(code='GUESS1234')
+
+    with pytest.raises(HTTPException) as exc_info:
+        await promocode_route.activate_promocode(
+            request=request, raw_request=None, user=User(id=1, telegram_id=1), db=AsyncMock()
+        )
+
+    assert exc_info.value.status_code == status.HTTP_429_TOO_MANY_REQUESTS

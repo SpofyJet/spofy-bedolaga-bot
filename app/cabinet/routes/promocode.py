@@ -1,15 +1,17 @@
 """Promo code routes for cabinet."""
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
 from app.services.promocode_service import PromoCodeService
+from app.utils.cache import RateLimitCache
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
+from ..ip_utils import get_client_ip
 
 
 logger = structlog.get_logger(__name__)
@@ -46,10 +48,24 @@ class PromocodeDeactivateResponse(BaseModel):
 @router.post('/activate')
 async def activate_promocode(
     request: PromocodeActivateRequest,
+    raw_request: Request,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Activate a promo code for the current user."""
+    # Перебор кодов (в т.ч. призовых кодов колеса) — по пользователю и по IP,
+    # чтобы пачка триальных аккаунтов не обходила лимит одного.
+    if await RateLimitCache.is_rate_limited(
+        user.id, 'promocode_activate', limit=10, window=300, fail_closed=True
+    ) or await RateLimitCache.is_ip_rate_limited(
+        get_client_ip(raw_request), 'promocode_activate', limit=30, window=300, fail_closed=True
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '300'},
+        )
+
     promocode_service = PromoCodeService()
 
     result = await promocode_service.activate_promocode(
