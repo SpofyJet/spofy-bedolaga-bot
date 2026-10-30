@@ -149,7 +149,7 @@ async def get_claimable_gift(
     if len(token) >= 64:
         token_filter = GuestPurchase.token == token
     elif len(token) >= GIFT_TOKEN_MIN_PREFIX_LENGTH:
-        token_filter = GuestPurchase.token.startswith(token)
+        token_filter = GuestPurchase.token.startswith(token, autoescape=True)
     else:
         return None
 
@@ -164,8 +164,9 @@ async def get_claimable_gift(
     )
     if for_update:
         query = query.with_for_update()
-    result = await db.execute(query)
-    return result.scalars().first()
+    result = await db.execute(query.limit(2))
+    matches = result.scalars().all()
+    return matches[0] if len(matches) == 1 else None
 
 
 class GuestPurchaseError(Exception):
@@ -915,7 +916,8 @@ async def _find_or_create_user(
     For email contacts: creates a verified cabinet account with generated password.
     For telegram contacts: creates user without password (QR flow only).
 
-    Returns (user, is_new_account) where is_new_account means a new password was generated.
+    Returns (user, is_new_account) where is_new_account means the account was created
+    by this call (only then are cabinet credentials generated).
 
     Args:
         pre_resolved_telegram_id: If caller already resolved the telegram_id via Bot API,
@@ -928,18 +930,11 @@ async def _find_or_create_user(
         result = await db.execute(select(User).where(User.email == contact_value))
         user = result.scalars().first()
         if user:
+            # SECURITY: the buyer has not proven they own this mailbox. Never set
+            # a password or mark the email verified on an account that already
+            # exists — the credentials would be shown to the buyer on the success
+            # page (account takeover of OAuth users who have an email but no password).
             is_new_account = False
-            if not user.password_hash:
-                # User without cabinet access — generate credentials
-                plain_password = secrets.token_urlsafe(12)
-                user.password_hash = hash_password(plain_password)
-                if purchase:
-                    purchase.cabinet_password = plain_password
-                is_new_account = True
-            # Fix email_verified for all existing guest users
-            if not user.email_verified:
-                user.email_verified = True
-                user.email_verified_at = datetime.now(UTC)
             # Ensure default promo group
             if not user.promo_group_id:
                 default_group = await _get_or_create_default_promo_group(db)
@@ -981,16 +976,8 @@ async def _find_or_create_user(
                 # Race condition — user was created concurrently
                 if purchase:
                     purchase.cabinet_password = None
+                # Same rule as above: an account we did not create gets no credentials.
                 is_new_account = False
-                if not user.password_hash:
-                    regen_password = secrets.token_urlsafe(12)
-                    user.password_hash = hash_password(regen_password)
-                    if purchase:
-                        purchase.cabinet_password = regen_password
-                    is_new_account = True
-                if not user.email_verified:
-                    user.email_verified = True
-                    user.email_verified_at = datetime.now(UTC)
                 if not user.promo_group_id:
                     default_group = await _get_or_create_default_promo_group(db)
                     user.promo_group_id = default_group.id
