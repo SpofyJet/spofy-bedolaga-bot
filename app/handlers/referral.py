@@ -940,8 +940,23 @@ async def process_withdrawal_amount_callback(
     """Обрабатывает выбор суммы для вывода через кнопку."""
     texts = get_texts(db_user.language)
 
-    # Получаем сумму из callback_data
-    amount_kopeks = int(callback.data.split('_')[-1])
+    # Получаем сумму из callback_data — клиент может прислать любую, проверяем как ручной ввод
+    try:
+        amount_kopeks = int(callback.data.split('_')[-1])
+    except ValueError:
+        await callback.answer()
+        return
+    data = await state.get_data()
+    available = data.get('available_balance', 0)
+    if (
+        amount_kopeks <= 0
+        or amount_kopeks < settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS
+        or amount_kopeks > available
+    ):
+        await callback.answer(
+            texts.t('REFERRAL_WITHDRAWAL_INVALID_AMOUNT', '❌ Введите корректную сумму'), show_alert=True
+        )
+        return
 
     # Сохраняем сумму и переходим к вводу реквизитов
     await state.update_data(withdrawal_amount=amount_kopeks)

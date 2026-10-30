@@ -434,6 +434,14 @@ class ReferralWithdrawalService:
 
         available = stats['available_total']
 
+        # Сумма может прийти из callback_data (подконтрольна клиенту): отрицательная
+        # заявка при одобрении превращала списание в зачисление.
+        if amount_kopeks <= 0:
+            return None, 'Некорректная сумма'
+        min_amount = settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS
+        if amount_kopeks < min_amount:
+            return None, f'Минимальная сумма вывода: {min_amount / 100:.0f}₽'
+
         if amount_kopeks > available:
             return None, f'Недостаточно средств. Доступно: {available / 100:.0f}₽'
 
@@ -483,7 +491,12 @@ class ReferralWithdrawalService:
         Одобряет заявку на вывод и списывает средства с баланса.
         Возвращает (success, error_message).
         """
-        result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id).with_for_update())
+        result = await db.execute(
+            select(WithdrawalRequest)
+            .where(WithdrawalRequest.id == request_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         request = result.scalar_one_or_none()
 
         if not request:
@@ -492,8 +505,13 @@ class ReferralWithdrawalService:
         if request.status != WithdrawalRequestStatus.PENDING.value:
             return False, 'Заявка уже обработана'
 
+        if request.amount_kopeks <= 0:
+            return False, 'Некорректная сумма заявки'
+
         # Получаем пользователя для списания с баланса (с блокировкой строки)
-        user_result = await db.execute(select(User).where(User.id == request.user_id).with_for_update())
+        user_result = await db.execute(
+            select(User).where(User.id == request.user_id).with_for_update().execution_options(populate_existing=True)
+        )
         user = user_result.scalar_one_or_none()
 
         if not user:
@@ -529,7 +547,12 @@ class ReferralWithdrawalService:
         self, db: AsyncSession, request_id: int, admin_id: int, comment: str | None = None
     ) -> tuple[bool, str]:
         """Отклоняет заявку на вывод."""
-        result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id).with_for_update())
+        result = await db.execute(
+            select(WithdrawalRequest)
+            .where(WithdrawalRequest.id == request_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         request = result.scalar_one_or_none()
 
         if not request:
@@ -550,7 +573,12 @@ class ReferralWithdrawalService:
         self, db: AsyncSession, request_id: int, admin_id: int, comment: str | None = None
     ) -> tuple[bool, str]:
         """Отмечает заявку как выполненную (деньги переведены)."""
-        result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id).with_for_update())
+        result = await db.execute(
+            select(WithdrawalRequest)
+            .where(WithdrawalRequest.id == request_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         request = result.scalar_one_or_none()
 
         if not request:
