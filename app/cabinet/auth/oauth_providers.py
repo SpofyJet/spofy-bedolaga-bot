@@ -122,6 +122,12 @@ async def generate_oauth_state(provider: str, extra_data: dict[str, str] | None 
     return state
 
 
+async def peek_oauth_state(state: str) -> dict[str, Any] | None:
+    """Read a CSRF state token's data without consuming it (preview before confirmation)."""
+    data: Any = await cache.get(cache_key('oauth_state', state))
+    return data if isinstance(data, dict) else None
+
+
 async def validate_oauth_state(state: str, provider: str | None = None) -> dict[str, Any] | None:
     """Validate and consume a CSRF state token from Redis.
 

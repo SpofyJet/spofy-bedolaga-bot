@@ -1,7 +1,8 @@
 """Account linking and merge routes for cabinet.
 
 Router 1 (`router`): JWT-protected endpoints for linking/unlinking OAuth providers.
-  Exception: `link/server-complete` uses state-token auth instead of JWT (for Mini App external browser flow).
+  Exception: `link/server-complete` uses state-token auth instead of JWT (for Mini App external browser flow);
+  it requires explicit confirmation after `link/server-complete/preview` shows the target account.
 Router 2 (`merge_router`): Public endpoints for merge preview and execution.
 """
 
@@ -47,6 +48,7 @@ from ..auth.merge_service import (
 from ..auth.oauth_providers import (
     generate_oauth_state,
     get_provider,
+    peek_oauth_state,
     resolve_oauth_redirect_uri,
     validate_oauth_state,
 )
@@ -238,6 +240,7 @@ async def _exchange_and_link_oauth(
     state_data: OAuthStateData,
     device_id: str | None,
     log_context: str,
+    allow_email_backfill: bool = True,
 ) -> LinkCallbackResponse:
     """Shared OAuth linking logic: exchange code, fetch user info, link or merge.
 
@@ -342,7 +345,7 @@ async def _exchange_and_link_oauth(
     # Only fill an empty slot; never overwrite an existing email, and never adopt an
     # address already owned by another account (that needs the explicit merge flow) —
     # just skip the backfill so linking the social login still succeeds.
-    if not user.email and user_info.email and user_info.email_verified:
+    if allow_email_backfill and not user.email and user_info.email and user_info.email_verified:
         normalized_email = user_info.email.strip().lower()
         email_owner = await get_user_by_email(db, normalized_email)
         if email_owner is not None and email_owner.id != user.id:
@@ -735,10 +738,73 @@ class ServerCompleteRequest(BaseModel):
     state: str = Field(..., min_length=1, max_length=128, description='CSRF state token')
     provider: OAuthProviderName | None = Field(None, description='OAuth provider name (resolved from state if omitted)')
     device_id: str | None = Field(None, max_length=256, description='Device ID from VK ID callback')
+    confirm: bool = Field(
+        False, description='Owner confirmed linking to the account shown by /link/server-complete/preview'
+    )
 
 
 class ServerCompleteResponse(LinkCallbackResponse):
     provider: str
+
+
+class ServerCompletePreviewResponse(BaseModel):
+    provider: str
+    account_label: str
+
+
+def _mask_tail(value: str, keep: int = 2) -> str:
+    return value[:keep] + '***' if len(value) > keep else value[:1] + '***'
+
+
+def _account_label(user: User) -> str:
+    """Узнаваемая владельцу, но не раскрывающая данные подпись аккаунта."""
+    parts: list[str] = []
+    if user.first_name:
+        parts.append(user.first_name)
+    if user.username:
+        parts.append('@' + _mask_tail(user.username))
+    elif user.email and '@' in user.email:
+        local, domain = user.email.split('@', 1)
+        parts.append(f'{_mask_tail(local)}@{domain}')
+    if user.telegram_id:
+        parts.append(f'Telegram ID …{str(user.telegram_id)[-3:]}')
+    return ' · '.join(parts) or f'#{user.id}'
+
+
+async def _load_linking_state_user(db: AsyncSession, state_data: dict | None) -> User:
+    if not state_data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid or expired OAuth state')
+    if state_data.get('linking') != 'true' or not state_data.get('user_id'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='OAuth state was not initiated for account linking',
+        )
+    try:
+        user_id = int(state_data['user_id'])
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid user_id in OAuth state') from exc
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='User not found')
+    return user
+
+
+@router.get('/link/server-complete/preview', response_model=ServerCompletePreviewResponse)
+async def link_server_complete_preview(
+    state: str,
+    raw_request: Request,
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> ServerCompletePreviewResponse:
+    """Показать, к какому аккаунту будет привязан вход, — до подтверждения (state не гасится)."""
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'server_complete', limit=10, window=60, fail_closed=True):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+    if not state or len(state) > 128:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid or expired OAuth state')
+
+    state_data = await peek_oauth_state(state)
+    user = await _load_linking_state_user(db, state_data)
+    return ServerCompletePreviewResponse(provider=state_data.get('provider', ''), account_label=_account_label(user))
 
 
 @router.post('/link/server-complete', response_model=ServerCompleteResponse)
@@ -757,6 +823,17 @@ async def link_server_complete(
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'server_complete', limit=10, window=60, fail_closed=True):
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+
+    # SECURITY: state привязан к инициатору, но не к браузеру. Чужая ссылка
+    # authorize_url (state атакующего), пройденная жертвой, раньше молча
+    # привязывала её Google к аккаунту атакующего. Теперь страница колбэка
+    # показывает, к какому аккаунту идёт привязка (preview), и завершает её
+    # только по явному подтверждению владельца входа.
+    if not request.confirm:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Linking must be confirmed on the callback page',
+        )
 
     # 1. Validate and consume state from Redis (one-time use).
     #    Provider may be None — validate_oauth_state will skip provider check,
@@ -790,29 +867,8 @@ async def link_server_complete(
 
     provider_name: str = state_provider
 
-    # 2. Must be a linking state (not login)
-    if state_data.get('linking') != 'true' or not state_data.get('user_id'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='OAuth state was not initiated for account linking',
-        )
-
-    # 3. Parse and validate user_id from state
-    try:
-        user_id = int(state_data['user_id'])
-    except (ValueError, TypeError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid user_id in OAuth state',
-        ) from exc
-
-    # 4. Load user from DB
-    user = await get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='User not found',
-        )
+    # 2-4. Linking state, user_id from state, user from DB
+    user = await _load_linking_state_user(db, state_data)
 
     # 5-9. Exchange code, fetch user info, link or merge
     result = await _exchange_and_link_oauth(
@@ -824,6 +880,9 @@ async def link_server_complete(
         state_data=state_data,
         device_id=request.device_id,
         log_context='server-complete',
+        # Почту провайдера не переносим: браузер, завершающий привязку, не
+        # доказал, что принадлежит владельцу аккаунта из state.
+        allow_email_backfill=False,
     )
 
     return ServerCompleteResponse(
