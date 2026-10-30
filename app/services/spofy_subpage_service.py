@@ -138,10 +138,17 @@ def is_subpage_cart(cart: dict[str, Any] | None) -> bool:
     return bool(cart) and cart.get('source') == SUBPAGE_SOURCE
 
 
-async def tag_current_cart_as_subpage(user_id: int) -> bool:
-    """Re-tag the cart the cabinet helpers just saved (devices / traffic carry source='cabinet')."""
+async def tag_current_cart_as_subpage(user_id: int, expected: dict[str, Any] | None = None) -> bool:
+    """Re-tag the cart the cabinet helpers just saved (devices / traffic carry source='cabinet').
+
+    ``expected`` pins the cart to the one the page just priced: between saving and tagging the
+    customer's cabinet can overwrite the shared cart slot (e.g. with a 365-day tariff), and the
+    tag plus the page's bound price would then buy that cart for the price of a device.
+    """
     cart = await user_cart_service.get_user_cart(user_id)
     if not cart:
+        return False
+    if expected and any(cart.get(key) != value for key, value in expected.items()):
         return False
     cart['source'] = SUBPAGE_SOURCE
     cart['return_to_cart'] = True  # keeps the fresh top-up intent for this purchase

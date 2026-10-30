@@ -100,6 +100,7 @@ def auto_on(monkeypatch):
     # name kept for the fixtures below: the global switch is deliberately OFF
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False, raising=False)
     monkeypatch.setattr(bridge, 'tag_current_cart_as_subpage', AsyncMock(return_value=True))
+    monkeypatch.setattr(bridge, 'bind_cart_to_payment', AsyncMock(return_value=True))
 
 
 @pytest.fixture
@@ -236,8 +237,36 @@ async def test_devices_checkout_saves_cabinet_cart(monkeypatch, auto_on, owner, 
     await bridge.checkout('abcdefgh', body, db=None)
     assert save.await_args.kwargs['request'].devices == 2
     assert save.await_args.kwargs['subscription_id'] == 42
-    bridge.tag_current_cart_as_subpage.assert_awaited_once_with(5)  # cabinet cart re-tagged
+    # cabinet cart re-tagged — only if it is still the cart the page just priced
+    bridge.tag_current_cart_as_subpage.assert_awaited_once_with(
+        5, {'cart_mode': 'add_devices', 'subscription_id': 42, 'devices_to_add': 2}
+    )
     assert topup.await_args.kwargs['request'].amount_kopeks == 15000
+
+
+async def test_devices_checkout_refuses_a_swapped_cart(monkeypatch, auto_on, owner, topup):
+    """W1: кабинет перезаписал общий слот корзины между save и tag → 409, без пополнения."""
+    monkeypatch.setattr(
+        bridge, 'get_device_price', AsyncMock(return_value={'available': True, 'total_price_kopeks': 100})
+    )
+    monkeypatch.setattr(bridge, 'save_devices_cart', AsyncMock(return_value={'success': True}))
+    monkeypatch.setattr(bridge, 'tag_current_cart_as_subpage', AsyncMock(return_value=False))
+    body = bridge.CheckoutRequest(kind='devices', devices=1, payment_method='yookassa')
+    with pytest.raises(HTTPException) as error:
+        await bridge.checkout('abcdefgh', body, db=None)
+    assert error.value.status_code == 409
+    topup.assert_not_awaited()
+
+
+async def test_tagging_refuses_a_cart_other_than_the_priced_one(monkeypatch):
+    svc = completion.user_cart_service
+    swapped = {'cart_mode': 'tariff_purchase', 'tariff_id': 9, 'period_days': 365, 'source': 'cabinet'}
+    monkeypatch.setattr(svc, 'get_user_cart', AsyncMock(return_value=swapped))
+    save = AsyncMock(return_value=True)
+    monkeypatch.setattr(svc, 'save_user_cart', save)
+    expected = {'cart_mode': 'add_devices', 'subscription_id': 42, 'devices_to_add': 1}
+    assert await completion.tag_current_cart_as_subpage(5, expected) is False
+    save.assert_not_awaited()
 
 
 async def test_devices_unavailable(monkeypatch, auto_on, owner, topup):
@@ -299,9 +328,7 @@ async def test_concurrent_different_checkout_gets_409(monkeypatch, auto_on, owne
 
     async def slow_topup(**kwargs: object) -> object:
         await asyncio.sleep(0.05)
-        return SimpleNamespace(
-            payment_url='https://pay.example/x', payment_id='17', qr_payload=None, expires_at=None
-        )
+        return SimpleNamespace(payment_url='https://pay.example/x', payment_id='17', qr_payload=None, expires_at=None)
 
     monkeypatch.setattr(bridge, 'create_topup', slow_topup)
     first = asyncio.create_task(
@@ -503,9 +530,7 @@ async def test_completion_skips_when_global_switch_on(monkeypatch):
 
 async def test_completion_needs_fresh_intent(monkeypatch):
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False, raising=False)
-    process = _carts(
-        monkeypatch, per_sub=[], global_cart={**BOUND, 'cart_mode': 'add_traffic'}, intent=False
-    )
+    process = _carts(monkeypatch, per_sub=[], global_cart={**BOUND, 'cart_mode': 'add_traffic'}, intent=False)
     assert await completion.complete_subpage_carts_after_topup(None, _user(), credited_kopeks=49900) is False
     process.assert_not_awaited()
 
@@ -766,9 +791,10 @@ async def test_orphan_topup_without_intent_offers_return_to_cart(monkeypatch):
     process = _carts(monkeypatch, per_sub=[], global_cart={**BOUND, 'cart_mode': 'extend'}, intent=False)
     bot = _bot_mock()
 
-    assert await completion.complete_subpage_carts_after_topup(
-        None, _telegram_user(), bot=bot, credited_kopeks=49900
-    ) is False
+    assert (
+        await completion.complete_subpage_carts_after_topup(None, _telegram_user(), bot=bot, credited_kopeks=49900)
+        is False
+    )
 
     process.assert_not_awaited()
     bot.send_message.assert_awaited_once()
@@ -786,9 +812,10 @@ async def test_orphan_topup_without_any_cart_points_to_buy(monkeypatch):
     process = _carts(monkeypatch, per_sub=[], global_cart=None)
     bot = _bot_mock()
 
-    assert await completion.complete_subpage_carts_after_topup(
-        None, _telegram_user(), bot=bot, credited_kopeks=49900
-    ) is False
+    assert (
+        await completion.complete_subpage_carts_after_topup(None, _telegram_user(), bot=bot, credited_kopeks=49900)
+        is False
+    )
 
     process.assert_not_awaited()
     bot.send_message.assert_awaited_once()
@@ -803,9 +830,10 @@ async def test_completed_purchase_does_not_duplicate_notification(monkeypatch):
     process = _carts(monkeypatch, per_sub=[{**BOUND, 'cart_mode': 'extend'}], global_cart=None)
     bot = _bot_mock()
 
-    assert await completion.complete_subpage_carts_after_topup(
-        None, _telegram_user(), bot=bot, credited_kopeks=49900
-    ) is True
+    assert (
+        await completion.complete_subpage_carts_after_topup(None, _telegram_user(), bot=bot, credited_kopeks=49900)
+        is True
+    )
 
     process.assert_awaited_once()
     bot.send_message.assert_not_awaited()

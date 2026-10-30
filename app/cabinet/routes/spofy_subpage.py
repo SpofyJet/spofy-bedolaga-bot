@@ -477,6 +477,9 @@ async def _checkout(short_uuid: str, body: CheckoutRequest, db: AsyncSession) ->
         await checkout_serializer.end(user.id)
 
 
+_CART_CHANGED = 'Cart changed concurrently — please retry'
+
+
 async def _checkout_payment(
     user: User, subscription: Subscription, body: CheckoutRequest, db: AsyncSession
 ) -> dict[str, Any]:
@@ -501,7 +504,9 @@ async def _checkout_payment(
         await save_devices_cart(
             request=DevicePurchaseRequest(devices=body.devices), subscription_id=subscription.id, user=user, db=db
         )
-        await tag_current_cart_as_subpage(user.id)
+        expected = {'cart_mode': 'add_devices', 'subscription_id': subscription.id, 'devices_to_add': body.devices}
+        if not await tag_current_cart_as_subpage(user.id, expected):
+            raise HTTPException(status.HTTP_409_CONFLICT, _CART_CHANGED)
     else:
         if body.traffic_gb is None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, 'traffic_gb is required')
@@ -513,7 +518,9 @@ async def _checkout_payment(
         await save_traffic_cart(
             request=TrafficPurchaseRequest(gb=body.traffic_gb), user=user, db=db, subscription_id=subscription.id
         )
-        await tag_current_cart_as_subpage(user.id)
+        expected = {'cart_mode': 'add_traffic', 'subscription_id': subscription.id, 'traffic_gb': body.traffic_gb}
+        if not await tag_current_cart_as_subpage(user.id, expected):
+            raise HTTPException(status.HTTP_409_CONFLICT, _CART_CHANGED)
 
     if price <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Nothing to pay — use the bot for free options')
@@ -528,7 +535,9 @@ async def _checkout_payment(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Amount exceeds the payment method limit')
 
     # The cart is bought only by THIS payment, never from the customer's balance.
-    await bind_cart_to_payment(user.id, price_kopeks=price, requested_kopeks=amount)
+    if not await bind_cart_to_payment(user.id, price_kopeks=price, requested_kopeks=amount):
+        # The slot no longer holds the page's cart: paying now would leave an orphan top-up.
+        raise HTTPException(status.HTTP_409_CONFLICT, _CART_CHANGED)
 
     topup = await create_topup(
         request=TopUpRequest(amount_kopeks=amount, payment_method=method.id, payment_option=body.payment_option),
