@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import structlog
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -485,10 +485,18 @@ async def get_user_referral_stats(db: AsyncSession, user_id: int) -> dict:
     invited_count_result = await db.execute(select(func.count(User.id)).where(User.referred_by_id == user_id))
     invited_count = invited_count_result.scalar()
 
-    total_earned, total_earned_days = await get_referral_earnings_totals(db, user_id)
-
+    # Все четыре итога — одним запросом: общие суммы плюс месячный срез через
+    # FILTER, вместо двух отдельных round-trip к Postgres.
     month_ago = datetime.now(UTC) - timedelta(days=30)
-    month_earned, month_earned_days = await get_referral_earnings_totals(db, user_id, start_date=month_ago)
+    totals_result = await db.execute(
+        select(
+            func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
+            func.coalesce(func.sum(ReferralEarning.days_granted), 0),
+            func.coalesce(func.sum(ReferralEarning.amount_kopeks).filter(ReferralEarning.created_at >= month_ago), 0),
+            func.coalesce(func.sum(ReferralEarning.days_granted).filter(ReferralEarning.created_at >= month_ago), 0),
+        ).where(ReferralEarning.user_id == user_id, not_referee_directed())
+    )
+    total_earned, total_earned_days, month_earned, month_earned_days = totals_result.one()
 
     active_referrals_result = await db.execute(
         select(func.count(func.distinct(User.id)))
@@ -506,8 +514,31 @@ async def get_user_referral_stats(db: AsyncSession, user_id: int) -> dict:
     return {
         'invited_count': invited_count,
         'active_referrals': active_referrals,
-        'total_earned_kopeks': total_earned,
-        'total_earned_days': total_earned_days,
-        'month_earned_kopeks': month_earned,
-        'month_earned_days': month_earned_days,
+        'total_earned_kopeks': int(total_earned or 0),
+        'total_earned_days': int(total_earned_days or 0),
+        'month_earned_kopeks': int(month_earned or 0),
+        'month_earned_days': int(month_earned_days or 0),
+    }
+
+
+async def get_user_referral_stats_light(db: AsyncSession, user_id: int) -> dict:
+    """Облегчённая статистика для главного меню: один запрос к Postgres.
+
+    Меню показывает только «приглашено» и «заработано», поэтому месячные срезы,
+    активных рефералов и выборку строк User не считаем вовсе.
+    """
+    row = (
+        await db.execute(
+            select(
+                func.count(User.id),
+                func.coalesce(func.sum(case((User.has_made_first_topup.is_(True), 1), else_=0)), 0),
+                select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0))
+                .where(ReferralEarning.user_id == user_id, not_referee_directed())
+                .scalar_subquery(),
+            ).where(User.referred_by_id == user_id)
+        )
+    ).one()
+    return {
+        'invited_count': row[0] or 0,
+        'total_earned_kopeks': int(row[2] or 0),
     }

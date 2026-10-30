@@ -8,6 +8,9 @@
 владельца бота есть Telegram Premium.
 """
 
+import re
+
+
 BUTTON_ICONS: dict[str, str] = {
     '💎': '5963312935148195483',
     '🤝': '5915556996215476302',
@@ -84,18 +87,24 @@ BUTTON_ICONS: dict[str, str] = {
 
 _EMOJI_KEYS = sorted(BUTTON_ICONS, key=len, reverse=True)
 
+# Один скомпилированный проход вместо перебора всех ключей: middleware
+# вызывает это на каждой кнопке каждого исходящего сообщения.
+_EMOJI_RE = re.compile(
+    r'^(?:' + '|'.join(re.escape(sym) for sym in _EMOJI_KEYS) + r')|(?:' + '|'.join(re.escape(sym) for sym in _EMOJI_KEYS) + r')$'
+)
+
 
 def _icon_for(text: str) -> tuple[str, str] | None:
     """(новый_текст, custom_emoji_id) для текста кнопки или None."""
     stripped = text.strip()
-    for sym in _EMOJI_KEYS:
-        if not stripped.startswith(sym) and not stripped.endswith(sym):
-            continue
-        new_text = stripped.replace(sym, '').strip()
-        if not new_text:
-            return None
-        return new_text, BUTTON_ICONS[sym]
-    return None
+    match = _EMOJI_RE.search(stripped)
+    if match is None:
+        return None
+    sym = match.group(0)
+    new_text = stripped.replace(sym, '').strip()
+    if not new_text:
+        return None
+    return new_text, BUTTON_ICONS[sym]
 
 
 def apply_button_icons(markup):

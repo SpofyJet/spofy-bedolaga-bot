@@ -59,7 +59,6 @@ from app.utils.pricing_utils import (
 )
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.subscription_utils import resolve_tariff_purchase_device_limit
-from app.utils.subscription_utils import resolve_tariff_renewal_device_limit
 from app.utils.timezone import format_local_datetime
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user

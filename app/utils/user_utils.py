@@ -3,7 +3,7 @@ import string
 from datetime import UTC, datetime, timedelta
 
 import structlog
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import and_, case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -114,13 +114,15 @@ async def mark_user_as_had_paid_subscription(db: AsyncSession, user: User) -> bo
 
 async def get_user_referral_summary(db: AsyncSession, user_id: int) -> dict:
     try:
-        invited_count_result = await db.execute(select(func.count(User.id)).where(User.referred_by_id == user_id))
-        invited_count = invited_count_result.scalar() or 0
-
-        referrals_result = await db.execute(select(User).where(User.referred_by_id == user_id))
-        referrals = referrals_result.scalars().all()
-
-        paid_referrals_count = sum(1 for ref in referrals if ref.has_made_first_topup)
+        # Приглашённые и «сделали первое пополнение» — одним агрегатом вместо
+        # выборки всех строк User в память ради подсчёта.
+        ref_stats_result = await db.execute(
+            select(
+                func.count(User.id),
+                func.coalesce(func.sum(case((User.has_made_first_topup.is_(True), 1), else_=0)), 0),
+            ).where(User.referred_by_id == user_id)
+        )
+        invited_count, paid_referrals_count = ref_stats_result.one()
 
         # Дни идут отдельной суммой: в копейках такая награда равна нулю, и без
         # своего итога пользователь, которому программа платит днями, видит на
@@ -129,28 +131,17 @@ async def get_user_referral_summary(db: AsyncSession, user_id: int) -> dict:
         # ПРИГЛАШЁННОМУ принадлежит ему самому, и без фильтра пользователь,
         # не пригласивший никого, видит «Приглашено: 0 · Заработано: 7 дн.»,
         # где вторая сторона пары — его собственный пригласивший.
+        # Общие и месячные итоги считаются одним запросом (FILTER по дате).
+        month_ago = datetime.now(UTC) - timedelta(days=30)
         total_earnings_result = await db.execute(
             select(
                 func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
                 func.coalesce(func.sum(ReferralEarning.days_granted), 0),
+                func.coalesce(func.sum(ReferralEarning.amount_kopeks).filter(ReferralEarning.created_at >= month_ago), 0),
+                func.coalesce(func.sum(ReferralEarning.days_granted).filter(ReferralEarning.created_at >= month_ago), 0),
             ).where(ReferralEarning.user_id == user_id, not_referee_directed())
         )
-        total_earned_kopeks, total_earned_days = total_earnings_result.one()
-
-        month_ago = datetime.now(UTC) - timedelta(days=30)
-        month_earnings_result = await db.execute(
-            select(
-                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
-                func.coalesce(func.sum(ReferralEarning.days_granted), 0),
-            ).where(
-                and_(
-                    ReferralEarning.user_id == user_id,
-                    ReferralEarning.created_at >= month_ago,
-                    not_referee_directed(),
-                )
-            )
-        )
-        month_earned_kopeks, month_earned_days = month_earnings_result.one()
+        total_earned_kopeks, total_earned_days, month_earned_kopeks, month_earned_days = total_earnings_result.one()
 
         recent_earnings_result = await db.execute(
             select(ReferralEarning)
