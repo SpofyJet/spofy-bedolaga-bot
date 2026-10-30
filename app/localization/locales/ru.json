@@ -2145,7 +2145,7 @@
   "SUBSCRIPTION_WARNING_MINUTES": "\n<tg-emoji emoji-id='5967333011652350314'>🔴</tg-emoji> истекает через несколько минут!",
   "SUBSCRIPTION_WARNING_TODAY": "\n<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> истекает сегодня!",
   "SUBSCRIPTION_WARNING_TOMORROW": "\n<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> истекает завтра!",
-  "SUB_ADD_DEVICES_BUTTON": "📱 Докупить устройства",
+  "SUB_ADD_DEVICES_BUTTON": "➕ Докупить устройства",
   "SUB_DEVICES_BUTTON": "📱 Устройства",
   "SUB_REVOKE_SHORT": "<tg-emoji emoji-id='6005570495603282482'>🔑</tg-emoji> Новая ссылка",
   "SUB_STATUS_ACTIVE_FEW_DAYS": "<tg-emoji emoji-id='5963312935148195483'>💎</tg-emoji> Активна\n<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> истекает через {days} дн.",

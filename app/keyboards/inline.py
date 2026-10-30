@@ -1467,7 +1467,7 @@ def get_subscription_keyboard(
                 keyboard.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('SUB_ADD_DEVICES_BUTTON', '📱 Докупить устройства'),
+                            text=texts.t('SUB_ADD_DEVICES_BUTTON', '➕ Докупить устройства'),
                             callback_data='subscription_change_devices',
                         )
                     ]

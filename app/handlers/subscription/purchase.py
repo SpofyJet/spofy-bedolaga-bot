@@ -1317,6 +1317,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                             InlineKeyboardButton(
                                 text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                                 web_app=types.WebAppInfo(url=subscription_link),
+                                style='success',
                             )
                         ],
                         [
@@ -1344,6 +1345,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                             InlineKeyboardButton(
                                 text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                                 web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
+                                style='success',
                             )
                         ],
                         [
@@ -1360,6 +1362,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         InlineKeyboardButton(
                             text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                             url=subscription_link,
+                            style='success',
                         )
                     ]
                 ]
@@ -1381,6 +1384,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         InlineKeyboardButton(
                             text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                             callback_data='open_subscription_link',
+                            style='success',
                         )
                     ]
                 ]
@@ -1403,6 +1407,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                             InlineKeyboardButton(
                                 text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                                 callback_data='subscription_connect',
+                                style='success',
                             )
                         ],
                         [
@@ -2928,6 +2933,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                             InlineKeyboardButton(
                                 text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                                 web_app=types.WebAppInfo(url=subscription_link),
+                                style='success',
                             )
                         ],
                         [
@@ -2955,6 +2961,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                             InlineKeyboardButton(
                                 text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                                 web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
+                                style='success',
                             )
                         ],
                         [
@@ -2986,6 +2993,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         InlineKeyboardButton(
                             text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                             callback_data='open_subscription_link',
+                            style='success',
                         )
                     ]
                 ]
