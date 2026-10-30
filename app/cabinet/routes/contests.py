@@ -1,7 +1,6 @@
 """Contests routes for cabinet - user participation in games/contests."""
 
 import random
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -14,7 +13,6 @@ from app.database.crud.contest import (
     create_attempt,
     get_active_rounds,
     get_attempt,
-    increment_winner_count,
 )
 from app.database.crud.subscription import get_active_subscriptions_by_user_id, get_subscription_by_user_id
 from app.database.models import SubscriptionStatus, User
@@ -40,6 +38,7 @@ from app.services.contest_rotation_service import (
     GAME_QUEST,
     GAME_SERVER,
 )
+from app.services.contests.attempt_service import ContestAttemptService
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
@@ -102,60 +101,6 @@ def _user_allowed(subscription) -> bool:
         SubscriptionStatus.TRIAL.value,
         SubscriptionStatus.LIMITED.value,
     }
-
-
-async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_value: str) -> str:
-    """Award prize to winner."""
-    if prize_type == 'days':
-        try:
-            days = int(prize_value)
-        except ValueError:
-            return 'Error: invalid prize value'
-
-        subscription = await _resolve_subscription_for_prize(db, user_id)
-        if not subscription:
-            return 'Error: subscription not found'
-
-        # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
-        from app.services.grace_access_echo import undo_grace_overlay_echo
-
-        await undo_grace_overlay_echo(db, subscription)
-        subscription.end_date = subscription.end_date + timedelta(days=days)
-        subscription.updated_at = datetime.now(UTC)
-        # Условия тарифа на новый срок: база тарифа + активные докупки.
-        from app.database.crud.subscription import reconcile_tariff_traffic_limit
-
-        await reconcile_tariff_traffic_limit(db, subscription)
-        await db.commit()
-        await db.refresh(subscription)
-
-        logger.info('🎁 Extended subscription for user by days (contest prize)', user_id=user_id, days=days)
-        return f'Subscription extended by {days} days'
-
-    if prize_type == 'balance':
-        from app.database.crud.user import get_user_by_id
-
-        try:
-            amount = float(prize_value)
-        except ValueError:
-            return 'Error: invalid prize value'
-
-        user = await get_user_by_id(db, user_id)
-        if not user:
-            return 'Error: user not found'
-
-        from app.database.crud.user import lock_user_for_update
-
-        user = await lock_user_for_update(db, user)
-        user.balance_kopeks += int(round(amount * 100))
-        await db.commit()
-        await db.refresh(user)
-
-        logger.info('🎁 Added to balance for user (contest prize)', amount=amount, user_id=user_id)
-        return f'Balance increased by {amount}'
-
-    logger.warning('Unknown prize type', prize_type=prize_type)
-    return f"Prize type '{prize_type}' not supported"
 
 
 # ============ Routes ============
@@ -288,24 +233,21 @@ async def get_contest_game(
     game_data = {}
     instructions = ''
 
+    # Загаданный индекс (payload['secret_idx']) клиенту не отдаём — ответ проверяет сервер.
     if game_type == GAME_QUEST:
         rows = round_obj.payload.get('rows', 3)
         cols = round_obj.payload.get('cols', 3)
-        secret = random.randint(0, rows * cols - 1)
         game_data = {
             'rows': rows,
             'cols': cols,
-            'secret': secret,
             'grid_size': rows * cols,
         }
         instructions = 'Select one of the nodes in the grid. Find the hidden server!'
 
     elif game_type == GAME_LOCKS:
         total = round_obj.payload.get('total', 20)
-        secret = random.randint(0, total - 1)
         game_data = {
             'total': total,
-            'secret': secret,
         }
         instructions = 'Find the unlocked button among the locks!'
 
@@ -409,14 +351,14 @@ async def submit_contest_answer(
         is_winner = answer == correct_flag
 
     elif tpl.slug in {GAME_QUEST, GAME_LOCKS}:
+        # Клиент присылает «{idx}_{...}»; раньше победа = idx == второе число из
+        # того же ответа, то есть «0_0» выигрывал всегда. Сверяем с сервером.
+        secret_idx = round_obj.payload.get('secret_idx')
         try:
-            parts = answer.split('_')
-            if len(parts) >= 2:
-                idx = int(parts[0])
-                secret = int(parts[1])
-                is_winner = idx == secret
-        except (ValueError, IndexError):
-            is_winner = False
+            idx = int(answer.split('_')[0])
+        except ValueError:
+            idx = None
+        is_winner = secret_idx is not None and idx == secret_idx
 
     elif tpl.slug == GAME_BLITZ:
         is_winner = answer.lower() == 'blitz'
@@ -425,12 +367,16 @@ async def submit_contest_answer(
         correct = (round_obj.payload.get('answer') or '').upper()
         is_winner = correct and answer.upper() == correct
 
+    # Лимит победителей и приз — общие с ботом: атомарный счётчик под блокировкой
+    # раунда, приз баланса в копейках (раньше здесь было значение × 100).
+    attempt_service = ContestAttemptService()
+    is_winner = await attempt_service._atomic_winner_check(db, round_obj.id, bool(is_winner))
+
     # Record attempt
     await create_attempt(db, round_id=round_obj.id, user_id=user.id, answer=str(answer), is_winner=is_winner)
 
     if is_winner:
-        await increment_winner_count(db, round_obj)
-        prize_text = await _award_prize(db, user.id, tpl.prize_type, tpl.prize_value)
+        prize_text = await attempt_service._award_prize(db, user.id, tpl, user.language or 'ru')
         return ContestResult(
             is_winner=True,
             message=f'🎉 Congratulations! You won! {prize_text}',
