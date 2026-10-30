@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import PaymentMethod, Subscription, TransactionType
 from app.services.payment.payer_identity import PayerIdentity, payer_from_guest, resolve_user_payer
-from app.services.payment.reversal_alert import alert_paid_payment_reversed
+from app.services.payment_reversal_alert import alert_paid_payment_reversed
 from app.services.platega_service import PlategaService
 from app.utils.formatters import format_human_date
 from app.utils.payment_logger import payment_logger as logger

@@ -135,7 +135,7 @@ async def delete_subscription(
 
     # Истёкший триал — единственный след «триал уже был» (is_trial_already_used
     # смотрит на наличие подписок): удаление открывало новый триал бесконечно.
-    if subscription.is_trial:
+    if getattr(subscription, 'is_trial', False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Trial subscriptions cannot be deleted',

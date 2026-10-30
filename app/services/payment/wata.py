@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
-from app.services.payment.reversal_alert import alert_paid_payment_reversed
+from app.services.payment_reversal_alert import alert_paid_payment_reversed
 from app.services.wata_service import WataAPIError, WataService
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
