@@ -1668,7 +1668,7 @@
   "PAYMENT_PLATEGA_M11": "银行卡 (RUB)",
   "PAYMENT_PLATEGA_M12": "国际卡",
   "PAYMENT_PLATEGA_M13": "加密货币",
-  "PAYMENT_PLATEGA_M2": "银行卡 / SBP",
+  "PAYMENT_PLATEGA_M2": "💳 银行卡 / SBP",
   "PAYMENT_RETURN_HOME_BUTTON": "🏠返回首页",
   "PAYMENT_RIOPAY": "银行卡(RioPay)",
   "PAYMENT_SBP_YOOKASSA": "通过SBP支付(YooKassa)",
