@@ -24,6 +24,14 @@ from app.database.models import (
 
 logger = structlog.get_logger(__name__)
 
+# Описание транзакции одобренного вывода — по нему реплей кошелька отличает вывод
+# реферальных денег от админских списаний (у тех тоже тип WITHDRAWAL).
+WITHDRAWAL_TX_DESCRIPTION_PREFIX = 'Вывод реферального баланса'
+
+_OTHER_CREDIT_TYPES = frozenset(
+    {TransactionType.DEPOSIT.value, TransactionType.REFUND.value, TransactionType.POLL_REWARD.value}
+)
+
 
 class ReferralWithdrawalService:
     """Сервис для обработки запросов на вывод реферального баланса."""
@@ -121,18 +129,54 @@ class ReferralWithdrawalService:
         )
         return result.scalar() or 0
 
+    async def get_unspent_referral_amount(self, db: AsyncSession, user_id: int) -> int:
+        """
+        Сколько реферальных денег осталось в кошельке — реплей транзакций по времени.
+
+        Кошелёк делится на две части: реферальная и прочая (пополнения, бонусы кампаний,
+        промокоды, возвраты). Покупки списываются сначала из прочей части, потом из
+        реферальной; одобренный вывод — сначала из реферальной. Пополнение после покупки
+        не «возвращает» потраченные реферальные деньги, поэтому бонусный баланс нельзя
+        вывести как реферальный. Суммы берутся по модулю: в старых записях
+        subscription_payment/withdrawal встречаются положительными.
+        """
+        result = await db.execute(
+            select(Transaction.type, Transaction.amount_kopeks, Transaction.description)
+            .where(Transaction.user_id == user_id, Transaction.is_completed == True)
+            .order_by(Transaction.created_at, Transaction.id)
+        )
+        referral_part = other_part = 0
+        for tx_type, amount, description in result.all():
+            amount = abs(amount or 0)
+            if tx_type == TransactionType.REFERRAL_REWARD.value:
+                referral_part += amount
+            elif tx_type in _OTHER_CREDIT_TYPES:
+                other_part += amount
+            elif tx_type == TransactionType.WITHDRAWAL.value and (description or '').startswith(
+                WITHDRAWAL_TX_DESCRIPTION_PREFIX
+            ):
+                taken = min(referral_part, amount)
+                referral_part -= taken
+                other_part = max(0, other_part - (amount - taken))
+            else:
+                taken = min(other_part, amount)
+                other_part -= taken
+                referral_part = max(0, referral_part - (amount - taken))
+        return referral_part
+
     async def get_referral_balance_stats(self, db: AsyncSession, user_id: int) -> dict:
         """
         Получает полную статистику реферального баланса.
 
-        Доступный реферальный баланс = min(баланс кошелька, заработано - выведено - в ожидании).
+        Доступный реферальный баланс = min(кошелёк - в ожидании,
+        min(непотраченные реф. деньги, заработано - выведено) - в ожидании).
         Партнёр не может вывести больше, чем реально лежит в кошельке (User.balance_kopeks),
-        и не больше, чем заработал минус уже выведенные/замороженные средства.
+        больше, чем заработал минус уже выведенное, и реферальные деньги, которые он уже
+        потратил на покупки (см. get_unspent_referral_amount).
         """
         total_earned = await self.get_total_referral_earnings(db, user_id)
         own_deposits = await self.get_user_own_deposits(db, user_id)
         spending = await self.get_user_spending(db, user_id)
-        spending_after_earning = await self.get_user_spending_after_first_earning(db, user_id)
         withdrawn = await self.get_withdrawn_amount(db, user_id)
         pending = await self.get_pending_withdrawal_amount(db, user_id)
 
@@ -140,20 +184,21 @@ class ReferralWithdrawalService:
         user = await db.get(User, user_id)
         user_balance = user.balance_kopeks if user else 0
 
-        # referral_spent — для аналитики/отображения, больше НЕ влияет на available_referral
-        referral_spent = min(spending_after_earning, total_earned)
+        # Заработано минус выведено, но не больше того, что ещё не потрачено на покупки
+        earned_left = max(0, total_earned - withdrawn)
+        unspent_referral = min(await self.get_unspent_referral_amount(db, user_id), earned_left)
+        referral_spent = earned_left - unspent_referral
 
-        # Реферальное право: сколько заработано минус выведено/заморожено
-        referral_entitlement = max(0, total_earned - withdrawn - pending)
+        # Реферальное право: непотраченное минус замороженное в заявке
+        referral_entitlement = max(0, unspent_referral - pending)
 
-        # Доступный реферальный баланс: мин(кошелёк, реферальное право)
-        # Нельзя вывести больше, чем лежит в кошельке
-        available_referral = min(user_balance, referral_entitlement)
+        # Заявка в ожидании ещё не списана с кошелька — её сумма уже занята
+        spendable_balance = max(0, user_balance - pending)
+        available_referral = min(spendable_balance, referral_entitlement)
 
         # Если разрешено выводить и свой баланс
         if not settings.REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE:
-            # Весь кошелёк доступен к выводу (уже ограничен user_balance)
-            available_total = user_balance
+            available_total = spendable_balance
         else:
             available_total = available_referral
 
@@ -161,7 +206,7 @@ class ReferralWithdrawalService:
             'total_earned': total_earned,  # Всего заработано с рефералов
             'own_deposits': own_deposits,  # Собственные пополнения
             'spending': spending,  # Потрачено на подписки и пр.
-            'referral_spent': referral_spent,  # Сколько реф. баланса потрачено (аналитика)
+            'referral_spent': referral_spent,  # Сколько реф. денег ушло на покупки
             'withdrawn': withdrawn,  # Уже выведено
             'pending': pending,  # На рассмотрении
             'available_referral': available_referral,  # Доступно реф. баланса
@@ -528,7 +573,7 @@ class ReferralWithdrawalService:
             user_id=request.user_id,
             type=TransactionType.WITHDRAWAL.value,
             amount_kopeks=-request.amount_kopeks,
-            description=f'Вывод реферального баланса (заявка #{request.id})',
+            description=f'{WITHDRAWAL_TX_DESCRIPTION_PREFIX} (заявка #{request.id})',
             is_completed=True,
             completed_at=datetime.now(UTC),
         )
