@@ -98,7 +98,7 @@ async def debug_callback_handler(callback: types.CallbackQuery):
     logger.info('Username', username=callback.from_user.username)
 
 
-async def setup_bot() -> tuple[Bot, Dispatcher]:
+async def setup_bot(memory: MemoryStorage | None = None) -> tuple[Bot, Dispatcher]:
     try:
         await cache.connect()
         logger.info('Кеш инициализирован')
@@ -137,7 +137,11 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     except Exception as e:
         logger.warning('Не удалось подключиться к Redis', error=e)
         logger.info('Используется MemoryStorage для FSM')
-        storage = MemoryStorage()
+        # Без Redis MemoryStorage растёт бесконечно — берём ограниченный
+        # вариант с FIFO-вытеснением (патч работает и для переданного storage).
+        from app.utils.fsm_memory import LimitedMemoryStorage
+
+        storage = memory if memory is not None else LimitedMemoryStorage()
 
     dp = Dispatcher(storage=storage)
 

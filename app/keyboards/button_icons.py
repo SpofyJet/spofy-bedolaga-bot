@@ -93,10 +93,21 @@ _EMOJI_RE = re.compile(
     r'^(?:' + '|'.join(re.escape(sym) for sym in _EMOJI_KEYS) + r')|(?:' + '|'.join(re.escape(sym) for sym in _EMOJI_KEYS) + r')$'
 )
 
+# Страховка: если в текст кнопки затесался tg-emoji-тег (из локали, где ключ
+# оказался и кнопкой, и сообщением), превращаем его в icon_custom_emoji_id —
+# кнопки HTML не парсят и показали бы тег буквально.
+_TAG_RE = re.compile(r"<tg-emoji emoji-id='([0-9]+)'>(.*?)</tg-emoji>")
+
 
 def _icon_for(text: str) -> tuple[str, str] | None:
     """(новый_текст, custom_emoji_id) для текста кнопки или None."""
     stripped = text.strip()
+    tag = _TAG_RE.search(stripped)
+    if tag is not None:
+        new_text = _TAG_RE.sub('', stripped).strip()
+        if not new_text:
+            return None
+        return new_text, tag.group(1)
     match = _EMOJI_RE.search(stripped)
     if match is None:
         return None

@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import fnmatch
+import re
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -249,7 +250,8 @@ async def test_button_really_buys_traffic_and_says_so(monkeypatch, cart_service)
     assert succeeded is True
     assert after.traffic == 200
     text = bot.send_message.call_args.kwargs['text']
-    assert text.startswith('✅ <b>Трафик добавлен!</b>')
+    plain = re.sub(r"<tg-emoji emoji-id='\d+'>(.*?)</tg-emoji>", r'\1', text)
+    assert plain.startswith('✅ <b>Трафик добавлен!</b>')
     assert 'автоматически' not in text
     assert await cart_service.get_user_cart(USER_ID) is None
 
@@ -268,7 +270,8 @@ async def test_button_really_buys_devices_and_says_so(monkeypatch, cart_service)
     assert succeeded is True
     assert after.devices == 3
     text = bot.send_message.call_args.kwargs['text']
-    assert text.startswith('✅ <b>Устройства добавлены!</b>')
+    plain = re.sub(r"<tg-emoji emoji-id='\d+'>(.*?)</tg-emoji>", r'\1', text)
+    assert plain.startswith('✅ <b>Устройства добавлены!</b>')
     assert 'автоматически' not in text
 
 

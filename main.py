@@ -799,6 +799,24 @@ async def main():
                 stage.skip('Проверка версий отключена настройками')
 
         async with timeline.stage(
+            'Мониторинг памяти',
+            '🧠',
+            success_message='RSS-мониторинг запущен',
+        ) as stage:
+            from app.utils.fsm_memory import RSS_CHECK_INTERVAL_SEC, log_memory
+
+            async def _rss_monitor() -> None:
+                while True:
+                    await asyncio.sleep(RSS_CHECK_INTERVAL_SEC)
+                    try:
+                        log_memory('bot')
+                    except Exception:
+                        pass
+
+            rss_monitor_task = asyncio.create_task(_rss_monitor())
+            stage.log(f'Интервал проверки RSS: {RSS_CHECK_INTERVAL_SEC} сек')
+
+        async with timeline.stage(
             'Запуск polling',
             '🤖',
             success_message='Aiogram polling запущен',
@@ -1029,6 +1047,13 @@ async def main():
             version_check_task.cancel()
             try:
                 await version_check_task
+            except asyncio.CancelledError:
+                pass
+
+        if rss_monitor_task and not rss_monitor_task.done():
+            rss_monitor_task.cancel()
+            try:
+                await rss_monitor_task
             except asyncio.CancelledError:
                 pass
 
