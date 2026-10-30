@@ -234,6 +234,18 @@ async def _prepare_subscription_summary(
     if devices_selection_enabled:
         summary_lines.append(texts.t('SUBSCRIPTION_SUMMARY_DEVICES').format(devices=devices_selected))
 
+    autopay_note = (
+        texts.t(
+            'CHECKOUT_AUTOPAY_ON_NOTE',
+            '🔁 Автопродление включено — доступ продлится автоматически с баланса.',
+        )
+        if summary_data.get('checkout_autopay')
+        else texts.t(
+            'CHECKOUT_AUTOPAY_OFF_NOTE',
+            '🔁 Автопродление выключено — это разовый платёж, продлевать подписку нужно будет вручную.',
+        )
+    )
+
     summary_lines.extend(
         [
             '',
@@ -241,6 +253,7 @@ async def _prepare_subscription_summary(
             details_text,
             '',
             texts.t('SUBSCRIPTION_SUMMARY_TOTAL').format(total=texts.format_price(total_price)),
+            autopay_note,
             '',
             texts.t('SUBSCRIPTION_SUMMARY_CONFIRM_PROMPT'),
         ]

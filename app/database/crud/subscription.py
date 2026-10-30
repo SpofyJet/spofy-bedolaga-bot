@@ -610,6 +610,7 @@ async def create_paid_subscription(
     tariff_id: int | None = None,
     commit: bool = True,
     conversion_trial: Subscription | None = None,
+    autopay_enabled: bool | None = None,
 ) -> Subscription:
     # Multi-tariff invariant: at most ONE subscription per (user, tariff). If a
     # subscription for this tariff has EXPIRED, revive it in place instead of
@@ -684,7 +685,7 @@ async def create_paid_subscription(
         device_limit=device_limit,
         connected_squads=final_squads,
         pending_panel_expire_at=end_date,
-        autopay_enabled=settings.is_autopay_enabled_by_default(),
+        autopay_enabled=autopay_enabled if autopay_enabled is not None else settings.is_autopay_enabled_by_default(),
         autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
         tariff_id=tariff_id,
         remnawave_short_id=short_id,

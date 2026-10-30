@@ -207,6 +207,7 @@ async def test_return_to_saved_cart_skips_edit_when_message_matches(
 
         mock_texts = AsyncMock()
         mock_texts.format_price = lambda x: f'{x / 100:.0f} ₽'
+        mock_texts.t = lambda key, default=None: default or ''
         mock_get_texts.return_value = mock_texts
 
         mock_settings.is_devices_selection_enabled.return_value = True
@@ -220,7 +221,8 @@ async def test_return_to_saved_cart_skips_edit_when_message_matches(
             '📊 Трафик: 40 ГБ\n'
             '🌍 Страны: Russia, USA\n'
             '📱 Устройства: 3\n\n'
-            '💎 Общая стоимость: 440 ₽\n\n'
+            '💎 Общая стоимость: 440 ₽\n'
+            '🔁 Автопродление выключено — это разовый платёж, продлевать подписку нужно будет вручную.\n\n'
             'Подтверждаете покупку?'
         )
 

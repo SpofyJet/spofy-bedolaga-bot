@@ -44,7 +44,9 @@ async def present_subscription_summary(
 
     await callback.message.edit_text(
         summary_text,
-        reply_markup=get_subscription_confirm_keyboard(db_user.language),
+        reply_markup=get_subscription_confirm_keyboard(
+            db_user.language, autopay_enabled=bool(prepared_data.get('checkout_autopay'))
+        ),
         parse_mode='HTML',
     )
 

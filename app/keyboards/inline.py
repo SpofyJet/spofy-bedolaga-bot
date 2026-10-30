@@ -654,6 +654,7 @@ def get_main_menu_keyboard(
                 InlineKeyboardButton(
                     text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
                     callback_data=resume_callback,
+                    style='success',
                 )
             ]
         )
@@ -689,6 +690,7 @@ def get_main_menu_keyboard(
             return InlineKeyboardButton(
                 text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                 callback_data=connect_callback,
+                style='success',
             )
 
         if connect_mode == 'miniapp_subscription':
@@ -698,6 +700,7 @@ def get_main_menu_keyboard(
                         InlineKeyboardButton(
                             text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                             web_app=types.WebAppInfo(url=subscription_link),
+                            style='success',
                         )
                     ]
                 )
@@ -709,13 +712,19 @@ def get_main_menu_keyboard(
                     InlineKeyboardButton(
                         text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                         web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
+                        style='success',
                     )
                 ]
             )
         elif connect_mode == 'link':
             if subscription_link:
                 keyboard.append(
-                    [InlineKeyboardButton(text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), url=subscription_link)]
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), url=subscription_link,
+                            style='success',
+                        )
+                    ]
                 )
             else:
                 keyboard.append([_fallback_connect_button()])
@@ -728,6 +737,7 @@ def get_main_menu_keyboard(
                             callback_data=(
                                 connect_callback if settings.is_multi_tariff_enabled() else 'open_subscription_link'
                             ),
+                            style='success',
                         )
                     ]
                 )
@@ -804,10 +814,14 @@ def get_main_menu_keyboard(
     subscription_buttons: list[InlineKeyboardButton] = []
 
     if show_trial:
-        subscription_buttons.append(InlineKeyboardButton(text=texts.MENU_TRIAL, callback_data='menu_trial'))
+        subscription_buttons.append(
+            InlineKeyboardButton(text=texts.MENU_TRIAL, callback_data='menu_trial', style='success')
+        )
 
     if show_buy:
-        subscription_buttons.append(InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy'))
+        subscription_buttons.append(
+            InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')
+        )
 
     if subscription_buttons:
         # Каждая кнопка подписки — в отдельной строке, ВЫШЕ баланса (главный CTA для новых)
@@ -1016,6 +1030,7 @@ def get_happ_cryptolink_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                     url=final_redirect_link,
+                    style='success',
                 )
             ]
         )
@@ -1215,6 +1230,7 @@ def get_subscription_keyboard(
                         InlineKeyboardButton(
                             text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                             web_app=types.WebAppInfo(url=subscription_link),
+                            style='success',
                         )
                     ]
                 )
@@ -1225,6 +1241,7 @@ def get_subscription_keyboard(
                             InlineKeyboardButton(
                                 text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                                 web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
+                                style='success',
                             )
                         ]
                     )
@@ -1234,12 +1251,18 @@ def get_subscription_keyboard(
                             InlineKeyboardButton(
                                 text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                                 callback_data=f'subscription_connect{_sub_suffix}',
+                                style='success',
                             )
                         ]
                     )
             elif connect_mode == 'link':
                 keyboard.append(
-                    [InlineKeyboardButton(text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), url=subscription_link)]
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), url=subscription_link,
+                            style='success',
+                        )
+                    ]
                 )
             elif connect_mode == 'happ_cryptolink':
                 keyboard.append(
@@ -1247,6 +1270,7 @@ def get_subscription_keyboard(
                         InlineKeyboardButton(
                             text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                             callback_data=f'open_subscription_link{_sub_suffix}',
+                            style='success',
                         )
                     ]
                 )
@@ -1256,6 +1280,7 @@ def get_subscription_keyboard(
                         InlineKeyboardButton(
                             text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                             callback_data=f'subscription_connect{_sub_suffix}',
+                            style='success',
                         )
                     ]
                 )
@@ -1265,6 +1290,7 @@ def get_subscription_keyboard(
                     InlineKeyboardButton(
                         text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                         web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
+                        style='success',
                     )
                 ]
             )
@@ -1274,6 +1300,7 @@ def get_subscription_keyboard(
                     InlineKeyboardButton(
                         text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
                         callback_data=f'subscription_connect{_sub_suffix}',
+                        style='success',
                     )
                 ]
             )
@@ -1288,6 +1315,7 @@ def get_subscription_keyboard(
                     InlineKeyboardButton(
                         text=texts.t('TRIAL_GO_PAID_BUTTON', '⭐️ Перейти на платный тариф'),
                         callback_data='subscription_upgrade',
+                        style='success',
                     )
                 ]
             )
@@ -1324,8 +1352,13 @@ def get_subscription_keyboard(
                     pause_text = texts.t('RESUME_DAILY_BUTTON', '▶️ Возобновить подписку')
                 else:
                     pause_text = texts.t('PAUSE_DAILY_BUTTON', '⏸️ Приостановить подписку')
+                pause_style = 'success' if (is_inactive or is_paused) else None
                 keyboard.append(
-                    [InlineKeyboardButton(text=pause_text, callback_data='toggle_daily_subscription_pause')]
+                    [
+                        InlineKeyboardButton(
+                            text=pause_text, callback_data='toggle_daily_subscription_pause', style=pause_style
+                        )
+                    ]
                 )
             elif is_legacy_subscription:
                 # Старая подписка (куплена в классике, тарифа нет, а оператор на
@@ -1342,7 +1375,13 @@ def get_subscription_keyboard(
             else:
                 # «Продлить подписку» — главная CTA экрана, отдельным рядом на всю ширину
                 keyboard.append(
-                    [InlineKeyboardButton(text=texts.MENU_EXTEND_SUBSCRIPTION, callback_data='subscription_extend')]
+                    [
+                        InlineKeyboardButton(
+                            text=texts.MENU_EXTEND_SUBSCRIPTION,
+                            callback_data='subscription_extend',
+                            style='success',
+                        )
+                    ]
                 )
                 autopay_row = [
                     InlineKeyboardButton(
@@ -1393,7 +1432,9 @@ def get_subscription_keyboard(
                 if getattr(subscription, 'actual_status', None) in ('expired', 'disabled'):
                     settings_row.append(
                         InlineKeyboardButton(
-                            text=texts.t('BUY_TARIFF_BUTTON', '📦 Купить тариф'), callback_data='menu_buy'
+                            text=texts.t('BUY_TARIFF_BUTTON', '📦 Купить тариф'),
+                            callback_data='menu_buy',
+                            style='success',
                         )
                     )
                 else:
@@ -1471,7 +1512,11 @@ def get_payment_methods_keyboard_with_cart(
 
     # Кнопка "Очистить корзину"
     keyboard.inline_keyboard.append(
-        [InlineKeyboardButton(text='🗑️ Очистить корзину и вернуться', callback_data='clear_saved_cart')]
+        [
+            InlineKeyboardButton(
+                text='🗑️ Очистить корзину и вернуться', callback_data='clear_saved_cart', style='danger'
+            )
+        ]
     )
 
     if back_row:
@@ -1480,12 +1525,31 @@ def get_payment_methods_keyboard_with_cart(
     return keyboard
 
 
-def get_subscription_confirm_keyboard_with_cart(language: str = 'ru') -> InlineKeyboardMarkup:
+def get_subscription_confirm_keyboard_with_cart(
+    language: str = 'ru',
+    autopay_available: bool = True,
+    autopay_enabled: bool = False,
+) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text='✅ Подтвердить покупку', callback_data='subscription_confirm')],
-            [InlineKeyboardButton(text='🗑️ Очистить корзину', callback_data='clear_saved_cart')],
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                text='✅ Подтвердить покупку',
+                callback_data='subscription_confirm',
+                style='success',
+            )
+        ],
+    ]
+    if autopay_available:
+        autopay_text = (
+            texts.t('CHECKOUT_AUTOPAY_BUTTON_ON', '🔁 Автопродление: вкл')
+            if autopay_enabled
+            else texts.t('CHECKOUT_AUTOPAY_BUTTON_OFF', '🔁 Автопродление: выкл')
+        )
+        keyboard.append([InlineKeyboardButton(text=autopay_text, callback_data='checkout_toggle_autopay')])
+    keyboard.extend(
+        [
+            [InlineKeyboardButton(text='🗑️ Очистить корзину', callback_data='clear_saved_cart', style='danger')],
             [
                 InlineKeyboardButton(
                     text=texts.BACK,
@@ -1494,6 +1558,7 @@ def get_subscription_confirm_keyboard_with_cart(language: str = 'ru') -> InlineK
             ],
         ]
     )
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_insufficient_balance_keyboard_with_cart(
@@ -1518,6 +1583,7 @@ def get_insufficient_balance_keyboard_with_cart(
             InlineKeyboardButton(
                 text='🗑️ Очистить корзину и вернуться',
                 callback_data='clear_saved_cart',
+                style='danger',
             )
         ],
     )
@@ -1531,7 +1597,9 @@ def get_trial_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('TRIAL_ACTIVATE_BUTTON', '🎁 Активировать'), callback_data='trial_activate'
+                    text=texts.t('TRIAL_ACTIVATE_BUTTON', '🎁 Активировать'),
+                    callback_data='trial_activate',
+                    style='success',
                 ),
             ],
             [
@@ -1774,18 +1842,34 @@ def _get_device_declension(count: int) -> str:
     return 'устройств'
 
 
-def get_subscription_confirm_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+def get_subscription_confirm_keyboard(
+    language: str = DEFAULT_LANGUAGE,
+    autopay_available: bool = True,
+    autopay_enabled: bool = False,
+) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text=texts.CONFIRM, callback_data='subscription_confirm'),
-            ],
-            [
-                InlineKeyboardButton(text=texts.CANCEL, callback_data='subscription_cancel'),
-            ],
-        ]
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                text=texts.CONFIRM,
+                callback_data='subscription_confirm',
+                style='success',
+            ),
+        ],
+    ]
+    if autopay_available:
+        autopay_text = (
+            texts.t('CHECKOUT_AUTOPAY_BUTTON_ON', '🔁 Автопродление: вкл')
+            if autopay_enabled
+            else texts.t('CHECKOUT_AUTOPAY_BUTTON_OFF', '🔁 Автопродление: выкл')
+        )
+        keyboard.append([InlineKeyboardButton(text=autopay_text, callback_data='checkout_toggle_autopay')])
+    keyboard.append(
+        [
+            InlineKeyboardButton(text=texts.CANCEL, callback_data='subscription_cancel'),
+        ],
     )
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
@@ -1793,7 +1877,11 @@ def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
 
     # n6-П4: «Пополнить» — главное действие, первым рядом на всю ширину
     keyboard = [
-        [InlineKeyboardButton(text=texts.BALANCE_TOP_UP, callback_data='balance_topup')],
+        [
+            InlineKeyboardButton(
+                text=texts.BALANCE_TOP_UP, callback_data='balance_topup', style='success'
+            )
+        ],
         [
             InlineKeyboardButton(text=texts.BALANCE_HISTORY, callback_data='balance_history'),
             InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode'),
@@ -2649,6 +2737,7 @@ def get_referral_keyboard(language: str = DEFAULT_LANGUAGE, share_url: str | Non
                 InlineKeyboardButton(
                     text=texts.t('REFERRAL_SHARE_BUTTON', '📤 Переслать приглашение'),
                     url=share_url,
+                    style='success',
                 )
             ]
         )
@@ -2717,6 +2806,7 @@ def get_support_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
                 InlineKeyboardButton(
                     text=texts.t('CONTACT_SUPPORT_BUTTON', '💬 Связаться с поддержкой'),
                     url=settings.get_support_contact_url() or 'https://t.me/',
+                    style='success',
                 )
             ]
         )
@@ -3693,6 +3783,7 @@ def get_devices_management_keyboard(
             InlineKeyboardButton(
                 text=texts.t('RESET_ALL_DEVICES_BUTTON', '🔄 Сбросить все устройства'),
                 callback_data='reset_all_devices',
+                style='danger',
             )
         ]
     )
@@ -3703,6 +3794,7 @@ def get_devices_management_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('DEVICE_ADD_SLOT_BUTTON', '➕ Добавить место для устройства'),
                     callback_data=add_slot_callback,
+                    style='success',
                 )
             ]
         )
@@ -3827,6 +3919,7 @@ def get_device_reset_confirm_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('RESET_DEVICE_CONFIRM_BUTTON', '✅ Да, сбросить это устройство'),
                     callback_data=f'confirm_reset_device_{device_index}_{page}',
+                    style='danger',
                 )
             ],
             [InlineKeyboardButton(text=texts.CANCEL, callback_data=f'devices_page_{page}')],

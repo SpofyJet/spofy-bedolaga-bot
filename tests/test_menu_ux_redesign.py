@@ -52,3 +52,10 @@ def test_expired_sub_single_traffic_button(monkeypatch):
         'ru', has_subscription=True, is_trial=False, subscription=_fake_sub('expired')
     )
     assert _callbacks(markup).count('buy_traffic') <= 1
+
+
+def test_secondary_actions_one_per_row():
+    markup = kb.get_referral_keyboard('ru')
+    assert all(len(row) == 1 for row in markup.inline_keyboard)
+    callbacks = _callbacks(markup)
+    assert callbacks[:4] == ['referral_create_invite', 'referral_show_qr', 'referral_list', 'referral_analytics']

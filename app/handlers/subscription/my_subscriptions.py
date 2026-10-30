@@ -19,7 +19,7 @@ from app.database.crud.subscription import (
     get_all_subscriptions_by_user_id,
     get_subscription_by_id_for_user,
 )
-from app.database.models import Subscription, SubscriptionStatus, User
+from app.database.models import Subscription, User
 from app.localization.texts import Texts, get_texts
 from app.utils.legacy_subscription import is_legacy_subscription
 from app.utils.subscription_utils import get_display_subscription_link
@@ -168,9 +168,6 @@ def _build_subscription_detail_keyboard(sub_id: int, sub=None, language: str = '
         )
         buttons.append([types.InlineKeyboardButton(text='📊 Трафик', callback_data=f'st:{sub_id}')])
         buttons.append([types.InlineKeyboardButton(text='📱 Устройства', callback_data=f'sd:{sub_id}')])
-
-    if is_inactive:
-        buttons.append([types.InlineKeyboardButton(text='🗑 Удалить подписку', callback_data=f'sub_del:{sub_id}')])
 
     if not is_inactive and settings.is_subscription_revoke_enabled():
         buttons.append(
@@ -437,98 +434,6 @@ async def handle_device_management_menu(
     from .devices import handle_device_management
 
     await handle_device_management(callback, db_user, db, state)
-
-
-async def handle_subscription_delete_confirm(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext,
-) -> None:
-    """Show delete confirmation for an expired/disabled subscription."""
-    sub_id = _extract_sub_id(callback)
-    if sub_id is None:
-        await callback.answer('Неверный формат', show_alert=True)
-        return
-
-    subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
-    if not subscription:
-        await callback.answer('Подписка не найдена', show_alert=True)
-        return
-
-    if subscription.actual_status not in ('expired', 'disabled'):
-        await callback.answer('Можно удалить только истекшую или отключённую подписку', show_alert=True)
-        return
-
-    tariff_name = subscription.tariff.name if subscription.tariff else 'Подписка'
-
-    text = (
-        f'🗑 <b>Удалить подписку «{tariff_name}»?</b>\n\n'
-        '⚠️ Подписка будет удалена безвозвратно.\n'
-        'Все данные, устройства и настройки будут потеряны.\n'
-        'Это действие нельзя отменить.'
-    )
-
-    keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [types.InlineKeyboardButton(text='🗑 Да, удалить', callback_data=f'sub_del_yes:{sub_id}')],
-            [types.InlineKeyboardButton(text='◀️ Отмена', callback_data=f'sm:{sub_id}')],
-        ]
-    )
-
-    if callback.message:
-        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
-    await callback.answer()
-
-
-async def handle_subscription_delete_execute(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext,
-) -> None:
-    """Actually delete an expired/disabled subscription."""
-    sub_id = _extract_sub_id(callback)
-    if sub_id is None:
-        await callback.answer('Неверный формат', show_alert=True)
-        return
-
-    subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
-    if not subscription:
-        await callback.answer('Подписка не найдена', show_alert=True)
-        return
-
-    deletable_statuses = {SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value}
-    if getattr(subscription, 'actual_status', subscription.status) not in deletable_statuses:
-        await callback.answer('Можно удалить только истекшую или отключённую подписку', show_alert=True)
-        return
-
-    # Порядок удаления (грейс-гард → автоплатежи → панель → строка) живёт в общем
-    # сервисе: своя копия здесь расходилась с ним — звала delete_user напрямую,
-    # мимо REMNAWAVE_USER_DELETE_MODE и мимо правил адресации общего аккаунта
-    # однотарифного режима.
-    from app.services.grace_access_runtime import GraceAccessDeletionBlocked
-    from app.services.subscription_deletion_service import delete_subscription_record
-
-    try:
-        await delete_subscription_record(db, subscription, deleted_by=f'user:{db_user.id}')
-    except GraceAccessDeletionBlocked:
-        await callback.answer(
-            'Подписку нельзя удалить, пока действует временный доступ для продления.',
-            show_alert=True,
-        )
-        return
-
-    logger.info(
-        'Subscription deleted by user via bot',
-        subscription_id=sub_id,
-        user_id=db_user.id,
-    )
-
-    await callback.answer('Подписка удалена', show_alert=True)
-
-    # Return to subscriptions list
-    await show_my_subscriptions(callback, db_user, db, state)
 
 
 def _extract_sub_id(callback: types.CallbackQuery) -> int | None:

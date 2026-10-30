@@ -1762,10 +1762,23 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
         if devices_value is not None:
             summary_lines.append(f'📱 Устройства: {devices_value}')
 
+    cart_autopay_note = (
+        texts.t(
+            'CHECKOUT_AUTOPAY_ON_NOTE',
+            '🔁 Автопродление включено — доступ продлится автоматически с баланса.',
+        )
+        if prepared_cart_data.get('checkout_autopay')
+        else texts.t(
+            'CHECKOUT_AUTOPAY_OFF_NOTE',
+            '🔁 Автопродление выключено — это разовый платёж, продлевать подписку нужно будет вручную.',
+        )
+    )
+
     summary_lines.extend(
         [
             '',
             f'💎 Общая стоимость: {texts.format_price(total_price)}',
+            cart_autopay_note,
             '',
             'Подтверждаете покупку?',
         ]
@@ -1777,7 +1790,9 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
     await state.set_data(prepared_cart_data)
     await state.set_state(SubscriptionStates.confirming_purchase)
 
-    confirm_keyboard = get_subscription_confirm_keyboard_with_cart(db_user.language)
+    confirm_keyboard = get_subscription_confirm_keyboard_with_cart(
+        db_user.language, autopay_enabled=bool(prepared_cart_data.get('checkout_autopay'))
+    )
 
     if _message_needs_update(callback.message, summary_text, confirm_keyboard):
         await callback.message.edit_text(summary_text, reply_markup=confirm_keyboard, parse_mode='HTML')
@@ -2716,6 +2731,12 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
             existing_subscription.traffic_used_gb = 0.0
 
+            # Выбор автопродления в checkout важнее дефолта конверсии триала
+            if data.get('checkout_autopay'):
+                _sub_tariff = getattr(existing_subscription, 'tariff', None)
+                if not (_sub_tariff and getattr(_sub_tariff, 'is_daily', False)):
+                    existing_subscription.autopay_enabled = True
+
             await db.commit()
             await db.refresh(existing_subscription)
             subscription = existing_subscription
@@ -2760,6 +2781,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 device_limit=resolved_device_limit,
                 connected_squads=new_subscription_countries,
                 traffic_gb=final_traffic_gb,
+                autopay_enabled=True if data.get('checkout_autopay') else None,
             )
 
         from app.database.crud.server_squad import add_user_to_servers, get_server_ids_by_uuids
@@ -3056,7 +3078,9 @@ async def resume_subscription_checkout(
 
     await callback.message.edit_text(
         summary_text,
-        reply_markup=get_subscription_confirm_keyboard(db_user.language),
+        reply_markup=get_subscription_confirm_keyboard(
+            db_user.language, autopay_enabled=bool(prepared_data.get('checkout_autopay'))
+        ),
         parse_mode='HTML',
     )
 
@@ -3070,6 +3094,7 @@ async def create_paid_subscription_with_traffic_mode(
     device_limit: int | None,
     connected_squads: list[str],
     traffic_gb: int | None = None,
+    autopay_enabled: bool | None = None,
 ):
     from app.config import settings
 
@@ -3092,6 +3117,9 @@ async def create_paid_subscription_with_traffic_mode(
 
     if device_limit is not None:
         create_kwargs['device_limit'] = device_limit
+
+    if autopay_enabled is not None:
+        create_kwargs['autopay_enabled'] = autopay_enabled
 
     subscription = await create_paid_subscription(**create_kwargs)
 
@@ -4350,6 +4378,38 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
         await callback.answer('❌ Произошла ошибка при создании платежа. Попробуйте позже.', show_alert=True)
 
 
+@error_handler
+async def handle_checkout_autopay_toggle(callback: types.CallbackQuery, state: FSMContext, db_user: User):
+    """Тогл автопродления в checkout классической покупки."""
+    texts = get_texts(db_user.language)
+    data = await state.get_data()
+    if not data.get('period_days'):
+        await callback.answer(
+            texts.t(
+                'SUBSCRIPTION_PURCHASE_ERROR',
+                'Ошибка при оформлении подписки. Попробуйте начать сначала.',
+            ),
+            show_alert=True,
+        )
+        return
+
+    data['checkout_autopay'] = not data.get('checkout_autopay')
+    await state.set_data(data)
+
+    summary_text, prepared_data = await _prepare_subscription_summary(db_user, data, texts)
+    await state.set_data(prepared_data)
+    await save_subscription_checkout_draft(db_user.id, prepared_data)
+
+    await callback.message.edit_text(
+        summary_text,
+        reply_markup=get_subscription_confirm_keyboard(
+            db_user.language, autopay_enabled=bool(prepared_data.get('checkout_autopay'))
+        ),
+        parse_mode='HTML',
+    )
+    await callback.answer()
+
+
 def register_handlers(dp: Dispatcher):
     update_traffic_prices()
 
@@ -4365,8 +4425,6 @@ def register_handlers(dp: Dispatcher):
     from app.handlers.subscription.my_subscriptions import (
         handle_change_devices_menu,
         handle_device_management_menu,
-        handle_subscription_delete_confirm,
-        handle_subscription_delete_execute,
         handle_subscription_devices,
         handle_subscription_extend,
         handle_subscription_link,
@@ -4377,8 +4435,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_subscription_extend, F.data.startswith('se:'))
     dp.callback_query.register(handle_subscription_traffic, F.data.startswith('st:'))
     dp.callback_query.register(handle_subscription_devices, F.data.startswith('sd:'))
-    dp.callback_query.register(handle_subscription_delete_confirm, F.data.startswith('sub_del:'))
-    dp.callback_query.register(handle_subscription_delete_execute, F.data.startswith('sub_del_yes:'))
     dp.callback_query.register(handle_change_devices_menu, F.data.startswith('change_devices_menu:'))
     dp.callback_query.register(handle_device_management_menu, F.data.startswith('device_management:'))
 
@@ -4446,6 +4502,11 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(devices_continue, F.data == 'devices_continue', SubscriptionStates.selecting_devices)
 
+    dp.callback_query.register(
+        handle_checkout_autopay_toggle,
+        F.data == 'checkout_toggle_autopay',
+        SubscriptionStates.confirming_purchase,
+    )
     dp.callback_query.register(
         confirm_purchase, F.data == 'subscription_confirm', SubscriptionStates.confirming_purchase
     )
