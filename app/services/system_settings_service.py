@@ -89,6 +89,21 @@ class BotConfigurationService:
         'WEB_API_DEFAULT_TOKEN',
         'WEB_API_TOKEN_HMAC_SECRET',
         'WEBHOOK_SECRET_TOKEN',
+        # Куда бот ходит с ключом панели и куда отправляет полный дамп БД: правка
+        # через `settings:edit` уводила бы ключ панели или бэкап на чужой адрес.
+        'REMNAWAVE_API_URL',
+        'REMNAWAVE_API_KEY',
+        'REMNAWAVE_SECRET_KEY',
+        'REMNAWAVE_USERNAME',
+        'REMNAWAVE_PASSWORD',
+        'REMNAWAVE_WEBHOOK_SECRET',
+        'BACKUP_SEND_CHAT_ID',
+        'BACKUP_SEND_TOPIC_ID',
+        'BACKUP_ARCHIVE_PASSWORD',
+        # Подмена доверенных прокси = подмена IP клиента (обход лимитов входа),
+        # подмена origins = CORS с учётными данными для чужого сайта.
+        'CABINET_TRUSTED_PROXIES',
+        'CABINET_ALLOWED_ORIGINS',
     }
 
     READ_ONLY_KEYS: set[str] = set()
