@@ -2035,6 +2035,15 @@ async def auto_login(
             detail='Invalid or expired auto-login token',
         )
 
+    # Одноразовый: токен лежит на странице статуса покупки до 72 ч — повторный
+    # вход по нему (ссылка переслана, страница открыта кем-то ещё) не допускаем.
+    token_hash = hashlib.sha256(request.token.encode()).hexdigest()
+    if await TokenReplayCache.is_token_replayed(f'auto_login:{token_hash}', ttl=72 * 3600):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid or expired auto-login token',
+        )
+
     try:
         user_id = int(payload['sub'])
     except (KeyError, ValueError, TypeError) as e:
@@ -2104,12 +2113,6 @@ async def forgot_password(
     # Always return success to prevent email enumeration
     if not user:
         return {'message': 'If the email exists, a password reset link has been sent'}
-
-    # Auto-fix guest-created email users who have a password but weren't verified
-    if not user.email_verified and user.password_hash and user.auth_type == 'email':
-        user.email_verified = True
-        user.email_verified_at = datetime.now(UTC)
-        await db.commit()
 
     if not user.email_verified:
         return {'message': 'If the email exists, a password reset link has been sent'}
