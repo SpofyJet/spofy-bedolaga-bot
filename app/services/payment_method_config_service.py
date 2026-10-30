@@ -23,10 +23,6 @@ _display_sort_orders: dict[str, int] = {}
 
 
 def _config_method_id(method_id: str) -> str:
-    # Встроенные методы platega_m* наследуют конфиг (имя и порядок) родителя platega,
-    # чтобы «Карта / СБП» оставалась на заданном в кабинете месте.
-    if method_id.startswith('platega_m'):
-        return 'platega'
     return {'stars': 'telegram_stars', 'yookassa_sbp': 'yookassa'}.get(method_id, method_id)
 
 
@@ -48,6 +44,12 @@ def get_display_name_override(method_id: str) -> str | None:
 
 
 def get_display_sort_order(method_id: str) -> int | None:
+    # Встроенные методы platega_m* наследуют только порядок родителя platega,
+    # чтобы «Карта / СБП» оставалась первой. Имена они НЕ наследуют: у каждого
+    # метода своё название (Карта / СБП, Международные карты), иначе подписи
+    # дублируются, а международная карта «исчезает».
+    if method_id.startswith('platega_m'):
+        method_id = 'platega'
     return _display_sort_orders.get(_config_method_id(method_id))
 
 
