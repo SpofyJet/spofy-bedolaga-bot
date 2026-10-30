@@ -146,153 +146,159 @@ async def _ensure_mailing_schema() -> None:
     from app.database.database import engine
 
     async with engine.begin() as conn:
-        await conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS ma_settings (
-                    id SERIAL PRIMARY KEY,
-                    key VARCHAR(128) NOT NULL UNIQUE,
-                    value TEXT,
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                );
-
-                CREATE TABLE IF NOT EXISTS ma_users (
-                    user_id BIGINT PRIMARY KEY,
-                    tg_user_id BIGINT,
-                    username VARCHAR(64),
-                    first_name VARCHAR(255),
-                    last_name VARCHAR(255),
-                    language VARCHAR(16),
-                    is_bot BOOLEAN NOT NULL DEFAULT FALSE,
-                    is_premium BOOLEAN,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    deleted_at TIMESTAMPTZ,
-                    ma_settings_id INTEGER REFERENCES ma_settings(id) ON DELETE CASCADE
-                );
-
-                CREATE TABLE IF NOT EXISTS ma_chats (
-                    id SERIAL PRIMARY KEY,
-                    chat_id BIGINT NOT NULL,
-                    chat_type VARCHAR(32) NOT NULL,
-                    title VARCHAR(512),
-                    username VARCHAR(64),
-                    member_count INTEGER,
-                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                    language VARCHAR(16),
-                    last_activity_at TIMESTAMPTZ,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    deleted_at TIMESTAMPTZ,
-                    ma_settings_id INTEGER REFERENCES ma_settings(id) ON DELETE CASCADE,
-                    UNIQUE(chat_id, chat_type)
-                );
-
-                CREATE TABLE IF NOT EXISTS ma_mailing_lists (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL,
-                    description TEXT,
-                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    deleted_at TIMESTAMPTZ,
-                    ma_settings_id INTEGER REFERENCES ma_settings(id) ON DELETE CASCADE
-                );
-
-                CREATE TABLE IF NOT EXISTS ma_campaigns (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL,
-                    description TEXT,
-                    status VARCHAR(32) NOT NULL DEFAULT 'draft',
-                    scheduled_at TIMESTAMPTZ,
-                    started_at TIMESTAMPTZ,
-                    completed_at TIMESTAMPTZ,
-                    total_recipients INTEGER NOT NULL DEFAULT 0,
-                    sent_count INTEGER NOT NULL DEFAULT 0,
-                    delivered_count INTEGER NOT NULL DEFAULT 0,
-                    failed_count INTEGER NOT NULL DEFAULT 0,
-                    blocked_count INTEGER NOT NULL DEFAULT 0,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    deleted_at TIMESTAMPTZ,
-                    ma_mailing_list_id INTEGER REFERENCES ma_mailing_lists(id) ON DELETE SET NULL,
-                    ma_settings_id INTEGER REFERENCES ma_settings(id) ON DELETE CASCADE
-                );
-
-                CREATE TABLE IF NOT EXISTS ma_campaign_recipients (
-                    id SERIAL PRIMARY KEY,
-                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
-                    attempts INTEGER NOT NULL DEFAULT 0,
-                    max_attempts INTEGER NOT NULL DEFAULT 3,
-                    sent_at TIMESTAMPTZ,
-                    delivered_at TIMESTAMPTZ,
-                    error_message TEXT,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    ma_campaign_id INTEGER NOT NULL REFERENCES ma_campaigns(id) ON DELETE CASCADE,
-                    ma_user_id INTEGER REFERENCES ma_users(id) ON DELETE CASCADE,
-                    ma_chat_id INTEGER REFERENCES ma_chats(id) ON DELETE CASCADE
-                );
-                CREATE INDEX IF NOT EXISTS ix_ma_campaign_recipients_campaign
-                    ON ma_campaign_recipients (ma_campaign_id, status);
-                CREATE INDEX IF NOT EXISTS ix_ma_campaign_recipients_user
-                    ON ma_campaign_recipients (ma_user_id);
-
-                CREATE TABLE IF NOT EXISTS ma_queue_jobs (
-                    id SERIAL PRIMARY KEY,
-                    job_type VARCHAR(64) NOT NULL,
-                    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
-                    priority INTEGER NOT NULL DEFAULT 0,
-                    attempts INTEGER NOT NULL DEFAULT 0,
-                    max_attempts INTEGER NOT NULL DEFAULT 3,
-                    run_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    processed_at TIMESTAMPTZ,
-                    error_message TEXT,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    ma_campaign_id INTEGER REFERENCES ma_campaigns(id) ON DELETE CASCADE
-                );
-                CREATE INDEX IF NOT EXISTS ix_ma_queue_jobs_status ON ma_queue_jobs (status, run_at);
-
-                CREATE TABLE IF NOT EXISTS ma_message_logs (
-                    id SERIAL PRIMARY KEY,
-                    direction VARCHAR(16) NOT NULL DEFAULT 'outgoing',
-                    message_type VARCHAR(64),
-                    status VARCHAR(32),
-                    error_message TEXT,
-                    sent_at TIMESTAMPTZ,
-                    delivered_at TIMESTAMPTZ,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    ma_user_id INTEGER REFERENCES ma_users(id) ON DELETE SET NULL,
-                    ma_chat_id INTEGER REFERENCES ma_chats(id) ON DELETE SET NULL,
-                    ma_campaign_id INTEGER REFERENCES ma_campaigns(id) ON DELETE SET NULL
-                );
-                CREATE INDEX IF NOT EXISTS ix_ma_message_logs_campaign
-                    ON ma_message_logs (ma_campaign_id, created_at);
-                CREATE INDEX IF NOT EXISTS ix_ma_message_logs_user
-                    ON ma_message_logs (ma_user_id, created_at);
-
-                CREATE TABLE IF NOT EXISTS ma_stats (
-                    id SERIAL PRIMARY KEY,
-                    stat_date DATE NOT NULL,
-                    stat_type VARCHAR(64) NOT NULL,
-                    total_sent INTEGER NOT NULL DEFAULT 0,
-                    total_delivered INTEGER NOT NULL DEFAULT 0,
-                    total_failed INTEGER NOT NULL DEFAULT 0,
-                    total_blocked INTEGER NOT NULL DEFAULT 0,
-                    active_users INTEGER NOT NULL DEFAULT 0,
-                    active_chats INTEGER NOT NULL DEFAULT 0,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    ma_settings_id INTEGER REFERENCES ma_settings(id) ON DELETE CASCADE,
-                    UNIQUE(stat_date, stat_type)
-                );
-                """
-            )
-        )
+        # asyncpg не принимает несколько команд в одном prepared statement —
+        # выполняем DDL по одному; всё равно всё идемпотентно.
+        for statement in _MAILING_SCHEMA_DDL.split(';'):
+            statement = statement.strip()
+            if statement:
+                await conn.execute(text(statement))
     logger.info('Схема рассыльщика (ma_*) проверена/создана')
+
+
+# Кольцо таблиц рассыльщика: каждый statement заканчивается ';', скрипт
+# разбивает и выполняет их по одному (asyncpg: одна команда за запрос).
+_MAILING_SCHEMA_DDL = """
+CREATE TABLE IF NOT EXISTS ma_settings (
+    id SERIAL PRIMARY KEY,
+    key VARCHAR(128) NOT NULL UNIQUE,
+    value TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS ma_users (
+    user_id BIGINT PRIMARY KEY,
+    tg_user_id BIGINT,
+    username VARCHAR(64),
+    first_name VARCHAR(255),
+    last_name VARCHAR(255),
+    language VARCHAR(16),
+    is_bot BOOLEAN NOT NULL DEFAULT FALSE,
+    is_premium BOOLEAN,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at TIMESTAMPTZ,
+    ma_settings_id INTEGER REFERENCES ma_settings(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ma_chats (
+    id SERIAL PRIMARY KEY,
+    chat_id BIGINT NOT NULL,
+    chat_type VARCHAR(32) NOT NULL,
+    title VARCHAR(512),
+    username VARCHAR(64),
+    member_count INTEGER,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    language VARCHAR(16),
+    last_activity_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at TIMESTAMPTZ,
+    ma_settings_id INTEGER REFERENCES ma_settings(id) ON DELETE CASCADE,
+    UNIQUE(chat_id, chat_type)
+);
+
+CREATE TABLE IF NOT EXISTS ma_mailing_lists (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at TIMESTAMPTZ,
+    ma_settings_id INTEGER REFERENCES ma_settings(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ma_campaigns (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    status VARCHAR(32) NOT NULL DEFAULT 'draft',
+    scheduled_at TIMESTAMPTZ,
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    total_recipients INTEGER NOT NULL DEFAULT 0,
+    sent_count INTEGER NOT NULL DEFAULT 0,
+    delivered_count INTEGER NOT NULL DEFAULT 0,
+    failed_count INTEGER NOT NULL DEFAULT 0,
+    blocked_count INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deleted_at TIMESTAMPTZ,
+    ma_mailing_list_id INTEGER REFERENCES ma_mailing_lists(id) ON DELETE SET NULL,
+    ma_settings_id INTEGER REFERENCES ma_settings(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ma_campaign_recipients (
+    id SERIAL PRIMARY KEY,
+    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    sent_at TIMESTAMPTZ,
+    delivered_at TIMESTAMPTZ,
+    error_message TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ma_campaign_id INTEGER NOT NULL REFERENCES ma_campaigns(id) ON DELETE CASCADE,
+    ma_user_id INTEGER REFERENCES ma_users(id) ON DELETE CASCADE,
+    ma_chat_id INTEGER REFERENCES ma_chats(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS ix_ma_campaign_recipients_campaign
+    ON ma_campaign_recipients (ma_campaign_id, status);
+CREATE INDEX IF NOT EXISTS ix_ma_campaign_recipients_user
+    ON ma_campaign_recipients (ma_user_id);
+
+CREATE TABLE IF NOT EXISTS ma_queue_jobs (
+    id SERIAL PRIMARY KEY,
+    job_type VARCHAR(64) NOT NULL,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    priority INTEGER NOT NULL DEFAULT 0,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    run_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    processed_at TIMESTAMPTZ,
+    error_message TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ma_campaign_id INTEGER REFERENCES ma_campaigns(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS ix_ma_queue_jobs_status ON ma_queue_jobs (status, run_at);
+
+CREATE TABLE IF NOT EXISTS ma_message_logs (
+    id SERIAL PRIMARY KEY,
+    direction VARCHAR(16) NOT NULL DEFAULT 'outgoing',
+    message_type VARCHAR(64),
+    status VARCHAR(32),
+    error_message TEXT,
+    sent_at TIMESTAMPTZ,
+    delivered_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ma_user_id INTEGER REFERENCES ma_users(id) ON DELETE SET NULL,
+    ma_chat_id INTEGER REFERENCES ma_chats(id) ON DELETE SET NULL,
+    ma_campaign_id INTEGER REFERENCES ma_campaigns(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS ix_ma_message_logs_campaign
+    ON ma_message_logs (ma_campaign_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_ma_message_logs_user
+    ON ma_message_logs (ma_user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS ma_stats (
+    id SERIAL PRIMARY KEY,
+    stat_date DATE NOT NULL,
+    stat_type VARCHAR(64) NOT NULL,
+    total_sent INTEGER NOT NULL DEFAULT 0,
+    total_delivered INTEGER NOT NULL DEFAULT 0,
+    total_failed INTEGER NOT NULL DEFAULT 0,
+    total_blocked INTEGER NOT NULL DEFAULT 0,
+    active_users INTEGER NOT NULL DEFAULT 0,
+    active_chats INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ma_settings_id INTEGER REFERENCES ma_settings(id) ON DELETE CASCADE,
+    UNIQUE(stat_date, stat_type)
+);
+"""
 
 
 # Spofy: до v5.0.0 форк жил на своей цепочке ревизий — 0099 (xrocket) и 0100
