@@ -239,7 +239,7 @@ CREATE TABLE IF NOT EXISTS ma_campaign_recipients (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     ma_campaign_id INTEGER NOT NULL REFERENCES ma_campaigns(id) ON DELETE CASCADE,
-    ma_user_id INTEGER REFERENCES ma_users(id) ON DELETE CASCADE,
+    ma_user_id BIGINT REFERENCES ma_users(user_id) ON DELETE CASCADE,
     ma_chat_id INTEGER REFERENCES ma_chats(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS ix_ma_campaign_recipients_campaign
@@ -274,7 +274,7 @@ CREATE TABLE IF NOT EXISTS ma_message_logs (
     delivered_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    ma_user_id INTEGER REFERENCES ma_users(id) ON DELETE SET NULL,
+    ma_user_id BIGINT REFERENCES ma_users(user_id) ON DELETE SET NULL,
     ma_chat_id INTEGER REFERENCES ma_chats(id) ON DELETE SET NULL,
     ma_campaign_id INTEGER REFERENCES ma_campaigns(id) ON DELETE SET NULL
 );
