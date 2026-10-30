@@ -656,7 +656,7 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
 
 
 @error_handler
-async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession):
+async def handle_sbp_payment(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     try:
         local_payment_id = int(callback.data.split('_')[-1])
 
@@ -664,7 +664,8 @@ async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession):
 
         payment = await get_yookassa_payment_by_local_id(db, local_payment_id)
 
-        if not payment:
+        # Токен подтверждения СБП — только владельцу платежа.
+        if not payment or payment.user_id != db_user.id:
             await callback.answer('❌ Платеж не найден', show_alert=True)
             return
 

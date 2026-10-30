@@ -454,12 +454,21 @@ async def process_platega_payment_amount(
 @error_handler
 async def check_platega_payment_status(
     callback: types.CallbackQuery,
+    db_user: User,
     db: AsyncSession,
 ):
     try:
         local_payment_id = int(callback.data.split('_')[-1])
     except ValueError:
         await callback.answer('❌ Некорректный идентификатор платежа', show_alert=True)
+        return
+
+    # Владельца проверяем до запроса к провайдеру: id в callback_data подконтролен клиенту.
+    from app.database.crud.platega import get_platega_payment_by_id
+
+    owned_payment = await get_platega_payment_by_id(db, local_payment_id)
+    if not owned_payment or owned_payment.user_id != db_user.id:
+        await callback.answer('⚠️ Платёж не найден', show_alert=True)
         return
 
     payment_service = PaymentService(callback.bot)

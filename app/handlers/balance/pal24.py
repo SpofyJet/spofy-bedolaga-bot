@@ -488,10 +488,19 @@ async def handle_pal24_method_selection(
 @error_handler
 async def check_pal24_payment_status(
     callback: types.CallbackQuery,
+    db_user: User,
     db: AsyncSession,
 ):
     try:
         local_payment_id = int(callback.data.split('_')[-1])
+        # Владельца проверяем до запроса к провайдеру: id в callback_data подконтролен клиенту.
+        from app.database.crud.pal24 import get_pal24_payment_by_id
+
+        owned_payment = await get_pal24_payment_by_id(db, local_payment_id)
+        if not owned_payment or owned_payment.user_id != db_user.id:
+            await callback.answer('❌ Платеж не найден', show_alert=True)
+            return
+
         payment_service = PaymentService(callback.bot)
         status_info = await payment_service.get_pal24_payment_status(db, local_payment_id)
 

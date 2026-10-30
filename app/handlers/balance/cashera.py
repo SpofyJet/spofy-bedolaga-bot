@@ -340,11 +340,19 @@ def _render_qr(payload: str):
 
 
 @error_handler
-async def check_cashera_payment_status(callback: types.CallbackQuery, db: AsyncSession):
+async def check_cashera_payment_status(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     try:
         local_payment_id = int(callback.data.rsplit('_', 1)[-1])
     except ValueError:
         await callback.answer('❌ Некорректный идентификатор платежа', show_alert=True)
+        return
+
+    # Владельца проверяем до запроса к провайдеру: id в callback_data подконтролен клиенту.
+    from app.database.crud.cashera import get_cashera_payment_by_id
+
+    owned_payment = await get_cashera_payment_by_id(db, local_payment_id)
+    if not owned_payment or owned_payment.user_id != db_user.id:
+        await callback.answer('⚠️ Платёж не найден', show_alert=True)
         return
 
     try:

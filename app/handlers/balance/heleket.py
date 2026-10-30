@@ -279,6 +279,7 @@ async def process_heleket_payment_amount(
 @error_handler
 async def check_heleket_payment_status(
     callback: types.CallbackQuery,
+    db_user: User,
     db: AsyncSession,
 ) -> None:
     try:
@@ -290,7 +291,7 @@ async def check_heleket_payment_status(
     from app.database.crud.heleket import get_heleket_payment_by_id
 
     payment = await get_heleket_payment_by_id(db, local_payment_id)
-    if not payment:
+    if not payment or payment.user_id != db_user.id:
         await callback.answer('Платёж не найден', show_alert=True)
         return
 

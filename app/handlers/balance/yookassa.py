@@ -550,7 +550,7 @@ async def process_yookassa_sbp_payment_amount(
 
 
 @error_handler
-async def check_yookassa_payment_status(callback: types.CallbackQuery, db: AsyncSession):
+async def check_yookassa_payment_status(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     try:
         local_payment_id = int(callback.data.split('_')[-1])
 
@@ -558,7 +558,7 @@ async def check_yookassa_payment_status(callback: types.CallbackQuery, db: Async
 
         payment = await get_yookassa_payment_by_local_id(db, local_payment_id)
 
-        if not payment:
+        if not payment or payment.user_id != db_user.id:
             await callback.answer('❌ Платеж не найден', show_alert=True)
             return
 

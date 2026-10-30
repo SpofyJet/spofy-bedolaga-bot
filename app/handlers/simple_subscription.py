@@ -1759,10 +1759,19 @@ async def handle_simple_subscription_payment_method(
 @error_handler
 async def check_simple_pal24_payment_status(
     callback: types.CallbackQuery,
+    db_user: User,
     db: AsyncSession,
 ):
     try:
         local_payment_id = int(callback.data.rsplit('_', 1)[-1])
+        # Владельца проверяем до запроса к провайдеру: id в callback_data подконтролен клиенту.
+        from app.database.crud.pal24 import get_pal24_payment_by_id
+
+        owned_payment = await get_pal24_payment_by_id(db, local_payment_id)
+        if not owned_payment or owned_payment.user_id != db_user.id:
+            await callback.answer('❌ Платеж не найден', show_alert=True)
+            return
+
         payment_service = PaymentService(callback.bot)
         status_info = await payment_service.get_pal24_payment_status(db, local_payment_id)
 
@@ -1893,12 +1902,21 @@ async def check_simple_pal24_payment_status(
 @error_handler
 async def check_simple_mulenpay_payment_status(
     callback: types.CallbackQuery,
+    db_user: User,
     db: AsyncSession,
 ):
     try:
         local_payment_id = int(callback.data.rsplit('_', 1)[-1])
     except (ValueError, IndexError):
         await callback.answer('❌ Некорректный идентификатор платежа', show_alert=True)
+        return
+
+    # Владельца проверяем до запроса к провайдеру: id в callback_data подконтролен клиенту.
+    from app.database.crud.mulenpay import get_mulenpay_payment_by_local_id
+
+    owned_payment = await get_mulenpay_payment_by_local_id(db, local_payment_id)
+    if not owned_payment or owned_payment.user_id != db_user.id:
+        await callback.answer('❌ Платеж не найден', show_alert=True)
         return
 
     payment_service = PaymentService(callback.bot)
@@ -1970,6 +1988,7 @@ async def check_simple_mulenpay_payment_status(
 @error_handler
 async def check_simple_cryptobot_payment_status(
     callback: types.CallbackQuery,
+    db_user: User,
     db: AsyncSession,
 ):
     try:
@@ -1981,7 +2000,7 @@ async def check_simple_cryptobot_payment_status(
     from app.database.crud.cryptobot import get_cryptobot_payment_by_id
 
     payment = await get_cryptobot_payment_by_id(db, local_payment_id)
-    if not payment:
+    if not payment or payment.user_id != db_user.id:
         await callback.answer('❌ Платеж не найден', show_alert=True)
         return
 
@@ -2040,6 +2059,7 @@ async def check_simple_cryptobot_payment_status(
 @error_handler
 async def check_simple_heleket_payment_status(
     callback: types.CallbackQuery,
+    db_user: User,
     db: AsyncSession,
 ):
     try:
@@ -2051,7 +2071,7 @@ async def check_simple_heleket_payment_status(
     from app.database.crud.heleket import get_heleket_payment_by_id
 
     payment = await get_heleket_payment_by_id(db, local_payment_id)
-    if not payment:
+    if not payment or payment.user_id != db_user.id:
         await callback.answer('❌ Платеж не найден', show_alert=True)
         return
 
@@ -2126,12 +2146,21 @@ async def check_simple_heleket_payment_status(
 @error_handler
 async def check_simple_wata_payment_status(
     callback: types.CallbackQuery,
+    db_user: User,
     db: AsyncSession,
 ):
     try:
         local_payment_id = int(callback.data.rsplit('_', 1)[-1])
     except (ValueError, IndexError):
         await callback.answer('❌ Некорректный идентификатор платежа', show_alert=True)
+        return
+
+    # Владельца проверяем до запроса к провайдеру: id в callback_data подконтролен клиенту.
+    from app.database.crud.wata import get_wata_payment_by_id
+
+    owned_payment = await get_wata_payment_by_id(db, local_payment_id)
+    if not owned_payment or owned_payment.user_id != db_user.id:
+        await callback.answer('❌ Платеж не найден', show_alert=True)
         return
 
     payment_service = PaymentService(callback.bot)
