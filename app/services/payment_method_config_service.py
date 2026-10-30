@@ -23,6 +23,10 @@ _display_sort_orders: dict[str, int] = {}
 
 
 def _config_method_id(method_id: str) -> str:
+    # Встроенные методы platega_m* наследуют конфиг (имя и порядок) родителя platega,
+    # чтобы «Карта / СБП» оставалась на заданном в кабинете месте.
+    if method_id.startswith('platega_m'):
+        return 'platega'
     return {'stars': 'telegram_stars', 'yookassa_sbp': 'yookassa'}.get(method_id, method_id)
 
 
