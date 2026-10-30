@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -2196,6 +2196,14 @@ async def reset_password(
     user.password_hash = hash_password(request.password)
     user.password_reset_token = None
     user.password_reset_expires = None
+
+    # Сброс пароля — обычно реакция на угон: старые refresh-токены (7 дней) иначе
+    # продолжали бы выдавать сессии тому, кто вошёл до смены пароля.
+    await db.execute(
+        update(CabinetRefreshToken)
+        .where(CabinetRefreshToken.user_id == user.id, CabinetRefreshToken.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(UTC))
+    )
 
     await db.commit()
 
