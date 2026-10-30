@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import PaymentMethod, Subscription, TransactionType
 from app.services.payment.payer_identity import PayerIdentity, payer_from_guest, resolve_user_payer
+from app.services.payment.reversal_alert import alert_paid_payment_reversed
 from app.services.platega_service import PlategaService
 from app.utils.formatters import format_human_date
 from app.utils.payment_logger import payment_logger as logger
@@ -960,6 +961,26 @@ class PlategaPaymentMixin:
             if result is None:
                 logger.error('Platega webhook: финализация не удалась', payment_id=payment.id)
                 return False
+            return True
+
+        if payment.is_paid and status_raw not in self._PENDING_STATUSES:
+            # Оплаченный платёж ушёл в CHARGEBACKED/REFUNDED/FAILED: is_paid не сбрасываем
+            # (повторный CONFIRMED иначе финализировал бы платёж ещё раз), зовём админа.
+            await payment_module.update_platega_payment(
+                db,
+                payment=payment,
+                status=status_raw,
+                callback_payload=payload,
+                platega_transaction_id=transaction_id or None,
+            )
+            await alert_paid_payment_reversed(
+                getattr(self, 'bot', None),
+                provider='Platega',
+                local_payment_id=payment.id,
+                user_id=payment.user_id,
+                amount_kopeks=payment.amount_kopeks,
+                status=status_raw,
+            )
             return True
 
         if status_raw in self._FAILED_STATUSES:

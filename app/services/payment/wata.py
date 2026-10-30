@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
+from app.services.payment.reversal_alert import alert_paid_payment_reversed
 from app.services.wata_service import WataAPIError, WataService
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
@@ -278,6 +279,17 @@ class WataPaymentMixin:
 
         if status_lower == 'declined':
             logger.info('WATA платеж отклонён', payment_link_id=payment.payment_link_id)
+
+        if payment.is_paid and status_lower not in {'pending', 'created', 'opened'}:
+            # Не-«paid» статус по уже оплаченному платежу — возврат/отмена у провайдера.
+            await alert_paid_payment_reversed(
+                getattr(self, 'bot', None),
+                provider='WATA',
+                local_payment_id=payment.id,
+                user_id=payment.user_id,
+                amount_kopeks=payment.amount_kopeks,
+                status=transaction_status,
+            )
 
         return True
 
