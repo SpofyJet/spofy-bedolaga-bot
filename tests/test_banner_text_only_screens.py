@@ -35,6 +35,14 @@ def test_amount_and_withdrawal_input_states_have_no_banner():
     assert is_text_only_screen(None, 'TicketStates:waiting_for_title') is False
 
 
+@pytest.mark.parametrize('callback', ['back_to_menu', 'menu_subscription', 'menu_info'])
+def test_navigation_from_amount_input_state_keeps_the_banner(callback):
+    # Регрессия: навигация кнопкой из «ожидания суммы» не должна ронять баннер
+    # целевого экрана — иначе фото-меню удалялось и главное меню оставалось текстовым.
+    assert is_text_only_screen(callback, 'BalanceStates:waiting_for_amount') is False
+    assert is_text_only_screen(callback, 'ReferralWithdrawalStates:waiting_for_amount') is False
+
+
 async def test_answer_without_banner_sends_plain_text(monkeypatch):
     monkeypatch.setattr(settings, 'ENABLE_LOGO_MODE', True, raising=False)
     original = AsyncMock(return_value='sent')

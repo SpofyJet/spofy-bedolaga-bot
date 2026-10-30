@@ -46,8 +46,12 @@ TEXT_ONLY_STATE_PREFIXES = ('BalanceStates:', 'ReferralWithdrawalStates:')
 
 
 def is_text_only_screen(callback_data: str | None, state_name: str | None) -> bool:
-    if callback_data and callback_data.startswith(TEXT_ONLY_CALLBACK_PREFIXES):
-        return True
+    # Префикс состояния (ввод суммы/реквизитов) действует только на текстовые
+    # сообщения: нажатие кнопки навигации из такого состояния («Назад», пункты
+    # меню) рендерит целевой экран, а баннер у целевого экрана есть. Иначе
+    # возврат в главное меню из «ожидания суммы» удалял фото-меню навсегда.
+    if callback_data:
+        return callback_data.startswith(TEXT_ONLY_CALLBACK_PREFIXES)
     return bool(state_name and state_name.startswith(TEXT_ONLY_STATE_PREFIXES))
 
 
