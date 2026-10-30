@@ -27,8 +27,12 @@ WEB_AUTH_TOKEN_MIN_LENGTH = 16
 WEB_AUTH_PREFIX = 'web_auth'
 
 
-async def create_web_auth_token() -> str:
+async def create_web_auth_token(*, requester_ip: str | None = None, requester_agent: str | None = None) -> str:
     """Generate a web auth token and store it in Redis (pending state).
+
+    The requester's IP and browser are kept so the bot can show them in the confirmation:
+    the token is requested anonymously, and a link sent by someone else («+7 дней бесплатно»)
+    must not look like the user's own sign-in.
 
     Returns the raw token string (URL-safe, 24 bytes of entropy).
     """
@@ -37,6 +41,8 @@ async def create_web_auth_token() -> str:
     value: dict[str, Any] = {
         'status': 'pending',
         'created_at': datetime.now(UTC).isoformat(),
+        'requester_ip': requester_ip,
+        'requester_agent': (requester_agent or '')[:120] or None,
     }
     stored = await cache.set(key, value, expire=WEB_AUTH_TOKEN_TTL)
     if not stored:
@@ -45,6 +51,18 @@ async def create_web_auth_token() -> str:
 
     logger.debug('Web auth token created', token_prefix=token[:8])
     return token
+
+
+async def get_web_auth_request_context(token: str) -> dict[str, Any] | None:
+    """Who requested this sign-in (IP, browser, time) — read-only, the token stays pending."""
+    data: Any = await cache.get(cache_key(WEB_AUTH_PREFIX, token))
+    if not isinstance(data, dict) or data.get('status') != 'pending':
+        return None
+    return {
+        'ip': data.get('requester_ip'),
+        'agent': data.get('requester_agent'),
+        'created_at': data.get('created_at'),
+    }
 
 
 async def link_web_auth_token(token: str, telegram_id: int, user_id: int) -> bool:

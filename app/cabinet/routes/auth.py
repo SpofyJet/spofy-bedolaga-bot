@@ -2569,7 +2569,9 @@ async def request_deep_link_token(
         )
 
     try:
-        token = await create_web_auth_token()
+        token = await create_web_auth_token(
+            requester_ip=client_ip, requester_agent=raw_request.headers.get('user-agent')
+        )
     except RuntimeError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

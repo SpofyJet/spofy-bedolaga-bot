@@ -84,7 +84,11 @@ from app.services.registration_access_service import (
 from app.services.registration_invite_service import RegistrationInviteConflict, RegistrationInviteService
 from app.services.subscription_service import SubscriptionService
 from app.services.support_settings_service import SupportSettingsService
-from app.services.web_auth_service import WEB_AUTH_TOKEN_MIN_LENGTH, link_web_auth_token
+from app.services.web_auth_service import (
+    WEB_AUTH_TOKEN_MIN_LENGTH,
+    get_web_auth_request_context,
+    link_web_auth_token,
+)
 from app.states import RegistrationStates
 from app.utils.gift_links import InvalidGiftTokenError, parse_gift_claim_input
 from app.utils.long_messages import answer_long_text, edit_long_text, send_long_text
@@ -1369,13 +1373,23 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                         ],
                     ]
                 )
-                await message.answer(
-                    texts.t(
-                        'WEB_AUTH_CONFIRM_PROMPT',
-                        '🔐 Подтвердите вход в личный кабинет. Если вы не запрашивали вход — нажмите «Нет».',
-                    ),
-                    reply_markup=keyboard,
+                prompt = texts.t(
+                    'WEB_AUTH_CONFIRM_PROMPT',
+                    '🔐 Подтвердите вход в личный кабинет. Если вы не запрашивали вход — нажмите «Нет».',
                 )
+                # Откуда запрошен вход: ссылку мог прислать посторонний («+7 дней бесплатно»),
+                # и подтверждение отдало бы ему сессию.
+                context = await get_web_auth_request_context(web_auth_token)
+                if context and (context.get('ip') or context.get('agent')):
+                    prompt += '\n\n' + texts.t(
+                        'WEB_AUTH_CONFIRM_CONTEXT',
+                        'Вход запрошен с IP <code>{ip}</code>\nБраузер: {agent}\n\n'
+                        'Если вы сейчас не входите в кабинет на этом устройстве — нажмите «Нет».',
+                    ).format(
+                        ip=html.escape(context.get('ip') or '—'),
+                        agent=html.escape(context.get('agent') or '—'),
+                    )
+                await message.answer(prompt, reply_markup=keyboard)
             else:
                 logger.warning('Web auth attempt from unregistered user', telegram_id=message.from_user.id)
                 await message.answer('❌ Сначала зарегистрируйтесь в боте, затем попробуйте войти в кабинет.')

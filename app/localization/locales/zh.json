@@ -2452,6 +2452,7 @@
   "WEB_ADMIN_BUTTON": "🖥 网页管理后台",
   "WEB_AUTH_CONFIRM_NO": "❌ 否",
   "WEB_AUTH_CONFIRM_PROMPT": "🔐 请确认登录到您的个人面板。如果不是您发起的，请点击“否”。",
+  "WEB_AUTH_CONFIRM_CONTEXT": "登录请求来自 IP <code>{ip}</code>\n浏览器：{agent}\n\n如果您现在没有在该设备上登录个人中心，请点击“否”。",
   "WEB_AUTH_CONFIRM_YES": "✅ 是的，登录",
   "WEB_AUTH_EXPIRED": "❌ 登录链接已过期。请重试。",
   "WEB_AUTH_SUCCESS": "✅ 网页面板登录已确认！请返回浏览器。",
