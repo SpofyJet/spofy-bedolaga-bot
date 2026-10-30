@@ -3164,6 +3164,12 @@ async def confirm_tariff_extend(
         await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
         return
 
+    # Подписка без тарифа (старая/триальная) не проходит сверку ниже, и подделанный
+    # callback продлевал её тарифом, закрытым для промогруппы. Свой тариф продлевать
+    # можно, даже если его потом закрыли для группы.
+    if subscription.tariff_id is None and await _reject_unavailable_tariff(callback, tariff, db_user, texts):
+        return
+
     # Защита от рассинхрона до списания: продлеваемая подписка должна
     # соответствовать тарифу из callback.
     if subscription.tariff_id and subscription.tariff_id != tariff_id:
