@@ -1437,7 +1437,7 @@
   "LOW_BALANCE_ALERT": "⚠️ <b>余额不足</b>\n\n当前余额：{balance} ₽。\n\n请提前充值，以便自动续费成功，订阅不中断。",
   "MAINTENANCE_MODE_ACTIVE": "\n🔧正在进行技术维护！\n\n服务暂时不可用。我们正在进行技术工作以提高服务质量。\n\n⏰预计完成时间：未知\n🔄请稍后再试\n\n对于暂时的不便，我们深表歉意。\n",
   "MAINTENANCE_MODE_API_ERROR": "\n🔧正在进行技术维护！\n\n由于连接服务器出现问题，服务暂时不可用。\n\n⏰我们正在努力恢复。请几分钟后再试。\n\n🔄最后检查时间：{last_check}\n",
-  "MAIN_MENU": "<tg-emoji emoji-id='5440539497383087970'>🥇</tg-emoji> Spofy VPN\n\n👋 您好，<b>{user_name}</b>！\n\n<tg-emoji emoji-id='5467686551142046616'>📱</tg-emoji> <b>订阅：</b>\n<blockquote>{subscription_status}</blockquote>\n\n<b>请选择操作：</b>",
+  "MAIN_MENU": "🪙 欢迎使用主菜单！\n\n📱 订阅：\n{subscription_status}\n\n{website_line}请选择操作：",
   "MAIN_MENU_ACTION_PROMPT": "请选择操作：",
   "MAIN_MENU_BUTTON": "🏠主菜单",
   "MAIN_MENU_RICH_BALANCE": "💰 余额：{balance}",
@@ -2456,5 +2456,6 @@
   "TOPUP_RETRY_TOO_LOW": "❌ 最低充值金额：{minimum} 卢布。\n\n如需继续，请向机器人发送一条消息，输入 {minimum} 至 {maximum} 卢布之间的充值金额。",
   "TOPUP_RETRY_TOO_HIGH": "❌ 最高充值金额：{maximum} 卢布。\n\n如需继续，请向机器人发送一条消息，输入 {minimum} 至 {maximum} 卢布之间的充值金额。",
   "TOPUP_RETRY_EXAMPLE": "例如，发送：{amount}",
-  "TOPUP_RETRY_NO_RANGE": "❌ 此方式没有可手动输入的有效金额（最低 {minimum} 卢布，最高 {maximum} 卢布）。请选择其他支付方式。"
+  "TOPUP_RETRY_NO_RANGE": "❌ 此方式没有可手动输入的有效金额（最低 {minimum} 卢布，最高 {maximum} 卢布）。请选择其他支付方式。",
+  "MAIN_MENU_WEBSITE_LINE": "🔗 我们的网站：{url}"
 }

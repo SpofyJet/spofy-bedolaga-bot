@@ -1468,8 +1468,29 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
     return status_text, ''
 
 
+def _get_website_line(texts) -> str:
+    """Строка «Наш сайт» для главного меню. Пустая, если URL не настроен.
+
+    Приоритет: SERVICE_WEBSITE_URL, fallback — CABINET_URL (если это не
+    дефолтный example.com). Без настроенного URL плейсхолдер {website_line}
+    раскрывается в пустую строку и строка в меню не появляется.
+    """
+    from app.config import settings
+
+    url = (getattr(settings, 'SERVICE_WEBSITE_URL', None) or '').strip()
+    if not url:
+        cabinet = (getattr(settings, 'CABINET_URL', '') or '').strip().rstrip('/')
+        if cabinet and cabinet != settings._CABINET_URL_DEFAULT:
+            url = cabinet
+    if not url:
+        return ''
+    return texts.t('MAIN_MENU_WEBSITE_LINE', '🔗 Наш сайт: {url}').format(url=url) + '\n\n'
+
+
 async def get_main_menu_text(user, texts, db: AsyncSession):
     from app.config import settings
+
+    website_line = _get_website_line(texts)
 
     # Multi-tariff: show summary of all subscriptions
     if settings.is_multi_tariff_enabled():
@@ -1478,6 +1499,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
         base_text = texts.MAIN_MENU.format(
             user_name=html.escape(user.full_name or ''),
             subscription_status=subscriptions_status,
+            website_line=website_line,
         )
 
         if tariff_info_block:
@@ -1505,6 +1527,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
         base_text = texts.MAIN_MENU.format(
             user_name=html.escape(user.full_name or ''),
             subscription_status=_get_subscription_status(user, texts, is_daily_tariff),
+            website_line=website_line,
         )
         # Название тарифа в главном меню не дублируем — оно есть на экране подписки
 

@@ -3141,8 +3141,12 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
 
 
 async def get_main_menu_text_simple(user_name, texts, db: AsyncSession):
+    from app.handlers.menu import _get_website_line
+
     base_text = texts.MAIN_MENU.format(
-        user_name=html.escape(user_name or ''), subscription_status=_get_subscription_status_simple(texts)
+        user_name=html.escape(user_name or ''),
+        subscription_status=_get_subscription_status_simple(texts),
+        website_line=_get_website_line(texts),
     )
 
     action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')

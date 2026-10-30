@@ -1437,7 +1437,7 @@
   "LOW_BALANCE_ALERT": "⚠️ <b>Low balance</b>\n\nYour balance is {balance} ₽.\n\nTop up in advance — so auto-renewal succeeds and the subscription stays on.",
   "MAINTENANCE_MODE_ACTIVE": "\n🔧 <b>Maintenance</b>\n\nThe service is temporarily unavailable — we are improving it for you.\n\nPlease try again a bit later. Sorry for the inconvenience!\n",
   "MAINTENANCE_MODE_API_ERROR": "\n🔧 Maintenance in progress!\n\nThe service is temporarily unavailable due to connection issues with the servers.\n\n⏰ We're working on it. Please try again in a few minutes.\n\n🔄 Last check: {last_check}\n",
-  "MAIN_MENU": "<tg-emoji emoji-id='5440539497383087970'>🥇</tg-emoji> Spofy VPN\n\n👋 Hello, <b>{user_name}</b>!\n\n<tg-emoji emoji-id='5467686551142046616'>📱</tg-emoji> <b>Subscription:</b>\n<blockquote>{subscription_status}</blockquote>\n\n<b>Choose an action:</b>",
+  "MAIN_MENU": "🪙 Welcome to the main menu!\n\n📱 Subscription:\n{subscription_status}\n\n{website_line}Choose an action:",
   "MAIN_MENU_ACTION_PROMPT": "Choose an option:",
   "MAIN_MENU_BUTTON": "🏠 Main menu",
   "MAIN_MENU_RICH_BALANCE": "💰 Balance: {balance}",
@@ -2456,5 +2456,6 @@
   "TOPUP_RETRY_TOO_LOW": "❌ Minimum top-up amount: {minimum} RUB.\n\nTo continue, send the bot a new top-up amount between {minimum} RUB and {maximum} RUB.",
   "TOPUP_RETRY_TOO_HIGH": "❌ Maximum top-up amount: {maximum} RUB.\n\nTo continue, send the bot a new top-up amount between {minimum} RUB and {maximum} RUB.",
   "TOPUP_RETRY_EXAMPLE": "For example, send: {amount}",
-  "TOPUP_RETRY_NO_RANGE": "❌ This method has no valid amount for manual input (minimum {minimum} RUB, maximum {maximum} RUB). Choose another payment method."
+  "TOPUP_RETRY_NO_RANGE": "❌ This method has no valid amount for manual input (minimum {minimum} RUB, maximum {maximum} RUB). Choose another payment method.",
+  "MAIN_MENU_WEBSITE_LINE": "🔗 Our website: {url}"
 }
