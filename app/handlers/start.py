@@ -91,6 +91,7 @@ from app.utils.long_messages import answer_long_text, edit_long_text, send_long_
 from app.utils.rich_menu import try_answer_rich_main_menu, try_send_rich_main_menu
 from app.utils.telegram_html import html_to_telegram
 from app.utils.user_utils import generate_unique_referral_code
+from app.utils.validators import sanitize_telegram_name
 
 
 logger = structlog.get_logger(__name__)
@@ -1593,15 +1594,19 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             logger.info('📝 Username обновлен', old_username=old_username, username=user.username)
             profile_updated = True
 
-        if user.first_name != message.from_user.first_name:
+        # Имя — в том же санитизированном виде, что пишет AuthMiddleware: сырое имя
+        # из Telegram с «<>&» перезаписывало очищенное и ждало любого f-string без escape.
+        safe_first_name = sanitize_telegram_name(message.from_user.first_name)
+        if user.first_name != safe_first_name:
             old_first_name = user.first_name
-            user.first_name = message.from_user.first_name
+            user.first_name = safe_first_name
             logger.info('📝 Имя обновлено', old_first_name=old_first_name, first_name=user.first_name)
             profile_updated = True
 
-        if user.last_name != message.from_user.last_name:
+        safe_last_name = sanitize_telegram_name(message.from_user.last_name)
+        if user.last_name != safe_last_name:
             old_last_name = user.last_name
-            user.last_name = message.from_user.last_name
+            user.last_name = safe_last_name
             logger.info('📝 Фамилия обновлена', old_last_name=old_last_name, last_name=user.last_name)
             profile_updated = True
 
