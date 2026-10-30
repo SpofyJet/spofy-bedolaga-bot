@@ -93,25 +93,11 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         ).format(count=summary['active_referrals_count'])
         + '\n'
         + texts.t(
-            'REFERRAL_STATS_CONVERSION',
-            '• Конверсия: <b>{rate}%</b>',
-        ).format(rate=summary['conversion_rate'])
-        + '\n'
-        + texts.t(
             'REFERRAL_STATS_TOTAL_EARNED',
             '• Заработано всего: <b>{amount}</b>',
         ).format(
             amount=format_reward_total(
                 summary['total_earned_kopeks'], summary.get('total_earned_days', 0), db_user.language
-            )
-        )
-        + '\n'
-        + texts.t(
-            'REFERRAL_STATS_MONTH_EARNED',
-            '• За последний месяц: <b>{amount}</b>',
-        ).format(
-            amount=format_reward_total(
-                summary['month_earned_kopeks'], summary.get('month_earned_days', 0), db_user.language
             )
         )
         + '\n\n'
@@ -212,19 +198,6 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
             + texts.t('REFERRAL_CABINET_LINK_TITLE', '🌐 <b>Ссылка на кабинет:</b>')
             + f'\n{html_escape(cabinet_referral_link)}\n'
         )
-
-    referral_text += (
-        '\n'
-        + texts.t('REFERRAL_CODE_TITLE', '🆔 <b>Ваш код:</b> <code>{code}</code>').format(
-            code=html_escape(str(db_user.referral_code or ''))
-        )
-        + '\n\n'
-    )
-
-    referral_text += texts.t(
-        'REFERRAL_INVITE_FOOTER',
-        '📢 Приглашайте друзей и зарабатывайте!',
-    )
 
     await edit_or_answer_photo(
         callback,
