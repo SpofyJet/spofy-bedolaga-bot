@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 from typing import Any
 
 import structlog
@@ -208,11 +209,15 @@ def create_telegram_router(
 
     @router.post(webhook_path)
     async def telegram_webhook(request: Request) -> JSONResponse:
-        if secret_token:
-            header_token = request.headers.get('X-Telegram-Bot-Api-Secret-Token')
-            if header_token != secret_token:
-                logger.warning('Получен Telegram webhook с неверным секретом')
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='invalid_secret_token')
+        # Без секрета любой мог бы прислать апдейт от имени любого user_id (в том
+        # числе админа) — как и платёжные вебхуки, без секрета не принимаем.
+        if not secret_token:
+            logger.error('Telegram webhook отклонён: WEBHOOK_SECRET_TOKEN не задан')
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='webhook_secret_not_configured')
+        header_token = request.headers.get('X-Telegram-Bot-Api-Secret-Token') or ''
+        if not hmac.compare_digest(header_token.encode(), secret_token.encode()):
+            logger.warning('Получен Telegram webhook с неверным секретом')
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='invalid_secret_token')
 
         content_type = request.headers.get('content-type', '')
         if content_type and 'application/json' not in content_type.lower():

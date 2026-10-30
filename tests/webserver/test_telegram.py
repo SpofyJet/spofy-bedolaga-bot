@@ -13,10 +13,13 @@ from app.webserver.telegram import (
 )
 
 
+_SECRET = 'test-webhook-secret'
+
+
 @pytest.fixture(autouse=True)
 def reset_webhook_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'WEBHOOK_PATH', '/telegram-webhook', raising=False)
-    monkeypatch.setattr(settings, 'WEBHOOK_SECRET_TOKEN', '', raising=False)
+    monkeypatch.setattr(settings, 'WEBHOOK_SECRET_TOKEN', _SECRET, raising=False)
     monkeypatch.setattr(settings, 'WEBHOOK_URL', None, raising=False)
     monkeypatch.setattr(settings, 'BOT_RUN_MODE', 'webhook', raising=False)
     monkeypatch.setattr(settings, 'WEBHOOK_MAX_QUEUE_SIZE', 8, raising=False)
@@ -38,7 +41,10 @@ def _build_request(path: str, body: bytes, headers: dict[str, str] | None = None
         'asgi': {'version': '3.0'},
         'method': 'POST',
         'path': path,
-        'headers': [(k.lower().encode('latin-1'), v.encode('latin-1')) for k, v in (headers or {}).items()],
+        'headers': [
+            (k.lower().encode('latin-1'), v.encode('latin-1'))
+            for k, v in (headers if headers is not None else {'X-Telegram-Bot-Api-Secret-Token': _SECRET}).items()
+        ],
     }
 
     async def receive() -> dict[str, Any]:
@@ -52,32 +58,24 @@ def _webhook_path() -> str:
 
 
 @pytest.mark.anyio
-async def test_webhook_without_secret() -> None:
+async def test_webhook_without_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Без WEBHOOK_SECRET_TOKEN вебхук не принимает апдейты (иначе подделка от любого user_id)."""
     bot = AsyncMock()
     dispatcher = AsyncMock()
     dispatcher.feed_update = AsyncMock()
 
-    sample_update = {
-        'update_id': 123,
-        'message': {
-            'message_id': 10,
-            'date': 1715700000,
-            'chat': {'id': 456, 'type': 'private'},
-            'text': 'ping',
-        },
-    }
+    monkeypatch.setattr(settings, 'WEBHOOK_SECRET_TOKEN', '', raising=False)
 
     router = create_telegram_router(bot, dispatcher)
     path = _webhook_path()
     route = _get_route(router, path)
-    request = _build_request(path, json.dumps(sample_update).encode('utf-8'))
+    request = _build_request(path, json.dumps({'update_id': 123}).encode('utf-8'), headers={})
 
-    response = await route.endpoint(request)
+    with pytest.raises(HTTPException) as exc:
+        await route.endpoint(request)
 
-    assert response.status_code == 200
-    dispatcher.feed_update.assert_awaited_once()
-    args, _kwargs = dispatcher.feed_update.await_args
-    assert args[0] is bot
+    assert exc.value.status_code == 503
+    dispatcher.feed_update.assert_not_called()
 
 
 @pytest.mark.anyio
@@ -177,7 +175,7 @@ async def test_webhook_invalid_content_type() -> None:
     request = _build_request(
         path,
         json.dumps(sample_update).encode('utf-8'),
-        headers={'Content-Type': 'text/plain'},
+        headers={'Content-Type': 'text/plain', 'X-Telegram-Bot-Api-Secret-Token': _SECRET},
     )
 
     with pytest.raises(HTTPException) as exc:
