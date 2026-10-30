@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import PERIOD_PRICES, settings
 from app.database.models import User
+from app.keyboards.button_icons import apply_button_icons
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
@@ -138,7 +139,7 @@ async def get_main_menu_keyboard_async(
             has_autopay=has_autopay,
         )
 
-        return await MenuLayoutService.build_keyboard(db, context)
+        return apply_button_icons(await MenuLayoutService.build_keyboard(db, context))
 
     # Fallback на синхронную версию
     # smart-trial-button: вычисляем точный гейт из объекта пользователя
@@ -592,7 +593,7 @@ def _build_cabinet_main_menu_keyboard(
     if is_moderator and not is_admin:
         keyboard_rows.append([InlineKeyboardButton(text='🧑‍⚖️ Модерация', callback_data='moderator_panel')])
 
-    return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+    return apply_button_icons(InlineKeyboardMarkup(inline_keyboard=keyboard_rows))
 
 
 def get_main_menu_keyboard(
@@ -902,7 +903,7 @@ def get_main_menu_keyboard(
             [InlineKeyboardButton(text=texts.t('MODERATION_BUTTON', '🧑‍⚖️ Модерация'), callback_data='moderator_panel')]
         )
 
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+    return apply_button_icons(InlineKeyboardMarkup(inline_keyboard=keyboard))
 
 
 def get_info_menu_keyboard(
@@ -2788,7 +2789,7 @@ def get_referral_keyboard(language: str = DEFAULT_LANGUAGE, share_url: str | Non
 
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
 
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+    return apply_button_icons(InlineKeyboardMarkup(inline_keyboard=keyboard))
 
 
 def get_support_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
