@@ -133,6 +133,14 @@ async def delete_subscription(
             detail='Only expired or disabled subscriptions can be deleted',
         )
 
+    # Истёкший триал — единственный след «триал уже был» (is_trial_already_used
+    # смотрит на наличие подписок): удаление открывало новый триал бесконечно.
+    if subscription.is_trial:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Trial subscriptions cannot be deleted',
+        )
+
     from app.services.grace_access_runtime import GraceAccessDeletionBlocked
     from app.services.subscription_deletion_service import delete_subscription_record
 
