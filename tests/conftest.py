@@ -15,10 +15,25 @@ import pytest
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-# Подменяем параметры подключения к БД, чтобы SQLAlchemy не требовал aiosqlite.
-os.environ.setdefault('DATABASE_MODE', 'postgresql')
-os.environ.setdefault('DATABASE_URL', 'postgresql+asyncpg://user:pass@localhost/test_db')
-os.environ.setdefault('BOT_TOKEN', 'test-token')
+# Тесты не должны видеть боевое окружение. ``Settings`` читает ``.env`` из корня
+# проекта, а переменные процесса имеют приоритет над ``.env``; агенты-помощники
+# (Kimi, Claude Code) и ``docker exec`` к тому же экспортируют боевой ``.env`` в
+# окружение. Один раз это уже закончилось тем, что фикстуры pytest ушли в
+# админ-чат как «покупки» (30.10.2026). Поэтому здесь не ``setdefault``, а
+# жёсткая подмена всего, через что тест может дотянуться до боя: токен бота,
+# админ-уведомления, база, ключ панели. Для настоящего PostgreSQL есть
+# отдельная ``TEST_DATABASE_URL`` (tests/fixtures/postgres_db.py), для панели —
+# ``TEST_REMNAWAVE_URL``/``TEST_REMNAWAVE_TOKEN_FILE``.
+_ISOLATED_ENV = {
+    'DATABASE_MODE': 'postgresql',
+    'DATABASE_URL': 'postgresql+asyncpg://user:pass@localhost/test_db',
+    'BOT_TOKEN': 'test-token',
+    'ADMIN_NOTIFICATIONS_ENABLED': 'false',
+    'ADMIN_REPORTS_ENABLED': 'false',
+    'REMNAWAVE_API_URL': '',
+    'REMNAWAVE_API_KEY': '',
+}
+os.environ.update(_ISOLATED_ENV)
 
 # Module-level singleton `backup_service = BackupService()` в backup_service.py
 # при импорте делает `Path(settings.BACKUP_LOCATION).mkdir(parents=True)`.
@@ -208,6 +223,36 @@ if 'yookassa' not in sys.modules:
     sys.modules['yookassa.domain.common.confirmation_type'] = confirmation_module
     sys.modules['yookassa.domain.exceptions'] = exceptions_module
     sys.modules['yookassa.domain.exceptions.not_found_error'] = not_found_module
+
+
+# ── Страховка от выхода в Telegram ───────────────────────────────────────────
+# Даже если тест включит ADMIN_NOTIFICATIONS_ENABLED и соберёт бота через
+# create_bot(), запрос к api.telegram.org не уйдёт: сетевой слой aiogram
+# подменён на исключение. Сервисы-уведомители работают best-effort и глотают
+# исключения, так что тесты это не ломает, а текст в логе объясняет причину.
+class TelegramApiBlockedInTests(RuntimeError):
+    """Тест попытался отправить настоящий запрос в Telegram Bot API."""
+
+
+try:
+    from aiogram.client.session.aiohttp import AiohttpSession as _AiohttpSession
+except Exception:  # pragma: no cover - окружение без aiogram
+    _AiohttpSession = None
+
+if _AiohttpSession is not None:
+    _real_make_request = _AiohttpSession.make_request
+    _LOOPBACK_MARKERS = ('://127.0.0.1', '://localhost', '://[::1]')
+
+    async def _guarded_make_request(self, bot, method, timeout=None):
+        # Локальный заглушечный сервер (tests/utils/test_rich_media.py) — можно.
+        api_base = str(getattr(getattr(self, 'api', None), 'base', ''))
+        if any(marker in api_base for marker in _LOOPBACK_MARKERS):
+            return await _real_make_request(self, bot, method, timeout)
+        raise TelegramApiBlockedInTests(
+            f'Тесты не ходят в Telegram Bot API (метод {type(method).__name__}): подмените бота на AsyncMock.'
+        )
+
+    _AiohttpSession.make_request = _guarded_make_request
 
 
 @pytest.fixture

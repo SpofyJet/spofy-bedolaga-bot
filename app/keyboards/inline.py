@@ -759,7 +759,9 @@ def get_main_menu_keyboard(
             keyboard.append(
                 [
                     InlineKeyboardButton(
-                        text=texts.t('MENU_BUY_SUBSCRIPTION', '💎 Купить Подписку'), callback_data='menu_buy'
+                        text=texts.t('MENU_BUY_SUBSCRIPTION', '💎 Купить Подписку'),
+                        callback_data='menu_buy',
+                        style='success',
                     )
                 ]
             )
@@ -1183,6 +1185,7 @@ def get_insufficient_balance_keyboard(
             InlineKeyboardButton(
                 text=button_label,
                 callback_data=resume_callback or 'return_to_saved_cart',
+                style='success',
             )
         ]
         insert_index = back_row_index if back_row_index is not None else len(keyboard.inline_keyboard)
@@ -1507,7 +1510,7 @@ def get_payment_methods_keyboard_with_cart(
 
     # Кнопка возврата к оформлению подписки
     keyboard.inline_keyboard.append(
-        [InlineKeyboardButton(text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT, callback_data='return_to_saved_cart')]
+        [InlineKeyboardButton(text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT, callback_data='return_to_saved_cart', style='success')]
     )
 
     # Кнопка "Очистить корзину"

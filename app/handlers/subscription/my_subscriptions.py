@@ -169,6 +169,9 @@ def _build_subscription_detail_keyboard(sub_id: int, sub=None, language: str = '
         buttons.append([types.InlineKeyboardButton(text='📊 Трафик', callback_data=f'st:{sub_id}')])
         buttons.append([types.InlineKeyboardButton(text='📱 Устройства', callback_data=f'sd:{sub_id}')])
 
+    # Самоудаление подписки из бота намеренно убрано: удаление закрывает
+    # «🔑 Перевыпустить подписку» (revoke), это безвозвратная потеря
+    # ссылки/настроек, а ранее в продукте такого действия не было.
     if not is_inactive and settings.is_subscription_revoke_enabled():
         buttons.append(
             [
