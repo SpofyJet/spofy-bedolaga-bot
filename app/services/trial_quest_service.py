@@ -179,7 +179,7 @@ async def on_first_connected(db: AsyncSession, user: User, subscription: Subscri
         friend_text,
         InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
                 [InlineKeyboardButton(text=texts.MY_SUBSCRIPTION_BUTTON, callback_data='menu_subscription')],
             ]
         ),

@@ -1023,7 +1023,7 @@ class RemnaWaveWebhookService:
         button_text = texts.get('WEBHOOK_RENEW_BUTTON', 'Renew subscription')
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [build_subscription_extend_button(button_text, subscription_id)],
+                [build_subscription_extend_button(button_text, subscription_id, style='success')],
             ]
         )
 
@@ -1051,7 +1051,7 @@ class RemnaWaveWebhookService:
         sub_text = texts.get('MY_SUBSCRIPTION_BUTTON', 'My subscription')
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [build_miniapp_or_callback_button(text=buy_text, callback_data='buy_traffic')],
+                [build_miniapp_or_callback_button(text=buy_text, callback_data='buy_traffic', style='success')],
                 [build_miniapp_or_callback_button(text=sub_text, callback_data='menu_subscription')],
             ]
         )
@@ -1891,7 +1891,7 @@ class RemnaWaveWebhookService:
             )
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [build_miniapp_or_callback_button(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                    [build_miniapp_or_callback_button(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
                     [
                         build_miniapp_or_callback_button(
                             text=texts.MY_SUBSCRIPTION_BUTTON, callback_data='menu_subscription'

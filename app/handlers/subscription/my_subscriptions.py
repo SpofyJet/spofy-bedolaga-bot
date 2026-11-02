@@ -105,7 +105,9 @@ def _build_subscriptions_keyboard(
         buy_text = getattr(texts, 'MENU_BUY_SUBSCRIPTION', 'Купить ещё тариф')
         buttons.append(
             [
-                types.InlineKeyboardButton(text=f'➕ {buy_text}', callback_data='menu_buy'),
+                types.InlineKeyboardButton(
+                    text=f'➕ {buy_text}', callback_data='menu_buy', style='success'
+                ),
             ]
         )
     if gift_enabled:
@@ -145,7 +147,9 @@ def _build_subscription_detail_keyboard(sub_id: int, sub=None, language: str = '
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), callback_data=f'sl:{sub_id}'
+                    text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                    callback_data=f'sl:{sub_id}',
+                    style='success',
                 )
             ]
         )
@@ -153,7 +157,9 @@ def _build_subscription_detail_keyboard(sub_id: int, sub=None, language: str = '
     buttons.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('MENU_EXTEND_SUBSCRIPTION', '⏰ Продлить подписку'), callback_data=f'se:{sub_id}'
+                text=texts.t('MENU_EXTEND_SUBSCRIPTION', '⏰ Продлить подписку'),
+                callback_data=f'se:{sub_id}',
+                style='success',
             )
         ]
     )
@@ -206,7 +212,7 @@ async def show_my_subscriptions(
     if not subscriptions:
         text = '📋 <b>Мои подписки</b>\n\nУ вас нет подписок.'
         buttons = [
-            [types.InlineKeyboardButton(text='🛒 Купить подписку', callback_data='menu_buy')],
+            [types.InlineKeyboardButton(text='🛒 Купить подписку', callback_data='menu_buy', style='success')],
             [
                 types.InlineKeyboardButton(
                     text=texts.t('GIFT_SUBSCRIPTION_BUTTON', '🎁 Подарить подписку'),

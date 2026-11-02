@@ -29,12 +29,14 @@ async def open_subscription_deeplink(message: types.Message, user, db: AsyncSess
     if action == 'traffic':
         text = texts.get('DEEPLINK_TRAFFIC_TEXT', '📈 <b>Докупка трафика</b>')
         button = build_miniapp_or_callback_button(
-            text=texts.get('BYPASS_BUY_TRAFFIC_BUTTON', '📈 Докупить трафик'), callback_data='buy_traffic'
+            text=texts.get('BYPASS_BUY_TRAFFIC_BUTTON', '📈 Докупить трафик'),
+            callback_data='buy_traffic',
+            style='success',
         )
     else:
         text = texts.get('DEEPLINK_RENEW_TEXT', '⏰ <b>Продление подписки</b>')
         button = build_subscription_extend_button(
-            texts.get('BYPASS_RENEW_BUTTON', '⏰ Продлить подписку'), subscription.id
+            texts.get('BYPASS_RENEW_BUTTON', '⏰ Продлить подписку'), subscription.id, style='success'
         )
     await message.answer(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[[button]]))
     return True

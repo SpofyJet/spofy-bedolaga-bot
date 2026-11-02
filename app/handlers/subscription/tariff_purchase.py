@@ -3602,7 +3602,9 @@ async def show_tariff_switch_list(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BUY_TARIFF_BUTTON', '📦 Купить тариф'), callback_data='menu_buy'
+                            text=texts.t('BUY_TARIFF_BUTTON', '📦 Купить тариф'),
+                            callback_data='menu_buy',
+                            style='success',
                         )
                     ],
                     [InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')],
@@ -4924,7 +4926,9 @@ async def show_instant_switch_list(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BUY_TARIFF_BUTTON', '📦 Купить тариф'), callback_data='menu_buy'
+                            text=texts.t('BUY_TARIFF_BUTTON', '📦 Купить тариф'),
+                            callback_data='menu_buy',
+                            style='success',
                         )
                     ],
                     [InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')],

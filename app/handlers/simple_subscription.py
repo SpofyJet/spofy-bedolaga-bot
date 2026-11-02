@@ -660,6 +660,7 @@ async def handle_simple_subscription_pay_with_balance(
             return types.InlineKeyboardButton(
                 text=connect_button_text,
                 callback_data='subscription_connect',
+                style='success',
             )
 
         if connect_mode == 'miniapp_subscription':
@@ -668,6 +669,7 @@ async def handle_simple_subscription_pay_with_balance(
                     types.InlineKeyboardButton(
                         text=connect_button_text,
                         web_app=types.WebAppInfo(url=subscription_link),
+                        style='success',
                     )
                 ]
             else:
@@ -679,6 +681,7 @@ async def handle_simple_subscription_pay_with_balance(
                     types.InlineKeyboardButton(
                         text=connect_button_text,
                         web_app=types.WebAppInfo(url=custom_url),
+                        style='success',
                     )
                 ]
             else:
@@ -689,6 +692,7 @@ async def handle_simple_subscription_pay_with_balance(
                     types.InlineKeyboardButton(
                         text=connect_button_text,
                         url=subscription_link,
+                        style='success',
                     )
                 ]
             else:
@@ -699,6 +703,7 @@ async def handle_simple_subscription_pay_with_balance(
                     types.InlineKeyboardButton(
                         text=connect_button_text,
                         callback_data='open_subscription_link',
+                        style='success',
                     )
                 ]
             else:
@@ -2443,6 +2448,7 @@ async def confirm_simple_subscription_purchase(
             return types.InlineKeyboardButton(
                 text=connect_button_text,
                 callback_data='subscription_connect',
+                style='success',
             )
 
         if connect_mode == 'miniapp_subscription':
@@ -2451,6 +2457,7 @@ async def confirm_simple_subscription_purchase(
                     types.InlineKeyboardButton(
                         text=connect_button_text,
                         web_app=types.WebAppInfo(url=subscription_link),
+                        style='success',
                     )
                 ]
             else:
@@ -2462,6 +2469,7 @@ async def confirm_simple_subscription_purchase(
                     types.InlineKeyboardButton(
                         text=connect_button_text,
                         web_app=types.WebAppInfo(url=custom_url),
+                        style='success',
                     )
                 ]
             else:
@@ -2472,6 +2480,7 @@ async def confirm_simple_subscription_purchase(
                     types.InlineKeyboardButton(
                         text=connect_button_text,
                         url=subscription_link,
+                        style='success',
                     )
                 ]
             else:
@@ -2482,6 +2491,7 @@ async def confirm_simple_subscription_purchase(
                     types.InlineKeyboardButton(
                         text=connect_button_text,
                         callback_data='open_subscription_link',
+                        style='success',
                     )
                 ]
             else:

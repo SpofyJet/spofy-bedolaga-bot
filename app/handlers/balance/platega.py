@@ -372,6 +372,7 @@ async def process_platega_payment_amount(
                         'Оплатить через {method}',
                     ).format(method=method_title),
                     url=redirect_url,
+                    style='success',
                 )
             ],
             [

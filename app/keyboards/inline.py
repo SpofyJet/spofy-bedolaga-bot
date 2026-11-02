@@ -296,6 +296,7 @@ def get_channel_sub_keyboard(
             InlineKeyboardButton(
                 text=texts.t('CHANNEL_CHECK_BUTTON', '✅ Я подписался'),
                 callback_data='sub_channel_check',
+                style='success',
             )
         ]
     )
@@ -311,6 +312,7 @@ def get_post_registration_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKe
                 InlineKeyboardButton(
                     text=texts.t('POST_REGISTRATION_TRIAL_BUTTON', '🚀 Подключиться бесплатно 🚀'),
                     callback_data='trial_activate',
+                    style='success',
                 )
             ],
             [InlineKeyboardButton(text=texts.t('SKIP_BUTTON', 'Пропустить ➡️'), callback_data='back_to_menu')],
@@ -785,7 +787,9 @@ def get_main_menu_keyboard(
             keyboard.append(
                 [
                     InlineKeyboardButton(
-                        text=texts.t('BUY_TRAFFIC_BUTTON', '📊 Докупить трафик'), callback_data='buy_traffic'
+                        text=texts.t('BUY_TRAFFIC_BUTTON', '📊 Докупить трафик'),
+                        callback_data='buy_traffic',
+                        style='success',
                     )
                 ]
             )
@@ -1409,7 +1413,9 @@ def get_subscription_keyboard(
                 keyboard.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BUY_TRAFFIC_BUTTON', '📈 Докупить трафик'), callback_data='buy_traffic'
+                            text=texts.t('BUY_TRAFFIC_BUTTON', '📈 Докупить трафик'),
+                            callback_data='buy_traffic',
+                            style='success',
                         )
                     ]
                 )

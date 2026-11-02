@@ -311,6 +311,7 @@ class ActivationFunnelService:
                         InlineKeyboardButton(
                             text=texts.t('FUNNEL_TRIAL_CTA_BUTTON', '🎁 Попробовать бесплатно'),
                             callback_data='menu_trial',
+                            style='success',
                         )
                     ],
                 ]
@@ -483,9 +484,10 @@ class ActivationFunnelService:
                         InlineKeyboardButton(
                             text=texts.t('CLAIM_DISCOUNT_BUTTON', '🎁 Забрать скидку'),
                             callback_data=f'claim_discount_{offer.id}',
+                            style='success',
                         )
                     ],
-                    [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                    [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
                 ]
             )
             try:
@@ -1105,7 +1107,7 @@ class ActivationFunnelService:
                 'TRIAL_ENDING_1D',
                 ('⏳ <b>Пробный период закончится завтра</b>\n\nОформите подписку сегодня, и доступ не прервётся.'),
             )
-            rows = [[InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')]]
+            rows = [[InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')]]
             if settings.is_referral_program_enabled() and getattr(settings, 'TRIAL_QUESTS_ENABLED', True):
                 from app.services.trial_quest_service import DAYS_FRIEND
 
@@ -1256,7 +1258,7 @@ class ActivationFunnelService:
             ).format(traffic_line=traffic_line, days_left=days_left)
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                    [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
                     [InlineKeyboardButton(text=texts.t('MENU_SUPPORT', '🆘 Поддержка'), callback_data='menu_support')],
                 ]
             )

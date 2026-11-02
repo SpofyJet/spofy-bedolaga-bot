@@ -89,6 +89,7 @@ class PaymentCommonMixin:
         first_button = build_miniapp_or_callback_button(
             text=(texts.MENU_EXTEND_SUBSCRIPTION if has_active_subscription else texts.MENU_BUY_SUBSCRIPTION),
             callback_data=('subscription_extend' if has_active_subscription else 'menu_buy'),
+            style='success',
         )
 
         keyboard_rows: list[list[InlineKeyboardButton]] = [

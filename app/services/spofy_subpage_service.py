@@ -218,6 +218,7 @@ async def _notify_orphan_topup(
         action = build_miniapp_or_callback_button(
             text=texts.MENU_BUY_SUBSCRIPTION,
             callback_data='menu_buy',
+            style='success',
         )
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[action], [build_main_menu_button(texts.MAIN_MENU_BUTTON)]])
 

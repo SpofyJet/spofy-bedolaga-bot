@@ -668,7 +668,7 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
         # smart-trial-button: вместо тупика сразу ведём на покупку
         trial_used_keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
                 [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
             ]
         )
@@ -956,7 +956,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
         # smart-trial-button: вместо тупика сразу ведём на покупку
         trial_used_keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
                 [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
             ]
         )
@@ -1830,7 +1830,7 @@ async def handle_extend_subscription(
             '🎯 <b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                    [types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
                     [
                         types.InlineKeyboardButton(
                             text=texts.t('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'),
@@ -1856,7 +1856,7 @@ async def handle_extend_subscription(
             '🎯 <b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                    [types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
                     [
                         types.InlineKeyboardButton(
                             text=texts.t('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'),
@@ -3500,7 +3500,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
         # smart-trial-button: вместо тупика сразу ведём на покупку
         trial_used_keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
                 [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
             ]
         )
@@ -3923,7 +3923,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
         # smart-trial-button: вместо тупика сразу ведём на покупку
         trial_used_keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
                 [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
             ]
         )

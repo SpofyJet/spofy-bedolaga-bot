@@ -313,6 +313,7 @@ class BypassDowngradeService:
                     build_miniapp_or_callback_button(
                         text=texts.get('BYPASS_TRIAL_BUY_BUTTON', '🏴‍☠️ Оформить «С Обходами»'),
                         callback_data='menu_buy',
+                        style='success',
                     )
                 ]
             ]
@@ -321,13 +322,16 @@ class BypassDowngradeService:
             rows = [
                 [
                     build_miniapp_or_callback_button(
-                        text=texts.get('BYPASS_BUY_TRAFFIC_BUTTON', '📈 Докупить трафик'), callback_data='buy_traffic'
+                        text=texts.get('BYPASS_BUY_TRAFFIC_BUTTON', '📈 Докупить трафик'),
+                        callback_data='buy_traffic',
+                        style='success',
                     )
                 ],
                 [
                     build_subscription_extend_button(
                         texts.get('BYPASS_RENEW_BUTTON', '⏰ Продлить подписку'),
                         getattr(subscription, 'id', None),
+                        style='success',
                     )
                 ],
             ]
