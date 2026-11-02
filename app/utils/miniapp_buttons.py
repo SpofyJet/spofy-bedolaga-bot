@@ -36,6 +36,21 @@ def strip_leading_emoji(text: str) -> str:
     return _LEADING_EMOJI_RE.sub('', text, count=1)
 
 
+_TG_EMOJI_TAG_RE = re.compile(r"<tg-emoji emoji-id='\d+'>(.*?)</tg-emoji>")
+
+
+def tg_emoji_to_unicode(text: str | None) -> str | None:
+    """Развернуть <tg-emoji emoji-id='...'>X</tg-emoji> в обычный юникод-эмодзи X.
+
+    Тег tg-emoji рендерится только внутри Telegram (parse_mode=HTML); в веб-кабинете
+    и в текстах кнопок он показывается сырым HTML — поэтому на кабинетной границе
+    и в подписях кнопок строки пропускаются через эту функцию.
+    """
+    if not text:
+        return text
+    return _TG_EMOJI_TAG_RE.sub(r'\1', text)
+
+
 # Mapping from callback_data to cabinet frontend paths.
 # Used for automatic deep-linking when explicit ``cabinet_path`` is not provided.
 # If callback_data is NOT in this mapping, the button falls back to a regular callback.

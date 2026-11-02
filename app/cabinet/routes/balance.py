@@ -28,7 +28,7 @@ from app.services.payment_verification_service import (
     run_manual_check,
 )
 from app.utils.currency_converter import currency_converter
-from app.utils.miniapp_buttons import strip_leading_emoji
+from app.utils.miniapp_buttons import strip_leading_emoji, tg_emoji_to_unicode
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.balance import (
@@ -198,8 +198,8 @@ async def get_payment_methods(
                 formatted_options.append(
                     {
                         'id': opt_id,
-                        'name': strip_leading_emoji(opt_name),
-                        'description': description,
+                        'name': strip_leading_emoji(tg_emoji_to_unicode(opt_name) or ''),
+                        'description': tg_emoji_to_unicode(description) or '',
                     }
                 )
             options = formatted_options or None
@@ -220,12 +220,17 @@ async def get_payment_methods(
                     PaymentMethodResponse(
                         id=f'platega_m{_code}',
                         name=strip_leading_emoji(
-                            _texts.t(
-                                f'PAYMENT_PLATEGA_M{_code}',
-                                settings.get_platega_method_display_title(_code),
+                            tg_emoji_to_unicode(
+                                _texts.t(
+                                    f'PAYMENT_PLATEGA_M{_code}',
+                                    settings.get_platega_method_display_title(_code),
+                                )
                             )
+                            or ''
                         ),
-                        description=_PLATEGA_OPTION_DESCRIPTIONS.get(_code, method_data.get('description')),
+                        description=tg_emoji_to_unicode(
+                            _PLATEGA_OPTION_DESCRIPTIONS.get(_code, method_data.get('description'))
+                        ),
                         min_amount_kopeks=method_data['min_amount_kopeks'],
                         max_amount_kopeks=method_data['max_amount_kopeks'],
                         is_available=True,
@@ -239,8 +244,8 @@ async def get_payment_methods(
         methods.append(
             PaymentMethodResponse(
                 id=method_id,
-                name=strip_leading_emoji(method_data['name']),
-                description=method_data.get('description'),
+                name=strip_leading_emoji(tg_emoji_to_unicode(method_data['name']) or ''),
+                description=tg_emoji_to_unicode(method_data.get('description')),
                 min_amount_kopeks=method_data['min_amount_kopeks'],
                 max_amount_kopeks=method_data['max_amount_kopeks'],
                 is_available=True,
