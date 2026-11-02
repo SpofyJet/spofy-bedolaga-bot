@@ -209,6 +209,12 @@ async def get_payment_methods(
             from app.localization.texts import get_texts as _get_texts
 
             _texts = _get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+            _PLATEGA_OPTION_DESCRIPTIONS = {
+                2: 'Система быстрых платежей (QR)',
+                11: 'Банковская карта РФ (RUB)',
+                12: 'Visa / Mastercard (EUR)',
+                13: 'Криптовалюта',
+            }
             for _code in settings.get_platega_active_methods():
                 methods.append(
                     PaymentMethodResponse(
@@ -219,7 +225,7 @@ async def get_payment_methods(
                                 settings.get_platega_method_display_title(_code),
                             )
                         ),
-                        description=method_data.get('description'),
+                        description=_PLATEGA_OPTION_DESCRIPTIONS.get(_code, method_data.get('description')),
                         min_amount_kopeks=method_data['min_amount_kopeks'],
                         max_amount_kopeks=method_data['max_amount_kopeks'],
                         is_available=True,

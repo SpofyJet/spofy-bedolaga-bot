@@ -2263,6 +2263,7 @@ class MonitoringService:
                     InlineKeyboardButton(
                         text=check_button,
                         callback_data='sub_channel_check',
+                        style='success',
                     )
                 ]
             )

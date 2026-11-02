@@ -375,7 +375,9 @@ class ActivationFunnelService:
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), callback_data='subscription_connect'
+                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                            callback_data='subscription_connect',
+                            style='success',
                         )
                     ],
                     [InlineKeyboardButton(text=texts.t('MENU_SUPPORT', '🆘 Поддержка'), callback_data='menu_support')],
@@ -1176,7 +1178,9 @@ class ActivationFunnelService:
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), callback_data='subscription_connect'
+                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                            callback_data='subscription_connect',
+                            style='success',
                         )
                     ],
                     [InlineKeyboardButton(text=texts.t('MENU_SUPPORT', '🆘 Поддержка'), callback_data='menu_support')],
