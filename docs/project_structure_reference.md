@@ -4669,7 +4669,7 @@
   Функции: `test_promo_segment_counts_match_recipient_lists` — Для каждого промо-сегмента SQL-счётчик равен длине списка получателей., `test_promo_segment_counts_are_not_all_zero` — Явные ожидания — паритет сам по себе прошёл бы и на двух одинаково пустых ветках., `test_expired_segment_edge_cases` — Каждый расходившийся случай — в отдельной БД, чтобы ошибки не сокращались., `test_unknown_segment_counts_zero` — Неизвестный ключ не роняет запрос и не показывает мусорный охват.
 - `tests/handlers/test_referral_invite.py` — Python-модуль
   Классы: нет
-  Функции: `test_create_invite_message_wraps_links_in_code`
+  Функции: `test_create_invite_message_wraps_links_in_code`, `test_referral_qr_cache_tracks_link_and_owner`
 - `tests/handlers/test_referral_settings_screen.py` — Python-модуль
   Классы: `TestVisibility` (3 методов), `TestCurrentStateIsVisible` (3 методов), `TestSaving` (7 методов), `TestDaysTargetFollowsTheKindChoice` (2 методов), `TestAmountsAreShown` (2 методов)
   Функции: `allowed`, `sides` — Суммы сторон считает движок по настоящей БД — здесь она не предмет., `subs`, `test_every_handler_is_registered` — Обработчик без регистрации — кнопка, которая молча ничего не делает.
