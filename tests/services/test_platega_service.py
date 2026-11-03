@@ -6,7 +6,7 @@ from app.services.payment.payer_identity import PayerIdentity
 from app.services.platega_service import PlategaService
 
 
-PAYER = PayerIdentity(user_id='555', user_name='@neo', contact='555')
+PAYER = PayerIdentity(user_id='555', user_name='@neo', contact='555', platega_email='555@telegram.org')
 
 
 def _configure_platega(monkeypatch: pytest.MonkeyPatch, **overrides) -> None:
@@ -217,7 +217,11 @@ async def test_create_payment_sends_payer_metadata(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(service, '_request', fake_request)
     await service.create_payment(payer=PAYER, payment_method=2, amount=100.0, currency='RUB')
 
-    assert captured['json_data']['metadata'] == {'userId': '555', 'userName': '@neo'}
+    assert captured['json_data']['metadata'] == {
+        'userId': '555',
+        'userName': '@neo',
+        'user_email': '555@telegram.org',
+    }
 
 
 async def test_create_payment_requires_the_payer(monkeypatch: pytest.MonkeyPatch) -> None:

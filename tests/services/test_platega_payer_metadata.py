@@ -76,7 +76,7 @@ async def test_telegram_user_payment_carries_telegram_id_and_username(monkeypatc
 
         payer = await _pay(db, user_id=42)
 
-    assert payer.platega_metadata() == {'userId': '555', 'userName': '@neo'}
+    assert payer.platega_metadata() == {'userId': '555', 'userName': '@neo', 'user_email': '555@telegram.org'}
 
 
 @pytest.mark.asyncio
@@ -89,7 +89,11 @@ async def test_email_user_payment_carries_internal_id_and_email(monkeypatch) -> 
 
         payer = await _pay(db, user_id=43)
 
-    assert payer.platega_metadata() == {'userId': 'user-43', 'userName': 'mail@example.com'}
+    assert payer.platega_metadata() == {
+        'userId': 'user-43',
+        'userName': 'mail@example.com',
+        'user_email': 'mail@example.com',
+    }
 
 
 @pytest.mark.asyncio
@@ -134,7 +138,7 @@ async def test_sbp_subscription_carries_the_payer(monkeypatch) -> None:
         await Svc().create_platega_sbp_subscription(db, user_id=777, subscription=subscription, tariff=tariff)
 
     payer = create_subscription.await_args.kwargs['payer']
-    assert payer.platega_metadata() == {'userId': '9001', 'userName': 'Анна'}
+    assert payer.platega_metadata() == {'userId': '9001', 'userName': 'Анна', 'user_email': '9001@telegram.org'}
 
 
 @pytest.mark.asyncio
@@ -177,4 +181,8 @@ async def test_landing_guest_payment_carries_the_guest(monkeypatch) -> None:
         )
 
     guest_id = 'guest-' + hashlib.sha256(TOKEN.encode()).hexdigest()[:16]
-    assert captured['payer'].platega_metadata() == {'userId': guest_id, 'userName': '@buyer'}
+    assert captured['payer'].platega_metadata() == {
+        'userId': guest_id,
+        'userName': '@buyer',
+        'user_email': f'{guest_id}@spofyltd.ru',
+    }

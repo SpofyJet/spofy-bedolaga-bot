@@ -124,7 +124,7 @@ def test_overlong_values_are_cut() -> None:
 def test_platega_metadata_has_both_string_fields() -> None:
     metadata = payer_from_user(_record(username='neo')).platega_metadata()
 
-    assert metadata == {'userId': '555', 'userName': '@neo'}
+    assert metadata == {'userId': '555', 'userName': '@neo', 'user_email': '555@telegram.org'}
 
 
 # --- гость лендинга ----------------------------------------------------------
@@ -164,7 +164,7 @@ async def test_resolve_user_payer_reads_the_user(monkeypatch) -> None:
 
         payer = await resolve_user_payer(db, 7)
 
-    assert payer == PayerIdentity(user_id='555', user_name='@neo', contact='555')
+    assert payer == PayerIdentity(user_id='555', user_name='@neo', contact='555', platega_email='555@telegram.org')
 
 
 @pytest.mark.asyncio
@@ -207,7 +207,9 @@ async def test_resolve_guest_payer_reads_the_purchase(monkeypatch) -> None:
 
         payer = await resolve_guest_payer(db, TOKEN)
 
-    assert payer == PayerIdentity(user_id=GUEST_ID, user_name='guest@example.com', contact='guest@example.com')
+    assert payer == PayerIdentity(
+        user_id=GUEST_ID, user_name='guest@example.com', contact='guest@example.com', platega_email='guest@example.com'
+    )
 
 
 @pytest.mark.asyncio
@@ -217,3 +219,28 @@ async def test_resolve_guest_payer_without_the_purchase_is_still_filled(monkeypa
 
     assert payer.user_id == GUEST_ID
     _assert_filled(payer)
+
+
+# --- Platega metadata.user_email (обязателен с 2026-10-30) --------------------
+
+
+def test_platega_email_never_blocks_payment() -> None:
+    """Почту не спрашиваем и платёж из-за неё не отклоняем — всегда валидный адрес."""
+    from app.services.payment.payer_identity import platega_email_for
+
+    assert platega_email_for(telegram_id='555', email='real@example.com', fallback_id='555') == '555@telegram.org'
+    assert platega_email_for(telegram_id=None, email=' real@example.com ', fallback_id='user-7') == 'real@example.com'
+    assert platega_email_for(telegram_id=None, email='не почта', fallback_id='user-7') == 'user-7@spofyltd.ru'
+    assert platega_email_for(telegram_id=None, email=None, fallback_id='user-7') == 'user-7@spofyltd.ru'
+
+
+def test_platega_metadata_without_email_falls_back_to_synthetic() -> None:
+    bare = PayerIdentity(user_id='user-404', user_name='user-404', contact='user-404')
+
+    assert bare.platega_metadata()['user_email'] == 'user-404@spofyltd.ru'
+
+
+def test_web_user_with_invalid_email_still_pays() -> None:
+    payer = payer_from_user(_record(telegram_id=None, email='broken@@mail', username=None))
+
+    assert payer.platega_metadata()['user_email'].endswith('@spofyltd.ru')

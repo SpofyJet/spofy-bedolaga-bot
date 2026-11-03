@@ -15,7 +15,7 @@ from app.services.payment.payer_identity import PayerIdentity
 from app.services.platega_service import PlategaService
 
 
-PAYER = PayerIdentity(user_id='555', user_name='@neo', contact='555')
+PAYER = PayerIdentity(user_id='555', user_name='@neo', contact='555', platega_email='555@telegram.org')
 
 
 def _configure(monkeypatch: pytest.MonkeyPatch, **overrides) -> None:
@@ -482,7 +482,11 @@ async def test_create_subscription_sends_payer_metadata(monkeypatch: pytest.Monk
     monkeypatch.setattr(service, '_request', fake_request)
     await service.create_subscription(payer=PAYER, amount=199.0, currency='RUB', interval=3)
 
-    assert captured['json_data']['metadata'] == {'userId': '555', 'userName': '@neo'}
+    assert captured['json_data']['metadata'] == {
+        'userId': '555',
+        'userName': '@neo',
+        'user_email': '555@telegram.org',
+    }
 
 
 async def test_reconcile_stops_on_first_401_from_platega(monkeypatch: pytest.MonkeyPatch) -> None:
