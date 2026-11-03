@@ -4486,6 +4486,8 @@ async def confirm_daily_tariff_switch(
             old_tariff_device_limit=old_tariff.device_limit if old_tariff else None,
             new_tariff_device_limit=tariff.device_limit,
             max_device_limit=getattr(tariff, 'max_device_limit', None),
+            old_tariff=old_tariff,
+            new_tariff=tariff,
         )
         subscription.connected_squads = squads
         subscription.status = 'active'
@@ -5076,6 +5078,8 @@ async def preview_instant_switch(
         old_tariff_device_limit=current_tariff.device_limit if current_tariff else None,
         new_tariff_device_limit=new_tariff.device_limit,
         max_device_limit=getattr(new_tariff, 'max_device_limit', None),
+        old_tariff=current_tariff,
+        new_tariff=new_tariff,
     )
     _purchased_gb_sw = (subscription.purchased_traffic_gb or 0) if subscription else 0
     traffic = (
@@ -5088,8 +5092,11 @@ async def preview_instant_switch(
         _paid_dev = (
             max(0, (subscription.device_limit or 0) - (current_tariff.device_limit or 0)) if current_tariff else 0
         )
+        from app.database.crud.subscription import device_addons_carry_over
+
+        _devices_carry = device_addons_carry_over(current_tariff, new_tariff)
         _addon_parts = []
-        if _paid_dev:
+        if _paid_dev and _devices_carry:
             _addon_parts.append(f'📱 +{_paid_dev}')
         if _purchased_gb_sw:
             _addon_parts.append(f'📈 +{_purchased_gb_sw} GB')
@@ -5098,6 +5105,18 @@ async def preview_instant_switch(
                 'TARIFF_SWITCH_ADDONS_KEPT',
                 '\n\n🔗 Докуплено: {addons} — сохранится при переходе.',
             ).format(addons=', '.join(_addon_parts))
+        if _paid_dev and not _devices_carry:
+            # Spofy: места, купленные помесячно, на тариф с разовой ценой места
+            # (ULTIMA) не переносятся — говорим об этом до оплаты, а не после.
+            addons_note += texts.t(
+                'TARIFF_SWITCH_DEVICES_NOT_CARRIED',
+                '\n\n📱 Докупленные места (+{count}) на этот тариф не переносятся: '
+                'в нём {base} мест, дополнительное — {price}.',
+            ).format(
+                count=_paid_dev,
+                base=new_tariff.device_limit,
+                price=texts.format_price(new_tariff.device_price_kopeks or 0),
+            )
 
     # Проверяем, суточный ли новый тариф
     is_new_daily = getattr(new_tariff, 'is_daily', False)
@@ -5557,6 +5576,8 @@ async def confirm_instant_switch(
             old_tariff_device_limit=old_tariff.device_limit if old_tariff else None,
             new_tariff_device_limit=new_tariff.device_limit,
             max_device_limit=getattr(new_tariff, 'max_device_limit', None),
+            old_tariff=old_tariff,
+            new_tariff=new_tariff,
         )
         subscription.connected_squads = squads
 

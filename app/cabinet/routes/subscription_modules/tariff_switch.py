@@ -208,6 +208,25 @@ async def preview_tariff_switch(
         'is_upgrade': is_upgrade,
     }
 
+    # Spofy: сколько мест будет после перехода и не теряются ли докупки —
+    # кабинет показывает это до оплаты (на ULTIMA помесячные места не переносятся).
+    from app.database.crud.subscription import calc_device_limit_on_tariff_switch, device_addons_carry_over
+
+    paid_devices = (
+        max(0, (subscription.device_limit or 0) - (current_tariff.device_limit or 0)) if current_tariff else 0
+    )
+    response['devices_after_switch'] = calc_device_limit_on_tariff_switch(
+        current_device_limit=subscription.device_limit,
+        old_tariff_device_limit=current_tariff.device_limit if current_tariff else None,
+        new_tariff_device_limit=new_tariff.device_limit,
+        max_device_limit=new_tariff.max_device_limit,
+        old_tariff=current_tariff,
+        new_tariff=new_tariff,
+    )
+    response['paid_devices_not_carried'] = (
+        paid_devices if paid_devices and not device_addons_carry_over(current_tariff, new_tariff) else 0
+    )
+
     # Add discount info if applicable
     if period_discount_percent > 0 and discount_value > 0:
         response['discount_percent'] = period_discount_percent
@@ -502,6 +521,8 @@ async def switch_tariff(
         old_tariff_device_limit=current_tariff.device_limit if current_tariff else None,
         new_tariff_device_limit=new_tariff.device_limit,
         max_device_limit=new_tariff.max_device_limit,
+        old_tariff=current_tariff,
+        new_tariff=new_tariff,
     )
     subscription.connected_squads = new_tariff.allowed_squads or []
 

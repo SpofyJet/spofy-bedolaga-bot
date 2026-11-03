@@ -7237,6 +7237,8 @@ async def switch_tariff_endpoint(
         old_tariff_device_limit=current_tariff.device_limit if current_tariff else None,
         new_tariff_device_limit=new_tariff.device_limit,
         max_device_limit=new_tariff.max_device_limit,
+        old_tariff=current_tariff,
+        new_tariff=new_tariff,
     )
     subscription.connected_squads = squads
     # Сбрасываем докупленный трафик при смене тарифа

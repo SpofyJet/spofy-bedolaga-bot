@@ -316,6 +316,8 @@ async def _do_change_tariff(
         old_tariff_device_limit=old_tariff.device_limit if old_tariff else None,
         new_tariff_device_limit=tariff.device_limit,
         max_device_limit=tariff.max_device_limit,
+        old_tariff=old_tariff,
+        new_tariff=tariff,
     )
     # Set squads from tariff
     sub.connected_squads = tariff.allowed_squads or []

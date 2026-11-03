@@ -81,34 +81,80 @@ def is_recently_updated_by_webhook(subscription: Subscription) -> bool:
     return elapsed < _WEBHOOK_GUARD_SECONDS
 
 
+def device_addons_carry_over(old_tariff, new_tariff) -> bool:
+    """Переносятся ли докупленные места со старого тарифа на новый.
+
+    Правило Spofy: место переносится, только если на новом тарифе оно не дороже,
+    чем было оплачено. Разовая цена места (``device_price_flat``, «вечный»
+    ULTIMA — 1000 ₽ навсегда) всегда дороже помесячной (Стандартный/Обходы —
+    50 ₽ в месяц): места, купленные помесячно, на ULTIMA не переносятся, а
+    купленные на ULTIMA при переходе ниже — переносятся. Внутри одной модели
+    цены сравниваем цену места.
+
+    Неизвестный тариф с любой стороны — переносим, как раньше: правило не
+    должно отбирать оплаченное там, где сравнить не с чем.
+    """
+    if old_tariff is None or new_tariff is None:
+        return True
+    old_flat = bool(getattr(old_tariff, 'device_price_flat', False))
+    new_flat = bool(getattr(new_tariff, 'device_price_flat', False))
+    if old_flat != new_flat:
+        return old_flat  # с разовой цены на помесячную — да, наоборот — нет
+    old_price = getattr(old_tariff, 'device_price_kopeks', None)
+    new_price = getattr(new_tariff, 'device_price_kopeks', None)
+    if old_price is None or new_price is None:
+        return True  # на одном из тарифов место не продаётся — сравнить не с чем
+    return new_price <= old_price
+
+
+def _device_limit_after_switch(
+    current_device_limit: int | None,
+    old_tariff_device_limit: int | None,
+    new_tariff_device_limit: int | None,
+    max_device_limit: int | None,
+    carry_over: bool,
+) -> int:
+    new_base = new_tariff_device_limit if new_tariff_device_limit is not None else 1
+    if new_base == 0:
+        return 0  # безлимит нового тарифа остаётся безлимитом
+
+    # Докупленные места = эффективный лимит минус база СТАРОГО тарифа. Без
+    # известной старой базы допов нет — переносим только то, что точно оплачено.
+    extra_devices = 0
+    if carry_over and old_tariff_device_limit:
+        current = current_device_limit or old_tariff_device_limit
+        extra_devices = max(0, current - old_tariff_device_limit)
+
+    total = new_base + extra_devices
+    effective_max = max_device_limit or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
+    if effective_max and total > effective_max:
+        total = effective_max
+    return total
+
+
 def calc_device_limit_on_tariff_switch(
     current_device_limit: int | None,
     old_tariff_device_limit: int | None,
     new_tariff_device_limit: int | None,
     max_device_limit: int | None = None,
+    *,
+    old_tariff=None,
+    new_tariff=None,
 ) -> int:
-    """Calculate device_limit when switching tariffs.
+    """device_limit после смены тарифа самим пользователем.
 
-    Previously purchased extra devices ARE carried over on top of the new
-    tariff base device limit — they were paid for separately and must not
-    silently burn on a tariff switch.  Capped at max_device_limit.
+    База нового тарифа + докупленные места, если они переносятся по правилу
+    :func:`device_addons_carry_over` (Spofy: на ULTIMA с тарифов ниже — нет).
+    Ограничено max_device_limit. Вызывающие передают ``old_tariff``/``new_tariff``,
+    иначе правило не применить (тест следит за всеми вызовами).
     """
-    new_base = new_tariff_device_limit if new_tariff_device_limit is not None else 1
-
-    # Докупленные устройства = эффективный лимит минус база СТАРОГО тарифа.
-    # Если старый тариф неизвестен, считаем допов нет — переносим только то,
-    # что точно было оплачено сверх базы.
-    paid_addons = 0
-    if current_device_limit is not None and old_tariff_device_limit is not None:
-        paid_addons = max(0, current_device_limit - old_tariff_device_limit)
-
-    effective_max = max_device_limit or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
-
-    new_limit = new_base + paid_addons
-    if effective_max and new_limit > effective_max:
-        new_limit = effective_max
-
-    return new_limit
+    return _device_limit_after_switch(
+        current_device_limit,
+        old_tariff_device_limit,
+        new_tariff_device_limit,
+        max_device_limit,
+        device_addons_carry_over(old_tariff, new_tariff),
+    )
 
 
 def calc_device_limit_on_admin_tariff_change(
@@ -116,34 +162,23 @@ def calc_device_limit_on_admin_tariff_change(
     old_tariff_device_limit: int | None,
     new_tariff_device_limit: int | None,
     max_device_limit: int | None = None,
+    *,
+    old_tariff=None,
+    new_tariff=None,
 ) -> int:
-    """Calculate device_limit when an admin changes the tariff (one user or bulk action).
+    """device_limit после смены тарифа админом (одному или массово).
 
-    An admin change is a relabel, not a purchase: nothing is charged and the
-    extra devices are already paid until the end date. So the extra devices
-    (limit above the old tariff's base) are carried over onto the new base,
-    capped at max_device_limit. Without a known old base nothing is carried.
-    A new tariff with a zero base is unlimited and stays unlimited (0).
-
-    A switch made by the user still resets to the new base
-    (calc_device_limit_on_tariff_switch): that path prices the switch, and
-    carried-over devices kept the old per-device rate (aec01ce0).
+    Смена админом — смена метки без оплаты: докупки оплачены до конца срока и
+    переносятся (upstream bbe64967) — по тому же правилу цены места, что и у
+    пользователя, иначе админская смена на ULTIMA раздавала бы дешёвые места.
     """
-    extra_devices = 0
-    if old_tariff_device_limit:
-        current = current_device_limit or old_tariff_device_limit
-        extra_devices = max(0, current - old_tariff_device_limit)
-
-    new_base = new_tariff_device_limit if new_tariff_device_limit is not None else 1
-    if new_base == 0:
-        return 0
-    total = new_base + extra_devices
-
-    effective_max = max_device_limit or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
-    if effective_max and total > effective_max:
-        total = effective_max
-
-    return total
+    return _device_limit_after_switch(
+        current_device_limit,
+        old_tariff_device_limit,
+        new_tariff_device_limit,
+        max_device_limit,
+        device_addons_carry_over(old_tariff, new_tariff),
+    )
 
 
 def is_active_paid_subscription(subscription: Subscription | None) -> bool:
