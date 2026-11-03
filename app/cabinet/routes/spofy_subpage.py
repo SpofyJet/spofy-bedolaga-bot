@@ -53,6 +53,8 @@ from app.services.spofy_subpage_service import (
     tag_current_cart_as_subpage,
 )
 from app.services.user_cart_service import user_cart_service
+from app.utils.lifetime import for_period_ru, is_lifetime_end, is_lifetime_period
+from app.utils.pricing_utils import format_period_description
 
 from ..dependencies import get_cabinet_db
 from ..schemas.balance import TopUpRequest
@@ -135,6 +137,8 @@ def snapshot(subscription: Subscription) -> dict[str, Any]:
         'tariff_id': subscription.tariff_id,
         'tariff_name': subscription.tariff.name if subscription.tariff_id and subscription.tariff else None,
         'end_date': end_date.isoformat() if isinstance(end_date, datetime) else None,
+        # ULTIMA «Навсегда»: страница пишет «Навсегда» вместо даты и не предлагает продление.
+        'is_lifetime': not subscription.is_trial and is_lifetime_end(end_date),
         'device_limit': subscription.device_limit,
         'traffic_limit_gb': subscription.traffic_limit_gb,
     }
@@ -193,6 +197,9 @@ async def tariff_offers(db: AsyncSession, user: User, subscription: Subscription
             periods.append(
                 {
                     'period_days': period_days,
+                    # Готовая подпись: «1 месяц», «Навсегда» (2222 дня).
+                    'label': format_period_description(period_days, getattr(user, 'language', None) or 'ru'),
+                    'is_lifetime': is_lifetime_period(period_days),
                     'price_kopeks': price.final_total,
                     'original_price_kopeks': price.original_total if price.original_total > price.final_total else None,
                     'is_highlighted': tariff.highlight_period_days == period_days,
@@ -221,6 +228,8 @@ async def save_renewal_cart(db: AsyncSession, user: User, subscription: Subscrip
     actual_status = getattr(subscription, 'actual_status', subscription.status)
     if actual_status in {SubscriptionStatus.DISABLED.value, SubscriptionStatus.PENDING.value}:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f'Cannot renew subscription with status: {actual_status}')
+    if is_lifetime_end(subscription.end_date):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Subscription is lifetime and cannot be renewed')
 
     tariff = subscription.tariff if subscription.tariff_id else None
     if tariff and tariff.is_active and tariff.period_prices:
@@ -245,7 +254,7 @@ async def save_renewal_cart(db: AsyncSession, user: User, subscription: Subscrip
         'saved_cart': True,
         'missing_amount': price,
         'return_to_cart': True,
-        'description': f'Продление подписки на {period_days} дней' + (f' ({tariff.name})' if tariff else ''),
+        'description': f'Продление подписки {for_period_ru(period_days)}' + (f' ({tariff.name})' if tariff else ''),
         'discount_percent': discount_percent,
         'consume_promo_offer': pricing.promo_offer_discount > 0,
         'source': SUBPAGE_SOURCE,
@@ -303,7 +312,7 @@ async def save_tariff_cart(
         'saved_cart': True,
         'missing_amount': price,
         'return_to_cart': True,
-        'description': f'Покупка тарифа {tariff.name} на {period_days} дней',
+        'description': f'Покупка тарифа {tariff.name} {for_period_ru(period_days)}',
         'traffic_limit_gb': tariff.traffic_limit_gb,
         'device_limit': effective_device_limit,
         'allowed_squads': tariff.allowed_squads or [],
@@ -381,9 +390,10 @@ async def _offer(short_uuid: str, db: AsyncSession) -> dict[str, Any]:
         if subscription.is_trial
         else await _soft(get_renewal_options(user=user, db=db, subscription_id=subscription.id), [], 'renewal')
     )
+    lifetime = not subscription.is_trial and is_lifetime_end(subscription.end_date)
     tariffs = (
         await _soft(tariff_offers(db, user, subscription), [], 'tariffs')
-        if (subscription.is_trial or not renewal)
+        if (subscription.is_trial or (not renewal and not lifetime))
         else []
     )
     devices = await device_offer(db, user, subscription)

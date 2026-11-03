@@ -51,6 +51,7 @@ from app.services.subscription_purchase_service import (
 from app.services.subscription_service import SubscriptionService
 from app.services.traffic_reset_policy import should_reset_traffic_on_tariff_purchase
 from app.services.user_cart_service import user_cart_service
+from app.utils.lifetime import for_period_ru
 from app.utils.pricing_utils import (
     calculate_months_from_days,
     calculate_period_device_cost,
@@ -990,7 +991,7 @@ async def purchase_tariff(
                     'saved_cart': True,
                     'missing_amount': missing,
                     'return_to_cart': True,
-                    'description': f'Покупка тарифа {tariff.name} на {period_days} дней',
+                    'description': f'Покупка тарифа {tariff.name} {for_period_ru(period_days)}',
                     'traffic_limit_gb': traffic_limit_gb,
                     'custom_traffic_gb': custom_traffic_gb,
                     'device_limit': effective_device_limit,
@@ -1414,7 +1415,7 @@ async def purchase_tariff(
                     'period_days': period_days,
                     'total_price': price_kopeks,
                     'tariff_id': tariff.id,
-                    'description': f'Продление тарифа {tariff.name} на {period_days} дней',
+                    'description': f'Продление тарифа {tariff.name} {for_period_ru(period_days)}',
                 }
                 await user_cart_service.save_user_cart(user.id, cart_data)
                 logger.info('Tariff cart saved for auto-renewal (cabinet) user', user_id=user.id)

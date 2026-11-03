@@ -94,6 +94,10 @@ def format_time_ago(dt: datetime | str, language: str = 'ru') -> str:
 
 
 def format_days_declension(days: int, language: str = 'ru') -> str:
+    from app.utils.lifetime import is_lifetime_period, lifetime_label
+
+    if is_lifetime_period(days):
+        return lifetime_label(language)
     language_code = (language or 'ru').split('-')[0].lower()
     if language_code not in {'ru', 'fa'}:
         return f'{days} day{"s" if days != 1 else ""}'

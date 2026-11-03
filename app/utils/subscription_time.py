@@ -22,6 +22,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
+from app.utils.lifetime import is_lifetime_end
 from app.utils.timezone import local_date
 
 
@@ -93,6 +94,8 @@ def format_time_left(texts: _Texts | None, end_date: datetime, now: datetime | N
     remaining = time_left(end_date, now)
     if remaining <= timedelta(0):
         return texts.t('SUBSCRIPTION_TIME_LEFT_EXPIRED', 'истёк')
+    if is_lifetime_end(end_date):
+        return texts.t('SUBSCRIPTION_TIME_LEFT_LIFETIME', 'навсегда')
 
     hours = remaining.seconds // _SECONDS_IN_HOUR
     if remaining.days > 0:

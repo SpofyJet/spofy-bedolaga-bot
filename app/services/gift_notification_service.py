@@ -28,6 +28,7 @@ from app.utils.gift_links import (
     build_gift_claim_artifacts,
     build_telegram_gift_share_url,
 )
+from app.utils.lifetime import apply_lifetime_period
 from app.utils.timezone import format_local_datetime
 
 
@@ -173,9 +174,14 @@ def build_gift_result_presentation(
     quote = purchase_result.quote
 
     # Localized share text for native Telegram chat-picker (NO financial details, NO standalone token)
-    share_text = texts.t(
-        'GIFT_SHARE_TEXT',
-        '🎁 Привет! Я дарю тебе подписку на {tariff_name} ({period_days} дн.). Нажми на ссылку, чтобы активировать!',
+    share_text = apply_lifetime_period(
+        texts.t(
+            'GIFT_SHARE_TEXT',
+            '🎁 Привет! Я дарю тебе подписку на {tariff_name} ({period_days} дн.). Нажми на ссылку, чтобы активировать!',
+        ),
+        quote.period_days,
+        'period_days',
+        texts.language,
     ).format(
         tariff_name=quote.tariff_name,
         period_days=quote.period_days,
@@ -205,29 +211,39 @@ def build_gift_result_presentation(
     devices_str = texts.format_device_limit(quote.device_limit)
 
     if purchase_result.is_idempotent_replay:
-        body_template = texts.t(
-            'GIFT_PURCHASE_REPLAY_TEXT',
-            '🎁 <b>Подарок уже был оформлен ранее</b>\n\n'
-            '📦 Тариф: <b>{tariff_name}</b>\n'
-            '📅 Период: <b>{period_days} дн.</b>\n'
-            '📊 Трафик: <b>{traffic}</b>\n'
-            '📱 Устройства: <b>{devices}</b>\n\n'
-            '🔑 Код подарка: <code>{public_code}</code>\n\n'
-            '🔗 Ссылка на подарок:\n{claim_link}\n\n'
-            'Отправьте эту ссылку получателю или воспользуйтесь кнопкой «Отправить подарок» ниже.',
+        body_template = apply_lifetime_period(
+            texts.t(
+                'GIFT_PURCHASE_REPLAY_TEXT',
+                '🎁 <b>Подарок уже был оформлен ранее</b>\n\n'
+                '📦 Тариф: <b>{tariff_name}</b>\n'
+                '📅 Период: <b>{period_days} дн.</b>\n'
+                '📊 Трафик: <b>{traffic}</b>\n'
+                '📱 Устройства: <b>{devices}</b>\n\n'
+                '🔑 Код подарка: <code>{public_code}</code>\n\n'
+                '🔗 Ссылка на подарок:\n{claim_link}\n\n'
+                'Отправьте эту ссылку получателю или воспользуйтесь кнопкой «Отправить подарок» ниже.',
+            ),
+            quote.period_days,
+            'period_days',
+            texts.language,
         )
     else:
-        body_template = texts.t(
-            'GIFT_PURCHASE_SUCCESS_TEXT',
-            '🎁 <b>Подарок успешно оформлен!</b>\n\n'
-            '📦 Тариф: <b>{tariff_name}</b>\n'
-            '📅 Период: <b>{period_days} дн.</b>\n'
-            '📊 Трафик: <b>{traffic}</b>\n'
-            '📱 Устройства: <b>{devices}</b>\n\n'
-            '🔑 Код подарка: <code>{public_code}</code>\n\n'
-            '🔗 Ссылка на подарок:\n{claim_link}\n\n'
-            'Отправьте эту ссылку получателю или воспользуйтесь кнопкой «Отправить подарок» ниже. '
-            'Получатель сможет активировать подписку в один клик.',
+        body_template = apply_lifetime_period(
+            texts.t(
+                'GIFT_PURCHASE_SUCCESS_TEXT',
+                '🎁 <b>Подарок успешно оформлен!</b>\n\n'
+                '📦 Тариф: <b>{tariff_name}</b>\n'
+                '📅 Период: <b>{period_days} дн.</b>\n'
+                '📊 Трафик: <b>{traffic}</b>\n'
+                '📱 Устройства: <b>{devices}</b>\n\n'
+                '🔑 Код подарка: <code>{public_code}</code>\n\n'
+                '🔗 Ссылка на подарок:\n{claim_link}\n\n'
+                'Отправьте эту ссылку получателю или воспользуйтесь кнопкой «Отправить подарок» ниже. '
+                'Получатель сможет активировать подписку в один клик.',
+            ),
+            quote.period_days,
+            'period_days',
+            texts.language,
         )
 
     text = body_template.format(
@@ -291,9 +307,14 @@ def build_gift_history_detail_presentation(
     created_str = format_local_datetime(item.created_at, '%d.%m.%Y %H:%M') if item.created_at else '—'
 
     if item.is_claimable:
-        share_text = texts.t(
-            'GIFT_SHARE_TEXT',
-            '🎁 Привет! Я дарю тебе подписку на {tariff_name} ({period_days} дн.). Нажми на ссылку, чтобы активировать!',
+        share_text = apply_lifetime_period(
+            texts.t(
+                'GIFT_SHARE_TEXT',
+                '🎁 Привет! Я дарю тебе подписку на {tariff_name} ({period_days} дн.). Нажми на ссылку, чтобы активировать!',
+            ),
+            item.period_days,
+            'period_days',
+            texts.language,
         ).format(
             tariff_name=item.tariff_name or texts.t('GIFT_TARIFF_DEFAULT_NAME', 'VPN'),
             period_days=item.period_days,
@@ -314,18 +335,23 @@ def build_gift_history_detail_presentation(
         claim_link_display, action_buttons = _format_claim_link_and_action_buttons(texts, artifacts, share_url)
         status_text = texts.t('GIFT_STATUS_PENDING', '⏳ Ожидает активации')
 
-        body_template = texts.t(
-            'GIFT_MY_DETAIL_CLAIMABLE_TEXT',
-            '🎁 <b>Подарок</b>\n\n'
-            '📦 Тариф: <b>{tariff_name}</b>\n'
-            '📅 Период: <b>{period_days} дн.</b>\n'
-            '📊 Трафик: <b>{traffic}</b>\n'
-            '📱 Устройства: <b>{devices}</b>\n'
-            '📋 Статус: <b>{status_text}</b>\n'
-            '📅 Оформлен: <b>{created_at}</b>\n'
-            '🔑 Код подарка: <code>{public_code}</code>\n\n'
-            '🔗 Ссылка на подарок:\n{claim_link}\n\n'
-            'Отправьте эту ссылку или код получателю для активации подписки.',
+        body_template = apply_lifetime_period(
+            texts.t(
+                'GIFT_MY_DETAIL_CLAIMABLE_TEXT',
+                '🎁 <b>Подарок</b>\n\n'
+                '📦 Тариф: <b>{tariff_name}</b>\n'
+                '📅 Период: <b>{period_days} дн.</b>\n'
+                '📊 Трафик: <b>{traffic}</b>\n'
+                '📱 Устройства: <b>{devices}</b>\n'
+                '📋 Статус: <b>{status_text}</b>\n'
+                '📅 Оформлен: <b>{created_at}</b>\n'
+                '🔑 Код подарка: <code>{public_code}</code>\n\n'
+                '🔗 Ссылка на подарок:\n{claim_link}\n\n'
+                'Отправьте эту ссылку или код получателю для активации подписки.',
+            ),
+            item.period_days,
+            'period_days',
+            texts.language,
         )
 
         text = body_template.format(
@@ -379,16 +405,21 @@ def build_gift_history_detail_presentation(
             recipient_display=escaped_recipient
         )
 
-    body_template = texts.t(
-        'GIFT_MY_DETAIL_DELIVERED_TEXT',
-        '🎁 <b>Подарок</b>\n\n'
-        '📦 Тариф: <b>{tariff_name}</b>\n'
-        '📅 Период: <b>{period_days} дн.</b>\n'
-        '📊 Трафик: <b>{traffic}</b>\n'
-        '📱 Устройства: <b>{devices}</b>\n'
-        '📋 Статус: <b>{status_text}</b>\n'
-        '📅 Оформлен: <b>{created_at}</b>\n'
-        '{delivered_line}{recipient_line}',
+    body_template = apply_lifetime_period(
+        texts.t(
+            'GIFT_MY_DETAIL_DELIVERED_TEXT',
+            '🎁 <b>Подарок</b>\n\n'
+            '📦 Тариф: <b>{tariff_name}</b>\n'
+            '📅 Период: <b>{period_days} дн.</b>\n'
+            '📊 Трафик: <b>{traffic}</b>\n'
+            '📱 Устройства: <b>{devices}</b>\n'
+            '📋 Статус: <b>{status_text}</b>\n'
+            '📅 Оформлен: <b>{created_at}</b>\n'
+            '{delivered_line}{recipient_line}',
+        ),
+        item.period_days,
+        'period_days',
+        texts.language,
     )
 
     text = body_template.format(

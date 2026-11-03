@@ -37,6 +37,7 @@ from app.utils.decorators import error_handler
 from app.utils.formatting import format_period, format_price_kopeks, format_traffic
 from app.utils.fsm_selection import mutate_fsm_if_current
 from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
+from app.utils.lifetime import for_period_ru, is_lifetime_end, is_lifetime_period
 from app.utils.pricing_utils import calculate_period_device_cost
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.subscription_time import local_days_until
@@ -401,9 +402,7 @@ def get_tariff_periods_keyboard(
     # Доплата появляется только когда у человека устройств реально больше,
     # чем в тарифе, И за них платят — без этого поведение как раньше.
     has_extra_devices = (
-        device_limit is not None
-        and device_limit > (tariff.device_limit or 0)
-        and (tariff.device_price_kopeks or 0) > 0
+        device_limit is not None and device_limit > (tariff.device_limit or 0) and (tariff.device_price_kopeks or 0) > 0
     )
     promo_group = None
     if has_extra_devices and db_user:
@@ -2146,7 +2145,7 @@ async def select_tariff_period(
             'saved_cart': True,
             'missing_amount': missing,
             'return_to_cart': True,
-            'description': f'Покупка тарифа {tariff.name} на {period} дней',
+            'description': f'Покупка тарифа {tariff.name} {for_period_ru(period)}',
             'traffic_limit_gb': tariff.traffic_limit_gb,
             'device_limit': shown_device_limit,
             'allowed_squads': tariff.allowed_squads or [],
@@ -2638,9 +2637,7 @@ def get_tariff_extend_keyboard(
         period = int(period_str)
         base_price = prices[period_str]
 
-        price = _period_price_with_devices(
-            tariff, period, base_price, subscription_device_limit, promo_group, db_user
-        )
+        price = _period_price_with_devices(tariff, period, base_price, subscription_device_limit, promo_group, db_user)
 
         # Spofy: компактная цена периода — размер скидки показан в шапке экрана
         price_text = format_price_kopeks(price)
@@ -2787,6 +2784,8 @@ async def show_tariff_extend(
                         tariff_name = texts.t('TARIFF_PURCHASE_SUBSCRIPTION_FALLBACK', 'Подписка #{id}').format(
                             id=sub.id
                         )
+                    if is_lifetime_end(sub.end_date):
+                        continue
                     days_left = local_days_until(sub.end_date) if sub.end_date else 0
                     keyboard.append(
                         [
@@ -2819,6 +2818,13 @@ async def show_tariff_extend(
         subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription:
         await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
+        return
+
+    if not subscription.is_trial and is_lifetime_end(subscription.end_date):
+        await callback.answer(
+            texts.t('SUBSCRIPTION_LIFETIME_NO_RENEW', '♾️ Подписка действует навсегда — продлевать не нужно.'),
+            show_alert=True,
+        )
         return
 
     if not subscription.tariff_id:
@@ -3053,7 +3059,7 @@ async def select_tariff_extend_period(
             'saved_cart': True,
             'missing_amount': missing,
             'return_to_cart': True,
-            'description': f'Продление тарифа {tariff.name} на {period} дней',
+            'description': f'Продление тарифа {tariff.name} {for_period_ru(period)}',
             'traffic_limit_gb': tariff.traffic_limit_gb,
             'device_limit': actual_device_limit,
             'allowed_squads': tariff.allowed_squads or [],
@@ -3225,7 +3231,7 @@ async def confirm_tariff_extend(
                 db,
                 db_user,
                 final_price,
-                f'Продление тарифа {tariff.name} на {period} дней',
+                f'Продление тарифа {tariff.name} {for_period_ru(period)}',
                 consume_promo_offer=consume_promo,
                 mark_as_paid_subscription=True,
                 commit=False,
@@ -3259,7 +3265,7 @@ async def confirm_tariff_extend(
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=final_price,
-                description=f'Продление тарифа {tariff.name} на {period} дней',
+                description=f'Продление тарифа {tariff.name} {for_period_ru(period)}',
                 commit=False,
             )
             await db.commit()
@@ -3284,7 +3290,7 @@ async def confirm_tariff_extend(
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=final_price,
-            description=f'Продление тарифа {tariff.name} на {period} дней',
+            description=f'Продление тарифа {tariff.name} {for_period_ru(period)}',
             payment_method=PaymentMethod.BALANCE,
         )
 
@@ -3918,7 +3924,10 @@ async def select_tariff_switch_period(
             current_tariff_name = html.escape(current_tariff.name)
 
     # При смене тарифа устанавливается ровно оплаченный период
-    time_info = texts.t('TARIFF_SWITCH_WILL_SET_LINE', '⏰ Будет установлено: {days} дней').format(days=period)
+    if is_lifetime_period(period):
+        time_info = texts.t('TARIFF_SWITCH_WILL_SET_LIFETIME_LINE', '♾️ Срок: навсегда')
+    else:
+        time_info = texts.t('TARIFF_SWITCH_WILL_SET_LINE', '⏰ Будет установлено: {days} дней').format(days=period)
 
     if user_balance >= final_price:
         discount_text = ''
@@ -5212,7 +5221,12 @@ async def preview_instant_switch(
     full_price_note = ''
     if getattr(new_tariff, 'switch_full_price', False):
         _fp_periods = new_tariff.get_available_periods() or []
-        if _fp_periods:
+        if _fp_periods and is_lifetime_period(_fp_periods[0]):
+            full_price_note = '\n\n' + texts.t(
+                'TARIFF_SWITCH_LIFETIME_NOTE',
+                '♾️ Полная стоимость тарифа — подписка станет <b>бессрочной</b>: действует навсегда.',
+            )
+        elif _fp_periods:
             full_price_note = '\n\n' + texts.t(
                 'TARIFF_SWITCH_FULL_PRICE_DAYS_NOTE',
                 '📅 Полная стоимость тарифа — будет начислено <b>{days} дн.</b> поверх остатка.',

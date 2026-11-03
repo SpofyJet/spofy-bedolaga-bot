@@ -33,7 +33,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
+from sqlalchemy.orm import Mapped, backref, mapped_column, relationship, validates
 from sqlalchemy.sql import func
 
 
@@ -2896,6 +2896,20 @@ class Subscription(Base):
 
         return '❓'
 
+    @validates('end_date')
+    def _normalize_lifetime_end_date(self, _key, value):
+        # Срок дальше ~5,5 лет = «Навсегда» (ULTIMA): одна отметка 31.12.2099 для
+        # покупки, перехода, продления, админки и вебхуков панели. См. app/utils/lifetime.py.
+        from app.utils.lifetime import normalize_end_date
+
+        return normalize_end_date(value)
+
+    @property
+    def is_lifetime(self) -> bool:
+        from app.utils.lifetime import is_lifetime_end
+
+        return is_lifetime_end(self.end_date)
+
     @property
     def days_left(self) -> int:
         end = _aware(self.end_date)
@@ -2913,6 +2927,8 @@ class Subscription(Base):
         current_time = datetime.now(UTC)
         if end is None or end <= current_time:
             return 'истёк'
+        if self.is_lifetime:
+            return 'навсегда'
 
         delta = end - current_time
         days = delta.days

@@ -62,7 +62,7 @@ from app.services.traffic_reset_policy import (
     should_reset_traffic_on_tariff_purchase,
 )
 from app.services.user_cart_service import user_cart_service
-from app.utils.formatters import format_days_declension
+from app.utils.lifetime import for_period_ru
 from app.utils.pricing_utils import format_period_description
 from app.utils.subscription_utils import resolve_tariff_cart_traffic, resolve_tariff_purchase_device_limit
 from app.utils.timezone import format_local_datetime
@@ -443,10 +443,11 @@ async def _prepare_auto_extend_context(
         tariff = await get_tariff_by_id(db, tariff_id)
         tariff_name = tariff.name if tariff else 'тариф'
         description = (
-            cart_data.get('description') or f'Продление тарифа {tariff_name} на {format_days_declension(period_days)}'
+            cart_data.get('description')
+            or f'Продление тарифа {tariff_name} {for_period_ru(period_days, declined=True)}'
         )
     else:
-        description = cart_data.get('description') or f'Продление подписки на {format_days_declension(period_days)}'
+        description = cart_data.get('description') or f'Продление подписки {for_period_ru(period_days, declined=True)}'
 
     device_limit = cart_data.get('device_limit')
     if device_limit is not None:
@@ -1042,7 +1043,7 @@ async def _auto_purchase_tariff(
 
     # Списываем баланс
     try:
-        description = f'Покупка тарифа {tariff.name} на {format_days_declension(period_days)}'
+        description = f'Покупка тарифа {tariff.name} {for_period_ru(period_days, declined=True)}'
         success = await subtract_user_balance(
             db,
             user,
@@ -2546,7 +2547,7 @@ async def _try_auto_extend_expired_after_topup(
     consume_promo_offer = pricing.promo_offer_discount > 0
 
     user_id, subscription_id = user.id, subscription.id
-    description = f'Автопродление истёкшей подписки на {format_days_declension(period_days)}'
+    description = f'Автопродление истёкшей подписки {for_period_ru(period_days, declined=True)}'
     old_end_date = subscription.end_date
     try:
         deducted = await subtract_user_balance(
@@ -3264,9 +3265,13 @@ async def _process_single_cart(
     if cart_mode == 'daily_tariff_purchase':
         return await _auto_purchase_daily_tariff(db, user, cart_data, bot=bot)
     if cart_mode == 'add_devices':
-        return await _auto_add_devices(db, user, cart_data, bot=bot, manual=manual, bound_price_kopeks=bound_price_kopeks)
+        return await _auto_add_devices(
+            db, user, cart_data, bot=bot, manual=manual, bound_price_kopeks=bound_price_kopeks
+        )
     if cart_mode == 'add_traffic':
-        return await _auto_add_traffic(db, user, cart_data, bot=bot, manual=manual, bound_price_kopeks=bound_price_kopeks)
+        return await _auto_add_traffic(
+            db, user, cart_data, bot=bot, manual=manual, bound_price_kopeks=bound_price_kopeks
+        )
 
     logger.warning(
         'Автопокупка: неизвестный cart_mode, пропускаем',

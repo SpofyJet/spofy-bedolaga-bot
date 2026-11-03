@@ -21,6 +21,7 @@ from app.services.subscription_renewal_service import (
     SubscriptionRenewalService,
 )
 from app.services.user_cart_service import user_cart_service
+from app.utils.lifetime import is_lifetime_end
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import (
@@ -54,6 +55,10 @@ async def get_renewal_options(
     _non_renewable = {SubscriptionStatus.DISABLED.value, SubscriptionStatus.PENDING.value}
     _actual_status = getattr(subscription, 'actual_status', subscription.status)
     if _actual_status in _non_renewable:
+        return []
+
+    # ULTIMA «Навсегда»: продлевать нечего.
+    if not subscription.is_trial and is_lifetime_end(subscription.end_date):
         return []
 
     # Determine available periods
@@ -143,6 +148,12 @@ async def renew_subscription(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f'Cannot renew subscription with status: {_actual_status}',
+        )
+
+    if not subscription.is_trial and is_lifetime_end(subscription.end_date):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Subscription is lifetime and cannot be renewed',
         )
 
     if (

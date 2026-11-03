@@ -12,6 +12,7 @@ from app.keyboards.button_icons import apply_button_icons
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
+from app.utils.lifetime import is_lifetime_end
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.price_display import PriceInfo, format_price_button
 from app.utils.pricing_utils import (
@@ -724,7 +725,8 @@ def get_main_menu_keyboard(
                 keyboard.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), url=subscription_link,
+                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                            url=subscription_link,
                             style='success',
                         )
                     ]
@@ -1267,7 +1269,8 @@ def get_subscription_keyboard(
                 keyboard.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), url=subscription_link,
+                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                            url=subscription_link,
                             style='success',
                         )
                     ]
@@ -1380,6 +1383,9 @@ def get_subscription_keyboard(
                         )
                     ]
                 )
+            elif is_lifetime_end(getattr(subscription, 'end_date', None)):
+                # Бессрочная (ULTIMA «Навсегда»): продлевать и автопродлевать нечего.
+                pass
             else:
                 # «Продлить подписку» — главная CTA экрана, отдельным рядом на всю ширину
                 keyboard.append(
@@ -1517,16 +1523,16 @@ def get_payment_methods_keyboard_with_cart(
 
     # Кнопка возврата к оформлению подписки
     keyboard.inline_keyboard.append(
-        [InlineKeyboardButton(text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT, callback_data='return_to_saved_cart', style='success')]
+        [
+            InlineKeyboardButton(
+                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT, callback_data='return_to_saved_cart', style='success'
+            )
+        ]
     )
 
     # Кнопка "Очистить корзину"
     keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text='🗑️ Очистить корзину и вернуться', callback_data='clear_saved_cart', style='danger'
-            )
-        ]
+        [InlineKeyboardButton(text='🗑️ Очистить корзину и вернуться', callback_data='clear_saved_cart', style='danger')]
     )
 
     if back_row:
@@ -1887,11 +1893,7 @@ def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
 
     # n6-П4: «Пополнить» — главное действие, первым рядом на всю ширину
     keyboard = [
-        [
-            InlineKeyboardButton(
-                text=texts.BALANCE_TOP_UP, callback_data='balance_topup', style='success'
-            )
-        ],
+        [InlineKeyboardButton(text=texts.BALANCE_TOP_UP, callback_data='balance_topup', style='success')],
         [
             InlineKeyboardButton(text=texts.BALANCE_HISTORY, callback_data='balance_history'),
             InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode'),

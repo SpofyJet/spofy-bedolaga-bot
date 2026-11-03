@@ -98,6 +98,7 @@ from app.services.trial_activation_service import (
 from app.services.tribute_service import TributeService
 from app.services.user_action_log_service import mark_user_seen, schedule_miniapp_action_log
 from app.utils.currency_converter import currency_converter
+from app.utils.lifetime import for_period_ru
 from app.utils.pricing_utils import (
     apply_percentage_discount,
     calculate_price_per_month,
@@ -5414,7 +5415,7 @@ async def submit_subscription_renewal_endpoint(
 
     balance_kopeks = getattr(user, 'balance_kopeks', 0)
     missing_amount = calculate_missing_amount(balance_kopeks, final_total)
-    description = f'Продление подписки на {period_days} дней'
+    description = f'Продление подписки {for_period_ru(period_days)}'
 
     if missing_amount <= 0:
         # Both tariff and classic modes use finalize() for consistent renewal handling

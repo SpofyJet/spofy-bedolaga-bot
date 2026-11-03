@@ -111,6 +111,7 @@ from app.handlers.simple_subscription import (
     _get_simple_subscription_payment_keyboard,
 )
 from app.states import SubscriptionStates
+from app.utils.lifetime import is_lifetime_end
 from app.utils.price_display import PriceInfo, format_price_text
 from app.utils.pricing_utils import (
     calculate_months_from_days,
@@ -513,6 +514,24 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 if '</blockquote>' in _tpl_line and _tpl_lines:
                     _tpl_lines[-1] += '</blockquote>'
                 continue
+            _tpl_lines.append(_tpl_line)
+        message_template = '\n'.join(_tpl_lines)
+
+    if is_lifetime_end(subscription.end_date):
+        # Бессрочная (ULTIMA): вместо «Действует до: 31.12.2099 / Осталось: 26 000 дн.»
+        # одна строка «Срок: навсегда». По плейсхолдерам — работает в любой локали.
+        _lifetime_line = texts.t(
+            'SUBSCRIPTION_OVERVIEW_LIFETIME_LINE',
+            "<tg-emoji emoji-id='5908972566537572230'>♾️</tg-emoji> Срок: <b>навсегда</b>",
+        )
+        _tpl_lines = []
+        for _tpl_line in message_template.split('\n'):
+            if '{time_left}' in _tpl_line and '{end_date}' not in _tpl_line:
+                continue
+            if '{end_date}' in _tpl_line:
+                _prefix = '<blockquote>' if '<blockquote>' in _tpl_line else ''
+                _suffix = '</blockquote>' if '</blockquote>' in _tpl_line else ''
+                _tpl_line = f'{_prefix}{_lifetime_line}{_suffix}'
             _tpl_lines.append(_tpl_line)
         message_template = '\n'.join(_tpl_lines)
 
@@ -1830,7 +1849,11 @@ async def handle_extend_subscription(
             '🎯 <b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success'
+                        )
+                    ],
                     [
                         types.InlineKeyboardButton(
                             text=texts.t('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'),
@@ -1842,6 +1865,14 @@ async def handle_extend_subscription(
             parse_mode='HTML',
         )
         await callback.answer()
+        return
+
+    if not subscription.is_trial and is_lifetime_end(subscription.end_date):
+        # ULTIMA «Навсегда»: продлевать нечего (кнопка скрыта, это старые сообщения).
+        await callback.answer(
+            texts.t('SUBSCRIPTION_LIFETIME_NO_RENEW', '♾️ Подписка действует навсегда — продлевать не нужно.'),
+            show_alert=True,
+        )
         return
 
     # Триальная подписка с тарифом — направляем на покупку этого тарифа
@@ -1856,7 +1887,11 @@ async def handle_extend_subscription(
             '🎯 <b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success'
+                        )
+                    ],
                     [
                         types.InlineKeyboardButton(
                             text=texts.t('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'),

@@ -61,6 +61,7 @@ from app.services.user_cart_service import user_cart_service
 from app.states import GiftActivationStates, GiftPurchaseStates
 from app.utils.fsm_selection import mutate_fsm_if_current
 from app.utils.gift_links import build_gift_claim_artifacts
+from app.utils.lifetime import apply_lifetime_period
 
 
 logger = structlog.get_logger(__name__)
@@ -182,9 +183,14 @@ def _render_history_list(
     for item in items:
         status_emoji = '✅' if item.is_delivered else '⏳'
         raw_name = item.tariff_name or texts.t('GIFT_TARIFF_DELETED', 'Архивный тариф')
-        item_label = texts.t(
-            'GIFT_MY_ITEM_BUTTON',
-            '{status_emoji} {tariff_name} — {period_days} дн.',
+        item_label = apply_lifetime_period(
+            texts.t(
+                'GIFT_MY_ITEM_BUTTON',
+                '{status_emoji} {tariff_name} — {period_days} дн.',
+            ),
+            item.period_days,
+            'period_days',
+            texts.language,
         ).format(
             status_emoji=status_emoji,
             tariff_name=raw_name,
@@ -248,13 +254,16 @@ def _render_period_selection(db_user: User, offer: GiftTariffOffer) -> tuple[str
     for quote in offer.quotes:
         price_str = texts.format_price(quote.final_price_kopeks)
         if quote.discount_percent > 0:
-            btn_text = texts.t('GIFT_PERIOD_DISCOUNT_BUTTON', '{days} дн. — {price} (-{discount}%)').format(
-                days=quote.period_days, price=price_str, discount=quote.discount_percent
-            )
+            btn_text = apply_lifetime_period(
+                texts.t('GIFT_PERIOD_DISCOUNT_BUTTON', '{days} дн. — {price} (-{discount}%)'),
+                quote.period_days,
+                'days',
+                texts.language,
+            ).format(days=quote.period_days, price=price_str, discount=quote.discount_percent)
         else:
-            btn_text = texts.t('GIFT_PERIOD_CHOICE_BUTTON', '{days} дн. — {price}').format(
-                days=quote.period_days, price=price_str
-            )
+            btn_text = apply_lifetime_period(
+                texts.t('GIFT_PERIOD_CHOICE_BUTTON', '{days} дн. — {price}'), quote.period_days, 'days', texts.language
+            ).format(days=quote.period_days, price=price_str)
 
         buttons.append(
             [InlineKeyboardButton(text=btn_text, callback_data=f'gift_period:{offer.tariff_id}:{quote.period_days}')]
@@ -300,9 +309,14 @@ def _render_confirmation_summary(db_user: User, quote: GiftQuote) -> tuple[str, 
         final_price=final_price_str
     )
 
-    text = texts.t(
-        'GIFT_SUMMARY_TITLE',
-        '🎁 <b>Подтверждение подарка</b>\n\n📦 Тариф: <b>{tariff_name}</b>\n📅 Период: <b>{period_days} дн.</b>\n📊 Трафик: <b>{traffic}</b>\n📱 Устройства: <b>{devices}</b>\n\n{price_details}💳 Ваш баланс: <b>{balance}</b>\n\nПосле подтверждения с вашего баланса будет списана указанная сумма и создана ссылка на подарок.',
+    text = apply_lifetime_period(
+        texts.t(
+            'GIFT_SUMMARY_TITLE',
+            '🎁 <b>Подтверждение подарка</b>\n\n📦 Тариф: <b>{tariff_name}</b>\n📅 Период: <b>{period_days} дн.</b>\n📊 Трафик: <b>{traffic}</b>\n📱 Устройства: <b>{devices}</b>\n\n{price_details}💳 Ваш баланс: <b>{balance}</b>\n\nПосле подтверждения с вашего баланса будет списана указанная сумма и создана ссылка на подарок.',
+        ),
+        quote.period_days,
+        'period_days',
+        texts.language,
     ).format(
         tariff_name=escaped_name,
         period_days=quote.period_days,
@@ -1511,9 +1525,14 @@ async def handle_gift_code_input(
 
     tariff_name = html.escape(purchase.tariff.name) if purchase.tariff and purchase.tariff.name else ''
     period_days = purchase.period_days or 0
-    success_text = texts.t(
-        'GIFT_ACTIVATION_SUCCESS_TEXT',
-        '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
+    success_text = apply_lifetime_period(
+        texts.t(
+            'GIFT_ACTIVATION_SUCCESS_TEXT',
+            '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
+        ),
+        period_days,
+        'period_days',
+        texts.language,
     ).format(tariff_name=tariff_name, period_days=period_days)
 
     success_kb = InlineKeyboardMarkup(
@@ -1801,11 +1820,16 @@ async def handle_gift_my_text(
     item, artifacts, claim_link = loaded
     texts = get_texts(db_user.language)
 
-    body = texts.t(
-        'GIFT_COPY_TEXT_BODY',
-        '🎁 Дарю тебе подписку {tariff_name} на {period_days} дн.\n\n'
-        'Активировать: {claim_link}\n\n'
-        'Если ссылка не открывается, введи код в боте: {public_code}',
+    body = apply_lifetime_period(
+        texts.t(
+            'GIFT_COPY_TEXT_BODY',
+            '🎁 Дарю тебе подписку {tariff_name} на {period_days} дн.\n\n'
+            'Активировать: {claim_link}\n\n'
+            'Если ссылка не открывается, введи код в боте: {public_code}',
+        ),
+        item.period_days,
+        'period_days',
+        texts.language,
     ).format(
         tariff_name=item.tariff_name or texts.t('GIFT_TARIFF_DEFAULT_NAME', 'VPN'),
         period_days=item.period_days,

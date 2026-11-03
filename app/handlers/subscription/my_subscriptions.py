@@ -22,6 +22,7 @@ from app.database.crud.subscription import (
 from app.database.models import Subscription, User
 from app.localization.texts import Texts, get_texts
 from app.utils.legacy_subscription import is_legacy_subscription
+from app.utils.lifetime import is_lifetime_end
 from app.utils.subscription_utils import get_display_subscription_link
 from app.utils.timezone import format_local_datetime
 
@@ -76,7 +77,10 @@ def _format_subscription_line(sub, idx: int) -> str:
     parts.append(f'   📊 Трафик: {traffic}')
     if devices:
         parts.append(f'   📱 Устройства: {devices}')
-    parts.append(f'   📅 До: {end_date}')
+    if is_lifetime_end(sub.end_date):
+        parts.append('   ♾️ Срок: навсегда')
+    else:
+        parts.append(f'   📅 До: {end_date}')
 
     return '\n'.join(parts)
 
@@ -105,9 +109,7 @@ def _build_subscriptions_keyboard(
         buy_text = getattr(texts, 'MENU_BUY_SUBSCRIPTION', 'Купить ещё тариф')
         buttons.append(
             [
-                types.InlineKeyboardButton(
-                    text=f'➕ {buy_text}', callback_data='menu_buy', style='success'
-                ),
+                types.InlineKeyboardButton(text=f'➕ {buy_text}', callback_data='menu_buy', style='success'),
             ]
         )
     if gift_enabled:
@@ -285,7 +287,7 @@ async def show_subscription_detail(
         f'Статус: {status}\n'
         f'📊 Трафик: {traffic}\n'
         f'📱 Устройства: {Texts.format_device_limit(subscription.device_limit)}\n'
-        f'📅 До: {end_date}\n'
+        + ('♾️ Срок: навсегда\n' if is_lifetime_end(subscription.end_date) else f'📅 До: {end_date}\n')
     )
 
     subscription_link = get_display_subscription_link(subscription)

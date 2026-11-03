@@ -278,6 +278,10 @@ def _pluralize_days_ru(n: int) -> str:
 
 
 def format_period_description(days: int, language: str = 'ru') -> str:
+    from app.utils.lifetime import is_lifetime_period, lifetime_label
+
+    if is_lifetime_period(days):
+        return lifetime_label(language)
     language_code = (language or 'ru').split('-')[0].lower()
     if language_code in {'ru', 'fa'}:
         if days == 30:

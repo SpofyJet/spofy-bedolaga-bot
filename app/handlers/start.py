@@ -91,6 +91,7 @@ from app.services.web_auth_service import (
 )
 from app.states import RegistrationStates
 from app.utils.gift_links import InvalidGiftTokenError, parse_gift_claim_input
+from app.utils.lifetime import apply_lifetime_period
 from app.utils.long_messages import answer_long_text, edit_long_text, send_long_text
 from app.utils.rich_menu import try_answer_rich_main_menu, try_send_rich_main_menu
 from app.utils.telegram_html import html_to_telegram
@@ -491,9 +492,14 @@ async def _activate_pending_gift_after_registration(
 
         tariff_name = html.escape(gift_purchase.tariff.name) if gift_purchase.tariff else ''
         await answer_func(
-            texts.t(
-                'GIFT_ACTIVATION_SUCCESS_TEXT',
-                '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
+            apply_lifetime_period(
+                texts.t(
+                    'GIFT_ACTIVATION_SUCCESS_TEXT',
+                    '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
+                ),
+                gift_purchase.period_days,
+                'period_days',
+                texts.language,
             ).format(
                 tariff_name=tariff_name,
                 period_days=gift_purchase.period_days,

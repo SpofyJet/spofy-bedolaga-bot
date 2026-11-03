@@ -36,6 +36,7 @@ from app.services.subscription_checkout_service import (
 from app.services.support_settings_service import SupportSettingsService
 from app.services.user_cart_service import user_cart_service
 from app.utils.display_mode import is_visible_in_bot
+from app.utils.lifetime import is_lifetime_end
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.pricing_utils import format_period_description
 from app.utils.promo_offer import (
@@ -1382,6 +1383,9 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
         if is_daily_tariff:
             return texts.t('SUB_STATUS_DAILY_ACTIVE', '💎 Активна')
 
+        if is_lifetime_end(end_date):
+            return texts.t('SUB_STATUS_ACTIVE_LIFETIME', '💎 Активна\n♾️ Навсегда')
+
         if days_left > 7 and end_date_text:
             return texts.t(
                 'SUB_STATUS_ACTIVE_LONG',
@@ -1455,6 +1459,8 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
             status_suffix = ' — отключена'
         elif actual == 'limited':
             status_suffix = ' — лимит трафика'
+        elif is_lifetime_end(sub.end_date):
+            status_suffix = ' — навсегда'
         elif sub.end_date and sub.end_date > current_time:
             days_left = local_days_until(sub.end_date, current_time)
             end_str = format_local_datetime(sub.end_date, '%d.%m.%Y')

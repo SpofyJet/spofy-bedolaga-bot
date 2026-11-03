@@ -55,6 +55,9 @@ class SubscriptionData(BaseModel):
     # Лимит трафика — квота только на обходы, обычные серверы без лимита.
     bypass_quota: bool = False
     traffic_purchases: list[TrafficPurchaseInfo] = []
+    # ULTIMA «Навсегда»: бессрочная подписка (end_date = 31.12.2099) — фронт пишет
+    # «Навсегда» вместо даты и остатка дней и не предлагает продление.
+    is_lifetime: bool = False
     # Daily tariff fields
     is_daily: bool = False
     is_daily_paused: bool = False

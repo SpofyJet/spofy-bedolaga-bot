@@ -1259,7 +1259,9 @@ async def test_far_future_end_date_in_table_renders_without_tg_time(monkeypatch)
     html_out = await rich_menu.build_main_menu_rich_html(_make_user(eternal), DummyTexts(), AsyncMock())
 
     assert '<tg-time' not in html_out
-    assert '2099' in html_out
+    # Бессрочная подписка: вместо «31.12.2099» — «Навсегда».
+    assert 'Навсегда' in html_out
+    assert '2099' not in html_out
     assert '🟢 Активна' in html_out
 
 

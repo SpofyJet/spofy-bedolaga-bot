@@ -4020,9 +4020,11 @@ class Settings(BaseSettings):
         return self.PAYMENT_BALANCE_TEMPLATE.format(service_name=self.PAYMENT_SERVICE_NAME, description=description)
 
     def get_subscription_payment_description(self, period_days: int, amount_kopeks: int) -> str:
+        from app.utils.lifetime import for_period_ru
+
         return self.PAYMENT_SUBSCRIPTION_TEMPLATE.format(
             service_name=self.PAYMENT_SERVICE_NAME,
-            description=f'{self.PAYMENT_SUBSCRIPTION_DESCRIPTION} на {period_days} дней',
+            description=f'{self.PAYMENT_SUBSCRIPTION_DESCRIPTION} {for_period_ru(period_days)}',
         )
 
     def get_custom_payment_description(self, description: str) -> str:

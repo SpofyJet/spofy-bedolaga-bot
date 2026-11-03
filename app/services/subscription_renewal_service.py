@@ -26,6 +26,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.pricing_engine import RenewalPricing
 from app.services.remnawave_service import RemnaWaveConfigurationError
 from app.services.subscription_service import SubscriptionService
+from app.utils.lifetime import for_period_ru, is_lifetime_end
 from app.utils.pricing_utils import calculate_price_per_month
 
 
@@ -370,6 +371,10 @@ class SubscriptionRenewalService:
         description: str | None = None,
         payment_method: PaymentMethod | None = None,
     ) -> SubscriptionRenewalResult:
+        if not getattr(subscription, 'is_trial', False) and is_lifetime_end(getattr(subscription, 'end_date', None)):
+            # ULTIMA «Навсегда»: продление ничего не даёт — деньги не списываем.
+            raise SubscriptionRenewalError('Subscription is lifetime and cannot be renewed')
+
         final_total = int(pricing.final_total)
         final_total = max(final_total, 0)
 
@@ -385,7 +390,7 @@ class SubscriptionRenewalService:
         else:
             consume_promo_offer = bool(pricing.promo_offer_discount)
 
-        description_text = description or f'Продление подписки на {period_days} дней'
+        description_text = description or f'Продление подписки {for_period_ru(period_days)}'
 
         from sqlalchemy import select as sa_select
 

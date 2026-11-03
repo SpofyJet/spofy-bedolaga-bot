@@ -11,6 +11,7 @@ from fastapi import HTTPException, status
 from app.config import settings
 from app.services.bypass_downgrade import has_bypass_quota, is_suspension_effective
 from app.utils.legacy_subscription import is_legacy_subscription
+from app.utils.lifetime import is_lifetime_end
 
 
 if TYPE_CHECKING:
@@ -229,6 +230,7 @@ def _subscription_to_response(
         is_trial=is_trial_subscription,
         start_date=subscription.start_date,
         end_date=subscription.end_date,
+        is_lifetime=is_lifetime_end(subscription.end_date),
         days_left=days_left,
         hours_left=hours_left,
         minutes_left=minutes_left,

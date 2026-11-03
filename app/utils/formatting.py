@@ -35,7 +35,11 @@ def format_price_kopeks(kopeks: int, compact: bool = False) -> str:
 
 
 def format_period(days: int) -> str:
-    """Форматирует период."""
+    """Форматирует период. Бессрочный (ULTIMA, 2222 дня) — «Навсегда»."""
+    from app.utils.lifetime import is_lifetime_period, lifetime_label
+
+    if is_lifetime_period(days):
+        return lifetime_label('ru')
     mod100 = days % 100
     mod10 = days % 10
     if 11 <= mod100 <= 19:

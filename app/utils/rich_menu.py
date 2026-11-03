@@ -48,6 +48,7 @@ from app.database.models import User
 from app.localization.texts import Texts
 from app.utils.cache import cache
 from app.utils.formatters import format_username_link
+from app.utils.lifetime import is_lifetime_end, lifetime_label
 from app.utils.logo_fingerprint import logo_version
 from app.utils.miniapp_buttons import build_miniapp_startapp_url
 from app.utils.promo_offer import build_promo_offer_hint, build_test_access_hint
@@ -460,7 +461,9 @@ def _build_subscriptions_table(subscriptions, texts) -> str:
 
         end_date = getattr(subscription, 'end_date', None)
         end_date_text = format_local_datetime(end_date, '%d.%m.%Y') if end_date else ''
-        if end_date and end_date > current_time and actual_status in {'active', 'trial', 'limited'}:
+        if is_lifetime_end(end_date) and actual_status in {'active', 'trial', 'limited'}:
+            until_cell = _rich_text(lifetime_label(getattr(texts, 'language', 'ru')))
+        elif end_date and end_date > current_time and actual_status in {'active', 'trial', 'limited'}:
             days_left = local_days_until(end_date, current_time)
             days_text = texts.t('MAIN_MENU_RICH_DAYS_LEFT', 'осталось {days} дн.').replace('{days}', str(days_left))
             until_cell = f'{_tg_time(end_date, "d", end_date_text)} ({_rich_text(days_text)})'
