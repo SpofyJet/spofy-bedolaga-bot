@@ -63,8 +63,10 @@ def test_global_cap_applies_without_tariff_cap(monkeypatch):
     assert calc_device_limit_on_admin_tariff_change(11, 8, 8, None) == 9
 
 
-def test_user_switch_still_resets_to_new_base():
-    assert calc_device_limit_on_tariff_switch(11, 8, 8, None) == 8
+def test_user_switch_keeps_paid_devices_in_spofy():
+    # Spofy: смена тарифа самим пользователем тоже переносит докупленные места
+    # (upstream aec01ce0 сбрасывает до базы — у нас сознательно иначе).
+    assert calc_device_limit_on_tariff_switch(11, 8, 8, None) == 11
 
 
 @pytest.mark.asyncio

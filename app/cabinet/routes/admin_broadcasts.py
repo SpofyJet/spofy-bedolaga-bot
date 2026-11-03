@@ -284,13 +284,20 @@ _MEDIA_CAPTION_LIMIT = 1024
 
 
 def _ensure_media_caption_fits(caption: str) -> None:
-    """Отклонить рассылку с медиа, чью подпись Telegram не примет."""
-    if len(caption) > _MEDIA_CAPTION_LIMIT:
+    """Отклонить рассылку с медиа, чью подпись Telegram не примет.
+
+    Лимит Telegram считается по видимому тексту после разбора разметки: теги
+    (<b>, <tg-emoji> и т.п.) в него не входят. Сырой len() отклонял подписи с
+    разметкой, которые Telegram принял бы (upstream 0bdd41eb).
+    """
+    from app.utils.message_patch import caption_exceeds_telegram_limit
+
+    if caption_exceeds_telegram_limit(caption):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                f'Текст слишком длинный для сообщения с медиа. Максимум {_MEDIA_CAPTION_LIMIT} символов, '
-                f'сейчас {len(caption)}. Сократите текст или уберите медиафайл.'
+                f'Текст слишком длинный для сообщения с медиа. Максимум {_MEDIA_CAPTION_LIMIT} символов '
+                'после обработки разметки. Сократите текст или уберите медиафайл.'
             ),
         )
 
