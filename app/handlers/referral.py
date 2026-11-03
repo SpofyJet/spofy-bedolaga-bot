@@ -491,6 +491,28 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
     await callback.answer()
 
 
+def _invite_trial_block(texts) -> str:
+    """Что получает друг: пробный период без карты и +N дн. за подключение по ссылке (квест)."""
+    if (
+        settings.TRIAL_DURATION_DAYS <= 0
+        or settings.TRIAL_DISABLED_FOR == 'all'
+        or settings.is_trial_paid_activation_enabled()
+    ):
+        return ''
+    block = '\n' + texts.t(
+        'REFERRAL_INVITE_TRIAL',
+        '🎁 Бесплатный пробный период на {days} дн. — без карты!',
+    ).format(days=settings.TRIAL_DURATION_DAYS)
+    if getattr(settings, 'TRIAL_QUESTS_ENABLED', True):
+        from app.services.trial_quest_service import DAYS_FRIEND
+
+        block += '\n' + texts.t(
+            'REFERRAL_INVITE_FRIEND_DAYS',
+            '🤝 Подключишься по моей ссылке — получишь ещё {days} дн. в подарок.',
+        ).format(days=DAYS_FRIEND)
+    return block
+
+
 def _build_referral_share_url(bot_referral_link: str, texts) -> str:
     """URL вида t.me/share/url — открывает нативный диалог пересылки в чаты."""
     from urllib.parse import quote
@@ -515,6 +537,9 @@ def _build_referral_share_url(bot_referral_link: str, texts) -> str:
         share_text = share_text.format(bonus_block=share_bonus_block)
     except (KeyError, IndexError, ValueError):
         pass
+    # Без денежного бонуса в пересылаемом тексте не было ни одного повода перейти —
+    # добавляем то, что друг получит на самом деле: пробный период и дни за подключение.
+    share_text += _invite_trial_block(texts)
     return f'https://t.me/share/url?url={quote(bot_referral_link, safe="")}&text={quote(share_text, safe="")}'
 
 
@@ -560,23 +585,7 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User, db
     # Прежняя смешанная разметка (проза + отдельные <code>-ссылки) на iOS
     # при копировании выбрасывала <code>-части — ссылки снова терялись (#634720).
     # Внутри <code> ничего не авто-линкуется, поэтому исходный баг не возвращается.
-    trial_block = ''
-    if (
-        settings.TRIAL_DURATION_DAYS > 0
-        and settings.TRIAL_DISABLED_FOR != 'all'
-        and not settings.is_trial_paid_activation_enabled()
-    ):
-        trial_block = '\n' + texts.t(
-            'REFERRAL_INVITE_TRIAL',
-            '🎁 Бесплатный пробный период на {days} дн. — без карты!',
-        ).format(days=settings.TRIAL_DURATION_DAYS)
-        if getattr(settings, 'TRIAL_QUESTS_ENABLED', True):
-            from app.services.trial_quest_service import DAYS_FRIEND
-
-            trial_block += '\n' + texts.t(
-                'REFERRAL_INVITE_FRIEND_DAYS',
-                '🤝 Подключишься по моей ссылке — получишь ещё {days} дн. в подарок.',
-            ).format(days=DAYS_FRIEND)
+    trial_block = _invite_trial_block(texts)
 
     cabinet_block = ''
     if cabinet_referral_link:

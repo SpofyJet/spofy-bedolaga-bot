@@ -39,6 +39,7 @@ from app.keyboards.inline import (
     get_updated_subscription_settings_keyboard,
 )
 from app.localization.texts import Texts, get_texts
+from app.middlewares.banner_variant import show_banner_state
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.pricing_engine import pricing_engine
 from app.services.remnawave_service import RemnaWaveConfigurationError
@@ -463,7 +464,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
             engine_names = {
                 'platega': texts.t('RECURRENT_ENGINE_SBP', 'СБП'),
                 'lava': texts.t('RECURRENT_ENGINE_LAVA', 'карта (Lava)'),
-                'balance': texts.t('RECURRENT_ENGINE_BALANCE', 'автоплатёж с баланса'),
+                'balance': texts.t('RECURRENT_ENGINE_BALANCE', 'с баланса'),
             }
             active_engines = [engine_names[e] for e in ('platega', 'lava', 'balance') if e in engines]
             if active_engines:
@@ -810,22 +811,23 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
     await callback.answer()
 
 
-def _trial_activated_text(texts) -> str:
-    """«Пробная подписка активирована» + что в неё входит, если в пробном есть обходы."""
+def _trial_activated_text(texts, subscription=None) -> str:
+    """«Доступ активирован до …» + что в него входит, если в пробном есть обходы.
+
+    Подсказка «+2 дня за друга» отсюда переехала в сообщение после первого подключения: здесь
+    главное — подключиться, а не звать друзей.
+    """
     text = texts.TRIAL_ACTIVATED
+    end_date = getattr(subscription, 'end_date', None)
+    if end_date is not None:
+        text += '\n' + texts.t('TRIAL_ACTIVATED_UNTIL', '📅 До {end_date}').format(
+            end_date=format_local_datetime(end_date, '%d.%m, %H:%M')
+        )
     if settings.BYPASS_INCLUDE_TRIAL and (settings.TRIAL_TRAFFIC_LIMIT_GB or 0) > 0:
         text += '\n\n' + texts.t(
             'TRIAL_ACTIVATED_BYPASS_NOTE',
             '📶 Обычные серверы — без лимита.\n🏴‍☠️ На серверы «Обход» — {gb} ГБ.',
         ).format(gb=settings.TRIAL_TRAFFIC_LIMIT_GB)
-    if settings.is_referral_program_enabled() and getattr(settings, 'TRIAL_QUESTS_ENABLED', True):
-        from app.services.trial_quest_service import DAYS_FRIEND
-
-        text += '\n\n' + texts.t(
-            'TRIAL_FRIEND_DAYS_TIP',
-            '🎁 <b>+{days} дня за друга:</b> позовите друга, и когда он подключит VPN, вам и ему по '
-            '<b>+{days} дня</b>. Без ограничений.',
-        ).format(days=DAYS_FRIEND)
     return text
 
 
@@ -1278,6 +1280,8 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
 
         subscription_link = get_display_subscription_link(subscription)
         hide_subscription_link = settings.should_hide_subscription_link()
+        # Экран успеха — уже под баннером пробного периода, а не «2 дня бесплатно».
+        show_banner_state(db_user, 'trial')
 
         payment_note = ''
         if charged_amount > 0:
@@ -1289,7 +1293,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
                 trial_success_text = (
-                    f'{_trial_activated_text(texts)}\n\n'
+                    f'{_trial_activated_text(texts, subscription)}\n\n'
                     + texts.t(
                         'SUBSCRIPTION_HAPP_LINK_PROMPT',
                         '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
@@ -1302,7 +1306,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 )
             elif hide_subscription_link:
                 trial_success_text = (
-                    f'{_trial_activated_text(texts)}\n\n'
+                    f'{_trial_activated_text(texts, subscription)}\n\n'
                     + texts.t(
                         'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
                         'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
@@ -1320,7 +1324,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 ).format(subscription_url=subscription_link)
 
                 trial_success_text = (
-                    f'{_trial_activated_text(texts)}\n\n'
+                    f'{_trial_activated_text(texts, subscription)}\n\n'
                     f'{subscription_import_link}\n\n'
                     f'{texts.t("SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT", "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве")}'
                 )
@@ -1444,7 +1448,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 parse_mode='HTML',
             )
         else:
-            trial_success_text = f"{_trial_activated_text(texts)}\n\n⚠️ Ссылка генерируется, попробуйте перейти в раздел 'Моя подписка' через несколько секунд."
+            trial_success_text = f'{_trial_activated_text(texts, subscription)}\n\n⚠️ Ссылка генерируется, откройте «Подписку» через несколько секунд.'
             trial_success_text += payment_note
             await callback.message.edit_text(
                 trial_success_text,
@@ -3738,6 +3742,8 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
         # Показываем успешное сообщение с ссылкой
         subscription_link = get_display_subscription_link(subscription)
         hide_subscription_link = settings.should_hide_subscription_link()
+        # Экран успеха — уже под баннером пробного периода, а не «2 дня бесплатно».
+        show_banner_state(db_user, 'trial')
 
         payment_note = '\n\n' + texts.t(
             'TRIAL_PAYMENT_CHARGED_NOTE',
@@ -3747,7 +3753,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
                 trial_success_text = (
-                    f'{_trial_activated_text(texts)}\n\n'
+                    f'{_trial_activated_text(texts, subscription)}\n\n'
                     + texts.t(
                         'SUBSCRIPTION_HAPP_LINK_PROMPT',
                         '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
@@ -3760,7 +3766,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                 )
             elif hide_subscription_link:
                 trial_success_text = (
-                    f'{_trial_activated_text(texts)}\n\n'
+                    f'{_trial_activated_text(texts, subscription)}\n\n'
                     + texts.t(
                         'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
                         'ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
@@ -3778,7 +3784,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                 ).format(subscription_url=subscription_link)
 
                 trial_success_text = (
-                    f'{_trial_activated_text(texts)}\n\n'
+                    f'{_trial_activated_text(texts, subscription)}\n\n'
                     f'{subscription_import_link}\n\n'
                     f'{texts.t("SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT", "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве")}'
                 )
@@ -3794,7 +3800,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                 parse_mode='HTML',
             )
         else:
-            trial_success_text = f"{_trial_activated_text(texts)}\n\n⚠️ Ссылка генерируется, попробуйте перейти в раздел 'Моя подписка' через несколько секунд."
+            trial_success_text = f'{_trial_activated_text(texts, subscription)}\n\n⚠️ Ссылка генерируется, откройте «Подписку» через несколько секунд.'
             trial_success_text += payment_note
 
             await callback.message.edit_text(

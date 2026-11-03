@@ -219,6 +219,18 @@ class ActivationFunnelService:
     async def process(self, db: AsyncSession) -> None:
         if not _funnel_enabled() or not self._send:
             return
+        # Напоминания воронки не срочные, а окна у них — от суток: ночью не будим, письмо
+        # уйдёт утром того же окна. Брошенная оплата идёт отдельным циклом — она по горячим следам.
+        from app.services.user_reminders.dispatcher import is_quiet_time
+        from app.utils.timezone import get_local_timezone
+
+        if is_quiet_time(
+            datetime.now(UTC),
+            start_hour=settings.USER_REMINDERS_QUIET_HOURS_START,
+            end_hour=settings.USER_REMINDERS_QUIET_HOURS_END,
+            tz=get_local_timezone(),
+        ):
+            return
         try:
             self._trial_days = await _resolve_trial_days(db)
             await self._nudge_no_trial(db, EVENT_NO_TRIAL_1, NUDGE1_HOURS, NUDGE1_WINDOW_HOURS, wave=1)
@@ -481,13 +493,16 @@ class ActivationFunnelService:
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
+                        # Одна кнопка — она закрепляет скидку и ведёт к покупке; отдельное «Купить
+                        # подписку» открывало полную цену.
                         InlineKeyboardButton(
-                            text=texts.t('CLAIM_DISCOUNT_BUTTON', '🎁 Забрать скидку'),
+                            text=texts.t('DISCOUNT_FIRST_BUY_BUTTON', '🎁 Оформить со скидкой {percent}%').format(
+                                percent=percent
+                            ),
                             callback_data=f'claim_discount_{offer.id}',
                             style='success',
                         )
                     ],
-                    [InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
                 ]
             )
             try:

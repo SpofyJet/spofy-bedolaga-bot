@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, Subscription, TransactionType
+from app.services.payment.common import topup_success_text
 from app.services.payment.payer_identity import PayerIdentity, payer_from_guest, resolve_user_payer
 from app.services.payment_reversal_alert import alert_paid_payment_reversed
 from app.services.platega_service import PlategaService
@@ -1269,20 +1270,12 @@ class PlategaPaymentMixin:
             except Exception as error:
                 logger.error('Ошибка отправки админ уведомления Platega', error=error)
 
-        method_title = settings.get_platega_method_display_title(payment.payment_method_code)
-
         if getattr(self, 'bot', None) and user.telegram_id and settings.is_notifications_enabled():
             try:
                 keyboard = await self.build_topup_success_keyboard(user)
                 await self.bot.send_message(
                     user.telegram_id,
-                    (
-                        '✅ <b>Пополнение успешно!</b>\n\n'
-                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'🦊 Способ: {method_title}\n'
-                        f'🆔 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
-                    ),
+                    topup_success_text(user, payment.amount_kopeks),
                     parse_mode='HTML',
                     reply_markup=keyboard,
                 )

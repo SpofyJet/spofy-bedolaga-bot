@@ -743,10 +743,22 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
 
         if bot:
             commission_percent = get_effective_referral_commission_percent(referrer)
-            referral_notification = (
-                f'🎉 <b>Добро пожаловать!</b>\n\n'
-                f'Вы перешли по реферальной ссылке пользователя <b>{html.escape(referrer.full_name)}</b>!'
-            )
+            from app.localization.texts import get_texts
+
+            texts = get_texts(getattr(new_user, 'language', None) or 'ru')
+            referral_notification = texts.t(
+                'REFERRAL_WELCOME_INVITED',
+                '🎉 <b>Вас пригласил {name}</b>',
+            ).format(name=html.escape(referrer.full_name))
+            # Бонусы на баланс выключены — без строки ниже в приветствии не было ничего, ради чего
+            # стоит подключиться. Квест «+N дн. обоим за подключение» — то, что друг получит реально.
+            if getattr(settings, 'TRIAL_QUESTS_ENABLED', True) and settings.TRIAL_DURATION_DAYS > 0:
+                from app.services.trial_quest_service import DAYS_FRIEND
+
+                referral_notification += '\n\n' + texts.t(
+                    'REFERRAL_WELCOME_FRIEND_DAYS',
+                    '🎁 Подключите VPN в пробный период — и вы оба получите по +{days} дн.',
+                ).format(days=DAYS_FRIEND)
             # Обещание приглашённому одной фразой — общее для Telegram и письма.
             referee_promise = ''
             if settings.is_referral_levels_scheme():

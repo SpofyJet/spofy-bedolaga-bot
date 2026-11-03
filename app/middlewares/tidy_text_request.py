@@ -10,9 +10,9 @@ from typing import Any
 
 from aiogram import Bot
 from aiogram.client.session.middlewares.base import BaseRequestMiddleware, NextRequestMiddlewareType
-from aiogram.methods import TelegramMethod
+from aiogram.methods import AnswerCallbackQuery, TelegramMethod
 
-from app.utils.text_tidy import tidy_text
+from app.utils.text_tidy import plain_alert_text, tidy_text
 
 
 class TidyTextRequestMiddleware(BaseRequestMiddleware):
@@ -30,6 +30,12 @@ class TidyTextRequestMiddleware(BaseRequestMiddleware):
 
     @staticmethod
     def _tidy(method: TelegramMethod[Any]) -> None:
+        if isinstance(method, AnswerCallbackQuery):
+            # Всплывающее окно и «тост» после нажатия — простой текст, без HTML: тексты из
+            # локали с <tg-emoji …> и <b> показывались сырыми тегами («<tg-emoji emoji-id=…>✅…»).
+            if isinstance(method.text, str):
+                method.text = plain_alert_text(method.text)
+            return
         if isinstance(getattr(method, 'text', None), str) and not getattr(method, 'entities', None):
             method.text = tidy_text(method.text)
         if isinstance(getattr(method, 'caption', None), str) and not getattr(method, 'caption_entities', None):

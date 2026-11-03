@@ -109,5 +109,5 @@ async def test_preview_uses_engine_price_with_extra_devices(monkeypatch):
 
         # Превью обязано отбить по балансу с движковой ценой (100 + 50 = 150 ₽),
         # а не показать «Подтверждение покупки» со 100 ₽ и «После оплаты: 0».
-        assert 'Недостаточно средств' in rendered
+        assert 'К оплате' in rendered
         assert '150' in rendered

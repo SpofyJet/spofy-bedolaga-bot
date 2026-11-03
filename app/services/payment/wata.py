@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
+from app.services.payment.common import topup_success_text
 from app.services.payment_reversal_alert import alert_paid_payment_reversed
 from app.services.wata_service import WataAPIError, WataService
 from app.utils.payment_logger import payment_logger as logger
@@ -602,13 +603,7 @@ class WataPaymentMixin:
                 keyboard = await self.build_topup_success_keyboard(user)
                 await self.bot.send_message(
                     user.telegram_id,
-                    (
-                        '✅ <b>Пополнение успешно!</b>\n\n'
-                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        '🦊 Способ: WATA\n'
-                        f'🆔 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
-                    ),
+                    topup_success_text(user, payment.amount_kopeks),
                     parse_mode='HTML',
                     reply_markup=keyboard,
                 )

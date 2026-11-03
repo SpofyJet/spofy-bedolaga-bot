@@ -338,7 +338,8 @@ async def claim_discount_offer(
 
     success_message = _format_text_with_placeholders(success_template, format_values)
 
-    await callback.answer('✅ Скидка активирована!', show_alert=True)
+    # Короткий «тост», а не окно с «ОК»: следом приходит сообщение с кнопкой оплаты.
+    await callback.answer(texts.t('DISCOUNT_CLAIM_TOAST', '✅ Скидка активирована'))
 
     offer_type = None
     if isinstance(extra_data, dict):

@@ -27,7 +27,9 @@ from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, Tariff, Transaction, TransactionType, User
+from app.keyboards.inline import build_connect_button
 from app.localization.texts import Texts, get_texts
+from app.middlewares.banner_variant import show_banner_state
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.panel_sync import should_create_panel_account
 from app.services.subscription_service import SubscriptionService
@@ -213,6 +215,25 @@ def _get_user_period_discount(db_user: User, period_days: int, tariff_id: int | 
     return group_discount, personal_discount, display_combined
 
 
+def tariff_has_bypass_quota(tariff) -> bool:
+    """Лимит тарифа — квота на обходы (как has_bypass_quota у подписки, но по сквадам тарифа)."""
+    squad = settings.BYPASS_SQUAD_UUID
+    return (
+        bool(squad)
+        and squad in (getattr(tariff, 'allowed_squads', None) or [])
+        and (getattr(tariff, 'traffic_limit_gb', 0) or 0) > 0
+    )
+
+
+def tariff_traffic_text(tariff, texts) -> str:
+    """Трафик тарифа на экранах покупки: у тарифа с обходами — «∞ + 50 ГБ обходов», а не «50 ГБ»."""
+    if tariff_has_bypass_quota(tariff):
+        return texts.t('TARIFF_PURCHASE_TRAFFIC_BYPASS', '∞ + {traffic} ГБ обходов').format(
+            traffic=tariff.traffic_limit_gb
+        )
+    return format_traffic(tariff.traffic_limit_gb)
+
+
 def format_tariffs_list_text(
     tariffs: list[Tariff],
     db_user: User | None = None,
@@ -233,9 +254,16 @@ def format_tariffs_list_text(
     for tariff in tariffs:
         # Трафик компактно
         traffic_gb = tariff.traffic_limit_gb
-        traffic = (
-            '∞' if traffic_gb == 0 else texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=traffic_gb)
-        )
+        if traffic_gb and tariff_has_bypass_quota(tariff):
+            # Лимит тарифа с обходами — только квота на «Обход»; «50 ГБ» читалось как потолок,
+            # хотя обычные серверы без лимита.
+            traffic = texts.t('TARIFF_PURCHASE_TRAFFIC_BYPASS', '∞ + {traffic} ГБ обходов').format(traffic=traffic_gb)
+        else:
+            traffic = (
+                '∞'
+                if traffic_gb == 0
+                else texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=traffic_gb)
+            )
 
         # Цена
         is_daily = getattr(tariff, 'is_daily', False)
@@ -572,10 +600,9 @@ def get_tariff_insufficient_balance_keyboard(
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру при недостаточном балансе.
 
-    Если включена автопокупка после пополнения (AUTO_PURCHASE_AFTER_TOPUP_ENABLED),
-    показываем способы оплаты сразу, предзаполненные ровно недостающей суммой: после
-    оплаты подписка оформится автоматически, без отдельного шага «Пополнить баланс».
-    Иначе оставляем классический переход в пополнение баланса.
+    Способы оплаты показываем сразу, предзаполненные ровно недостающей суммой. С автопокупкой
+    (AUTO_PURCHASE_AFTER_TOPUP_ENABLED) подписка оформится сама, без неё — по кнопке
+    «Продолжить оформление» в сообщении о зачислении.
 
     СБП-оформление показываем и здесь: привязке баланс не нужен (первое списание
     Platega = подтверждение в банке), а без кнопки на этом экране фича была
@@ -588,7 +615,10 @@ def get_tariff_insufficient_balance_keyboard(
     sbp_rows = _sbp_purchase_rows(tariff_id, texts, period_days=period) if show_sbp else []
 
     trim_rows = [trim_row] if trim_row else []
-    if settings.is_auto_purchase_after_topup_enabled() and missing_kopeks > 0:
+    # Способы оплаты на недостающую сумму — сразу, и без автопокупки: корзина сохранена, после
+    # зачисления первая кнопка — «Продолжить оформление» (раньше без автопокупки здесь была только
+    # «Пополнить баланс» и ещё два экрана до выбора способа).
+    if missing_kopeks > 0:
         from app.keyboards.inline import get_payment_methods_keyboard
 
         # Оставляем только кнопки прямой оплаты (topup_amount|метод|сумма), отбрасывая
@@ -647,7 +677,10 @@ def get_tariff_extend_insufficient_balance_keyboard(
     back_button = InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)
     sbp_rows = sbp_rows or []
 
-    if settings.is_auto_purchase_after_topup_enabled() and missing_kopeks > 0:
+    # Способы оплаты на недостающую сумму — сразу, и без автопокупки: корзина сохранена, после
+    # зачисления первая кнопка — «Продолжить оформление» (раньше без автопокупки здесь была только
+    # «Пополнить баланс» и ещё два экрана до выбора способа).
+    if missing_kopeks > 0:
         from app.keyboards.inline import get_payment_methods_keyboard
 
         # Оставляем только кнопки прямой оплаты (topup_amount|метод|сумма), отбрасывая
@@ -776,7 +809,7 @@ def format_tariff_info_for_user(
     """Форматирует информацию о тарифе для пользователя."""
     texts = get_texts(language)
 
-    traffic = format_traffic(tariff.traffic_limit_gb)
+    traffic = tariff_traffic_text(tariff, texts)
 
     text = texts.t(
         'TARIFF_PURCHASE_INFO',
@@ -1337,7 +1370,7 @@ async def _proceed_with_selected_tariff(
             else ''
         )
         user_balance = db_user.balance_kopeks or 0
-        traffic = format_traffic(tariff.traffic_limit_gb)
+        traffic = tariff_traffic_text(tariff, texts)
 
         if user_balance >= daily_price:
             await callback.message.edit_text(
@@ -1765,6 +1798,7 @@ async def _confirm_tariff_checkout(callback, state, db_user, db, tariff, period)
         else subscription.traffic_limit_gb,
         target_subscription_id=subscription.id,
     )
+    show_banner_state(db_user, 'paid')  # экран «Оплата принята» — уже под баннером «Подписка активна»
     await callback.message.edit_text(
         texts.t(
             'TARIFF_PURCHASE_SUCCESS',
@@ -1784,6 +1818,8 @@ async def _confirm_tariff_checkout(callback, state, db_user, db, tariff, period)
         ),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
+                # Текст заканчивается «Теперь подключите устройство» — первой кнопкой подключение.
+                [build_connect_button(texts, subscription)],
                 [
                     InlineKeyboardButton(
                         text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
@@ -2074,7 +2110,7 @@ async def select_tariff_period(
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
-    traffic = format_traffic(tariff.traffic_limit_gb)
+    traffic = tariff_traffic_text(tariff, texts)
 
     confirm_keyboard = await _bind_tariff_purchase_keyboard(
         get_tariff_confirm_keyboard(
@@ -2521,8 +2557,9 @@ async def confirm_daily_tariff_purchase(
         # Payment is committed. Do not overwrite a newer dialog with its result.
         return
 
-    traffic = format_traffic(tariff.traffic_limit_gb)
+    traffic = tariff_traffic_text(tariff, texts)
 
+    show_banner_state(db_user, 'paid')  # экран «Оплата принята» — уже под баннером «Подписка активна»
     await callback.message.edit_text(
         texts.t(
             'TARIFF_PURCHASE_DAILY_SUCCESS',
@@ -2547,6 +2584,7 @@ async def confirm_daily_tariff_purchase(
                 tariff,
                 texts,
                 [
+                    [build_connect_button(texts, subscription)],
                     [
                         InlineKeyboardButton(
                             text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
@@ -2895,7 +2933,7 @@ async def show_tariff_extend(
         await callback.answer()
         return
 
-    traffic = format_traffic(tariff.traffic_limit_gb)
+    traffic = tariff_traffic_text(tariff, texts)
 
     # Проверяем есть ли у пользователя скидки по периодам
     promo_group = db_user.get_primary_promo_group() if hasattr(db_user, 'get_primary_promo_group') else None
@@ -3001,7 +3039,7 @@ async def select_tariff_extend_period(
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
-    traffic = format_traffic(tariff.traffic_limit_gb)
+    traffic = tariff_traffic_text(tariff, texts)
 
     if user_balance >= final_price:
         discount_text = ''
@@ -3352,8 +3390,9 @@ async def confirm_tariff_extend(
 
         await state.clear()
 
-        traffic = format_traffic(tariff.traffic_limit_gb)
+        traffic = tariff_traffic_text(tariff, texts)
 
+        show_banner_state(db_user, 'paid')
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_RENEW_SUCCESS',
@@ -3428,9 +3467,16 @@ def format_tariff_switch_list_text(
             continue
 
         traffic_gb = tariff.traffic_limit_gb
-        traffic = (
-            '∞' if traffic_gb == 0 else texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=traffic_gb)
-        )
+        if traffic_gb and tariff_has_bypass_quota(tariff):
+            # Лимит тарифа с обходами — только квота на «Обход»; «50 ГБ» читалось как потолок,
+            # хотя обычные серверы без лимита.
+            traffic = texts.t('TARIFF_PURCHASE_TRAFFIC_BYPASS', '∞ + {traffic} ГБ обходов').format(traffic=traffic_gb)
+        else:
+            traffic = (
+                '∞'
+                if traffic_gb == 0
+                else texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=traffic_gb)
+            )
 
         # Проверяем суточный ли тариф
         is_daily = getattr(tariff, 'is_daily', False)
@@ -3746,7 +3792,7 @@ async def select_tariff_switch(
                 )
                 return
 
-    traffic = format_traffic(tariff.traffic_limit_gb)
+    traffic = tariff_traffic_text(tariff, texts)
 
     # Проверяем, суточный ли это тариф
     is_daily = getattr(tariff, 'is_daily', False)
@@ -3909,7 +3955,7 @@ async def select_tariff_switch_period(
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
-    traffic = format_traffic(tariff.traffic_limit_gb)
+    traffic = tariff_traffic_text(tariff, texts)
 
     # Текущая подписка (с которой переходят): у старой подписки тарифа нет,
     # и в подтверждении так и пишем, а не «Неизвестно».
@@ -4303,11 +4349,12 @@ async def confirm_tariff_switch(
 
         await state.clear()
 
-        traffic = format_traffic(tariff.traffic_limit_gb)
+        traffic = tariff_traffic_text(tariff, texts)
 
         # При смене тарифа устанавливается оплаченный период
         time_info = texts.t('TARIFF_SWITCH_PERIOD_LINE', '📅 Период: {days} дней').format(days=days_for_new_tariff)
 
+        show_banner_state(db_user, 'paid')
         await callback.message.edit_text(
             texts.t(
                 'TARIFF_SWITCH_SUCCESS',
@@ -4632,7 +4679,7 @@ async def confirm_daily_tariff_switch(
 
         await state.clear()
 
-        traffic = format_traffic(tariff.traffic_limit_gb)
+        traffic = tariff_traffic_text(tariff, texts)
 
         await callback.message.edit_text(
             texts.t(
@@ -4791,9 +4838,16 @@ def format_instant_switch_list_text(
             continue
 
         traffic_gb = tariff.traffic_limit_gb
-        traffic = (
-            '∞' if traffic_gb == 0 else texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=traffic_gb)
-        )
+        if traffic_gb and tariff_has_bypass_quota(tariff):
+            # Лимит тарифа с обходами — только квота на «Обход»; «50 ГБ» читалось как потолок,
+            # хотя обычные серверы без лимита.
+            traffic = texts.t('TARIFF_PURCHASE_TRAFFIC_BYPASS', '∞ + {traffic} ГБ обходов').format(traffic=traffic_gb)
+        else:
+            traffic = (
+                '∞'
+                if traffic_gb == 0
+                else texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=traffic_gb)
+            )
 
         # Рассчитываем стоимость переключения
         try:

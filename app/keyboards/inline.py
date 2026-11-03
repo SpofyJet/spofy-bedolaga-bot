@@ -380,6 +380,32 @@ def _get_balance_text(cached_styles: dict, language: str, texts, balance_kopeks:
     )
 
 
+def build_connect_button(texts, subscription) -> InlineKeyboardButton:
+    """«🔗 Подключиться» для только что оплаченной (активной) подписки — по CONNECT_BUTTON_MODE.
+
+    Экран успешной покупки заканчивается словами «Теперь подключите устройство», поэтому первой
+    кнопкой там стоит именно подключение, а не «Моя подписка».
+    """
+    text = texts.t('CONNECT_BUTTON', '🔗 Подключиться')
+    link = get_display_subscription_link(subscription) if subscription else None
+    mode = settings.CONNECT_BUTTON_MODE
+    if mode == 'miniapp_subscription' and link:
+        return InlineKeyboardButton(text=text, web_app=types.WebAppInfo(url=link), style='success')
+    if mode == 'miniapp_custom' and settings.MINIAPP_CUSTOM_URL:
+        return InlineKeyboardButton(
+            text=text, web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL), style='success'
+        )
+    if mode == 'link' and link:
+        return InlineKeyboardButton(text=text, url=link, style='success')
+    subscription_id = getattr(subscription, 'id', None)
+    callback = (
+        f'sl:{subscription_id}'
+        if settings.is_multi_tariff_enabled() and subscription_id is not None
+        else 'subscription_connect'
+    )
+    return InlineKeyboardButton(text=text, callback_data=callback, style='success')
+
+
 def _is_support_enabled() -> bool:
     """Check if support menu is enabled."""
     try:

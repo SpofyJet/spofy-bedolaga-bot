@@ -400,6 +400,17 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
         pass
 
     full_text = payment_text
+    if amount_kopeks > 0:
+        # Сумма из корзины уже подставлена в кнопки способов — говорим её словами, иначе
+        # человек выбирал способ, не зная, сколько заплатит.
+        full_text = (
+            texts.t('PAYMENT_METHODS_AMOUNT_TITLE', '💳 <b>К оплате: {amount}</b>').format(
+                amount=settings.format_price(amount_kopeks)
+            )
+            + '\n\n'
+            + texts.t('PAYMENT_METHODS_PROMPT', 'Выберите способ оплаты:')
+            + '\n\n'
+        )
 
     keyboard = get_payment_methods_keyboard(amount_kopeks, db_user.language)
     if amount_kopeks > 0:
@@ -541,30 +552,20 @@ async def request_support_topup(callback: types.CallbackQuery, db_user: User):
         return
 
     user_id_display = db_user.telegram_id or db_user.email or f'#{db_user.id}'
-    support_text = f"""
-💬 <b>Другие способы оплаты</b>
-
-Для пополнения баланса обратитесь в техподдержку:
-{settings.get_support_contact_display_html()}
-
-Укажите:
-• ID: {user_id_display}
-• Сумму пополнения
-• Способ оплаты
-
-⏰ Время обработки: 1-24 часа
-
-<b>Доступные способы:</b>
-• Криптовалюта
-• Переводы между банками
-• Другие платежные системы
-"""
+    # Без «⏰ 1–24 часа» и списка «криптовалюта / переводы»: обещание срока и способов, которые
+    # никто не гарантирует. Только то, что нужно, чтобы поддержка сразу поняла запрос.
+    support_text = texts.t(
+        'SUPPORT_TOPUP_TEXT',
+        '💬 <b>Пополнение через поддержку</b>\n\n'
+        'Напишите в поддержку {contact} и укажите ваш ID <code>{user_id}</code>, сумму и удобный способ оплаты.',
+    ).format(contact=settings.get_support_contact_display_html(), user_id=html.escape(str(user_id_display)))
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text='💬 Написать в поддержку', url=settings.get_support_contact_url() or 'https://t.me/'
+                    text=texts.t('SUPPORT_TOPUP_WRITE_BUTTON', '💬 Написать в поддержку'),
+                    url=settings.get_support_contact_url() or 'https://t.me/',
                 )
             ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
+from app.services.payment.common import topup_success_text
 from app.services.payment.payer_identity import payer_from_guest, resolve_user_payer
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
@@ -145,7 +146,6 @@ class MulenPayPaymentMixin:
     ) -> bool:
         """Обрабатывает callback от MulenPay, обновляет статус и начисляет баланс."""
         display_name = settings.get_mulenpay_display_name()
-        display_name_html = settings.get_mulenpay_display_name_html()
         try:
             payment_module = import_module('app.services.payment_service')
             uuid_value = callback_data.get('uuid')
@@ -383,13 +383,7 @@ class MulenPayPaymentMixin:
                         keyboard = await self.build_topup_success_keyboard(user)
                         await self.bot.send_message(
                             user.telegram_id,
-                            (
-                                '✅ <b>Пополнение успешно!</b>\n\n'
-                                f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                                f'🦊 Способ: {display_name_html}\n'
-                                f'🆔 Транзакция: {transaction.id}\n\n'
-                                'Баланс пополнен автоматически!'
-                            ),
+                            topup_success_text(user, payment.amount_kopeks),
                             parse_mode='HTML',
                             reply_markup=keyboard,
                         )

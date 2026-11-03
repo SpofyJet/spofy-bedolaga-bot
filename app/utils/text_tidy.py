@@ -21,3 +21,27 @@ def tidy_text(text: str | None) -> str | None:
     cleaned = _TRAILING_SPACES.sub('\n', text)
     cleaned = _BLANK_RUN.sub('\n\n', cleaned)
     return cleaned.strip('\n') or text
+
+
+_TG_EMOJI_RE = re.compile(r'<tg-emoji\b[^>]*>(.*?)</tg-emoji>', re.DOTALL)
+_HTML_TAG_RE = re.compile(r'</?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^<>]*)?/?>')
+# Предел Telegram для текста answerCallbackQuery: длиннее — запрос падает целиком.
+ALERT_TEXT_LIMIT = 200
+
+
+def plain_alert_text(text: str) -> str:
+    """Текст для всплывающего окна после нажатия кнопки: HTML там не разбирается.
+
+    <tg-emoji …>✅</tg-emoji> → ✅, прочие теги (<b>, <i>, <code>…) снимаются, сущности
+    (&amp;, &lt;) раскрываются; слишком длинный текст обрезается по пределу Telegram.
+    """
+    import html
+
+    if '<' not in text and '&' not in text and len(text) <= ALERT_TEXT_LIMIT:
+        return text
+    plain = _TG_EMOJI_RE.sub(r'\1', text)
+    plain = _HTML_TAG_RE.sub('', plain)
+    plain = html.unescape(plain)
+    if len(plain) > ALERT_TEXT_LIMIT:
+        plain = plain[: ALERT_TEXT_LIMIT - 1].rstrip() + '…'
+    return plain

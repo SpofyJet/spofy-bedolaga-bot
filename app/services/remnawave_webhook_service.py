@@ -153,6 +153,26 @@ _ADMIN_TORRENT_BLOCKER_EVENTS: dict[str, str] = {
 _ADMIN_NODE_CONNECTION_EVENTS = frozenset({'node.connection_lost', 'node.connection_restored'})
 
 
+def _bot_sends_expiry_reminders(kind: str) -> bool:
+    """Напоминания о сроке шлёт один источник — мониторинг бота.
+
+    Он работает по своей базе (не зависит от доставки вебхука), знает про автопродление, тихие часы и
+    скидки. Если и панель настроена на «истекает через 72/48/24 ч» / «истекла сутки назад», человек
+    получал оба письма подряд. Панельные напоминания остаются запасным вариантом, когда
+    у бота эти уведомления выключены.
+    """
+    from app.services.notification_settings_service import NotificationSettingsService
+
+    try:
+        if not NotificationSettingsService.are_notifications_globally_enabled():
+            return False
+        if kind == 'expired_1d':
+            return NotificationSettingsService.is_expired_1d_enabled()
+        return True
+    except Exception:
+        return False
+
+
 class RemnaWaveWebhookService:
     """Processes incoming webhooks from RemnaWave backend."""
 
@@ -1749,6 +1769,8 @@ class RemnaWaveWebhookService:
         if not subscription:
             logger.info('Webhook expires_72h: подписка не найдена в БД, пропуск', user_id=user.id)
             return
+        if _bot_sends_expiry_reminders('expiring'):
+            return
         await self._notify_user(
             user,
             'WEBHOOK_SUB_EXPIRES_72H',
@@ -1761,6 +1783,8 @@ class RemnaWaveWebhookService:
     ) -> None:
         if not subscription:
             logger.info('Webhook expires_48h: подписка не найдена в БД, пропуск', user_id=user.id)
+            return
+        if _bot_sends_expiry_reminders('expiring'):
             return
         await self._notify_user(
             user,
@@ -1775,6 +1799,8 @@ class RemnaWaveWebhookService:
         if not subscription:
             logger.info('Webhook expires_24h: подписка не найдена в БД, пропуск', user_id=user.id)
             return
+        if _bot_sends_expiry_reminders('expiring'):
+            return
         await self._notify_user(
             user,
             'WEBHOOK_SUB_EXPIRES_24H',
@@ -1787,6 +1813,8 @@ class RemnaWaveWebhookService:
     ) -> None:
         if not subscription:
             logger.info('Webhook expired_24h_ago: подписка не найдена в БД, пропуск', user_id=user.id)
+            return
+        if _bot_sends_expiry_reminders('expired_1d'):
             return
         await self._notify_user(
             user,
@@ -1889,9 +1917,28 @@ class RemnaWaveWebhookService:
                     'Оформите подписку до конца теста, чтобы не отключиться.'
                 ),
             )
+            # «+N дн. за друга» — здесь, когда VPN уже работает: в сообщении об активации эта
+            # подсказка отвлекала от главного — подключиться.
+            invite_row: list = []
+            if settings.is_referral_program_enabled() and getattr(settings, 'TRIAL_QUESTS_ENABLED', True):
+                from app.services.trial_quest_service import DAYS_FRIEND
+
+                message += '\n\n' + texts.t(
+                    'TRIAL_FRIEND_DAYS_TIP',
+                    '🎁 <b>+{days} дня за друга:</b> позовите друга, и когда он подключит VPN, '
+                    'вам и ему по <b>+{days} дня</b>.',
+                ).format(days=DAYS_FRIEND)
+                invite_row = [
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('QUEST_BUTTON_INVITE', '👥 Позвать друга'), callback_data='menu_referrals'
+                        )
+                    ]
+                ]
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [build_miniapp_or_callback_button(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
+                    *invite_row,
                     [
                         build_miniapp_or_callback_button(
                             text=texts.MY_SUBSCRIPTION_BUTTON, callback_data='menu_subscription'
@@ -1965,6 +2012,23 @@ class RemnaWaveWebhookService:
             '',
         )
 
+        # Общий ключ с проверкой трафика в мониторинге бота: про один порог — одно письмо.
+        if (
+            subscription is not None
+            and getattr(subscription, 'id', None) is not None
+            and (subscription.traffic_limit_gb or 0) > 0
+        ):
+            from app.services.monitoring_service import TRAFFIC_WARNING_TTL_SECONDS, traffic_warning_cache_key
+            from app.utils.cache import cache
+
+            warn_key = traffic_warning_cache_key(subscription.id, subscription.traffic_limit_gb)
+            try:
+                if await cache.get(warn_key):
+                    return
+                await cache.set(warn_key, '1', expire=TRAFFIC_WARNING_TTL_SECONDS)
+            except Exception:
+                pass
+
         await self._notify_user(
             user,
             'WEBHOOK_SUB_BANDWIDTH_THRESHOLD',
@@ -1983,6 +2047,10 @@ class RemnaWaveWebhookService:
             user_id=user.id,
             not_connected_after_hours=hours,
         )
+        # Текст — «подписка оплачена, но VPN не подключён». Пробному периоду он не подходит,
+        # а напомнить подключиться им и так пишет воронка (FUNNEL_TRIAL_IDLE / TRIAL_INACTIVE_24H).
+        if subscription is not None and getattr(subscription, 'is_trial', False):
+            return
         format_kwargs: dict[str, Any] = {}
         if hours is not None:
             format_kwargs['hours'] = str(hours)

@@ -92,9 +92,9 @@ class PaymentCommonMixin:
             style='success',
         )
 
-        keyboard_rows: list[list[InlineKeyboardButton]] = [
-            [first_button],
-        ]
+        # Корзина или черновик оформления — главная кнопка «вернуться к оформлению»: человек
+        # пополнял ради конкретной покупки. «Купить подписку» рядом с ней начинало выбор заново.
+        resume_button: InlineKeyboardButton | None = None
 
         # Если для пользователя есть незавершённый checkout, предлагаем вернуться к нему.
         if user:
@@ -111,34 +111,27 @@ class PaymentCommonMixin:
             if cart_data:
                 cart_mode = cart_data.get('cart_mode')
                 if cart_mode == 'gift_purchase':
-                    keyboard_rows.append(
-                        [
-                            build_miniapp_or_callback_button(
-                                text=texts.t('GIFT_RETURN_TO_CART_BUTTON', '🎁 Вернуться к подарку'),
-                                callback_data='return_to_gift_cart',
-                            )
-                        ]
+                    resume_button = build_miniapp_or_callback_button(
+                        text=texts.t('GIFT_RETURN_TO_CART_BUTTON', '🎁 Вернуться к подарку'),
+                        callback_data='return_to_gift_cart',
+                        style='success',
                     )
                 else:
-                    keyboard_rows.append(
-                        [
-                            build_miniapp_or_callback_button(
-                                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                                callback_data='return_to_saved_cart',
-                            )
-                        ]
+                    resume_button = build_miniapp_or_callback_button(
+                        text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                        callback_data='return_to_saved_cart',
+                        style='success',
                     )
             else:
                 draft_exists = await has_subscription_checkout_draft(user.id)
                 if should_offer_checkout_resume(user, draft_exists, subscription=subscription):
-                    keyboard_rows.append(
-                        [
-                            build_miniapp_or_callback_button(
-                                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                                callback_data='subscription_resume_checkout',
-                            )
-                        ]
+                    resume_button = build_miniapp_or_callback_button(
+                        text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                        callback_data='subscription_resume_checkout',
+                        style='success',
                     )
+
+        keyboard_rows: list[list[InlineKeyboardButton]] = [[resume_button or first_button]]
 
         # «Мой баланс» направляется в соответствующий раздел кабинета
         # в MAIN_MENU_MODE=cabinet (через build_miniapp_or_callback_button),
@@ -213,16 +206,9 @@ class PaymentCommonMixin:
         )
 
         try:
-            payment_method = payment_method_title or 'Банковская карта (YooKassa)'
-
             # Стандартное сообщение с полной клавиатурой
             keyboard = await self.build_topup_success_keyboard(user_snapshot)
-            message = (
-                '✅ <b>Платеж успешно завершен!</b>\n\n'
-                f'💰 Сумма: {settings.format_price(amount_kopeks)}\n'
-                f'💳 Способ: {payment_method}\n\n'
-                'Средства зачислены на ваш баланс!'
-            )
+            message = topup_success_text(user_snapshot, amount_kopeks)
 
             await self.bot.send_message(
                 chat_id=telegram_id,
@@ -655,3 +641,21 @@ async def try_fulfill_guest_purchase(
         except Exception:
             logger.exception('Failed to mark guest purchase as PAID for retry')
         return True
+
+
+def topup_success_text(user: Any, amount_kopeks: int) -> str:
+    """«Зачислено N · Баланс M» — одно сообщение о пополнении для всех платёжных систем.
+
+    Раньше у каждой был свой текст с «🦊 Способ», «🆔 Транзакция: 123» и «Баланс пополнен
+    автоматически!»: номер транзакции человеку не нужен, а нового баланса — главного — не было.
+    """
+    texts = get_texts(getattr(user, 'language', None) or 'ru')
+    text = texts.t('TOPUP_SUCCESS_MESSAGE', '✅ <b>Зачислено {amount}</b>').format(
+        amount=settings.format_price(amount_kopeks)
+    )
+    balance = getattr(user, 'balance_kopeks', None)
+    if isinstance(balance, int):
+        text += '\n' + texts.t('TOPUP_SUCCESS_BALANCE', '💳 Баланс: {balance}').format(
+            balance=settings.format_price(balance)
+        )
+    return text

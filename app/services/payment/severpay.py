@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
+from app.services.payment.common import topup_success_text
 from app.services.severpay_service import severpay_service
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
@@ -467,13 +468,7 @@ class SeverPayPaymentMixin:
                 keyboard = await self.build_topup_success_keyboard(user)
                 await self.bot.send_message(
                     user.telegram_id,
-                    (
-                        '✅ <b>Пополнение успешно!</b>\n\n'
-                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'💳 Способ: {display_name}\n'
-                        f'🆔 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
-                    ),
+                    topup_success_text(user, payment.amount_kopeks),
                     parse_mode='HTML',
                     reply_markup=keyboard,
                 )

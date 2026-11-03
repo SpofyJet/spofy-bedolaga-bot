@@ -193,6 +193,14 @@ def _expires_by_own_date(subscription: Subscription, *, now: datetime) -> bool:
     return end_date <= now
 
 
+TRAFFIC_WARNING_TTL_SECONDS = 45 * 86400  # дольше любого периода: ключ меняется вместе с лимитом
+
+
+def traffic_warning_cache_key(subscription_id: int, traffic_limit_gb: float) -> str:
+    """«Предупредили о трафике» — на подписку и текущий лимит (докупка или новый период дают новый ключ)."""
+    return f'traffic_warn:{subscription_id}:{traffic_limit_gb}'
+
+
 class MonitoringService:
     def __init__(self, bot=None):
         self.is_running = False
@@ -1987,24 +1995,45 @@ class MonitoringService:
                     tariff_label = f' «{tariff_name}»'
                 elif hasattr(subscription, 'tariff') and subscription.tariff:
                     tariff_label = f' «{subscription.tariff.name}»'
-            # Текст из локалей (был зашит по-русски и не переводился).
-            message = (
-                get_texts(user.language)
-                .t(
-                    'SUBSCRIPTION_EXPIRED',
-                    '🔴 <b>Подписка{tariff_label} закончилась</b>\n\nПродлите, и VPN снова заработает.',
-                )
-                .format(tariff_label=tariff_label)
-            )
-
+            texts = get_texts(user.language)
             from aiogram.types import InlineKeyboardMarkup
 
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [build_subscription_extend_button('💎 Продлить подписку', subscription.id)],
-                    [build_miniapp_or_callback_button(text='💳 Пополнить баланс', callback_data='balance_topup')],
-                ]
-            )
+            if getattr(subscription, 'is_trial', False):
+                # Кончился пробный период — продлевать нечего: «Продлите подписку» и «Пополнить
+                # баланс» тут не про то. Одно предложение — оформить подписку.
+                message = texts.t(
+                    'TRIAL_EXPIRED_NOTICE',
+                    '⏳ <b>Пробный период закончился</b>\n\nОформите подписку — VPN заработает сразу.',
+                )
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            build_miniapp_or_callback_button(
+                                text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success'
+                            )
+                        ],
+                    ]
+                )
+            else:
+                # Текст из локалей (был зашит по-русски и не переводился).
+                message = texts.t(
+                    'SUBSCRIPTION_EXPIRED',
+                    '🔴 <b>Подписка{tariff_label} закончилась</b>\n\nПродлите, и VPN снова заработает.',
+                ).format(tariff_label=tariff_label)
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            build_subscription_extend_button(
+                                texts.t('MENU_EXTEND_SUBSCRIPTION', '⏰ Продлить подписку'), subscription.id
+                            )
+                        ],
+                        [
+                            build_miniapp_or_callback_button(
+                                text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup'
+                            )
+                        ],
+                    ]
+                )
 
             await self._send_message_with_logo(
                 chat_id=user.telegram_id,
@@ -2044,6 +2073,7 @@ class MonitoringService:
             # только уменьшают итог, поэтому «баланс < базовой цены» = точный сигнал,
             # а ложных тревог не будет.
             low_balance_action = None
+            base_price = None
             if subscription.autopay_enabled:
                 tariff_for_price = getattr(subscription, 'tariff', None)
                 prices = getattr(tariff_for_price, 'period_prices', None) or {}
@@ -2054,7 +2084,7 @@ class MonitoringService:
                         or (tariff_for_price.get_shortest_period() if tariff_for_price else None)
                         or 30
                     )
-                    base_price = prices.get(str(period_days))
+                    base_price = prices.get(str(period_days)) or None
                     if base_price and (user.balance_kopeks or 0) < base_price:
                         low_balance_action = texts.t(
                             'AUTOPAY_ACTION_LOW_BALANCE',
@@ -2101,6 +2131,40 @@ class MonitoringService:
             tariff_label = ''
             if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
                 tariff_label = f' «{subscription.tariff.name}»'
+
+            # Автопродление включено и денег хватает — это не «продлите», а «продлим сами». Кнопка
+            # «Продлить подписку» в таком письме приводила ко второй оплате того же периода.
+            autopay_covers = subscription.autopay_enabled and low_balance_action is None
+            if autopay_covers:
+                from aiogram.types import InlineKeyboardMarkup
+
+                if base_price:
+                    message = texts.t(
+                        'AUTOPAY_WILL_RENEW_WITH_COST',
+                        '🔔 <b>{end_date} продлим подписку{tariff_label} автоматически</b>\n\n'
+                        'Спишем {cost} с баланса — ничего делать не нужно.',
+                    ).format(end_date=end_date, tariff_label=tariff_label, cost=texts.format_price(base_price))
+                else:
+                    message = texts.t(
+                        'AUTOPAY_WILL_RENEW',
+                        '🔔 <b>{end_date} продлим подписку{tariff_label} автоматически</b>\n\nНичего делать не нужно.',
+                    ).format(end_date=end_date, tariff_label=tariff_label)
+                await self._send_message_with_logo(
+                    chat_id=user.telegram_id,
+                    text=message,
+                    parse_mode='HTML',
+                    reply_markup=InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [
+                                build_miniapp_or_callback_button(
+                                    text=texts.MENU_SUBSCRIPTION, callback_data='menu_subscription'
+                                )
+                            ]
+                        ]
+                    ),
+                )
+                return True
+
             message = texts.t(
                 'SUBSCRIPTION_EXPIRING_PAID',
                 '\n⚠️ <b>Подписка{tariff_label} истекает через {days_text}!</b>\n\n'
@@ -2454,21 +2518,14 @@ class MonitoringService:
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
+                    # Одна кнопка: она и закрепляет скидку, и ведёт к оплате. Раньше рядом стояло
+                    # «Продлить подписку» — по нему открывалась полная цена, хотя текст обещал скидку.
                     [
                         build_miniapp_or_callback_button(
-                            text='🎁 Получить скидку', callback_data=f'claim_discount_{offer_id}'
-                        )
-                    ],
-                    [
-                        build_subscription_extend_button(
-                            texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
-                            subscription.id,
-                        )
-                    ],
-                    [
-                        build_miniapp_or_callback_button(
-                            text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'),
-                            callback_data='balance_topup',
+                            text=texts.t('DISCOUNT_RETURN_BUTTON', '🎁 Продлить со скидкой {percent}%').format(
+                                percent=percent
+                            ),
+                            callback_data=f'claim_discount_{offer_id}',
                         )
                     ],
                     [
@@ -2636,11 +2693,25 @@ class MonitoringService:
         if not self.bot or not NotificationSettingsService.are_notifications_globally_enabled():
             return
 
+        # Не срочно: ночью не будим, письмо уйдёт утром (ключ «уже отправлено» ещё не стоит).
+        from app.services.user_reminders.dispatcher import is_quiet_time
+        from app.utils.timezone import get_local_timezone
+
+        if is_quiet_time(
+            datetime.now(UTC),
+            start_hour=settings.USER_REMINDERS_QUIET_HOURS_START,
+            end_hour=settings.USER_REMINDERS_QUIET_HOURS_END,
+            tz=get_local_timezone(),
+        ):
+            return
+
         try:
+            from aiogram.types import InlineKeyboardMarkup
             from sqlalchemy import select
             from sqlalchemy.orm import selectinload
 
             from app.database.models import Subscription
+            from app.services.bypass_downgrade import has_bypass_quota
             from app.utils.notification_prefs import get_traffic_warning_percent, is_traffic_warning_enabled
 
             # Get active subscriptions with traffic limits (not unlimited)
@@ -2672,11 +2743,15 @@ class MonitoringService:
                 current_percent = (traffic_used / traffic_limit) * 100
                 user_threshold = get_traffic_warning_percent(user)
 
-                if current_percent < user_threshold:
+                # На нуле приходит своё сообщение («Обходы отключены» / «трафик закончился»):
+                # «почти исчерпан» после него только путает.
+                if current_percent < user_threshold or current_percent >= 100:
                     continue
 
-                # Rate-limit: 1 notification per subscription per 24 hours
-                cache_key_str = f'traffic_warn:{subscription.id}'
+                # Один раз на порог (до смены лимита — докупки или нового периода), а не каждые
+                # сутки, пока трафик выше порога. Ключ общий с вебхуком панели о пороге: если
+                # панель уже написала, второе письмо не уходит.
+                cache_key_str = traffic_warning_cache_key(subscription.id, traffic_limit)
                 try:
                     already_sent = await cache.get(cache_key_str)
                     if already_sent:
@@ -2687,24 +2762,36 @@ class MonitoringService:
                 try:
                     language = getattr(user, 'language', 'ru') or 'ru'
                     texts = get_texts(language)
-                    message = texts.get(
-                        'TRAFFIC_WARNING_ALERT',
-                        '⚠️ <b>Предупреждение о трафике</b>\n\n'
-                        'Использовано: {used:.1f} / {limit} ГБ ({percent:.0f}%)\n\n'
-                        'Ваш лимит трафика почти исчерпан.',
+                    left_gb = f'{max(0.0, traffic_limit - traffic_used):.1f}'.rstrip('0').rstrip('.')
+                    # Тот же текст, что у порога из панели: остаток в ГБ и что будет на нуле —
+                    # на тарифе с обходами отключатся только обходы, обычные серверы работают.
+                    note = texts.t(
+                        'WEBHOOK_BANDWIDTH_NOTE_BYPASS' if has_bypass_quota(subscription) else 'WEBHOOK_BANDWIDTH_NOTE_REGULAR',
+                        '',
                     )
-                    message = message.format(
-                        used=traffic_used,
-                        limit=traffic_limit,
-                        percent=current_percent,
+                    message = texts.t(
+                        'WEBHOOK_SUB_BANDWIDTH_THRESHOLD',
+                        '📊 <b>Израсходовано {percent}% трафика</b>\n\nОсталось около <b>{left} ГБ</b>.{note}',
+                    ).format(percent=f'{current_percent:.0f}', left=left_gb, note=note)
+                    keyboard = InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [
+                                build_miniapp_or_callback_button(
+                                    text=texts.t('BUY_TRAFFIC_BUTTON', '📈 Докупить трафик'),
+                                    callback_data='buy_traffic',
+                                    style='success',
+                                )
+                            ],
+                        ]
                     )
                     await self.bot.send_message(
                         user.telegram_id,
                         message,
                         parse_mode='HTML',
+                        reply_markup=keyboard,
                     )
                     try:
-                        await cache.set(cache_key_str, '1', expire=86400)
+                        await cache.set(cache_key_str, '1', expire=TRAFFIC_WARNING_TTL_SECONDS)
                     except Exception:
                         pass
                     sent_count += 1

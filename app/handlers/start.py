@@ -3325,7 +3325,7 @@ async def required_sub_channel_check(
 
         await query.answer(
             texts.t('CHANNEL_SUBSCRIBE_THANKS', '✅ Спасибо за подписку'),
-            show_alert=True,
+            show_alert=False,
         )
 
         try:

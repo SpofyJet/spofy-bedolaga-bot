@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from importlib import import_module
@@ -13,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.services.freekassa_service import freekassa_service
+from app.services.payment.common import topup_success_text
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
@@ -378,32 +378,9 @@ class FreekassaPaymentMixin:
             try:
                 keyboard = await self.build_topup_success_keyboard(user)
 
-                # Resolve display name from payment metadata (sub-method aware)
-                display_name = settings.get_freekassa_display_name_html()
-                try:
-                    raw = payment.metadata_json
-                    if isinstance(raw, dict):
-                        meta = raw
-                    elif raw:
-                        meta = json.loads(raw)
-                    else:
-                        meta = {}
-                    pm = meta.get('payment_method', 'freekassa')
-                    if pm == 'freekassa_sbp':
-                        display_name = settings.get_freekassa_sbp_display_name_html()
-                    elif pm == 'freekassa_card':
-                        display_name = settings.get_freekassa_card_display_name_html()
-                except (json.JSONDecodeError, AttributeError, TypeError):
-                    pass
                 await self.bot.send_message(
                     user.telegram_id,
-                    (
-                        '✅ <b>Пополнение успешно!</b>\n\n'
-                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'💳 Способ: {display_name}\n'
-                        f'🆔 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
-                    ),
+                    topup_success_text(user, payment.amount_kopeks),
                     parse_mode='HTML',
                     reply_markup=keyboard,
                 )

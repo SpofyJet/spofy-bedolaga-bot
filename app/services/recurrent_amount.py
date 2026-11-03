@@ -200,7 +200,7 @@ def recurrent_engines_warning(texts, engines: set[str], *, enabling: str) -> str
     names = {
         'platega': texts.t('RECURRENT_ENGINE_SBP', 'СБП'),
         'lava': texts.t('RECURRENT_ENGINE_LAVA', 'карта (Lava)'),
-        'balance': texts.t('RECURRENT_ENGINE_BALANCE', 'автоплатёж с баланса'),
+        'balance': texts.t('RECURRENT_ENGINE_BALANCE', 'с баланса'),
     }
     listed = ', '.join(names[engine] for engine in ('platega', 'lava', 'balance') if engine in others)
     return texts.t(

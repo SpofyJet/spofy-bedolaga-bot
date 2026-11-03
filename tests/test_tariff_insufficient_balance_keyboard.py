@@ -9,14 +9,17 @@ def _callbacks(keyboard):
     return [button.callback_data for row in keyboard.inline_keyboard for button in row]
 
 
-def test_classic_topup_when_autopurchase_disabled(monkeypatch):
+def test_prefilled_payment_even_when_autopurchase_disabled(monkeypatch):
+    # Без автопокупки способы оплаты тоже сразу на экране «К оплате»: корзина сохранена,
+    # после зачисления — «Продолжить оформление». Лишних экранов «Пополнить баланс» нет.
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
+    monkeypatch.setattr(settings, 'TELEGRAM_STARS_ENABLED', True)
 
     keyboard = get_tariff_insufficient_balance_keyboard(7, 30, 'ru', missing_kopeks=50000)
     callbacks = _callbacks(keyboard)
 
-    assert 'balance_topup' in callbacks
-    assert not any((c or '').startswith('topup_amount|') for c in callbacks)
+    assert 'topup_amount|stars|50000' in callbacks
+    assert 'balance_topup' not in callbacks
     assert 'tariff_select:7' in callbacks
 
 
@@ -112,16 +115,16 @@ def test_extend_inlines_prefilled_payment_when_autopurchase_enabled(monkeypatch)
     assert not any((c or '').startswith('tariff_sbp:') for c in callbacks)
 
 
-def test_extend_classic_topup_when_autopurchase_disabled(monkeypatch):
+def test_extend_prefilled_payment_even_when_autopurchase_disabled(monkeypatch):
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
     monkeypatch.setattr(settings, 'TELEGRAM_STARS_ENABLED', True)
 
     keyboard = get_tariff_extend_insufficient_balance_keyboard(7, 42, 30, 'ru', missing_kopeks=50000)
     callbacks = _callbacks(keyboard)
 
-    assert 'balance_topup' in callbacks
+    assert 'topup_amount|stars|50000' in callbacks
     assert 'subscription_extend' in callbacks
-    assert not any((c or '').startswith('topup_amount|') for c in callbacks)
+    assert 'balance_topup' not in callbacks
 
 
 def test_extend_prefilled_amount_is_missing_not_full_price(monkeypatch):

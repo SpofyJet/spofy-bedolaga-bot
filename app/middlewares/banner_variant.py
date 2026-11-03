@@ -98,3 +98,14 @@ class BannerVariantMiddleware(BaseMiddleware):
         finally:
             reset_banner_text_only(text_token)
             reset_banner_variant(token)
+
+
+def show_banner_state(user: Any, state: str) -> None:
+    """Сменить баннер для оставшейся части обновления — после того, как состояние человека изменилось.
+
+    Вариант выбирается до обработки нажатия, поэтому экран результата («Оплата принята», «Доступ
+    активирован») редактировал сообщение со старой картинкой: «2 дня бесплатно», «Доступ закончился».
+    Вызывается на экранах успеха прямо перед ответом; middleware вернёт прежнее значение в конце.
+    """
+    language = (getattr(user, 'language', None) or 'ru').split('-')[0].lower()
+    set_banner_variant(state if language == 'ru' else f'{state}_{language}')

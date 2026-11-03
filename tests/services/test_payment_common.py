@@ -93,6 +93,6 @@ async def test_send_payment_success_notification_recovers_missing_greenlet(monke
 
     assert service.bot.messages, 'Ожидалось, что уведомление будет отправлено'
     message = service.bot.messages[0]
-    assert 'Тестовый метод' in message['text']
+    assert 'Зачислено 123' in message['text']
     assert service.keyboard_user is not None
     assert isinstance(service.keyboard_user, SimpleNamespace)

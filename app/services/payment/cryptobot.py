@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, TransactionType
+from app.services.payment.common import topup_success_text
 from app.services.pricing_engine import RenewalPricing, pricing_engine
 from app.services.subscription_renewal_service import (
     RenewalPaymentDescriptor,
@@ -361,14 +362,7 @@ class CryptoBotPaymentMixin:
 
                     try:
                         keyboard = await self.build_topup_success_keyboard(user)
-                        message_text = (
-                            '✅ <b>Пополнение успешно!</b>\n\n'
-                            f'💰 Сумма: {settings.format_price(amount_kopeks)}\n'
-                            f'🪙 Платеж: {updated_payment.amount} {updated_payment.asset}\n'
-                            f'💱 Курс: 1 USD = {conversion_rate:.2f}₽\n'
-                            f'🆔 Транзакция: {invoice_id[:8]}...\n\n'
-                            'Баланс пополнен автоматически!'
-                        )
+                        message_text = topup_success_text(user, amount_kopeks)
                         if settings.is_notifications_enabled():
                             user_notification = _UserNotificationPayload(
                                 telegram_id=user.telegram_id,
