@@ -14,6 +14,7 @@ from aiogram import types
 from aiogram.enums import ChatType
 
 import app.handlers.admin.referrals as admin_referrals
+from app.cabinet.routes import admin_withdrawals
 from app.config import Settings
 from app.database.models import WithdrawalRequestStatus
 from app.services import withdrawal_notifications
@@ -104,6 +105,32 @@ async def test_bot_rejection_sends_support_button(monkeypatch):
     assert args[0] == 777
     assert 'Причина' not in args[1]
     assert _callbacks(kwargs['reply_markup']) == ['menu_support']
+
+
+@pytest.mark.asyncio
+async def test_cabinet_complete_notifies_user(monkeypatch):
+    from app import bot_factory
+    from app.config import settings
+
+    monkeypatch.setattr(
+        admin_withdrawals.referral_withdrawal_service, 'complete_request', AsyncMock(return_value=(True, None))
+    )
+    monkeypatch.setattr(settings, 'BOT_TOKEN', 'masked:token')
+    bot = SimpleNamespace(send_message=AsyncMock(), session=SimpleNamespace(close=AsyncMock()))
+    monkeypatch.setattr(bot_factory, 'create_bot', lambda *a, **kw: bot)
+    withdrawal = SimpleNamespace(id=5, user_id=42, amount_kopeks=50_000)
+    user = _user()
+    db = AsyncMock()
+    db.get = AsyncMock(side_effect=lambda model, _id: withdrawal if model.__name__ == 'WithdrawalRequest' else user)
+
+    result = await admin_withdrawals.complete_withdrawal(5, admin=SimpleNamespace(id=1), db=db)
+
+    assert result == {'success': True}
+    bot.send_message.assert_awaited_once()
+    args, kwargs = bot.send_message.await_args
+    assert args[0] == 777
+    assert 'Выплата по заявке #5 выполнена' in args[1]
+    bot.session.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio

@@ -15,7 +15,7 @@ from app.database.models import (
     WithdrawalRequestStatus,
 )
 from app.services.referral_withdrawal_service import referral_withdrawal_service
-from app.services.withdrawal_notifications import build_withdrawal_status_message
+from app.services.withdrawal_notifications import build_withdrawal_status_message, notify_user_about_withdrawal_status
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.withdrawals import (
@@ -309,5 +309,28 @@ async def complete_withdrawal(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error or 'Не удалось завершить заявку',
         )
+
+    # Уведомляем пользователя, как и при отметке «Деньги переведены» в боте
+    try:
+        from app.bot_factory import create_bot
+        from app.config import settings
+
+        if settings.BOT_TOKEN:
+            withdrawal = await db.get(WithdrawalRequest, withdrawal_id)
+            user = await db.get(User, withdrawal.user_id) if withdrawal else None
+            if user and withdrawal and user.telegram_id:
+                bot = create_bot()
+                try:
+                    await notify_user_about_withdrawal_status(
+                        bot,
+                        user,
+                        request_id=withdrawal.id,
+                        amount_kopeks=withdrawal.amount_kopeks,
+                        status=WithdrawalRequestStatus.COMPLETED.value,
+                    )
+                finally:
+                    await bot.session.close()
+    except Exception as e:
+        logger.error('Failed to send withdrawal completion notification', error=e)
 
     return {'success': True}
