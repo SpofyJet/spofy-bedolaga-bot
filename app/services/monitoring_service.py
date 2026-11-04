@@ -1,5 +1,6 @@
 import asyncio
 import html
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -18,6 +19,7 @@ from app.database.crud.discount_offer import (
 )
 from app.database.crud.notification import (
     clear_notification_by_type,
+    list_sent_notification_keys,
     notification_sent,
     record_notification,
 )
@@ -225,6 +227,16 @@ def traffic_warning_cache_key(subscription_id: int, traffic_limit_gb: float) -> 
     return f'traffic_warn:{subscription_id}:{traffic_limit_gb}'
 
 
+LOW_BALANCE_ALERT_TTL_SECONDS = 86400
+# Заблокировавшим бота не пишем несколько дней: Telegram всё равно откажет, а без этой
+# отметки попытка повторялась бы каждый цикл. Срок короткий — человек может разблокировать.
+TELEGRAM_BLOCKED_TTL_SECONDS = 3 * 86400
+
+
+def telegram_blocked_cache_key(telegram_id: int) -> str:
+    return f'tg_blocked:{telegram_id}'
+
+
 class MonitoringService:
     def __init__(self, bot=None):
         self.is_running = False
@@ -241,6 +253,9 @@ class MonitoringService:
         # In-memory fallback состояния уведомлений об ошибке автоплатежа (на случай
         # недоступности Redis). Ключ — (subscription_id, cycle_token=int(end_date.timestamp())).
         self._autopay_fail_state: dict[tuple[int, int], dict] = {}
+        # Память процесса для отметок «уже предупредили» / «бот заблокирован»: ключ → момент
+        # (time.monotonic), до которого отметка действует. Страхует, когда Redis недоступен.
+        self._local_marks: dict[str, float] = {}
 
     async def _send_message_with_logo(
         self,
@@ -545,6 +560,7 @@ class MonitoringService:
             expired_keys = [key for key in self._autopay_fail_state if key[1] < cutoff_ts]
             for key in expired_keys:
                 del self._autopay_fail_state[key]
+            self._purge_local_marks()
 
             self._last_cleanup = current_time
             logger.info(
@@ -553,6 +569,45 @@ class MonitoringService:
                 autopay_state_evicted=len(expired_keys),
                 autopay_state_remaining=len(self._autopay_fail_state),
             )
+
+    def _local_marks_store(self) -> dict[str, float]:
+        marks = getattr(self, '_local_marks', None)
+        if marks is None:
+            marks = self._local_marks = {}
+        return marks
+
+    def _purge_local_marks(self) -> None:
+        now = time.monotonic()
+        marks = self._local_marks_store()
+        for key in [key for key, until in marks.items() if until <= now]:
+            del marks[key]
+
+    async def _is_marked(self, key: str) -> bool:
+        """Отметка есть в памяти процесса или в Redis (Redis общий с вебхуками и переживает рестарт)."""
+        until = self._local_marks_store().get(key)
+        if until is not None and until > time.monotonic():
+            return True
+        try:
+            return bool(await cache.get(key))
+        except Exception:
+            return False
+
+    async def _set_mark(self, key: str, ttl_seconds: int) -> None:
+        """Ставит отметку в память процесса всегда и в Redis — если он доступен."""
+        self._local_marks_store()[key] = time.monotonic() + ttl_seconds
+        try:
+            await cache.set(key, '1', expire=ttl_seconds)
+        except Exception:
+            pass
+
+    async def _remember_if_unreachable(self, user: User, error: Exception) -> bool:
+        """Бот заблокирован / чат удалён — запомнить, чтобы не стучаться каждый цикл."""
+        unreachable = isinstance(error, TelegramForbiddenError) or (
+            isinstance(error, TelegramBadRequest) and self._is_unreachable_error(error)
+        )
+        if unreachable and user.telegram_id:
+            await self._set_mark(telegram_blocked_cache_key(user.telegram_id), TELEGRAM_BLOCKED_TTL_SECONDS)
+        return unreachable
 
     async def _load_autopay_fail_state(self, subscription_id: int, cycle_token: int) -> AutopayFailState:
         """Load per-cycle autopay-fail state. In-memory first (current within process),
@@ -958,9 +1013,18 @@ class MonitoringService:
             # КАЖДУЮ подписку × каждый день (подписки × дни² запросов за цикл).
             expiring_by_days: dict[int, list] = {}
             urgent_ids_by_days: dict[int, set[int]] = {}
+            # Простые значения — заранее: после отката объекты из выборок экспайрятся.
+            autopay_user_ids_by_days: dict[int, list[int]] = {}
             for days in warning_days:
                 expiring_by_days[days] = await self._get_expiring_paid_subscriptions(db, days)
                 urgent_ids_by_days[days] = {sub.id for sub in expiring_by_days[days]}
+                autopay_user_ids_by_days[days] = [sub.user_id for sub in expiring_by_days[days] if sub.autopay_enabled]
+
+            # Отметки «уже напомнили» — одним запросом на весь проход, а не запросом на подписку.
+            already_sent = await list_sent_notification_keys(
+                db, set().union(*urgent_ids_by_days.values()) if urgent_ids_by_days else (), 'expiring'
+            )
+            rolled_back = False
 
             for days in warning_days:
                 expiring_subscriptions = expiring_by_days[days]
@@ -969,103 +1033,37 @@ class MonitoringService:
                 # Batch-запрос: собираем user_id с autopay и проверяем наличие карт одним запросом
                 users_with_cards: set[int] = set()
                 if settings.ENABLE_AUTOPAY and settings.YOOKASSA_RECURRENT_ENABLED:
-                    autopay_user_ids = [s.user_id for s in expiring_subscriptions if s.autopay_enabled]
+                    autopay_user_ids = autopay_user_ids_by_days[days]
                     if autopay_user_ids:
                         from app.database.crud.saved_payment_method import get_user_ids_with_active_payment_methods
 
                         users_with_cards = await get_user_ids_with_active_payment_methods(db, autopay_user_ids)
 
-                from app.utils.notification_prefs import (
-                    get_subscription_expiry_days,
-                    is_subscription_expiry_enabled,
-                )
-
-                for subscription in expiring_subscriptions:
-                    user = await get_user_by_id(db, subscription.user_id)
-                    if not user:
-                        continue
-
-                    # n2: активное провайдерское автопродление — «продлите
-                    # вручную» не шлём (своё списание + pre-bill за сутки).
-                    if subscription.id in _recurrent_sub_ids:
-                        continue
-
-                    # Respect user notification preferences
-                    if not is_subscription_expiry_enabled(user):
-                        continue
-
-                    # Check if user's preferred days threshold matches this check
-                    user_expiry_days = get_subscription_expiry_days(user)
-                    if days > user_expiry_days:
-                        continue
-
-                    # Use user.id + subscription.id for key to support multiple subscriptions per user
-                    sub_key = f'user_{user.id}_sub_{subscription.id}_today'
-                    user_identifier = user.telegram_id or f'email:{user.id}'
-
-                    if (
-                        await notification_sent(db, user.id, subscription.id, 'expiring', days)
-                        or sub_key in all_processed_users
-                    ):
-                        logger.debug(
-                            'Уведомление уже отправлено, пропускаем',
-                            user_identifier=user_identifier,
-                            days=days,
-                        )
-                        continue
-
-                    has_saved_card = subscription.autopay_enabled and user.id in users_with_cards
-
-                    should_send = True
-                    for other_days in warning_days:
-                        if other_days < days and subscription.id in urgent_ids_by_days[other_days]:
-                            should_send = False
-                            logger.debug(
-                                '🎯 Пропускаем уведомление на дней для пользователя есть более срочное на дней',
-                                days=days,
-                                user_identifier=user_identifier,
-                                other_days=other_days,
-                            )
-                            break
-
-                    if not should_send:
-                        continue
-
-                    # Handle email-only users via notification delivery service
-                    if not user.telegram_id:
-                        success = await notification_delivery_service.notify_subscription_expiring(
-                            user=user,
-                            days_left=days,
-                            expires_at=subscription.end_date,
-                        )
-                        if success:
-                            await record_notification(db, user.id, subscription.id, 'expiring', days)
-                            all_processed_users.add(sub_key)
+                for subscription_id, listed in [(listed.id, listed) for listed in expiring_subscriptions]:
+                    try:
+                        subscription = listed
+                        if rolled_back:
+                            # Откат сбросил загруженные объекты: перечитываем со связями.
+                            subscription = await _reload_subscription(db, subscription_id)
+                            if subscription is None:
+                                continue
+                        if await self._notify_expiring_subscription(
+                            db,
+                            subscription,
+                            days,
+                            warning_days=warning_days,
+                            urgent_ids_by_days=urgent_ids_by_days,
+                            recurrent_sub_ids=_recurrent_sub_ids,
+                            users_with_cards=users_with_cards,
+                            already_sent=already_sent,
+                            processed=all_processed_users,
+                        ):
                             sent_count += 1
-                            logger.info(
-                                '✅ Email-пользователю отправлено уведомление об истечении подписки через дней',
-                                user_id=user.id,
-                                days=days,
-                            )
-                        continue
-
-                    if self.bot:
-                        success = await self._send_subscription_expiring_notification(
-                            user, subscription, days, has_saved_card=has_saved_card
-                        )
-                        if success:
-                            await record_notification(db, user.id, subscription.id, 'expiring', days)
-                            all_processed_users.add(sub_key)
-                            sent_count += 1
-                            logger.info(
-                                '✅ Пользователю отправлено уведомление об истечении подписки через дней',
-                                telegram_id=user.telegram_id,
-                                days=days,
-                            )
-                        else:
-                            logger.warning(
-                                '❌ Не удалось отправить уведомление пользователю', telegram_id=user.telegram_id
-                            )
+                    except Exception:
+                        # Одна подписка не должна останавливать напоминания всем остальным.
+                        logger.exception('Не удалось обработать напоминание о сроке', subscription_id=subscription_id)
+                        await _rollback_quietly(db, step='expiring_subscription')
+                        rolled_back = True
 
                 if sent_count > 0:
                     await self._log_monitoring_event(
@@ -1078,6 +1076,106 @@ class MonitoringService:
         except Exception as e:
             logger.error('Ошибка проверки истекающих подписок', error=e)
             await _rollback_quietly(db, step='expiring_subscriptions')
+
+    async def _notify_expiring_subscription(
+        self,
+        db: AsyncSession,
+        subscription: Subscription,
+        days: int,
+        *,
+        warning_days,
+        urgent_ids_by_days: dict[int, set[int]],
+        recurrent_sub_ids,
+        users_with_cards: set[int],
+        already_sent: set[tuple[int, int, int | None]],
+        processed: set[str],
+    ) -> bool:
+        """Одно напоминание «подписка истекает через N дней». True — отправили."""
+        from app.utils.notification_prefs import (
+            get_subscription_expiry_days,
+            is_subscription_expiry_enabled,
+        )
+
+        # Пользователь уже загружен вместе с подпиской (selectinload) — без запроса на каждую.
+        user = subscription.user
+        if not user:
+            return False
+
+        # n2: активное провайдерское автопродление — «продлите
+        # вручную» не шлём (своё списание + pre-bill за сутки).
+        if subscription.id in recurrent_sub_ids:
+            return False
+
+        # Respect user notification preferences
+        if not is_subscription_expiry_enabled(user):
+            return False
+
+        # Check if user's preferred days threshold matches this check
+        user_expiry_days = get_subscription_expiry_days(user)
+        if days > user_expiry_days:
+            return False
+
+        # Use user.id + subscription.id for key to support multiple subscriptions per user
+        sub_key = f'user_{user.id}_sub_{subscription.id}_today'
+        user_identifier = user.telegram_id or f'email:{user.id}'
+
+        if (user.id, subscription.id, days) in already_sent or sub_key in processed:
+            logger.debug(
+                'Уведомление уже отправлено, пропускаем',
+                user_identifier=user_identifier,
+                days=days,
+            )
+            return False
+
+        has_saved_card = subscription.autopay_enabled and user.id in users_with_cards
+
+        for other_days in warning_days:
+            if other_days < days and subscription.id in urgent_ids_by_days[other_days]:
+                logger.debug(
+                    '🎯 Пропускаем уведомление на дней для пользователя есть более срочное на дней',
+                    days=days,
+                    user_identifier=user_identifier,
+                    other_days=other_days,
+                )
+                return False
+
+        # Handle email-only users via notification delivery service
+        if not user.telegram_id:
+            success = await notification_delivery_service.notify_subscription_expiring(
+                user=user,
+                days_left=days,
+                expires_at=subscription.end_date,
+            )
+            if not success:
+                return False
+            await record_notification(db, user.id, subscription.id, 'expiring', days)
+            already_sent.add((user.id, subscription.id, days))
+            processed.add(sub_key)
+            logger.info(
+                '✅ Email-пользователю отправлено уведомление об истечении подписки через дней',
+                user_id=user.id,
+                days=days,
+            )
+            return True
+
+        if not self.bot:
+            return False
+
+        success = await self._send_subscription_expiring_notification(
+            user, subscription, days, has_saved_card=has_saved_card
+        )
+        if not success:
+            logger.warning('❌ Не удалось отправить уведомление пользователю', telegram_id=user.telegram_id)
+            return False
+        await record_notification(db, user.id, subscription.id, 'expiring', days)
+        already_sent.add((user.id, subscription.id, days))
+        processed.add(sub_key)
+        logger.info(
+            '✅ Пользователю отправлено уведомление об истечении подписки через дней',
+            telegram_id=user.telegram_id,
+            days=days,
+        )
+        return True
 
     async def _run_activation_funnel(self, db: AsyncSession):
         try:
@@ -1637,7 +1735,12 @@ class MonitoringService:
             select(Subscription)
             .join(User, Subscription.user_id == User.id)
             .options(
-                selectinload(Subscription.user),
+                # Пользователь и его группы — сразу пачкой: напоминания о сроке
+                # не делают отдельных запросов на каждую подписку.
+                selectinload(Subscription.user).selectinload(User.promo_group),
+                selectinload(Subscription.user)
+                .selectinload(User.user_promo_groups)
+                .selectinload(UserPromoGroup.promo_group),
                 selectinload(Subscription.tariff),
             )
             .where(
@@ -2877,6 +2980,8 @@ class MonitoringService:
                 user = subscription.user
                 if not user or not user.telegram_id:
                     continue
+                if user.status in (UserStatus.BLOCKED.value, UserStatus.DELETED.value):
+                    continue
 
                 if not is_traffic_warning_enabled(user):
                     continue
@@ -2899,12 +3004,10 @@ class MonitoringService:
                 # сутки, пока трафик выше порога. Ключ общий с вебхуком панели о пороге: если
                 # панель уже написала, второе письмо не уходит.
                 cache_key_str = traffic_warning_cache_key(subscription.id, traffic_limit)
-                try:
-                    already_sent = await cache.get(cache_key_str)
-                    if already_sent:
-                        continue
-                except Exception:
-                    pass
+                if await self._is_marked(cache_key_str):
+                    continue
+                if await self._is_marked(telegram_blocked_cache_key(user.telegram_id)):
+                    continue
 
                 try:
                     language = getattr(user, 'language', 'ru') or 'ru'
@@ -2939,12 +3042,10 @@ class MonitoringService:
                         parse_mode='HTML',
                         reply_markup=keyboard,
                     )
-                    try:
-                        await cache.set(cache_key_str, '1', expire=TRAFFIC_WARNING_TTL_SECONDS)
-                    except Exception:
-                        pass
+                    await self._set_mark(cache_key_str, TRAFFIC_WARNING_TTL_SECONDS)
                     sent_count += 1
                 except Exception as send_error:
+                    await self._remember_if_unreachable(user, send_error)
                     logger.debug(
                         'Failed to send traffic warning',
                         user_id=user.id,
@@ -2972,8 +3073,6 @@ class MonitoringService:
             return
 
         try:
-            from datetime import UTC, datetime, timedelta
-
             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
             from sqlalchemy import select
 
@@ -3005,6 +3104,8 @@ class MonitoringService:
 
             sent_count = 0
             for user in users:
+                if user.status in (UserStatus.BLOCKED.value, UserStatus.DELETED.value):
+                    continue
                 if not is_balance_low_enabled(user):
                     continue
 
@@ -3016,12 +3117,10 @@ class MonitoringService:
 
                 # Rate-limit via Redis: max 1 notification per 24 hours per user
                 cache_key_str = f'low_balance_alert:{user.id}'
-                try:
-                    already_sent = await cache.get(cache_key_str)
-                    if already_sent:
-                        continue
-                except Exception:
-                    pass
+                if await self._is_marked(cache_key_str):
+                    continue
+                if await self._is_marked(telegram_blocked_cache_key(user.telegram_id)):
+                    continue
 
                 try:
                     language = getattr(user, 'language', 'ru') or 'ru'
@@ -3063,12 +3162,10 @@ class MonitoringService:
                         reply_markup=keyboard,
                     )
                     # Mark as sent for 24 hours
-                    try:
-                        await cache.set(cache_key_str, '1', expire=86400)
-                    except Exception:
-                        pass
+                    await self._set_mark(cache_key_str, LOW_BALANCE_ALERT_TTL_SECONDS)
                     sent_count += 1
                 except Exception as send_error:
+                    await self._remember_if_unreachable(user, send_error)
                     logger.debug('Failed to send low balance alert', user_id=user.id, error=send_error)
 
             if sent_count > 0:
