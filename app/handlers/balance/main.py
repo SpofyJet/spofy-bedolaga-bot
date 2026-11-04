@@ -9,13 +9,14 @@ from aiogram.types import InaccessibleMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.transaction import get_user_transactions
+from app.database.crud.transaction import get_user_history_page
 from app.database.models import TransactionType, User
 from app.handlers.subscription.autopay import handle_confirm_unlink, handle_saved_cards_list, handle_unlink_card
 from app.keyboards.inline import (
     get_back_keyboard,
     get_balance_keyboard,
     get_pagination_keyboard,
+    get_payment_error_keyboard,
     get_payment_methods_keyboard,
 )
 from app.localization.texts import get_texts
@@ -290,41 +291,28 @@ async def show_balance_menu(callback: types.CallbackQuery, db_user: User, db: As
 async def show_balance_history(callback: types.CallbackQuery, db_user: User, db: AsyncSession, page: int = 1):
     texts = get_texts(db_user.language)
 
-    offset = (page - 1) * TRANSACTIONS_PER_PAGE
+    page = max(page, 1)
+    unique_transactions, total_unique = await get_user_history_page(
+        db, db_user.id, page=page, per_page=TRANSACTIONS_PER_PAGE
+    )
+    total_pages = (total_unique + TRANSACTIONS_PER_PAGE - 1) // TRANSACTIONS_PER_PAGE
 
-    raw_transactions = await get_user_transactions(db, db_user.id, limit=TRANSACTIONS_PER_PAGE * 3, offset=offset)
-
-    seen_transactions = set()
-    unique_transactions = []
-
-    for transaction in raw_transactions:
-        rounded_time = transaction.created_at.replace(second=0, microsecond=0)
-        transaction_key = (transaction.amount_kopeks, transaction.description, rounded_time)
-
-        if transaction_key not in seen_transactions:
-            seen_transactions.add(transaction_key)
-            unique_transactions.append(transaction)
-
-            if len(unique_transactions) >= TRANSACTIONS_PER_PAGE:
-                break
-
-    all_transactions = await get_user_transactions(db, db_user.id, limit=1000)
-    seen_all = set()
-    total_unique = 0
-
-    for transaction in all_transactions:
-        rounded_time = transaction.created_at.replace(second=0, microsecond=0)
-        transaction_key = (transaction.amount_kopeks, transaction.description, rounded_time)
-        if transaction_key not in seen_all:
-            seen_all.add(transaction_key)
-            total_unique += 1
+    if not unique_transactions and total_pages and page > total_pages:
+        # Старая кнопка страницы, которой уже нет (операций стало меньше) — показываем последнюю.
+        page = total_pages
+        unique_transactions, total_unique = await get_user_history_page(
+            db, db_user.id, page=page, per_page=TRANSACTIONS_PER_PAGE
+        )
 
     if not unique_transactions:
-        await callback.message.edit_text('📊 История операций пуста', reply_markup=get_back_keyboard(db_user.language))
+        await callback.message.edit_text(
+            texts.t('BALANCE_HISTORY_EMPTY', '📊 История операций пуста'),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='menu_balance'),
+        )
         await callback.answer()
         return
 
-    text = '📊 <b>История операций</b>\n\n'
+    text = texts.t('BALANCE_HISTORY_TITLE', '📊 <b>История операций</b>') + '\n\n'
 
     for transaction in unique_transactions:
         is_credit = transaction.type in CREDIT_TRANSACTION_TYPES
@@ -340,7 +328,6 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
         text += f'📅 {format_local_datetime(transaction.created_at, "%d.%m.%Y %H:%M")}\n\n'
 
     keyboard = []
-    total_pages = (total_unique + TRANSACTIONS_PER_PAGE - 1) // TRANSACTIONS_PER_PAGE
 
     if total_pages > 1:
         pagination_row = get_pagination_keyboard(page, total_pages, 'balance_history', db_user.language)
@@ -650,7 +637,10 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
                 return
 
         if not await route_payment_by_method(message, db_user, amount_kopeks, state, payment_method):
-            await message.answer('Неизвестный способ оплаты')
+            await message.answer(
+                texts.t('PAYMENT_METHOD_UNKNOWN', '❌ Этот способ оплаты сейчас недоступен. Выберите другой.'),
+                reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
+            )
 
     except (ValueError, InvalidOperation):
         await message.answer(texts.INVALID_AMOUNT, reply_markup=get_back_keyboard(db_user.language))
@@ -696,10 +686,10 @@ async def handle_sbp_payment(callback: types.CallbackQuery, db_user: User, db: A
         await callback.answer('❌ Ошибка обработки платежа', show_alert=True)
 
 
-async def _reply_after_answer(callback: types.CallbackQuery, text: str) -> None:
+async def _reply_after_answer(callback: types.CallbackQuery, text: str, reply_markup=None) -> None:
     """Нажатие уже подтверждено — второй answer() Telegram отвергнет, поэтому пишем сообщением."""
     if isinstance(callback.message, types.Message):
-        await callback.message.answer(text)
+        await callback.message.answer(text, reply_markup=reply_markup)
 
 
 @error_handler
@@ -782,13 +772,23 @@ async def handle_topup_amount_callback(
             await state.update_data(payment_method=method)
             await state.set_state(BalanceStates.waiting_for_amount)
             if not await route_payment_by_method(callback.message, db_user, amount_kopeks, state, method):
-                await _reply_after_answer(callback, '❌ Неизвестный способ оплаты')
+                await _reply_after_answer(
+                    callback,
+                    get_texts(db_user.language).t(
+                        'PAYMENT_METHOD_UNKNOWN', '❌ Этот способ оплаты сейчас недоступен. Выберите другой.'
+                    ),
+                    reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
+                )
 
     except TelegramBadRequest:
         raise  # устаревший запрос и прочие ответы Telegram классифицирует @error_handler
     except Exception as error:
         logger.error('Ошибка быстрого пополнения', error=error)
-        await _reply_after_answer(callback, '❌ Ошибка обработки запроса')
+        await _reply_after_answer(
+            callback,
+            '❌ Ошибка обработки запроса',
+            reply_markup=get_payment_error_keyboard(db_user.language),
+        )
 
 
 def register_balance_handlers(dp: Dispatcher):
