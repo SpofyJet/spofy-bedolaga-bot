@@ -312,6 +312,31 @@ async def get_ticket(
     )
 
 
+@router.post('/{ticket_id}/close', response_model=TicketDetailResponse)
+async def close_ticket(
+    ticket_id: int,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Close the user's own ticket (the bot has the same button). Closing twice is not an error."""
+    _ensure_tickets_enabled()
+
+    result = await db.execute(select(Ticket).where(Ticket.id == ticket_id, Ticket.user_id == user.id))
+    ticket = result.scalar_one_or_none()
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Ticket not found',
+        )
+
+    if ticket.status != 'closed':
+        await TicketCRUD.close_ticket(db, ticket.id)
+        logger.info('Cabinet: user closed ticket', ticket_id=ticket.id, user_id=user.id)
+
+    db.expire_all()
+    return await get_ticket(ticket_id, user=user, db=db)
+
+
 @router.post('/{ticket_id}/messages', response_model=TicketMessageResponse)
 async def add_ticket_message(
     ticket_id: int,
