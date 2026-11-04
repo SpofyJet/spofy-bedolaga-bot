@@ -11,9 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.models import (
+    PaymentMethod,
+    Transaction,
+    TransactionType,
     WheelConfig,
     WheelPrize,
+    WheelPrizeType,
     WheelSpin,
+    WheelSpinPaymentType,
 )
 from app.utils.timezone import local_day_start
 
@@ -243,10 +248,54 @@ async def get_user_spins_today(db: AsyncSession, user_id: int) -> int:
             and_(
                 WheelSpin.user_id == user_id,
                 WheelSpin.created_at >= today_start,
+                # Бесплатные спины за пополнения заработаны деньгами — дневной лимит их не режет.
+                WheelSpin.payment_type != WheelSpinPaymentType.TOPUP_CREDIT.value,
             )
         )
     )
     return result.scalar() or 0
+
+
+# ==================== FREE SPINS FOR TOP-UPS ====================
+
+# Не реальные деньги: ручные начисления админа и внутренние списания/возвраты с баланса.
+NON_TOPUP_PAYMENT_METHODS = (PaymentMethod.MANUAL.value, PaymentMethod.BALANCE.value)
+
+
+async def get_topup_deposits_kopeks(db: AsyncSession, user_id: int, since: datetime | None) -> int:
+    """Сумма реальных пополнений пользователя с момента включения спинов за пополнения."""
+    if since is None:
+        return 0
+    result = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+            Transaction.user_id == user_id,
+            Transaction.type == TransactionType.DEPOSIT.value,
+            Transaction.is_completed.is_(True),
+            Transaction.payment_method.is_not(None),
+            Transaction.payment_method.not_in(NON_TOPUP_PAYMENT_METHODS),
+            Transaction.amount_kopeks > 0,
+            Transaction.created_at >= since,
+        )
+    )
+    return int(result.scalar() or 0)
+
+
+async def get_free_spin_counters(db: AsyncSession, user_id: int) -> tuple[int, int]:
+    """(выиграно спинов призом «Ещё спин», потрачено бесплатных спинов)."""
+    won = await db.execute(
+        select(func.coalesce(func.sum(WheelSpin.prize_value), 0)).where(
+            WheelSpin.user_id == user_id,
+            WheelSpin.prize_type == WheelPrizeType.EXTRA_SPIN.value,
+            WheelSpin.is_applied.is_(True),
+        )
+    )
+    used = await db.execute(
+        select(func.count(WheelSpin.id)).where(
+            WheelSpin.user_id == user_id,
+            WheelSpin.payment_type == WheelSpinPaymentType.TOPUP_CREDIT.value,
+        )
+    )
+    return int(won.scalar() or 0), int(used.scalar() or 0)
 
 
 async def get_user_spin_history(

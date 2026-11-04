@@ -2479,5 +2479,8 @@
   "AUTOPAY_WILL_RENEW": "🔔 <b>{end_date} 将自动续订{tariff_label}</b>\n\n无需操作。",
   "TRIAL_ACTIVATED_UNTIL": "📅 有效期至 {end_date}",
   "REFERRAL_WELCOME_INVITED": "🎉 <b>{name} 邀请了您</b>",
-  "REFERRAL_WELCOME_FRIEND_DAYS": "🎁 在试用期内连接 VPN，你们双方各得 +{days} 天。"
+  "REFERRAL_WELCOME_FRIEND_DAYS": "🎁 在试用期内连接 VPN，你们双方各得 +{days} 天。",
+  "WHEEL_TOPUP_SPIN_EARNED": "🎡 <b>奖品转盘 +{earned} 次</b> — 充值奖励。",
+  "WHEEL_TOPUP_SPIN_PRIZES": "可赢取天数、折扣、余额奖励或额外设备。剩余次数：{available}。",
+  "WHEEL_TOPUP_SPIN_BUTTON": "🎡 转动转盘"
 }

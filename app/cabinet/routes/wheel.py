@@ -48,6 +48,7 @@ async def get_wheel_config(
 
     # Проверяем доступность
     availability = await wheel_service.check_availability(db, user)
+    free = availability.free_spins or await wheel_service.get_free_spin_state(db, user.id, config)
 
     # Проверяем наличие подписки (multi-tariff aware)
     if settings.is_multi_tariff_enabled():
@@ -104,6 +105,12 @@ async def get_wheel_config(
         required_balance_kopeks=availability.required_balance_kopeks,
         has_subscription=has_subscription,
         eligible_subscriptions=eligible_subs_display,
+        topup_spins_enabled=free.enabled,
+        free_spins=free.available,
+        can_pay_free=availability.can_pay_free,
+        topup_spin_threshold_kopeks=free.threshold_kopeks,
+        topup_progress_kopeks=free.progress_kopeks,
+        topup_left_kopeks=free.left_kopeks,
     )
 
 
@@ -125,6 +132,7 @@ async def check_spin_availability(
         user_subscription_days=availability.user_subscription_days,
         user_balance_kopeks=availability.user_balance_kopeks,
         required_balance_kopeks=availability.required_balance_kopeks,
+        free_spins=availability.free_spins.available if availability.free_spins else 0,
     )
 
 

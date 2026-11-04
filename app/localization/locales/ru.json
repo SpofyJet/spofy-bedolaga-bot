@@ -2479,5 +2479,8 @@
   "AUTOPAY_WILL_RENEW": "<tg-emoji emoji-id='5909201569898827582'>🔔</tg-emoji> <b>{end_date} продлим подписку{tariff_label} автоматически</b>\n\nНичего делать не нужно.",
   "TRIAL_ACTIVATED_UNTIL": "<tg-emoji emoji-id='5967412305338568701'>📅</tg-emoji> До {end_date}",
   "REFERRAL_WELCOME_INVITED": "<tg-emoji emoji-id='5994502837327892086'>🎉</tg-emoji> <b>Вас пригласил {name}</b>",
-  "REFERRAL_WELCOME_FRIEND_DAYS": "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> Подключите VPN в пробный период — и вы оба получите по +{days} дн."
+  "REFERRAL_WELCOME_FRIEND_DAYS": "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> Подключите VPN в пробный период — и вы оба получите по +{days} дн.",
+  "WHEEL_TOPUP_SPIN_EARNED": "🎡 <b>+{earned} спин в колесе призов</b> — за пополнение.",
+  "WHEEL_TOPUP_SPIN_PRIZES": "Можно выиграть дни, скидку, бонус на баланс или ещё одно устройство. Спинов: {available}.",
+  "WHEEL_TOPUP_SPIN_BUTTON": "🎡 Крутить колесо"
 }

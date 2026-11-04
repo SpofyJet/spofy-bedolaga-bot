@@ -2479,5 +2479,8 @@
   "AUTOPAY_WILL_RENEW": "🔔 <b>{end_date} продовжимо підписку{tariff_label} автоматично</b>\n\nНічого робити не треба.",
   "TRIAL_ACTIVATED_UNTIL": "📅 До {end_date}",
   "REFERRAL_WELCOME_INVITED": "🎉 <b>Вас запросив {name}</b>",
-  "REFERRAL_WELCOME_FRIEND_DAYS": "🎁 Підключіть VPN у пробний період — і ви обидва отримаєте по +{days} дн."
+  "REFERRAL_WELCOME_FRIEND_DAYS": "🎁 Підключіть VPN у пробний період — і ви обидва отримаєте по +{days} дн.",
+  "WHEEL_TOPUP_SPIN_EARNED": "🎡 <b>+{earned} спін у колесі призів</b> — за поповнення.",
+  "WHEEL_TOPUP_SPIN_PRIZES": "Можна виграти дні, знижку, бонус на баланс або ще один пристрій. Спінів: {available}.",
+  "WHEEL_TOPUP_SPIN_BUTTON": "🎡 Крутити колесо"
 }

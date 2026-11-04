@@ -469,6 +469,7 @@ class MonitoringService:
                 await self._run_activation_funnel(db)
                 await self._check_traffic_warnings(db)
                 await self._check_low_balance_alerts(db)
+                await self._expire_wheel_bonus_devices()
                 await self._retry_stuck_guest_purchases(db)
                 await self._cleanup_expired_refresh_tokens(db)
                 await self._cleanup_button_click_logs(db)
@@ -496,6 +497,15 @@ class MonitoringService:
                 except Exception:
                     pass
                 await db.rollback()
+
+    async def _expire_wheel_bonus_devices(self) -> None:
+        """Снимает устройства из колеса призов, у которых вышел срок (своя сессия, сбой не валит цикл)."""
+        try:
+            from app.services.wheel_service import wheel_service
+
+            await wheel_service.expire_bonus_devices()
+        except Exception as error:
+            logger.warning('Не удалось снять истёкшие устройства колеса', error=str(error))
 
     async def _cleanup_notification_cache(self):
         current_time = datetime.now(UTC)

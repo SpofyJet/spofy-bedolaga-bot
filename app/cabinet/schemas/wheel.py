@@ -14,6 +14,7 @@ class WheelPaymentType(StrEnum):
 
     TELEGRAM_STARS = 'telegram_stars'
     SUBSCRIPTION_DAYS = 'subscription_days'
+    TOPUP_CREDIT = 'topup_credit'
 
 
 class WheelPrizeType(StrEnum):
@@ -24,6 +25,9 @@ class WheelPrizeType(StrEnum):
     TRAFFIC_GB = 'traffic_gb'
     PROMOCODE = 'promocode'
     NOTHING = 'nothing'
+    DEVICE_SLOT = 'device_slot'
+    DISCOUNT = 'discount'
+    EXTRA_SPIN = 'extra_spin'
 
 
 # ==================== USER SCHEMAS ====================
@@ -62,6 +66,13 @@ class WheelConfigResponse(BaseModel):
     required_balance_kopeks: int = 0
     has_subscription: bool = False
     eligible_subscriptions: list[dict] | None = None
+    # Бесплатные спины за пополнения
+    topup_spins_enabled: bool = False
+    free_spins: int = 0
+    can_pay_free: bool = False
+    topup_spin_threshold_kopeks: int = 0
+    topup_progress_kopeks: int = 0
+    topup_left_kopeks: int = 0
 
 
 class SpinAvailabilityResponse(BaseModel):
@@ -76,6 +87,7 @@ class SpinAvailabilityResponse(BaseModel):
     user_subscription_days: int
     user_balance_kopeks: int = 0
     required_balance_kopeks: int = 0
+    free_spins: int = 0
 
 
 class SpinRequest(BaseModel):
@@ -176,6 +188,10 @@ class AdminWheelConfigResponse(BaseModel):
     min_subscription_days_for_day_payment: int
     promo_prefix: str
     promo_validity_days: int
+    topup_spins_enabled: bool = False
+    topup_spin_threshold_kopeks: int = 15000
+    topup_spin_value_kopeks: int = 1500
+    topup_spins_since: datetime | None = None
     prizes: list[WheelPrizeAdminResponse]
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -198,6 +214,9 @@ class UpdateWheelConfigRequest(BaseModel):
     min_subscription_days_for_day_payment: int | None = Field(None, ge=1, le=30)
     promo_prefix: str | None = Field(None, min_length=1, max_length=20)
     promo_validity_days: int | None = Field(None, ge=1, le=365)
+    topup_spins_enabled: bool | None = None
+    topup_spin_threshold_kopeks: int | None = Field(None, ge=100, le=10_000_000)
+    topup_spin_value_kopeks: int | None = Field(None, ge=0, le=10_000_000)
 
 
 class CreatePrizeRequest(BaseModel):

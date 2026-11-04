@@ -84,6 +84,10 @@ async def get_admin_wheel_config(
         min_subscription_days_for_day_payment=config.min_subscription_days_for_day_payment,
         promo_prefix=config.promo_prefix,
         promo_validity_days=config.promo_validity_days,
+        topup_spins_enabled=bool(config.topup_spins_enabled),
+        topup_spin_threshold_kopeks=config.topup_spin_threshold_kopeks,
+        topup_spin_value_kopeks=config.topup_spin_value_kopeks,
+        topup_spins_since=config.topup_spins_since,
         prizes=prizes_response,
         created_at=config.created_at,
         updated_at=config.updated_at,
@@ -104,6 +108,14 @@ async def update_admin_wheel_config(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='No fields to update',
         )
+
+    if update_data.get('topup_spins_enabled'):
+        # Спины считаются по пополнениям с момента первого включения — старые пополнения не в счёт.
+        current = await get_or_create_wheel_config(db)
+        if current.topup_spins_since is None:
+            from datetime import UTC, datetime
+
+            update_data['topup_spins_since'] = datetime.now(UTC)
 
     config = await update_wheel_config(db, **update_data)
 
@@ -147,6 +159,10 @@ async def update_admin_wheel_config(
         min_subscription_days_for_day_payment=config.min_subscription_days_for_day_payment,
         promo_prefix=config.promo_prefix,
         promo_validity_days=config.promo_validity_days,
+        topup_spins_enabled=bool(config.topup_spins_enabled),
+        topup_spin_threshold_kopeks=config.topup_spin_threshold_kopeks,
+        topup_spin_value_kopeks=config.topup_spin_value_kopeks,
+        topup_spins_since=config.topup_spins_since,
         prizes=prizes_response,
         created_at=config.created_at,
         updated_at=config.updated_at,

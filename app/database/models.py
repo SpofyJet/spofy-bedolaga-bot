@@ -208,6 +208,10 @@ class WheelPrizeType(Enum):
     TRAFFIC_GB = 'traffic_gb'
     PROMOCODE = 'promocode'
     NOTHING = 'nothing'
+    # Spofy: мини-бонусы за пополнения
+    DEVICE_SLOT = 'device_slot'  # +N устройств на WHEEL_DEVICE_BONUS_DAYS дней, продление за них не платит
+    DISCOUNT = 'discount'  # персональная скидка prize_value% на следующую покупку, promo_validity_days дней
+    EXTRA_SPIN = 'extra_spin'  # +N бесплатных спинов
 
 
 class WheelSpinPaymentType(Enum):
@@ -215,6 +219,7 @@ class WheelSpinPaymentType(Enum):
 
     TELEGRAM_STARS = 'telegram_stars'
     SUBSCRIPTION_DAYS = 'subscription_days'
+    TOPUP_CREDIT = 'topup_credit'  # бесплатный спин, заработанный пополнениями
 
 
 class YooKassaPayment(Base):
@@ -2728,6 +2733,10 @@ class Subscription(Base):
     subscription_crypto_link = Column(String, nullable=True)
 
     device_limit = Column(Integer, default=1)
+    # Устройства, выигранные в колесе: уже входят в device_limit, но в цену продления не идут и
+    # снимаются после wheel_bonus_devices_until (WheelService.expire_bonus_devices).
+    wheel_bonus_devices = Column(Integer, default=0, server_default='0', nullable=False)
+    wheel_bonus_devices_until = Column(AwareDateTime(), nullable=True)
     modem_enabled = Column(Boolean, default=False)
 
     connected_squads = Column(JSON, default=list)
@@ -4654,6 +4663,15 @@ class WheelConfig(Base):
     # Генерация промокодов
     promo_prefix = Column(String(20), default='WHEEL', nullable=False)
     promo_validity_days = Column(Integer, default=7, nullable=False)
+
+    # Бесплатные спины за пополнения: каждые topup_spin_threshold_kopeks реальных пополнений
+    # (DEPOSIT с платёжным методом, начиная с topup_spins_since) = 1 спин. Счёт выводится из
+    # транзакций, поэтому ничего не задваивается и не теряется при сбоях уведомлений.
+    topup_spins_enabled = Column(Boolean, default=False, server_default='false', nullable=False)
+    topup_spin_threshold_kopeks = Column(Integer, default=15000, server_default='15000', nullable=False)
+    # «Стоимость» бесплатного спина для RTP-расчёта и статистики (по умолчанию 10% от порога).
+    topup_spin_value_kopeks = Column(Integer, default=1500, server_default='1500', nullable=False)
+    topup_spins_since = Column(AwareDateTime(), nullable=True)
 
     created_at = Column(AwareDateTime(), default=func.now())
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())

@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from urllib.parse import quote, urlparse, urlunparse
 
 import structlog
@@ -217,7 +218,7 @@ def resolve_hwid_device_limit(subscription: Subscription | None) -> int | None:
                 subscription_device_limit=getattr(subscription, 'device_limit', None),
                 subscription_id=getattr(subscription, 'id', None),
             )
-            return forced_limit
+            return forced_limit + active_wheel_bonus_devices(subscription)
         # forced_limit не задан или равен 0 — используем device_limit из подписки,
         # чтобы при смене тарифа лимит устройств обновлялся в панели
 
@@ -230,7 +231,19 @@ def resolve_hwid_device_limit(subscription: Subscription | None) -> int | None:
         )
         return None
 
-    return limit
+    # Устройства, выигранные в колесе, — сверху оплаченного лимита: в цену продления не идут.
+    return limit + active_wheel_bonus_devices(subscription)
+
+
+def active_wheel_bonus_devices(subscription: object | None, now: datetime | None = None) -> int:
+    """Сколько бонусных устройств из колеса действует сейчас (0, если нет или срок вышел)."""
+    count = getattr(subscription, 'wheel_bonus_devices', 0)
+    until = getattr(subscription, 'wheel_bonus_devices_until', None)
+    if type(count) is not int or count <= 0 or not isinstance(until, datetime):
+        return 0
+    if until.tzinfo is None:
+        until = until.replace(tzinfo=UTC)
+    return count if until > (now or datetime.now(UTC)) else 0
 
 
 def resolve_hwid_device_limit_for_payload(

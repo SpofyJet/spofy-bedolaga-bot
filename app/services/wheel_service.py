@@ -18,7 +18,9 @@ from app.database.crud.subscription import get_subscription_by_user_id
 from app.database.crud.user import add_user_balance
 from app.database.crud.wheel import (
     create_wheel_spin,
+    get_free_spin_counters,
     get_or_create_wheel_config,
+    get_topup_deposits_kopeks,
     get_user_spins_today,
     get_wheel_prizes,
     get_wheel_statistics,
@@ -37,6 +39,23 @@ from app.services.subscription_service import SubscriptionService
 
 
 logger = structlog.get_logger(__name__)
+
+WHEEL_DEVICE_BONUS_DAYS = 30  # сколько живёт выигранное устройство
+WHEEL_DEVICE_BONUS_MIN_DAYS = 3  # подписке осталось меньше — устройство бессмысленно, отдаём деньгами
+
+
+@dataclass
+class FreeSpinState:
+    """Бесплатные спины за пополнения."""
+
+    enabled: bool = False
+    available: int = 0
+    threshold_kopeks: int = 0
+    progress_kopeks: int = 0  # пополнено в счёт следующего спина
+
+    @property
+    def left_kopeks(self) -> int:
+        return max(0, self.threshold_kopeks - self.progress_kopeks) if self.enabled else 0
 
 
 @dataclass
@@ -79,6 +98,8 @@ class SpinAvailability:
     user_balance_kopeks: int = 0
     required_balance_kopeks: int = 0
     eligible_subscriptions: list[EligibleSubscription] | None = None
+    can_pay_free: bool = False
+    free_spins: FreeSpinState | None = None
 
 
 class FortuneWheelService:
@@ -86,6 +107,24 @@ class FortuneWheelService:
 
     def __init__(self):
         pass
+
+    async def get_free_spin_state(self, db: AsyncSession, user_id: int, config: WheelConfig) -> FreeSpinState:
+        """Сколько бесплатных спинов есть и сколько осталось пополнить до следующего.
+
+        Выводится из транзакций: каждые threshold копеек реальных пополнений с момента включения
+        = 1 спин, плюс выигранные «Ещё спин», минус уже прокрученные бесплатные.
+        """
+        threshold = int(getattr(config, 'topup_spin_threshold_kopeks', 0) or 0)
+        if not getattr(config, 'topup_spins_enabled', False) or threshold <= 0:
+            return FreeSpinState()
+        deposits = await get_topup_deposits_kopeks(db, user_id, getattr(config, 'topup_spins_since', None))
+        won, used = await get_free_spin_counters(db, user_id)
+        return FreeSpinState(
+            enabled=True,
+            available=max(0, deposits // threshold + won - used),
+            threshold_kopeks=threshold,
+            progress_kopeks=deposits % threshold,
+        )
 
     async def check_availability(self, db: AsyncSession, user: User) -> SpinAvailability:
         """Проверить доступность спина для пользователя."""
@@ -98,16 +137,21 @@ class FortuneWheelService:
                 reason='wheel_disabled',
             )
 
-        # Проверяем лимит спинов
+        free = await self.get_free_spin_state(db, user.id, config)
+        can_pay_free = free.available > 0
+
+        # Проверяем лимит спинов (бесплатные спины за пополнения он не режет)
         spins_today = await get_user_spins_today(db, user.id)
         spins_remaining = config.daily_spin_limit - spins_today if config.daily_spin_limit > 0 else 999
 
-        if config.daily_spin_limit > 0 and spins_today >= config.daily_spin_limit:
+        if config.daily_spin_limit > 0 and spins_today >= config.daily_spin_limit and not can_pay_free:
             return SpinAvailability(
                 can_spin=False,
                 reason='daily_limit_reached',
                 spins_remaining_today=0,
+                free_spins=free,
             )
+        daily_limit_reached = config.daily_spin_limit > 0 and spins_today >= config.daily_spin_limit
 
         # Проверяем доступные способы оплаты
         can_pay_stars = False
@@ -116,7 +160,7 @@ class FortuneWheelService:
         required_balance_kopeks = 0
 
         # Проверяем оплату Stars (конвертируется в рубли из баланса)
-        if config.spin_cost_stars_enabled and config.spin_cost_stars > 0:
+        if config.spin_cost_stars_enabled and config.spin_cost_stars > 0 and not daily_limit_reached:
             stars_rate = Decimal(str(settings.get_stars_rate()))
             rubles = Decimal(config.spin_cost_stars) * stars_rate
             required_balance_kopeks = int(rubles * 100)
@@ -125,7 +169,7 @@ class FortuneWheelService:
                 can_pay_stars = True
 
         eligible_subs: list[EligibleSubscription] = []
-        if config.spin_cost_days_enabled:
+        if config.spin_cost_days_enabled and not daily_limit_reached:
             if settings.is_multi_tariff_enabled():
                 from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
@@ -153,10 +197,12 @@ class FortuneWheelService:
                 # For backward compat: use best subscription's days
                 user_subscription_days = max(s.days_left for s in eligible_subs)
 
-        if not can_pay_stars and not can_pay_days:
+        if not can_pay_stars and not can_pay_days and not can_pay_free:
             # Определяем причину
             reason = 'no_payment_method_available'
-            if config.spin_cost_stars_enabled and user.balance_kopeks < required_balance_kopeks:
+            if free.enabled:
+                reason = 'no_free_spins'
+            elif config.spin_cost_stars_enabled and user.balance_kopeks < required_balance_kopeks:
                 reason = 'insufficient_balance'
 
             return SpinAvailability(
@@ -170,6 +216,7 @@ class FortuneWheelService:
                 user_balance_kopeks=user.balance_kopeks,
                 required_balance_kopeks=required_balance_kopeks,
                 eligible_subscriptions=eligible_subs or None,
+                free_spins=free,
             )
 
         # Проверяем наличие призов
@@ -178,6 +225,7 @@ class FortuneWheelService:
             return SpinAvailability(
                 can_spin=False,
                 reason='no_prizes_configured',
+                free_spins=free,
             )
 
         return SpinAvailability(
@@ -190,6 +238,8 @@ class FortuneWheelService:
             user_balance_kopeks=user.balance_kopeks,
             required_balance_kopeks=required_balance_kopeks,
             eligible_subscriptions=eligible_subs or None,
+            can_pay_free=can_pay_free,
+            free_spins=free,
         )
 
     def calculate_prize_probabilities(
@@ -389,6 +439,7 @@ class FortuneWheelService:
         if not spent_days and prize_type not in (
             WheelPrizeType.SUBSCRIPTION_DAYS.value,
             WheelPrizeType.TRAFFIC_GB.value,
+            WheelPrizeType.DEVICE_SLOT.value,
         ):
             return
         user_id = user.id
@@ -409,7 +460,10 @@ class FortuneWheelService:
                 daily = current.tariff and getattr(current.tariff, 'is_daily', False)
                 days_changed = prize_type == WheelPrizeType.SUBSCRIPTION_DAYS.value and not daily
                 traffic_changed = prize_type == WheelPrizeType.TRAFFIC_GB.value and current.traffic_limit_gb > 0
-                if spent_days or days_changed or traffic_changed:
+                devices_changed = prize_type == WheelPrizeType.DEVICE_SLOT.value and bool(
+                    getattr(current, 'wheel_bonus_devices', 0)
+                )
+                if spent_days or days_changed or traffic_changed or devices_changed:
                     result = await SubscriptionService().update_remnawave_user(sync_db, current)
                     if result is None:
                         logger.warning('Wheel subscription panel sync did not complete', user_id=user_id)
@@ -423,15 +477,34 @@ class FortuneWheelService:
         prize: WheelPrize,
         config: WheelConfig,
         subscription: Subscription | None = None,
+        outcome: dict[str, Any] | None = None,
     ) -> str | None:
         """
         Применить приз к пользователю.
         Возвращает промокод (если приз - промокод), иначе None.
+        ``outcome`` (если передан) получает подробности: например, приз отдан деньгами на баланс.
         """
         prize_type = prize.prize_type
+        outcome = outcome if outcome is not None else {}
 
         if prize_type == WheelPrizeType.NOTHING.value:
             logger.info('🎰 Пустой приз для user_id', user_id=user.id)
+            return None
+
+        if prize_type == WheelPrizeType.EXTRA_SPIN.value:
+            # Сам спин с этим призом и есть начисление: get_free_spin_counters суммирует prize_value.
+            logger.info('🔄 Выигран ещё спин', user_id=user.id, spins=prize.prize_value)
+            return None
+
+        if prize_type == WheelPrizeType.DISCOUNT.value:
+            await self._apply_discount_prize(user, prize, config, outcome)
+            return None
+
+        if prize_type == WheelPrizeType.DEVICE_SLOT.value:
+            if not subscription and not settings.is_multi_tariff_enabled():
+                subscription = await get_subscription_by_user_id(db, user.id)
+            if not self._grant_bonus_devices(subscription, prize.prize_value, outcome):
+                await self._prize_to_balance(db, user, prize, outcome, 'устройство')
             return None
 
         if prize_type == WheelPrizeType.BALANCE_BONUS.value:
@@ -462,6 +535,7 @@ class FortuneWheelService:
                         create_transaction=True,
                         commit=False,
                     )
+                    outcome['balance_kopeks'] = prize.prize_value_kopeks
                     logger.info(
                         'Мульти-тариф: дни конвертированы в баланс (подписка не указана)',
                         prize_value=prize.prize_value,
@@ -491,6 +565,7 @@ class FortuneWheelService:
                             create_transaction=True,
                             commit=False,
                         )
+                        outcome['balance_kopeks'] = balance_bonus
                         logger.info(
                             '💰 Суточный тариф: дней конвертированы в ₽ для user_id',
                             prize_value=prize.prize_value,
@@ -507,6 +582,7 @@ class FortuneWheelService:
                             create_transaction=True,
                             commit=False,
                         )
+                        outcome['balance_kopeks'] = prize.prize_value_kopeks
                         logger.info('💰 Дни конвертированы в баланс для user_id', user_id=user.id)
                 else:
                     # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
@@ -532,6 +608,7 @@ class FortuneWheelService:
                     create_transaction=True,
                     commit=False,
                 )
+                outcome['balance_kopeks'] = prize.prize_value_kopeks
                 logger.info('💰 Дни конвертированы в баланс для user_id', user_id=user.id)
             return None
 
@@ -548,6 +625,7 @@ class FortuneWheelService:
                         create_transaction=True,
                         commit=False,
                     )
+                    outcome['balance_kopeks'] = prize.prize_value_kopeks
                     logger.info(
                         'Мульти-тариф: трафик конвертирован в баланс (подписка не указана)',
                         prize_value=prize.prize_value,
@@ -570,6 +648,7 @@ class FortuneWheelService:
                     create_transaction=True,
                     commit=False,
                 )
+                outcome['balance_kopeks'] = prize.prize_value_kopeks
             return None
 
         if prize_type == WheelPrizeType.PROMOCODE.value:
@@ -579,6 +658,117 @@ class FortuneWheelService:
             return promocode.code
 
         return None
+
+    async def _prize_to_balance(
+        self, db: AsyncSession, user: User, prize: WheelPrize, outcome: dict[str, Any], what: str
+    ) -> None:
+        """Приз нельзя выдать натурой (нет подписки, лимит устройств) — его стоимость на баланс."""
+        amount = int(prize.prize_value_kopeks or 0)
+        if amount <= 0:
+            return
+        await add_user_balance(
+            db,
+            user,
+            amount,
+            description=f'Выигрыш в колесе призов: {what} (на баланс)',
+            create_transaction=True,
+            commit=False,
+        )
+        outcome['balance_kopeks'] = amount
+
+    async def _apply_discount_prize(
+        self, user: User, prize: WheelPrize, config: WheelConfig, outcome: dict[str, Any]
+    ) -> None:
+        """Персональная скидка на следующую покупку — та же, что дают промокод и скидочные волны.
+
+        Уже есть скидка больше — оставляем её (и продлеваем срок, если наш дальше).
+        """
+        percent = max(1, min(100, int(prize.prize_value or 0)))
+        now = datetime.now(UTC)
+        until = now + timedelta(days=max(1, int(config.promo_validity_days or 7)))
+        current = int(getattr(user, 'promo_offer_discount_percent', 0) or 0)
+        current_until = getattr(user, 'promo_offer_discount_expires_at', None)
+        if current_until is not None and current_until.tzinfo is None:
+            current_until = current_until.replace(tzinfo=UTC)
+        current_active = current > 0 and (current_until is None or current_until > now)
+        if current_active and current >= percent:
+            if current_until is not None and current_until < until:
+                user.promo_offer_discount_expires_at = until
+            outcome['discount_percent'] = current
+            outcome['discount_until'] = user.promo_offer_discount_expires_at
+            return
+        user.promo_offer_discount_percent = percent
+        user.promo_offer_discount_source = 'wheel'
+        user.promo_offer_discount_expires_at = until
+        outcome['discount_percent'] = percent
+        outcome['discount_until'] = until
+        logger.info('🏷️ Скидка из колеса', user_id=user.id, percent=percent)
+
+    def _grant_bonus_devices(self, subscription: Subscription | None, devices: int, outcome: dict[str, Any]) -> bool:
+        """+N устройств на WHEEL_DEVICE_BONUS_DAYS дней поверх оплаченного лимита.
+
+        В device_limit не пишется: продление и докупки считают цену по оплаченному лимиту, а в
+        панель уходит лимит вместе с бонусом (resolve_hwid_device_limit). False — выдать нельзя.
+        """
+        from app.utils.subscription_utils import active_wheel_bonus_devices
+
+        devices = max(1, int(devices or 1))
+        if subscription is None or not subscription.is_active:
+            return False
+        limit = subscription.device_limit or 0
+        if limit <= 0:
+            return False  # безлимит устройств — добавлять нечего
+        if getattr(subscription, 'days_left', 0) < WHEEL_DEVICE_BONUS_MIN_DAYS:
+            return False
+        current_bonus = active_wheel_bonus_devices(subscription)
+        tariff_max = subscription.tariff.max_device_limit if subscription.tariff else None
+        caps = [c for c in (tariff_max, settings.MAX_DEVICES_LIMIT) if c and c > 0]
+        if caps and limit + current_bonus + devices > min(caps):
+            return False
+        now = datetime.now(UTC)
+        subscription.wheel_bonus_devices = current_bonus + devices
+        subscription.wheel_bonus_devices_until = now + timedelta(days=WHEEL_DEVICE_BONUS_DAYS)
+        subscription.updated_at = now
+        outcome['devices'] = devices
+        outcome['devices_until'] = subscription.wheel_bonus_devices_until
+        logger.info('📱 Устройство из колеса', subscription_id=subscription.id, devices=devices)
+        return True
+
+    async def expire_bonus_devices(self) -> int:
+        """Снимает выигранные устройства с истёкшим сроком и обновляет лимит в панели."""
+        from sqlalchemy import select
+
+        from app.database.database import AsyncSessionLocal
+
+        now = datetime.now(UTC)
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Subscription).where(
+                    Subscription.wheel_bonus_devices > 0,
+                    Subscription.wheel_bonus_devices_until.is_not(None),
+                    Subscription.wheel_bonus_devices_until <= now,
+                )
+            )
+            expired = list(result.scalars().all())
+            for subscription in expired:
+                subscription.wheel_bonus_devices = 0
+                subscription.wheel_bonus_devices_until = None
+            if not expired:
+                return 0
+            await db.commit()
+            service = SubscriptionService()
+            for subscription in expired:
+                try:
+                    if subscription.is_active:
+                        await service.update_remnawave_user(db, subscription)
+                except Exception as error:
+                    logger.warning(
+                        'Не удалось обновить лимит устройств после бонуса колеса',
+                        subscription_id=subscription.id,
+                        error=str(error),
+                    )
+            logger.info('📱 Сняты устройства колеса', count=len(expired))
+            return len(expired)
 
     async def _generate_prize_promocode(
         self, db: AsyncSession, user: User, prize: WheelPrize, config: WheelConfig
@@ -655,7 +845,8 @@ class FortuneWheelService:
             from app.database.crud.user import lock_user_for_update
 
             user = await lock_user_for_update(db, user)
-            if config.daily_spin_limit > 0:
+            is_free_spin = payment_type == WheelSpinPaymentType.TOPUP_CREDIT.value
+            if config.daily_spin_limit > 0 and not is_free_spin:
                 spins_today = await get_user_spins_today(db, user.id)
                 if spins_today >= config.daily_spin_limit:
                     return SpinResult(
@@ -679,6 +870,14 @@ class FortuneWheelService:
             elif not settings.is_multi_tariff_enabled():
                 # Single-tariff: auto-resolve
                 target_subscription = await get_subscription_by_user_id(db, user.id)
+            elif is_free_spin:
+                # Бесплатный спин не спрашивает подписку: приз идёт в самую длинную действующую.
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active = [s for s in await get_active_subscriptions_by_user_id(db, user.id) if s.is_active]
+                non_daily = [s for s in active if not (s.tariff and getattr(s.tariff, 'is_daily', False))]
+                pool = non_daily or active
+                target_subscription = max(pool, key=lambda s: s.days_left) if pool else None
 
             # Multi-tariff guard: subscription_id is required for days payment
             if (
@@ -711,6 +910,17 @@ class FortuneWheelService:
                     )
                 payment_amount = config.spin_cost_days
                 payment_value_kopeks = await self._process_days_payment(db, user, config, target_subscription)
+            elif is_free_spin:
+                # Перепроверка под блокировкой пользователя: два параллельных запроса не потратят один спин дважды.
+                free = await self.get_free_spin_state(db, user.id, config)
+                if free.available <= 0:
+                    return SpinResult(
+                        success=False,
+                        error='no_free_spins',
+                        message=self._get_error_message('no_free_spins'),
+                    )
+                payment_amount = 1
+                payment_value_kopeks = int(config.topup_spin_value_kopeks or 0)
             else:
                 return SpinResult(
                     success=False,
@@ -730,7 +940,10 @@ class FortuneWheelService:
             rotation = self._calculate_rotation(prizes, selected_prize)
 
             # 5. Применяем приз
-            generated_promocode = await self._apply_prize(db, user, selected_prize, config, target_subscription)
+            outcome: dict[str, Any] = {}
+            generated_promocode = await self._apply_prize(
+                db, user, selected_prize, config, target_subscription, outcome
+            )
             promocode_id = None
             if generated_promocode:
                 # Получаем ID промокода
@@ -768,7 +981,7 @@ class FortuneWheelService:
             )
 
             # 7. Формируем результат
-            message = self._get_prize_message(selected_prize, generated_promocode)
+            message = self._get_prize_message(selected_prize, generated_promocode, outcome)
 
             return SpinResult(
                 success=True,
@@ -807,12 +1020,37 @@ class FortuneWheelService:
             'no_payment_method_available': 'Нет доступных способов оплаты',
             'no_prizes_configured': 'Призы еще не настроены',
             'insufficient_balance': 'Недостаточно средств на балансе. Пополните баланс для оплаты спина.',
+            'no_free_spins': 'Бесплатных спинов пока нет — они начисляются за пополнения баланса.',
         }
         return messages.get(reason, 'Произошла ошибка')
 
-    def _get_prize_message(self, prize: WheelPrize, promocode: str | None) -> str:
+    def _get_prize_message(
+        self, prize: WheelPrize, promocode: str | None, outcome: dict[str, Any] | None = None
+    ) -> str:
         """Сформировать сообщение о выигрыше."""
+        from app.utils.timezone import format_local_datetime
+
         prize_type = prize.prize_type
+        outcome = outcome or {}
+
+        if outcome.get('balance_kopeks'):
+            return (
+                f'Зачислили {settings.format_price(outcome["balance_kopeks"])} на баланс — так приз пригодится больше.'
+            )
+
+        if prize_type == WheelPrizeType.EXTRA_SPIN.value:
+            return 'Ещё один бесплатный спин — крутите!'
+
+        if prize_type == WheelPrizeType.DISCOUNT.value:
+            percent = outcome.get('discount_percent') or prize.prize_value
+            until = outcome.get('discount_until')
+            until_text = f' до {format_local_datetime(until, "%d.%m")}' if until else ''
+            return f'Скидка {percent}% на следующую покупку или продление{until_text} — применится сама.'
+
+        if prize_type == WheelPrizeType.DEVICE_SLOT.value:
+            until = outcome.get('devices_until')
+            until_text = f' до {format_local_datetime(until, "%d.%m")}' if until else ''
+            return f'+{prize.prize_value} устройство{until_text} — можно подключать. В цену продления не входит.'
 
         if prize_type == WheelPrizeType.NOTHING.value:
             return 'К сожалению, в этот раз не повезло. Попробуйте еще!'

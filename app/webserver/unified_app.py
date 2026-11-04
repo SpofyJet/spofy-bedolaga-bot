@@ -182,6 +182,11 @@ def create_unified_app(
 
         register_support_ticket_event_bridge()
 
+    # «+1 спин в колесе призов» после пополнения (слушатель payment.completed).
+    from app.services.wheel_topup_notifier import register_wheel_topup_notifier
+
+    register_wheel_topup_notifier(bot)
+
     payments_router = payments.create_payment_router(bot, payment_service)
     if payments_router:
         app.include_router(payments_router)

@@ -2479,5 +2479,8 @@
   "AUTOPAY_WILL_RENEW": "🔔 <b>We'll renew your subscription{tariff_label} automatically on {end_date}</b>\n\nNothing to do.",
   "TRIAL_ACTIVATED_UNTIL": "📅 Until {end_date}",
   "REFERRAL_WELCOME_INVITED": "🎉 <b>{name} invited you</b>",
-  "REFERRAL_WELCOME_FRIEND_DAYS": "🎁 Connect the VPN during your trial and you both get +{days} days."
+  "REFERRAL_WELCOME_FRIEND_DAYS": "🎁 Connect the VPN during your trial and you both get +{days} days.",
+  "WHEEL_TOPUP_SPIN_EARNED": "🎡 <b>+{earned} spin on the prize wheel</b> — for your top-up.",
+  "WHEEL_TOPUP_SPIN_PRIZES": "Win extra days, a discount, balance bonus or one more device. Spins: {available}.",
+  "WHEEL_TOPUP_SPIN_BUTTON": "🎡 Spin the wheel"
 }

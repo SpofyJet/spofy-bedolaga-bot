@@ -2479,5 +2479,8 @@
   "AUTOPAY_WILL_RENEW": "🔔 <b>اشتراک{tariff_label} در {end_date} خودکار تمدید می‌شود</b>\n\nکاری لازم نیست.",
   "TRIAL_ACTIVATED_UNTIL": "📅 تا {end_date}",
   "REFERRAL_WELCOME_INVITED": "🎉 <b>{name} شما را دعوت کرد</b>",
-  "REFERRAL_WELCOME_FRIEND_DAYS": "🎁 در دوره آزمایشی VPN را وصل کنید تا هر دو +{days} روز بگیرید."
+  "REFERRAL_WELCOME_FRIEND_DAYS": "🎁 در دوره آزمایشی VPN را وصل کنید تا هر دو +{days} روز بگیرید.",
+  "WHEEL_TOPUP_SPIN_EARNED": "🎡 <b>+{earned} چرخش در گردونه جایزه</b> — برای شارژ حساب.",
+  "WHEEL_TOPUP_SPIN_PRIZES": "روز اضافه، تخفیف، اعتبار یا یک دستگاه بیشتر ببرید. چرخش‌ها: {available}.",
+  "WHEEL_TOPUP_SPIN_BUTTON": "🎡 چرخاندن گردونه"
 }
