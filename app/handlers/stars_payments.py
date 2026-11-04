@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
 from app.external.telegram_stars import TelegramStarsService
+from app.keyboards.inline import get_payment_error_keyboard
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import Texts, get_texts
 from app.services.payment_service import PaymentService
@@ -227,6 +228,7 @@ async def _handle_wheel_spin_payment(
         logger.error('Ошибка обработки wheel spin payment', error=e, exc_info=True)
         await message.answer(
             '❌ Произошла ошибка при обработке спина. Обратитесь в поддержку.',
+            reply_markup=get_payment_error_keyboard(user.language, back_callback='back_to_menu'),
         )
         return False
 
@@ -437,7 +439,10 @@ async def _handle_guest_purchase_payment(
             )
         else:
             logger.error('try_fulfill_guest_purchase returned None for Stars gift', payload=payload)
-            await message.answer('❌ Ошибка обработки платежа. Обратитесь в поддержку.')
+            await message.answer(
+                '❌ Ошибка обработки платежа. Обратитесь в поддержку.',
+                reply_markup=get_payment_error_keyboard(user.language, back_callback='back_to_menu'),
+            )
 
     except Exception as e:
         logger.error('Error handling guest purchase Stars payment', error=e, exc_info=True)
@@ -650,7 +655,8 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
                     'STARS_PAYMENT_ENROLLMENT_ERROR',
                     '❌ Произошла ошибка при зачислении средств. '
                     'Обратитесь в поддержку, платеж будет проверен вручную.',
-                )
+                ),
+                reply_markup=get_payment_error_keyboard(texts.language, back_callback='menu_balance'),
             )
 
     except Exception as e:
@@ -659,7 +665,8 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
             texts.t(
                 'STARS_PAYMENT_PROCESSING_ERROR',
                 '❌ Техническая ошибка при обработке платежа. Обратитесь в поддержку для решения проблемы.',
-            )
+            ),
+            reply_markup=get_payment_error_keyboard(texts.language, back_callback='menu_balance'),
         )
 
 

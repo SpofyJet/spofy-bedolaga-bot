@@ -49,9 +49,14 @@ def fallback_text(language: str, amount_kopeks: int) -> str:
 async def answer_creation_failed(
     message, language: str, amount_kopeks: int, failed_method_prefix: str, default_text: str, exact: bool = False
 ) -> None:
-    """Ответ на сбой создания платежа: другие способы на ту же сумму или прежний текст ошибки."""
+    """Ответ на сбой создания платежа: другие способы на ту же сумму или прежний текст ошибки.
+
+    Под текстом ошибки — «Назад» к способам пополнения и «Поддержка»: экран не тупик.
+    """
+    from app.keyboards.inline import get_payment_error_keyboard
+
     keyboard = fallback_methods_keyboard(amount_kopeks, language, failed_method_prefix, exact)
     if keyboard is not None:
         await message.answer(fallback_text(language, amount_kopeks), reply_markup=keyboard)
     else:
-        await message.answer(default_text)
+        await message.answer(default_text, reply_markup=get_payment_error_keyboard(language))

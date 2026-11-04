@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
-from app.keyboards.inline import get_back_keyboard
+from app.keyboards.inline import get_back_keyboard, get_payment_error_keyboard
 from app.keyboards.topup_amounts import get_topup_amount_keyboard
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
@@ -214,7 +214,8 @@ async def _create_xrocket_invoice(
             await message.answer(
                 '❌ Не удалось создать платёж.\n\n'
                 'Возможно, сумма слишком мала для выбранной криптовалюты. '
-                'Попробуйте увеличить сумму, выбрать другой актив или обратиться в поддержку.'
+                'Попробуйте увеличить сумму, выбрать другой актив или обратиться в поддержку.',
+                reply_markup=get_payment_error_keyboard(db_user.language),
             )
             await state.clear()
             return
@@ -222,7 +223,10 @@ async def _create_xrocket_invoice(
         payment_url = payment_result.get('pay_url')
 
         if not payment_url:
-            await message.answer('❌ Ошибка получения ссылки для оплаты. Обратитесь в поддержку.')
+            await message.answer(
+                '❌ Ошибка получения ссылки для оплаты. Обратитесь в поддержку.',
+                reply_markup=get_payment_error_keyboard(db_user.language),
+            )
             await state.clear()
             return
 

@@ -67,6 +67,28 @@ async def test_answer_creation_failed_falls_back_to_old_text(monkeypatch):
     from unittest.mock import AsyncMock
 
     monkeypatch.setattr('app.keyboards.inline.get_payment_methods_keyboard', lambda amount, lang: _keyboard('xrocket'))
+    monkeypatch.setattr(
+        'app.services.support_settings_service.SupportSettingsService.is_support_menu_enabled',
+        classmethod(lambda cls: True),
+    )
     message = AsyncMock()
     await payment_fallback.answer_creation_failed(message, 'ru', 31500, 'xrocket', 'прежняя ошибка')
-    message.answer.assert_awaited_once_with('прежняя ошибка')
+    message.answer.assert_awaited_once()
+    args, kwargs = message.answer.await_args
+    assert args == ('прежняя ошибка',)
+    # Не тупик: «Назад» к способам пополнения и «Поддержка».
+    assert [b.callback_data for row in kwargs['reply_markup'].inline_keyboard for b in row] == [
+        'balance_topup',
+        'menu_support',
+    ]
+
+
+def test_payment_error_keyboard_hides_support_when_disabled(monkeypatch):
+    from app.keyboards.inline import get_payment_error_keyboard
+
+    monkeypatch.setattr(
+        'app.services.support_settings_service.SupportSettingsService.is_support_menu_enabled',
+        classmethod(lambda cls: False),
+    )
+    markup = get_payment_error_keyboard('ru', back_callback='menu_balance')
+    assert [b.callback_data for row in markup.inline_keyboard for b in row] == ['menu_balance']
