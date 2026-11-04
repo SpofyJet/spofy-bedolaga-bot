@@ -21,9 +21,11 @@ APP_DIR = Path(__file__).resolve().parents[2] / 'app'
 # Переменные с пользовательским текстом, которые нельзя резать срезом.
 TEXT_VARIABLES = {'message_text', 'reply_text'}
 
+# Пользовательские хендлеры собирают альбом/разрезанный текст в пачку и
+# обрабатывают её в _create_ticket_from_batch / _add_ticket_reply_from_batch.
 HANDLERS = [
-    (APP_DIR / 'handlers' / 'tickets.py', 'handle_ticket_message_input'),
-    (APP_DIR / 'handlers' / 'tickets.py', 'handle_ticket_reply'),
+    (APP_DIR / 'handlers' / 'tickets.py', '_create_ticket_from_batch'),
+    (APP_DIR / 'handlers' / 'tickets.py', '_add_ticket_reply_from_batch'),
     (APP_DIR / 'handlers' / 'admin' / 'tickets.py', 'handle_admin_ticket_reply'),
 ]
 

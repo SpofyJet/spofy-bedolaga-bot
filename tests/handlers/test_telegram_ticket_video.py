@@ -30,9 +30,7 @@ from tests.fixtures.sqlite_memory import memory_session
 )
 async def test_ticket_handler_preserves_media(monkeypatch, entry, kind, caption):
     monkeypatch.setattr(Settings, 'is_admin', lambda self, user_id: True)
-    monkeypatch.setattr(tickets.RateLimitCache, 'is_rate_limited', AsyncMock(return_value=False))
-    monkeypatch.setattr(tickets.cache, 'get', AsyncMock(return_value=None))
-    monkeypatch.setattr(tickets.cache, 'set', AsyncMock())
+    monkeypatch.setattr(admin_tickets.RateLimitCache, 'is_rate_limited', AsyncMock(return_value=False))
     monkeypatch.setattr(tickets, '_try_delete_message_later', AsyncMock())
     monkeypatch.setattr(tickets, 'notify_admins_about_new_ticket', AsyncMock())
     monkeypatch.setattr(tickets, 'notify_admins_about_ticket_reply', AsyncMock())

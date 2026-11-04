@@ -1,6 +1,8 @@
 import asyncio
+import contextlib
 import html
 import time
+from dataclasses import dataclass, field
 
 import structlog
 from aiogram import Bot, Dispatcher, F, types
@@ -22,7 +24,6 @@ from app.keyboards.inline import (
 )
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
-from app.utils.cache import RateLimitCache, cache, cache_key
 from app.utils.formatters import format_username_link
 from app.utils.miniapp_buttons import build_admin_ticket_cabinet_button
 from app.utils.photo_message import edit_or_answer_photo, safe_edit_or_resend
@@ -32,6 +33,7 @@ from app.utils.ticket_text import (
     TICKET_PAGE_MAX_LEN,
     build_ticket_pages,
     preview_text,
+    split_long_block,
 )
 from app.utils.timezone import format_local_datetime
 
@@ -153,69 +155,175 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
     await state.set_state(TicketStates.waiting_for_message)
 
 
+# Пачки сообщений в состояниях ввода обращения/ответа.
+#
+# Альбом из нескольких фото приходит отдельными апдейтами с общим media_group_id,
+# а длинный текст Telegram сам режет на части по ~4096 символов. Раньше всё, что
+# пришло в окне 2–6 секунд после первой части, удалялось как «лишнее», и до
+# поддержки доходило только первое фото или первый кусок текста. Теперь первая
+# часть ждёт короткую паузу, остальные складываются в ту же пачку, и обращение
+# создаётся (или ответ добавляется) один раз со всеми частями.
+TICKET_INPUT_DEBOUNCE_SECONDS = 1.0
+TICKET_INPUT_MAX_WAIT_SECONDS = 6.0
+# Первая часть разрезанного Telegram текста почти всегда длиннее этого порога;
+# короткое сообщение обрабатываем сразу, без паузы.
+TICKET_SPLIT_TEXT_MIN_LENGTH = 3000
+# Склеенный текст хранится несколькими сообщениями обращения по
+# TICKET_MESSAGE_MAX_LENGTH; общий потолок защищает от простыней.
+TICKET_INPUT_MAX_LENGTH = TICKET_MESSAGE_MAX_LENGTH * 4
+
+
+class _TicketInputBatch:
+    def __init__(self, first: types.Message):
+        now = time.monotonic()
+        self.messages: list[types.Message] = [first]
+        self.started_at = now
+        self.last_at = now
+        self._taken = 0
+
+    def add(self, message: types.Message) -> None:
+        self.messages.append(message)
+        self.last_at = time.monotonic()
+
+    def take(self) -> list[types.Message]:
+        """Части, которые ещё не обработаны, в порядке отправки."""
+        fresh = self.messages[self._taken :]
+        self._taken = len(self.messages)
+        return sorted(fresh, key=lambda m: m.message_id)
+
+
+_ticket_input_batches: dict[tuple[str, int], _TicketInputBatch] = {}
+
+
+def _may_have_more_parts(message: types.Message) -> bool:
+    if getattr(message, 'media_group_id', None):
+        return True
+    return len(message.text or '') >= TICKET_SPLIT_TEXT_MIN_LENGTH
+
+
+@contextlib.asynccontextmanager
+async def _ticket_input_batch(kind: str, user_id: int, message: types.Message):
+    """Отдаёт пачку первому сообщению и None — остальным частям той же пачки.
+
+    Части, пришедшие пока первая ещё обрабатывается, тоже попадают в пачку:
+    их забирает `batch.take()` после создания обращения.
+    """
+    key = (kind, user_id)
+    batch = _ticket_input_batches.get(key)
+    if batch is not None:
+        batch.add(message)
+        yield None
+        return
+
+    batch = _TicketInputBatch(message)
+    _ticket_input_batches[key] = batch
+    try:
+        if _may_have_more_parts(message):
+            while True:
+                deadline = min(
+                    batch.last_at + TICKET_INPUT_DEBOUNCE_SECONDS,
+                    batch.started_at + TICKET_INPUT_MAX_WAIT_SECONDS,
+                )
+                delay = deadline - time.monotonic()
+                if delay <= 0:
+                    break
+                await asyncio.sleep(delay)
+        yield batch
+    finally:
+        if _ticket_input_batches.get(key) is batch:
+            del _ticket_input_batches[key]
+
+
+@dataclass
+class _TicketInputContent:
+    text: str
+    media_items: list[dict[str, str]] = field(default_factory=list)
+    caption: str | None = None
+
+
+def _ticket_input_content(messages: list[types.Message]) -> _TicketInputContent:
+    texts: list[str] = []
+    content = _TicketInputContent(text='')
+    for item in messages:
+        part_text = (item.text or item.caption or '').strip()
+        if part_text:
+            texts.append(part_text)
+        # Сохраняем вложение отдельно от подписи, в том числе видео без текста.
+        if item.photo:
+            content.media_items.append({'type': 'photo', 'file_id': item.photo[-1].file_id})
+        elif item.video:
+            content.media_items.append({'type': 'video', 'file_id': item.video.file_id})
+        else:
+            continue
+        if content.caption is None:
+            content.caption = item.caption
+    content.text = '\n'.join(texts)
+    return content
+
+
+def _ticket_media_fields(content: _TicketInputContent) -> dict:
+    """Поля вложений для TicketMessage: первое вложение — основное, весь альбом — в media_items."""
+    if not content.media_items:
+        return {}
+    first = content.media_items[0]
+    fields = {'media_type': first['type'], 'media_file_id': first['file_id'], 'media_caption': content.caption}
+    if len(content.media_items) > 1:
+        fields['media_items'] = list(content.media_items)
+    return fields
+
+
+def _ticket_text_chunks(text: str, limit: int) -> list[str]:
+    """Режет текст на сообщения обращения по limit символов, ничего не теряя."""
+    if len(text) <= limit:
+        return [text]
+    return split_long_block(text, limit)
+
+
+async def _append_ticket_messages(db: AsyncSession, ticket_id: int, user_id: int, content: _TicketInputContent) -> bool:
+    """Добавляет части пользователя в обращение: вложения — к первому сообщению."""
+    if not content.text and not content.media_items:
+        return False
+    media_fields = _ticket_media_fields(content)
+    for chunk in _ticket_text_chunks(content.text, TICKET_MESSAGE_MAX_LENGTH):
+        await TicketMessageCRUD.add_message(db, ticket_id, user_id, chunk, is_from_admin=False, **media_fields)
+        media_fields = {}
+    return True
+
+
+def _schedule_user_message_delete(message: types.Message) -> None:
+    # Удалим сообщение пользователя через 2 секунды, чтобы не засорять чат
+    try:
+        asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
+    except Exception as exc:
+        logger.debug('Сообщение обращения не поставлено на удаление', error=str(exc))
+
+
 async def handle_ticket_message_input(message: types.Message, state: FSMContext, db_user: User, db: AsyncSession):
     # Проверяем, что пользователь в правильном состоянии
     current_state = await state.get_state()
     if current_state != TicketStates.waiting_for_message:
         return
 
-    # Защита от спама: принимаем только первое сообщение в коротком окне
-    try:
-        # Глобальный мягкий супрессор на 6 секунд после создания тикета
-        try:
-            from_cache = await cache.get(cache_key('suppress_user_input', db_user.id))
-            if from_cache:
-                asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-                return
-        except Exception:
-            pass
-        limited = await RateLimitCache.is_rate_limited(db_user.id, 'ticket_create_message', limit=1, window=2)
-        if limited:
-            # Удаляем лишние части длинного сообщения
-            try:
-                asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception as exc:
-                logger.debug('Антиспам тикетов: сообщение не поставлено на удаление', error=str(exc))
+    async with _ticket_input_batch('create', db_user.id, message) as batch:
+        if batch is None:
+            # Часть альбома или длинного текста — её заберёт первое сообщение пачки.
+            _schedule_user_message_delete(message)
             return
-    except Exception:
-        pass
-    try:
-        data_rl = await state.get_data()
-        last_ts = data_rl.get('rl_ts_create')
-        now_ts = time.time()
-        if last_ts and (now_ts - float(last_ts)) < 2:
-            try:
-                asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception as exc:
-                logger.debug('Антиспам тикетов: сообщение не поставлено на удаление', error=str(exc))
-            return
-        await state.update_data(rl_ts_create=now_ts)
-    except Exception:
-        pass
+        await _create_ticket_from_batch(batch, state, db_user, db)
 
+
+async def _create_ticket_from_batch(batch: _TicketInputBatch, state: FSMContext, db_user: User, db: AsyncSession):
     """Обработать ввод сообщения тикета и создать тикет"""
-    # Сохраняем вложение отдельно от подписи, в том числе видео без текста.
-    message_text = (message.text or message.caption or '').strip()
-    media_type = None
-    media_file_id = None
-    media_caption = None
-    if message.photo:
-        media_type = 'photo'
-        media_file_id = message.photo[-1].file_id
-        media_caption = message.caption
-    elif message.video:
-        media_type = 'video'
-        media_file_id = message.video.file_id
-        media_caption = message.caption
-    # Глобальный блок
-    from app.database.crud.ticket import TicketCRUD
+    messages = batch.take()
+    message = messages[0]
+    texts = get_texts(db_user.language)
+    data_prompt = await state.get_data()
+    prompt_chat_id = data_prompt.get('prompt_chat_id')
+    prompt_message_id = data_prompt.get('prompt_message_id')
 
+    # Глобальный блок
     blocked_until = await TicketCRUD.is_user_globally_blocked(db, db_user.id)
     if blocked_until:
-        texts = get_texts(db_user.language)
-        data_prompt = await state.get_data()
-        prompt_chat_id = data_prompt.get('prompt_chat_id')
-        prompt_message_id = data_prompt.get('prompt_message_id')
         text_msg = (
             texts.t('USER_BLOCKED_FOREVER', 'Вы заблокированы для обращений в поддержку.')
             if blocked_until.year > 9999 - 1
@@ -233,36 +341,31 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         await state.clear()
         return
 
-    # Удалим сообщение пользователя через 2 секунды
-    asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
+    for item in messages:
+        _schedule_user_message_delete(item)
+
+    content = _ticket_input_content(messages)
+    message_text = content.text
     # Вложение может описывать проблему без текстовой подписи.
-    if len(message_text) < 10 and not media_file_id:
-        texts = get_texts(db_user.language)
-        data_prompt = await state.get_data()
-        prompt_chat_id = data_prompt.get('prompt_chat_id')
-        prompt_message_id = data_prompt.get('prompt_message_id')
+    if len(message_text) < 10 and not content.media_items:
         err_text = texts.t(
             'TICKET_MESSAGE_TOO_SHORT', 'Сообщение слишком короткое. Опишите проблему подробнее или отправьте фото:'
         )
         await _edit_or_send(message, prompt_chat_id, prompt_message_id, err_text, db_user.language)
         return
 
-    # Раньше текст молча резался до 500 символов — пользователь и поддержка
-    # теряли остаток. Теперь просим сократить, ничего не отбрасывая втихую.
-    if len(message_text) > TICKET_MESSAGE_MAX_LENGTH:
-        texts = get_texts(db_user.language)
-        data_prompt = await state.get_data()
-        prompt_chat_id = data_prompt.get('prompt_chat_id')
-        prompt_message_id = data_prompt.get('prompt_message_id')
+    # Длинный текст (Telegram режет его на части) сохраняем целиком несколькими
+    # сообщениями обращения; ничего не отбрасываем втихую.
+    if len(message_text) > TICKET_INPUT_MAX_LENGTH:
         err_text = texts.t(
             'TICKET_MESSAGE_TOO_LONG',
             'Сообщение слишком длинное. Максимум {limit} символов. Сократите текст и отправьте еще раз:',
-        ).format(limit=TICKET_MESSAGE_MAX_LENGTH)
+        ).format(limit=TICKET_INPUT_MAX_LENGTH)
         await _edit_or_send(message, prompt_chat_id, prompt_message_id, err_text, db_user.language)
         return
+    chunks = _ticket_text_chunks(message_text, TICKET_MESSAGE_MAX_LENGTH)
 
-    data = await state.get_data()
-    title = data.get('title')
+    title = data_prompt.get('title')
     priority = 'normal'
 
     try:
@@ -270,19 +373,19 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
             db,
             db_user.id,
             title,
-            message_text,
+            chunks[0],
             priority,
-            media_type=media_type,
-            media_file_id=media_file_id,
-            media_caption=media_caption,
+            **_ticket_media_fields(content),
         )
-        # Включим временное подавление лишних сообщений пользователя (на случай разбиения длинного текста)
-        try:
-            await cache.set(cache_key('suppress_user_input', db_user.id), True, 6)
-        except Exception:
-            pass
+        media_type = content.media_items[0]['type'] if content.media_items else None
+        media_file_id = content.media_items[0]['file_id'] if content.media_items else None
+        for chunk in chunks[1:]:
+            await TicketMessageCRUD.add_message(db, ticket.id, db_user.id, chunk, is_from_admin=False)
+        # Части, пришедшие пока обращение создавалось, — туда же
+        await _append_ticket_messages(db, ticket.id, db_user.id, _ticket_input_content(batch.take()))
+        await state.clear()
+        await _append_ticket_messages(db, ticket.id, db_user.id, _ticket_input_content(batch.take()))
 
-        texts = get_texts(db_user.language)
         # Ограничим длину подтверждения чтобы не упереться в лимиты
         safe_title = html.escape(title if len(title) <= 200 else (title[:197] + '...'))
         creation_text = (
@@ -294,9 +397,6 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
             + (f'📎 Вложение: {"видео" if media_type == "video" else "фото"}\n' if media_file_id else '')
         )
 
-        data_prompt = await state.get_data()
-        prompt_chat_id = data_prompt.get('prompt_chat_id')
-        prompt_message_id = data_prompt.get('prompt_message_id')
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -324,8 +424,6 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
                 await message.answer(creation_text, reply_markup=keyboard, parse_mode='HTML')
         else:
             await message.answer(creation_text, reply_markup=keyboard, parse_mode='HTML')
-
-        await state.clear()
 
         # Уведомить админов
         await notify_admins_about_new_ticket(ticket, db)
@@ -720,64 +818,36 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
     if current_state != TicketStates.waiting_for_reply:
         return
 
-    # Защита от спама: по тикету принимаем только первое сообщение в коротком окне
-    try:
-        data_rl = await state.get_data()
-        rl_ticket_id = data_rl.get('ticket_id') or 'reply'
-        limited = await RateLimitCache.is_rate_limited(db_user.id, f'ticket_reply_{rl_ticket_id}', limit=1, window=2)
-        if limited:
-            try:
-                asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception as exc:
-                logger.debug('Антиспам тикетов: сообщение не поставлено на удаление', error=str(exc))
+    async with _ticket_input_batch('reply', db_user.id, message) as batch:
+        if batch is None:
+            # Часть альбома или длинного текста — её заберёт первое сообщение пачки.
             return
-    except Exception:
-        pass
-    try:
-        data_rl = await state.get_data()
-        last_ts = data_rl.get('rl_ts_reply')
-        now_ts = time.time()
-        if last_ts and (now_ts - float(last_ts)) < 2:
-            try:
-                asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-            except Exception as exc:
-                logger.debug('Антиспам тикетов: сообщение не поставлено на удаление', error=str(exc))
-            return
-        await state.update_data(rl_ts_reply=now_ts)
-    except Exception as exc:
-        # Антиспам — вспомогательный механизм: без состояния ответ всё равно обрабатывается.
-        logger.debug('Антиспам ответа на тикет: состояние не обновлено', error=str(exc))
+        await _add_ticket_reply_from_batch(batch, state, db_user, db)
 
+
+async def _add_ticket_reply_from_batch(batch: _TicketInputBatch, state: FSMContext, db_user: User, db: AsyncSession):
     """Обработать ответ на тикет"""
-    # Фото и видео для ответа пользователя.
-    reply_text = (message.text or message.caption or '').strip()
-    media_type = None
-    media_file_id = None
-    media_caption = None
-    if message.photo:
-        media_type = 'photo'
-        media_file_id = message.photo[-1].file_id
-        media_caption = message.caption
-    elif message.video:
-        media_type = 'video'
-        media_file_id = message.video.file_id
-        media_caption = message.caption
+    messages = batch.take()
+    message = messages[0]
+    texts = get_texts(db_user.language)
+    # Фото и видео для ответа пользователя, все части альбома и длинного текста.
+    content = _ticket_input_content(messages)
+    reply_text = content.text
 
-    if len(reply_text) < 5 and not media_file_id:
-        texts = get_texts(db_user.language)
+    if len(reply_text) < 5 and not content.media_items:
         await message.answer(
             texts.t('TICKET_REPLY_TOO_SHORT', 'Ответ должен содержать минимум 5 символов. Попробуйте еще раз:')
         )
         return
 
     # Раньше ответ молча резался до 400 символов, и поддержка видела огрызок.
-    if len(reply_text) > TICKET_MESSAGE_MAX_LENGTH:
-        texts = get_texts(db_user.language)
+    # Длинный ответ сохраняем несколькими сообщениями по TICKET_MESSAGE_MAX_LENGTH.
+    if len(reply_text) > TICKET_INPUT_MAX_LENGTH:
         await message.answer(
             texts.t(
                 'TICKET_REPLY_TOO_LONG',
                 'Ответ слишком длинный. Максимум {limit} символов. Сократите текст и отправьте еще раз:',
-            ).format(limit=TICKET_MESSAGE_MAX_LENGTH)
+            ).format(limit=TICKET_INPUT_MAX_LENGTH)
         )
         return
 
@@ -785,7 +855,6 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
     ticket_id = data.get('ticket_id')
 
     if not ticket_id:
-        texts = get_texts(db_user.language)
         await message.answer(texts.t('TICKET_REPLY_ERROR', 'Ошибка: не найден ID тикета.'))
         await state.clear()
         return
@@ -794,12 +863,10 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         # Проверяем, что тикет принадлежит пользователю и не закрыт
         ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=False)
         if not ticket or ticket.user_id != db_user.id:
-            texts = get_texts(db_user.language)
             await message.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'))
             await state.clear()
             return
         if ticket.status == TicketStatus.CLOSED.value:
-            texts = get_texts(db_user.language)
             await message.answer(
                 texts.t('TICKET_CLOSED', '✅ Тикет закрыт.'),
                 reply_markup=types.InlineKeyboardMarkup(
@@ -818,7 +885,6 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
 
         # Блокируем добавление сообщения, если тикет закрыт или заблокирован админом
         if ticket.status == TicketStatus.CLOSED.value or ticket.is_user_reply_blocked:
-            texts = get_texts(db_user.language)
             await message.answer(
                 texts.t('TICKET_CLOSED_NO_REPLY', '❌ Тикет закрыт, ответить невозможно.'),
                 reply_markup=types.InlineKeyboardMarkup(
@@ -835,19 +901,17 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
             await state.clear()
             return
 
-        # Добавляем сообщение в тикет
-        await TicketMessageCRUD.add_message(
-            db,
-            ticket_id,
-            db_user.id,
-            reply_text,
-            is_from_admin=False,
-            media_type=media_type,
-            media_file_id=media_file_id,
-            media_caption=media_caption,
-        )
-
-        texts = get_texts(db_user.language)
+        # Добавляем сообщение в тикет (длинный текст — несколькими сообщениями)
+        media_fields = _ticket_media_fields(content)
+        for chunk in _ticket_text_chunks(reply_text, TICKET_MESSAGE_MAX_LENGTH):
+            await TicketMessageCRUD.add_message(db, ticket_id, db_user.id, chunk, is_from_admin=False, **media_fields)
+            media_fields = {}
+        # Части, пришедшие пока ответ сохранялся, — туда же
+        late = _ticket_input_content(batch.take())
+        await _append_ticket_messages(db, ticket_id, db_user.id, late)
+        await state.clear()
+        late_after_clear = _ticket_input_content(batch.take())
+        await _append_ticket_messages(db, ticket_id, db_user.id, late_after_clear)
 
         await message.answer(
             texts.t('TICKET_REPLY_SENT', '✅ Ваш ответ отправлен!'),
@@ -867,17 +931,19 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
             ),
         )
 
-        await state.clear()
-
         # Уведомить админов об ответе пользователя
         logger.info('Attempting to notify admins about ticket reply', ticket_id=ticket_id)
+        notify_text = '\n'.join(part for part in (reply_text, late.text, late_after_clear.text) if part)
         await notify_admins_about_ticket_reply(
-            ticket, reply_text, db, media_file_id=media_file_id, media_type=media_type
+            ticket,
+            notify_text,
+            db,
+            media_file_id=content.media_items[0]['file_id'] if content.media_items else None,
+            media_type=content.media_items[0]['type'] if content.media_items else None,
         )
 
     except Exception as e:
         logger.error('Error adding ticket reply', error=e)
-        texts = get_texts(db_user.language)
         await message.answer(
             texts.t('TICKET_REPLY_ERROR', '❌ Произошла ошибка при отправке ответа. Попробуйте позже.')
         )
