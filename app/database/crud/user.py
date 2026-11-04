@@ -573,6 +573,7 @@ async def add_user_balance(
     bot=None,
     payment_method: PaymentMethod | None = None,
     commit: bool = True,
+    external_id: str | None = None,
 ) -> bool:
     try:
         # Lock the user row to prevent concurrent balance race conditions
@@ -613,6 +614,7 @@ async def add_user_balance(
                 amount_kopeks=amount_kopeks,
                 description=description,
                 payment_method=payment_method,
+                external_id=external_id,
                 commit=commit,
             )
 

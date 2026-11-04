@@ -362,7 +362,9 @@ class TelegramStarsMixin:
                     subscription_id=payload_data.subscription_id,
                     user_id=user.id,
                 )
-                return False
+                return await self._credit_unapplied_simple_subscription(
+                    db, user, stars_amount, telegram_payment_charge_id, payload_data, 'подписка для оплаты не найдена'
+                )
 
             if payload_data.period_days is None:
                 start_point = pending_subscription.start_date or datetime.now(UTC)
@@ -383,15 +385,18 @@ class TelegramStarsMixin:
             logger.error(
                 'Ошибка активации pending подписки для пользователя', user_id=user.id, error=error, exc_info=True
             )
-            # Активация не удалась — откатываем незакоммиченную транзакцию (commit=False),
-            # чтобы не осталось «оплаты без подписки». Telegram повторит платёж → обработаем заново.
-            await db.rollback()
-            return False
+            # Активация не удалась. Telegram successful_payment не повторяет, а звёзды
+            # уже списаны — откатываем незакоммиченную транзакцию оплаты (commit=False)
+            # и зачисляем оплату на баланс (идемпотентно по charge_id).
+            return await self._credit_unapplied_simple_subscription(
+                db, user, stars_amount, telegram_payment_charge_id, payload_data, 'ошибка активации подписки'
+            )
 
         if not subscription:
             logger.error('Не удалось активировать pending подписку пользователя', user_id=user.id)
-            await db.rollback()
-            return False
+            return await self._credit_unapplied_simple_subscription(
+                db, user, stars_amount, telegram_payment_charge_id, payload_data, 'подписка не активировалась'
+            )
 
         # Активация подписки уже закоммичена (activate_pending_subscription делает db.commit),
         # и вместе с ней атомарно закоммичена транзакция (она создавалась с commit=False).
@@ -560,6 +565,36 @@ class TelegramStarsMixin:
         )
         return True
 
+    async def _credit_unapplied_simple_subscription(
+        self,
+        db: AsyncSession,
+        user,
+        stars_amount: int,
+        telegram_payment_charge_id: str,
+        payload_data: _SimpleSubscriptionPayload,
+        reason: str,
+    ) -> bool:
+        """Подписку по оплате Stars выдать не вышло — оплата уходит на баланс.
+
+        True — деньги на балансе (обработчик скажет об этом пользователю, найдя
+        DEPOSIT по charge_id), False — зачислить не удалось, админы оповещены.
+        """
+        user_id = user.id
+        await db.rollback()
+        user = await get_user_by_id(db, user_id)
+        if not user:
+            return False
+        credited = await credit_unapplied_stars_payment(
+            db,
+            user=user,
+            stars_amount=stars_amount,
+            telegram_payment_charge_id=telegram_payment_charge_id,
+            problem=f'Подписка за Stars не выдана ({reason})',
+            bot=getattr(self, 'bot', None),
+            details={'Подписка': f'#{payload_data.subscription_id}', 'Период': payload_data.period_days},
+        )
+        return credited is not None
+
     async def _finalize_stars_balance_topup(
         self,
         db: AsyncSession,
@@ -682,3 +717,92 @@ class TelegramStarsMixin:
             format_price=settings.format_price(amount_kopeks),
         )
         return True
+
+
+def stars_to_kopeks(stars_amount: int) -> int:
+    """Рубли за звёзды по текущему курсу — так же, как считается пополнение Stars."""
+    rubles = TelegramStarsService.calculate_rubles_from_stars(stars_amount)
+    return int((rubles * Decimal(100)).to_integral_value(rounding=ROUND_HALF_UP))
+
+
+async def credit_unapplied_stars_payment(
+    db: AsyncSession,
+    *,
+    user,
+    stars_amount: int,
+    telegram_payment_charge_id: str | None,
+    problem: str,
+    bot=None,
+    details: dict | None = None,
+) -> int | None:
+    """Оплата Stars прошла, а применить её по назначению нельзя — зачисляем на баланс.
+
+    Звёзды Telegram сам не возвращает и successful_payment не повторяет «по ошибке»,
+    поэтому без этого деньги пропадают. Зачисление — DEPOSIT с external_id =
+    telegram_payment_charge_id: повторная доставка того же платежа второй раз не
+    зачислит (проверка + уникальный индекс external_id/payment_method).
+
+    Возвращает зачисленную сумму в копейках (в том числе если её зачислили раньше)
+    или None, если зачислить не вышло — тогда админы получают оповещение.
+    """
+    from sqlalchemy import inspect as sa_inspect
+
+    from app.database.crud.user import add_user_balance
+    from app.services.payment_problem_alert import alert_payment_not_applied
+
+    # Вызывают обычно после db.rollback(): объект пользователя истёк, и ленивая
+    # загрузка атрибута в async-сессии упала бы. Берём id из identity и перечитываем.
+    state = sa_inspect(user, raiseerr=False)
+    if state is not None and state.identity:
+        user = await get_user_by_id(db, state.identity[0]) or user
+
+    charge_id = telegram_payment_charge_id or None
+    if charge_id:
+        existing = await get_transaction_by_external_id(db, charge_id, PaymentMethod.TELEGRAM_STARS)
+        if existing:
+            logger.info(
+                'Stars платёж уже зачислен на баланс — повтор пропущен',
+                telegram_payment_charge_id=charge_id,
+                user_id=user.id,
+            )
+            return abs(existing.amount_kopeks)
+
+    amount_kopeks = stars_to_kopeks(stars_amount)
+    alert_details = {'Telegram ID': getattr(user, 'telegram_id', None), 'Stars': stars_amount, **(details or {})}
+
+    credited = amount_kopeks > 0 and await add_user_balance(
+        db,
+        user,
+        amount_kopeks,
+        f'Оплата Telegram Stars зачислена на баланс: {problem} ({stars_amount} ⭐)',
+        transaction_type=TransactionType.DEPOSIT,
+        payment_method=PaymentMethod.TELEGRAM_STARS,
+        external_id=charge_id,
+    )
+    if not credited:
+        if charge_id:
+            # Параллельная доставка того же платежа успела зачислить первой.
+            existing = await get_transaction_by_external_id(db, charge_id, PaymentMethod.TELEGRAM_STARS)
+            if existing:
+                return abs(existing.amount_kopeks)
+        await alert_payment_not_applied(
+            bot,
+            provider='telegram_stars',
+            problem=f'{problem}. Зачислить на баланс не удалось — нужна ручная проверка',
+            user_id=user.id,
+            amount_kopeks=amount_kopeks,
+            reference=charge_id,
+            details=alert_details,
+        )
+        return None
+
+    await alert_payment_not_applied(
+        bot,
+        provider='telegram_stars',
+        problem=f'{problem}. Оплата зачислена на баланс пользователя',
+        user_id=user.id,
+        amount_kopeks=amount_kopeks,
+        reference=charge_id,
+        details=alert_details,
+    )
+    return amount_kopeks

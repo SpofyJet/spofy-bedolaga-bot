@@ -2864,6 +2864,18 @@ def get_support_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def get_stars_credited_to_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+    """«Мой баланс» + «Поддержка» — после того как оплату Stars не удалось применить
+    и она ушла на баланс (или ждёт ручной проверки)."""
+    texts = get_texts(language)
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [build_miniapp_or_callback_button(text=texts.MY_BALANCE_BUTTON, callback_data='menu_balance')],
+            [InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support')],
+        ]
+    )
+
+
 def get_pagination_keyboard(
     current_page: int, total_pages: int, callback_prefix: str, language: str = DEFAULT_LANGUAGE
 ) -> list[list[InlineKeyboardButton]]:
