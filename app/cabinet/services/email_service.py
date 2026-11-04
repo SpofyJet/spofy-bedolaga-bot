@@ -94,8 +94,26 @@ class EmailService:
         # <style>/<script> без закрывающего тега иначе утёк бы телом CSS/JS в текст —
         # срезаем висячий блок до конца ввода.
         text = re.sub(r'<(style|script)\b[^>]*>.*', '', text, flags=re.DOTALL | re.IGNORECASE)
+        # Скрытый прехедер — только для превью в списке писем, в тексте он дублировал бы начало.
+        text = re.sub(r'<div\b[^>]*class="preheader"[^>]*>.*?</div>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        # Кнопка в текстовой версии без ссылки бесполезна: «Продлить подписку: https://…».
+        text = re.sub(
+            r'<a\b(?=[^>]*class="button[^"]*")[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+            lambda m: f'{re.sub(r"<[^<>]+>", "", m.group(2)).strip()}: {m.group(1)}',
+            text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        # <title> и прочее из <head> в тексте не нужны.
+        text = re.sub(r'<head\b[^>]*>.*?</head\s*>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        # Строка таблицы «Тариф — С Обходами» → «Тариф: С Обходами».
+        text = re.sub(r'(<td\b[^>]*class="k"[^>]*>.*?)</td>', r'\1: </td>', text, flags=re.DOTALL | re.IGNORECASE)
+        # Блоки письма идут без переводов строк — без этого текст сливался в одну строку.
+        text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'</(p|h1|h2|h3|div|tr|table)\s*>', '\n', text, flags=re.IGNORECASE)
         text = re.sub(r'<[^<>]+>', '', text)
+        text = '\n'.join(line.strip() for line in text.splitlines())
         text = text.replace('&nbsp;', ' ')
+        text = text.replace('&zwnj;', '').replace('&#847;', '').replace('&#9679;', '•').replace('&copy;', '©')
         text = text.replace('&lt;', '<')
         text = text.replace('&gt;', '>')
         text = text.replace('&amp;', '&')
@@ -215,6 +233,12 @@ class EmailService:
         if not self.is_configured():
             logger.warning('SMTP is not configured, cannot send email')
             return False
+
+        # Стили встроенной обёртки — в style="", иначе Mail.ru/Яндекс/Outlook,
+        # режущие <style>, показали бы голый текст и кнопки-ссылки.
+        from .email_layout import inline_email_styles
+
+        body_html = inline_email_styles(body_html)
 
         sender_email = self.from_email
         if not sender_email or '@' not in sender_email:

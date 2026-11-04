@@ -180,7 +180,9 @@ class EmailNotificationTemplates:
         finally:
             self._render_context = None
 
-    def _get_base_template(self, content: str, language: str = 'ru', unsubscribe_url: str = '') -> str:
+    def _get_base_template(
+        self, content: str, language: str = 'ru', unsubscribe_url: str = '', *, preheader: str = ''
+    ) -> str:
         """Wrap content in the email layout — сохранённая в редакторе обёртка, иначе встроенная.
 
         ``unsubscribe_url`` непустой только у маркетинговых писем — у писем со
@@ -196,31 +198,643 @@ class EmailNotificationTemplates:
         return render_email_layout(
             resolve_email_layout(language),
             language,
-            {**recipient, 'content': content, 'unsubscribe_url': unsubscribe_url, 'service_name': self.service_name},
+            {
+                **recipient,
+                'content': content,
+                'unsubscribe_url': unsubscribe_url,
+                'service_name': self.service_name,
+                'preheader': preheader,
+            },
         )
 
     def _get_cabinet_button(self, language: str) -> str:
-        """Get cabinet link button HTML."""
-        if not self.cabinet_url:
-            return ''
-
-        texts = {
-            'ru': 'Открыть личный кабинет',
-            'en': 'Open Dashboard',
-            'zh': '打开控制面板',
-            'ua': 'Відкрити особистий кабінет',
-            'fa': 'باز کردن پنل کاربری',
-        }
-        text = texts.get(language, texts['en'])
-
-        return f'<p style="text-align: center;"><a href="{self.cabinet_url}" class="button">{text}</a></p>'
+        """Кнопка «Открыть личный кабинет» — для писем без более точного действия."""
+        return self._action('cabinet', language)
 
     def _link_button(self, url: str, language: str, texts: dict[str, str]) -> str:
         """Кнопка с произвольной ссылкой в том же стиле, что кнопка кабинета."""
+        return self._button(url, texts.get(language) or texts['en'])
+
+    # ============================================================================
+    # Кирпичики писем: заголовок, строки «название — значение», кнопка, примечание
+    # ============================================================================
+    #
+    # Тело письма собирается из классов обёртки (.details, .cta, .button, .note,
+    # .code), а не из inline-стилей: перед отправкой inline_email_styles()
+    # дублирует их в style="", а редактор получает чистый фрагмент (слово
+    # background во фрагменте перевело бы сохранённый шаблон в «свой дизайн»
+    # без обёртки).
+
+    # Куда ведёт кнопка письма и как она называется. Пути — реальные экраны кабинета.
+    _ACTIONS: dict[str, tuple[str, dict[str, str]]] = {
+        'renew': (
+            '/subscriptions',
+            {
+                'ru': 'Продлить подписку',
+                'en': 'Renew subscription',
+                'zh': '续订',
+                'ua': 'Продовжити підписку',
+                'fa': 'تمدید اشتراک',
+            },
+        ),
+        'buy': (
+            '/subscription/purchase',
+            {
+                'ru': 'Оформить подписку',
+                'en': 'Get a subscription',
+                'zh': '购买订阅',
+                'ua': 'Оформити підписку',
+                'fa': 'خرید اشتراک',
+            },
+        ),
+        'topup': (
+            '/balance/top-up',
+            {
+                'ru': 'Пополнить баланс',
+                'en': 'Top up balance',
+                'zh': '充值余额',
+                'ua': 'Поповнити баланс',
+                'fa': 'شارژ حساب',
+            },
+        ),
+        'connect': (
+            '/connection',
+            {'ru': 'Подключить VPN', 'en': 'Connect VPN', 'zh': '连接 VPN', 'ua': 'Підключити VPN', 'fa': 'اتصال VPN'},
+        ),
+        'subscription': (
+            '/subscriptions',
+            {
+                'ru': 'Открыть подписку',
+                'en': 'Open subscription',
+                'zh': '查看订阅',
+                'ua': 'Відкрити підписку',
+                'fa': 'مشاهده اشتراک',
+            },
+        ),
+        'balance': (
+            '/balance',
+            {
+                'ru': 'Открыть баланс',
+                'en': 'Open balance',
+                'zh': '查看余额',
+                'ua': 'Відкрити баланс',
+                'fa': 'مشاهده موجودی',
+            },
+        ),
+        'cabinet': (
+            '',
+            {
+                'ru': 'Открыть личный кабинет',
+                'en': 'Open Dashboard',
+                'zh': '打开控制面板',
+                'ua': 'Відкрити особистий кабінет',
+                'fa': 'باز کردن پنل کاربری',
+            },
+        ),
+    }
+
+    @staticmethod
+    def _ru_days(count: Any) -> str:
+        """«1 день», «3 дня», «5 дней» — в теме письма «дн.» выглядит канцелярски."""
+        try:
+            n = abs(int(count))
+        except (TypeError, ValueError):
+            return f'{count} дн.'
+        if n % 10 == 1 and n % 100 != 11:
+            word = 'день'
+        elif 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+            word = 'дня'
+        else:
+            word = 'дней'
+        return f'{n} {word}'
+
+    @staticmethod
+    def _en_days(count: Any) -> str:
+        try:
+            n = int(count)
+        except (TypeError, ValueError):
+            return f'{count} days'
+        return f'{n} day' if abs(n) == 1 else f'{n} days'
+
+    def _cabinet_link(self, path: str = '', query: str = '') -> str:
+        if not self.cabinet_url:
+            return ''
+        url = f'{self.cabinet_url.rstrip("/")}{path}'
+        return f'{url}?{query}' if query else url
+
+    def _button(self, url: str, text: str, *, secondary: bool = False) -> str:
+        """Кнопка письма. Без ссылки — ничего: пустая кнопка хуже никакой."""
         if not url:
             return ''
-        text = texts.get(language, texts['en'])
-        return f'<p style="text-align: center;"><a href="{html.escape(url, quote=True)}" class="button">{text}</a></p>'
+        css = 'button secondary' if secondary else 'button'
+        return (
+            f'<p class="cta"><a href="{html.escape(url, quote=True)}" class="{css}" target="_blank">'
+            f'{html.escape(text)}</a></p>'
+        )
+
+    def _action(self, kind: str, language: str, *, query: str = '', path: str = '', secondary: bool = False) -> str:
+        default_path, labels = self._ACTIONS[kind]
+        label = labels.get(language) or labels['en']
+        return self._button(self._cabinet_link(path or default_path, query), label, secondary=secondary)
+
+    @staticmethod
+    def _rows(rows: list[tuple[str, Any]]) -> str:
+        """Таблица «название — значение»; пустые значения пропускаются. Значения уже экранированы."""
+        cells = ''.join(
+            f'<tr><td class="k">{label}</td><td class="v">{value}</td></tr>'
+            for label, value in rows
+            if value not in (None, '')
+        )
+        if not cells:
+            return ''
+        return (
+            f'<table role="presentation" class="details" width="100%" cellpadding="0" cellspacing="0">{cells}</table>'
+        )
+
+    @staticmethod
+    def _letter(title: str, *parts: str) -> str:
+        return f'<h2>{title}</h2>' + ''.join(part for part in parts if part)
+
+    def _modern(
+        self, subject: str, content: str, language: str, *, preheader: str = '', unsubscribe_url: str = ''
+    ) -> dict[str, str]:
+        return {
+            'subject': subject,
+            'body_html': self._get_base_template(content, language, unsubscribe_url, preheader=preheader),
+        }
+
+    @staticmethod
+    def _modern_lang(language: str, legacy: tuple[str, ...] = ()) -> str | None:
+        """ru/en — новые тексты; языки из ``legacy`` — прежние; остальные — новые русские (как и раньше, через ru)."""
+        if language in legacy:
+            return None
+        return 'en' if language == 'en' else 'ru'
+
+    def _tariff_value(self, context: dict[str, Any]) -> str:
+        return html.escape(str(context.get('tariff_name') or '').strip())
+
+    def _renew_query(self, context: dict[str, Any]) -> tuple[str, str]:
+        """Путь продления: известная подписка — сразу её экран продления, иначе список подписок."""
+        sub_id = context.get('subscription_id')
+        if isinstance(sub_id, int) and sub_id > 0:
+            return f'/subscriptions/{sub_id}/renew', ''
+        return '', ''
+
+    def _auth_fallback(self, url: str, lang: str) -> str:
+        label = 'Кнопка не работает? Откройте ссылку:' if lang == 'ru' else 'Button not working? Open this link:'
+        return f'<p class="note">{label}<br><a class="link" href="{url}">{url}</a></p>'
+
+    def render_simple_letter(
+        self,
+        *,
+        language: str,
+        title: str,
+        body_html: str,
+        button_url: str = '',
+        button_text: str = '',
+        note: str = '',
+        unsubscribe_url: str = '',
+        preheader: str = '',
+    ) -> str:
+        """Готовое письмо «заголовок — текст — кнопка — примечание» в общей обёртке.
+
+        Для писем, которые собираются вне реестра типов (напоминания об оплате):
+        тот же вид и те же кнопки, что у остальных. ``body_html`` уже экранирован.
+        """
+        content = self._letter(
+            html.escape(title),
+            f'<p class="lead">{body_html}</p>',
+            self._button(button_url, button_text),
+            f'<p class="note">{html.escape(note)}</p>' if note else '',
+        )
+        return self._get_base_template(content, language, unsubscribe_url, preheader=preheader)
+
+    # ============================================================================
+    # Новые тексты (ru/en)
+    # ============================================================================
+
+    def _modern_email_verification(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        username = html.escape(str(context.get('username') or ''))
+        raw_url = str(context.get('verification_url') or '#')
+        url = html.escape(raw_url, quote=True)
+        hours = html.escape(str(context.get('expire_hours', 24)))
+        if lang == 'ru':
+            content = self._letter(
+                'Подтвердите email',
+                f'<p>Здравствуйте, {username}!</p>' if username else '',
+                '<p class="lead">Остался один шаг: нажмите кнопку, и адрес будет подтверждён.</p>',
+                self._button(raw_url, 'Подтвердить email'),
+                self._auth_fallback(url, lang),
+                f'<p class="note">Ссылка действует {hours} ч. Если вы не регистрировались, просто проигнорируйте письмо.</p>',
+            )
+            return self._modern(
+                'Подтвердите email', content, 'ru', preheader=f'Нажмите кнопку в письме — ссылка действует {hours} ч.'
+            )
+        content = self._letter(
+            'Confirm your email',
+            f'<p>Hi {username},</p>' if username else '',
+            '<p class="lead">One step left: press the button to confirm your address.</p>',
+            self._button(raw_url, 'Confirm email'),
+            self._auth_fallback(url, lang),
+            f'<p class="note">The link is valid for {hours} h. If you didn\'t sign up, just ignore this email.</p>',
+        )
+        return self._modern(
+            'Confirm your email',
+            content,
+            'en',
+            preheader=f'Press the button in this email — the link is valid for {hours} h.',
+        )
+
+    def _modern_password_reset(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        username = html.escape(str(context.get('username') or ''))
+        raw_url = str(context.get('reset_url') or '#')
+        url = html.escape(raw_url, quote=True)
+        hours = html.escape(str(context.get('expire_hours', 1)))
+        if lang == 'ru':
+            content = self._letter(
+                'Сброс пароля',
+                f'<p>Здравствуйте, {username}!</p>' if username else '',
+                '<p class="lead">Мы получили запрос на сброс пароля. Нажмите кнопку и задайте новый.</p>',
+                self._button(raw_url, 'Задать новый пароль'),
+                self._auth_fallback(url, lang),
+                f'<p class="note">Ссылка действует {hours} ч. Не запрашивали сброс? Ничего не делайте — пароль останется прежним.</p>',
+            )
+            return self._modern(
+                'Сброс пароля', content, 'ru', preheader=f'Задайте новый пароль — ссылка действует {hours} ч.'
+            )
+        content = self._letter(
+            'Reset your password',
+            f'<p>Hi {username},</p>' if username else '',
+            '<p class="lead">We got a request to reset your password. Press the button to set a new one.</p>',
+            self._button(raw_url, 'Set a new password'),
+            self._auth_fallback(url, lang),
+            f'<p class="note">The link is valid for {hours} h. Didn\'t ask for this? Do nothing — your password stays the same.</p>',
+        )
+        return self._modern(
+            'Reset your password', content, 'en', preheader=f'Set a new password — the link is valid for {hours} h.'
+        )
+
+    def _modern_email_change_code(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        code = html.escape(str(context.get('code') or ''))
+        minutes = html.escape(str(context.get('expire_minutes', 10)))
+        code_block = f'<div class="code">{code}</div>'
+        if lang == 'ru':
+            content = self._letter(
+                'Код для смены email',
+                '<p class="lead">Введите этот код в кабинете, чтобы подтвердить новый адрес:</p>',
+                code_block,
+                f'<p class="note">Код действует {minutes} мин. Если вы не меняли email, проигнорируйте письмо — адрес останется прежним.</p>',
+            )
+            return self._modern(f'Код подтверждения: {code}', content, 'ru', preheader=f'Код действует {minutes} мин.')
+        content = self._letter(
+            'Your email change code',
+            '<p class="lead">Enter this code in your dashboard to confirm the new address:</p>',
+            code_block,
+            f'<p class="note">The code is valid for {minutes} min. If you didn\'t change your email, ignore this message — nothing changes.</p>',
+        )
+        return self._modern(f'Your code: {code}', content, 'en', preheader=f'The code is valid for {minutes} min.')
+
+    def _modern_subscription_expiring(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        days_left = context.get('days_left', 0)
+        expires_at = html.escape(str(context.get('expires_at') or ''))
+        tariff = self._tariff_value(context)
+        path, query = self._renew_query(context)
+        if lang == 'ru':
+            days = self._ru_days(days_left)
+            content = self._letter(
+                'Подписка скоро закончится',
+                f'<p class="lead">Осталось {days}. Продлите заранее, чтобы VPN не отключился.</p>',
+                self._rows([('Тариф', tariff), ('Действует до', expires_at)]),
+                self._action('renew', 'ru', path=path, query=query),
+            )
+            return self._modern(
+                f'Подписка закончится через {days}',
+                content,
+                'ru',
+                preheader=f'Действует до {expires_at}. Продлите, чтобы не потерять доступ.' if expires_at else '',
+            )
+        days = self._en_days(days_left)
+        content = self._letter(
+            'Your subscription ends soon',
+            f'<p class="lead">{days} left. Renew now so your VPN keeps working.</p>',
+            self._rows([('Plan', tariff), ('Valid until', expires_at)]),
+            self._action('renew', 'en', path=path, query=query),
+        )
+        return self._modern(
+            f'Your subscription ends in {days}',
+            content,
+            'en',
+            preheader=f'Valid until {expires_at}. Renew to keep access.' if expires_at else '',
+        )
+
+    def _modern_subscription_expired(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        tariff = self._tariff_value(context)
+        path, query = self._renew_query(context)
+        if lang == 'ru':
+            content = self._letter(
+                'Подписка закончилась',
+                '<p class="lead">VPN отключён. Продлите подписку — доступ вернётся сразу, ссылка и настройки на устройствах останутся прежними.</p>',
+                self._rows([('Тариф', tariff)]),
+                self._action('renew', 'ru', path=path, query=query),
+            )
+            return self._modern(
+                'Подписка закончилась — VPN отключён',
+                content,
+                'ru',
+                preheader='Продлите подписку — доступ вернётся сразу.',
+            )
+        content = self._letter(
+            'Your subscription has ended',
+            '<p class="lead">VPN is off. Renew and access comes back right away — your link and device settings stay the same.</p>',
+            self._rows([('Plan', tariff)]),
+            self._action('renew', 'en', path=path, query=query),
+        )
+        return self._modern(
+            'Subscription ended — VPN is off', content, 'en', preheader='Renew and access comes back right away.'
+        )
+
+    def _modern_subscription_renewed(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        until = html.escape(str(context.get('new_expires_at') or ''))
+        tariff = self._tariff_value(context)
+        if lang == 'ru':
+            content = self._letter(
+                'Подписка продлена',
+                '<p class="lead">Всё работает, ничего настраивать не нужно.</p>',
+                self._rows([('Тариф', tariff), ('Действует до', until)]),
+                self._action('subscription', 'ru'),
+            )
+            return self._modern(f'Подписка продлена до {until}' if until else 'Подписка продлена', content, 'ru')
+        content = self._letter(
+            'Subscription renewed',
+            '<p class="lead">Everything keeps working, nothing to set up.</p>',
+            self._rows([('Plan', tariff), ('Valid until', until)]),
+            self._action('subscription', 'en'),
+        )
+        return self._modern(f'Subscription renewed until {until}' if until else 'Subscription renewed', content, 'en')
+
+    def _modern_subscription_activated(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        until = html.escape(str(context.get('expires_at') or ''))
+        tariff = self._tariff_value(context)
+        if lang == 'ru':
+            content = self._letter(
+                'Подписка активна',
+                '<p class="lead">Осталось подключить устройство — откройте инструкцию, это займёт минуту.</p>',
+                self._rows([('Тариф', tariff), ('Действует до', until)]),
+                self._action('connect', 'ru'),
+            )
+            return self._modern(
+                'Подписка активна — подключите VPN', content, 'ru', preheader='Подключение займёт минуту.'
+            )
+        content = self._letter(
+            'Your subscription is active',
+            '<p class="lead">Now connect a device — the guide takes about a minute.</p>',
+            self._rows([('Plan', tariff), ('Valid until', until)]),
+            self._action('connect', 'en'),
+        )
+        return self._modern(
+            'Subscription active — connect your VPN', content, 'en', preheader='Connecting takes about a minute.'
+        )
+
+    def _modern_autopay_success(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        amount = html.escape(str(context.get('formatted_amount') or f'{context.get("amount_rubles", 0):.2f} ₽'))
+        until = html.escape(str(context.get('new_expires_at') or ''))
+        if lang == 'ru':
+            content = self._letter(
+                'Подписка продлена автоматически',
+                '<p class="lead">Автопродление сработало, VPN работает без перерыва.</p>',
+                self._rows([('Списано с баланса', amount), ('Действует до', until)]),
+                self._action('subscription', 'ru'),
+            )
+            return self._modern(f'Автопродление: списано {amount}', content, 'ru')
+        content = self._letter(
+            'Renewed automatically',
+            '<p class="lead">Auto-renewal went through, your VPN keeps working.</p>',
+            self._rows([('Charged from balance', amount), ('Valid until', until)]),
+            self._action('subscription', 'en'),
+        )
+        return self._modern(f'Auto-renewal: {amount} charged', content, 'en')
+
+    def _modern_autopay_failed(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        reason = html.escape(str(context.get('reason') or ''))
+        path, query = self._renew_query(context)
+        if lang == 'ru':
+            content = self._letter(
+                'Автопродление не сработало',
+                '<p class="lead">Продлите подписку вручную, чтобы VPN не отключился.</p>',
+                self._rows([('Причина', reason)]),
+                self._action('renew', 'ru', path=path, query=query),
+            )
+            return self._modern(
+                'Не получилось продлить подписку', content, 'ru', preheader='Продлите вручную, чтобы VPN не отключился.'
+            )
+        content = self._letter(
+            "Auto-renewal didn't go through",
+            '<p class="lead">Renew manually so your VPN stays on.</p>',
+            self._rows([('Reason', reason)]),
+            self._action('renew', 'en', path=path, query=query),
+        )
+        return self._modern(
+            "Couldn't renew your subscription", content, 'en', preheader='Renew manually so your VPN stays on.'
+        )
+
+    def _topup_query(self, context: dict[str, Any]) -> str:
+        missing = context.get('missing_kopeks')
+        if isinstance(missing, int) and missing > 0:
+            return f'amount={(missing + 99) // 100}'
+        return ''
+
+    def _modern_autopay_insufficient_funds(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        required = html.escape(str(context.get('required_amount') or ''))
+        balance = html.escape(str(context.get('current_balance') or ''))
+        query = self._topup_query(context)
+        if lang == 'ru':
+            content = self._letter(
+                'Не хватает на автопродление',
+                '<p class="lead">Пополните баланс — подписка продлится автоматически, ничего больше делать не нужно.</p>',
+                self._rows([('Нужно', required), ('На балансе', balance)]),
+                self._action('topup', 'ru', query=query),
+            )
+            return self._modern(
+                'Пополните баланс для автопродления',
+                content,
+                'ru',
+                preheader='Пополните баланс — подписка продлится сама.',
+            )
+        content = self._letter(
+            'Not enough for auto-renewal',
+            '<p class="lead">Top up your balance and the subscription renews by itself.</p>',
+            self._rows([('Required', required), ('Balance', balance)]),
+            self._action('topup', 'en', query=query),
+        )
+        return self._modern(
+            'Top up to keep auto-renewal', content, 'en', preheader='Top up and the subscription renews by itself.'
+        )
+
+    def _modern_balance_topup(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        amount = html.escape(str(context.get('formatted_amount') or f'{context.get("amount_rubles", 0):.2f} ₽'))
+        balance = html.escape(str(context.get('formatted_balance') or f'{context.get("new_balance_rubles", 0):.2f} ₽'))
+        if lang == 'ru':
+            content = self._letter(
+                f'Зачислено <span class="amount">+{amount}</span>',
+                self._rows([('Баланс', balance)]),
+                '<p>Деньги на балансе — оформите или продлите подписку в пару нажатий.</p>',
+                self._action('buy', 'ru'),
+            )
+            return self._modern(f'Зачислено {amount}', content, 'ru', preheader=f'Баланс: {balance}')
+        content = self._letter(
+            f'Credited <span class="amount">+{amount}</span>',
+            self._rows([('Balance', balance)]),
+            '<p>The money is on your balance — get or renew a subscription in a couple of taps.</p>',
+            self._action('buy', 'en'),
+        )
+        return self._modern(f'{amount} credited', content, 'en', preheader=f'Balance: {balance}')
+
+    def _modern_payment_received(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        amount = html.escape(str(context.get('formatted_amount') or f'{context.get("amount_rubles", 0):.2f} ₽'))
+        method = html.escape(str(context.get('payment_method') or ''))
+        if lang == 'ru':
+            content = self._letter(
+                'Оплата получена',
+                self._rows([('Сумма', amount), ('Способ', method)]),
+                self._action('cabinet', 'ru'),
+            )
+            return self._modern(f'Оплата получена: {amount}', content, 'ru')
+        content = self._letter(
+            'Payment received',
+            self._rows([('Amount', amount), ('Method', method)]),
+            self._action('cabinet', 'en'),
+        )
+        return self._modern(f'Payment received: {amount}', content, 'en')
+
+    def _modern_daily_debit(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        amount = html.escape(str(context.get('formatted_amount') or f'{context.get("amount_rubles", 0):.2f} ₽'))
+        balance = html.escape(str(context.get('formatted_balance') or f'{context.get("new_balance_rubles", 0):.2f} ₽'))
+        if lang == 'ru':
+            content = self._letter(
+                'Списание за сутки',
+                self._rows([('Списано', amount), ('Остаток', balance)]),
+                '<p class="note">Пополните баланс заранее, чтобы подписка не встала на паузу.</p>',
+                self._action('topup', 'ru', secondary=True),
+            )
+            return self._modern(f'Списано {amount} за сутки', content, 'ru', preheader=f'Остаток: {balance}')
+        content = self._letter(
+            'Daily charge',
+            self._rows([('Charged', amount), ('Remaining', balance)]),
+            '<p class="note">Top up in advance so your subscription is not paused.</p>',
+            self._action('topup', 'en', secondary=True),
+        )
+        return self._modern(f'{amount} charged for the day', content, 'en', preheader=f'Remaining: {balance}')
+
+    def _modern_daily_insufficient_funds(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        if lang == 'ru':
+            content = self._letter(
+                'Не хватает на следующий день',
+                '<p class="lead">На балансе недостаточно средств, поэтому подписка будет приостановлена. Пополните баланс — VPN снова заработает.</p>',
+                self._action('topup', 'ru'),
+            )
+            return self._modern(
+                'Пополните баланс — подписка встанет на паузу',
+                content,
+                'ru',
+                preheader='Пополните баланс, чтобы VPN продолжил работать.',
+            )
+        content = self._letter(
+            'Not enough for the next day',
+            '<p class="lead">Your balance is too low, so the subscription will be paused. Top up and the VPN works again.</p>',
+            self._action('topup', 'en'),
+        )
+        return self._modern(
+            'Top up — your subscription will be paused', content, 'en', preheader='Top up to keep your VPN running.'
+        )
+
+    def _modern_winback_expired_1d(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        end_date = html.escape(str(context.get('end_date') or ''))
+        unsubscribe_url = context.get('unsubscribe_url', '')
+        if lang == 'ru':
+            content = self._letter(
+                'VPN отключён со вчерашнего дня',
+                f'<p class="lead">Подписка закончилась{f" {end_date}" if end_date else ""}. Продлите — доступ вернётся сразу, настраивать ничего не нужно.</p>',
+                self._action('renew', 'ru'),
+            )
+            return self._modern(
+                'Подписка закончилась — вернуть доступ',
+                content,
+                'ru',
+                preheader='Продлите — VPN заработает сразу.',
+                unsubscribe_url=unsubscribe_url,
+            )
+        content = self._letter(
+            'Your VPN has been off since yesterday',
+            f'<p class="lead">Your subscription ended{f" on {end_date}" if end_date else ""}. Renew and access comes back right away — nothing to set up.</p>',
+            self._action('renew', 'en'),
+        )
+        return self._modern(
+            'Subscription ended — get access back',
+            content,
+            'en',
+            preheader='Renew and your VPN works right away.',
+            unsubscribe_url=unsubscribe_url,
+        )
+
+    def _modern_winback_discount(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        percent = html.escape(str(context.get('percent', '')))
+        expires_at = html.escape(str(context.get('expires_at') or ''))
+        unsubscribe_url = context.get('unsubscribe_url', '')
+        if lang == 'ru':
+            content = self._letter(
+                f'Скидка {percent}% на продление',
+                '<p class="lead">Скидка уже закреплена за вами и применится к любому тарифу при оплате.</p>',
+                self._rows([('Скидка', f'{percent}%'), ('Действует до', expires_at)]),
+                self._button(self._cabinet_link('/subscription/purchase'), f'Продлить со скидкой {percent}%'),
+            )
+            return self._modern(
+                f'Скидка {percent}% на продление',
+                content,
+                'ru',
+                preheader=f'Действует до {expires_at}' if expires_at else '',
+                unsubscribe_url=unsubscribe_url,
+            )
+        content = self._letter(
+            f'{percent}% off your renewal',
+            '<p class="lead">The discount is already on your account and applies to any plan at checkout.</p>',
+            self._rows([('Discount', f'{percent}%'), ('Valid until', expires_at)]),
+            self._button(self._cabinet_link('/subscription/purchase'), f'Renew with {percent}% off'),
+        )
+        return self._modern(
+            f'{percent}% off your renewal',
+            content,
+            'en',
+            preheader=f'Valid until {expires_at}' if expires_at else '',
+            unsubscribe_url=unsubscribe_url,
+        )
+
+    def _modern_winback_trial_ending(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
+        unsubscribe_url = context.get('unsubscribe_url', '')
+        if lang == 'ru':
+            content = self._letter(
+                'Пробный период скоро закончится',
+                '<p class="lead">Оформите подписку, чтобы VPN не отключился. Ссылка и устройства останутся прежними.</p>',
+                self._action('buy', 'ru'),
+            )
+            return self._modern(
+                'Пробный период скоро закончится',
+                content,
+                'ru',
+                preheader='Оформите подписку — VPN продолжит работать.',
+                unsubscribe_url=unsubscribe_url,
+            )
+        content = self._letter(
+            'Your trial ends soon',
+            '<p class="lead">Get a subscription so your VPN keeps working. Your link and devices stay the same.</p>',
+            self._action('buy', 'en'),
+        )
+        return self._modern(
+            'Your trial ends soon',
+            content,
+            'en',
+            preheader='Subscribe and your VPN keeps working.',
+            unsubscribe_url=unsubscribe_url,
+        )
 
     def _nalogo_receipt_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Email: чек NaloGO («Мой налог») по платежу — файл во вложении, ссылка запасная."""
@@ -300,36 +914,22 @@ class EmailNotificationTemplates:
     # ============================================================================
 
     def _balance_topup_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for balance top-up notification."""
+        lang = self._modern_lang(language, ('ua', 'zh'))
+        if lang is None:
+            return self._legacy_balance_topup_template(language, context)
+        return self._modern_balance_topup(lang, context)
+
+    def _legacy_balance_topup_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Прежние тексты для языков без новой редакции. Template for balance top-up notification."""
         amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
         balance = context.get('formatted_balance', f'{context.get("new_balance_rubles", 0):.2f} ₽')
 
         subjects = {
-            'ru': f'Баланс пополнен на {amount}',
-            'en': f'Balance topped up by {amount}',
             'zh': f'余额已充值 {amount}',
             'ua': f'Баланс поповнено на {amount}',
         }
 
         bodies = {
-            'ru': f"""
-                <h2>Баланс успешно пополнен!</h2>
-                <div class="highlight success">
-                    <p>Сумма пополнения: <span class="amount">+{amount}</span></p>
-                    <p>Текущий баланс: <strong>{balance}</strong></p>
-                </div>
-                <p>Спасибо за использование нашего сервиса!</p>
-                {self._get_cabinet_button(language)}
-            """,
-            'en': f"""
-                <h2>Balance Successfully Topped Up!</h2>
-                <div class="highlight success">
-                    <p>Top-up amount: <span class="amount">+{amount}</span></p>
-                    <p>Current balance: <strong>{balance}</strong></p>
-                </div>
-                <p>Thank you for using our service!</p>
-                {self._get_cabinet_button(language)}
-            """,
             'zh': f"""
                 <h2>充值成功！</h2>
                 <div class="highlight success">
@@ -337,7 +937,7 @@ class EmailNotificationTemplates:
                     <p>当前余额: <strong>{balance}</strong></p>
                 </div>
                 <p>感谢使用我们的服务！</p>
-                {self._get_cabinet_button(language)}
+                {self._action('buy', language)}
             """,
             'ua': f"""
                 <h2>Баланс успішно поповнено!</h2>
@@ -346,13 +946,13 @@ class EmailNotificationTemplates:
                     <p>Поточний баланс: <strong>{balance}</strong></p>
                 </div>
                 <p>Дякуємо за використання нашого сервісу!</p>
-                {self._get_cabinet_button(language)}
+                {self._action('buy', language)}
             """,
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            'subject': subjects[language],
+            'body_html': self._get_base_template(bodies[language], language),
         }
 
     def _balance_change_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
@@ -412,45 +1012,26 @@ class EmailNotificationTemplates:
     # ============================================================================
 
     def _subscription_expiring_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for subscription expiring notification."""
+        lang = self._modern_lang(language, ('ua', 'zh'))
+        if lang is None:
+            return self._legacy_subscription_expiring_template(language, context)
+        return self._modern_subscription_expiring(lang, context)
+
+    def _legacy_subscription_expiring_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Прежние тексты для языков без новой редакции. Template for subscription expiring notification."""
         days_left = context.get('days_left', 0)
         expires_at = context.get('expires_at', '')
         tariff_name = html.escape(context.get('tariff_name', ''))
         tariff_suffix_ru = f' «{tariff_name}»' if tariff_name else ''
-        tariff_suffix_en = f' "{tariff_name}"' if tariff_name else ''
-        tariff_line_ru = f'<p>Тариф: <strong>{tariff_name}</strong></p>' if tariff_name else ''
-        tariff_line_en = f'<p>Plan: <strong>{tariff_name}</strong></p>' if tariff_name else ''
         tariff_line_zh = f'<p>套餐: <strong>{tariff_name}</strong></p>' if tariff_name else ''
         tariff_line_ua = f'<p>Тариф: <strong>{tariff_name}</strong></p>' if tariff_name else ''
 
         subjects = {
-            'ru': f'Подписка{tariff_suffix_ru} истекает через {days_left} дн.',
-            'en': f'Subscription{tariff_suffix_en} expires in {days_left} day(s)',
             'zh': f'订阅将在 {days_left} 天后到期',
             'ua': f'Підписка{tariff_suffix_ru} закінчується через {days_left} дн.',
         }
 
         bodies = {
-            'ru': f"""
-                <h2>Подписка скоро истекает</h2>
-                <div class="highlight warning">
-                    {tariff_line_ru}
-                    <p>Ваша подписка истекает через <strong>{days_left}</strong> дн.</p>
-                    <p>Дата истечения: <strong>{expires_at}</strong></p>
-                </div>
-                <p>Продлите подписку, чтобы не потерять доступ к сервису.</p>
-                {self._get_cabinet_button(language)}
-            """,
-            'en': f"""
-                <h2>Subscription Expiring Soon</h2>
-                <div class="highlight warning">
-                    {tariff_line_en}
-                    <p>Your subscription expires in <strong>{days_left}</strong> day(s).</p>
-                    <p>Expiration date: <strong>{expires_at}</strong></p>
-                </div>
-                <p>Renew your subscription to maintain access to our service.</p>
-                {self._get_cabinet_button(language)}
-            """,
             'zh': f"""
                 <h2>订阅即将到期</h2>
                 <div class="highlight warning">
@@ -459,7 +1040,7 @@ class EmailNotificationTemplates:
                     <p>到期日期: <strong>{expires_at}</strong></p>
                 </div>
                 <p>请续订以保持对服务的访问。</p>
-                {self._get_cabinet_button(language)}
+                {self._action('renew', language)}
             """,
             'ua': f"""
                 <h2>Підписка скоро закінчується</h2>
@@ -469,51 +1050,34 @@ class EmailNotificationTemplates:
                     <p>Дата закінчення: <strong>{expires_at}</strong></p>
                 </div>
                 <p>Продовжіть підписку, щоб не втратити доступ до сервісу.</p>
-                {self._get_cabinet_button(language)}
+                {self._action('renew', language)}
             """,
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            'subject': subjects[language],
+            'body_html': self._get_base_template(bodies[language], language),
         }
 
     def _subscription_expired_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for subscription expired notification."""
+        lang = self._modern_lang(language, ('ua', 'zh'))
+        if lang is None:
+            return self._legacy_subscription_expired_template(language, context)
+        return self._modern_subscription_expired(lang, context)
+
+    def _legacy_subscription_expired_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Прежние тексты для языков без новой редакции. Template for subscription expired notification."""
         tariff_name = html.escape(context.get('tariff_name', ''))
         tariff_suffix_ru = f' «{tariff_name}»' if tariff_name else ''
-        tariff_suffix_en = f' "{tariff_name}"' if tariff_name else ''
-        tariff_line_ru = f'<p>Тариф: <strong>{tariff_name}</strong></p>' if tariff_name else ''
-        tariff_line_en = f'<p>Plan: <strong>{tariff_name}</strong></p>' if tariff_name else ''
         tariff_line_zh = f'<p>套餐: <strong>{tariff_name}</strong></p>' if tariff_name else ''
         tariff_line_ua = f'<p>Тариф: <strong>{tariff_name}</strong></p>' if tariff_name else ''
 
         subjects = {
-            'ru': f'Подписка{tariff_suffix_ru} истекла',
-            'en': f'Subscription{tariff_suffix_en} Expired',
             'zh': '订阅已到期',
             'ua': f'Підписка{tariff_suffix_ru} закінчилась',
         }
 
         bodies = {
-            'ru': f"""
-                <h2>Подписка истекла</h2>
-                <div class="highlight danger">
-                    {tariff_line_ru}
-                    <p>Ваша подписка истекла. Доступ к VPN отключён.</p>
-                </div>
-                <p>Оформите новую подписку, чтобы продолжить использование сервиса.</p>
-                {self._get_cabinet_button(language)}
-            """,
-            'en': f"""
-                <h2>Subscription Expired</h2>
-                <div class="highlight danger">
-                    {tariff_line_en}
-                    <p>Your subscription has expired. VPN access has been disabled.</p>
-                </div>
-                <p>Purchase a new subscription to continue using our service.</p>
-                {self._get_cabinet_button(language)}
-            """,
             'zh': f"""
                 <h2>订阅已到期</h2>
                 <div class="highlight danger">
@@ -521,7 +1085,7 @@ class EmailNotificationTemplates:
                     <p>您的订阅已到期。VPN访问已被禁用。</p>
                 </div>
                 <p>请购买新订阅以继续使用我们的服务。</p>
-                {self._get_cabinet_button(language)}
+                {self._action('renew', language)}
             """,
             'ua': f"""
                 <h2>Підписка закінчилась</h2>
@@ -530,58 +1094,18 @@ class EmailNotificationTemplates:
                     <p>Ваша підписка закінчилась. Доступ до VPN вимкнено.</p>
                 </div>
                 <p>Оформіть нову підписку, щоб продовжити використання сервісу.</p>
-                {self._get_cabinet_button(language)}
+                {self._action('renew', language)}
             """,
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            'subject': subjects[language],
+            'body_html': self._get_base_template(bodies[language], language),
         }
 
     def _subscription_renewed_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for subscription renewed notification."""
-        new_expires_at = context.get('new_expires_at', '')
-        tariff_name = html.escape(context.get('tariff_name', ''))
-        tariff_suffix_ru = f' «{tariff_name}»' if tariff_name else ''
-        tariff_suffix_en = f' "{tariff_name}"' if tariff_name else ''
-        tariff_line_ru = f'<p>Тариф: <strong>{tariff_name}</strong></p>' if tariff_name else ''
-        tariff_line_en = f'<p>Plan: <strong>{tariff_name}</strong></p>' if tariff_name else ''
-
-        subjects = {
-            'ru': f'Подписка{tariff_suffix_ru} продлена',
-            'en': f'Subscription{tariff_suffix_en} Renewed',
-            'zh': '订阅已续订',
-            'ua': f'Підписку{tariff_suffix_ru} продовжено',
-        }
-
-        bodies = {
-            'ru': f"""
-                <h2>Подписка успешно продлена!</h2>
-                <div class="highlight success">
-                    {tariff_line_ru}
-                    <p>Ваша подписка была успешно продлена.</p>
-                    <p>Новая дата истечения: <strong>{new_expires_at}</strong></p>
-                </div>
-                <p>Спасибо за использование нашего сервиса!</p>
-                {self._get_cabinet_button(language)}
-            """,
-            'en': f"""
-                <h2>Subscription Successfully Renewed!</h2>
-                <div class="highlight success">
-                    {tariff_line_en}
-                    <p>Your subscription has been successfully renewed.</p>
-                    <p>New expiration date: <strong>{new_expires_at}</strong></p>
-                </div>
-                <p>Thank you for using our service!</p>
-                {self._get_cabinet_button(language)}
-            """,
-        }
-
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
-        }
+        lang = self._modern_lang(language, ())
+        return self._modern_subscription_renewed(lang, context)
 
     WEBHOOK_EMAIL_COPY = {
         'sub_expired': {
@@ -829,11 +1353,31 @@ class EmailNotificationTemplates:
         device_suffix = f' — {html.escape(device)}' if device and device != '—' else ''
         body = body.replace('{device}', device_suffix)
 
-        content = f'<h2>{subject}</h2><div class="highlight">{body}</div>{self._get_cabinet_button(language)}'
+        content = f'<h2>{subject}</h2>{body}{self._webhook_button(kind, language)}'
         return {
             'subject': subject,
             'body_html': self._get_base_template(content, language),
         }
+
+    # Событие панели -> что человеку сделать дальше. Остальные — просто в кабинет.
+    _WEBHOOK_ACTIONS = {
+        'sub_expired': 'renew',
+        'sub_expiring': 'renew',
+        'sub_disabled': 'subscription',
+        'sub_enabled': 'connect',
+        'sub_limited': 'subscription',
+        'sub_bandwidth_threshold': 'subscription',
+        'sub_traffic_reset': 'connect',
+        'sub_revoked': 'connect',
+        'sub_deleted': 'buy',
+        'user_not_connected': 'connect',
+        'sub_first_connected': 'subscription',
+        'device_added': 'subscription',
+        'device_deleted': 'subscription',
+    }
+
+    def _webhook_button(self, kind: str, language: str) -> str:
+        return self._action(self._WEBHOOK_ACTIONS.get(kind, 'cabinet'), language)
 
     # Grace-доступ: подписка кончилась, но на время оставлен доступ к тому, что
     # оператор назвал в GRACE_ACCESS_ALLOWED_SERVICES ({allowed}); {reason} —
@@ -901,7 +1445,7 @@ class EmailNotificationTemplates:
         }
         for key, value in values.items():
             body = body.replace('{' + key + '}', value)
-        content = f'<h2>{subject}</h2><div class="highlight">{body}</div>{self._get_cabinet_button(language)}'
+        content = f'<h2>{subject}</h2>{body}{self._action("renew", language)}'
         return {'subject': subject, 'body_html': self._get_base_template(content, language)}
 
     def _grace_access_granted_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
@@ -911,308 +1455,48 @@ class EmailNotificationTemplates:
         return self._grace_access_email('ended', language, context)
 
     def _winback_expired_1d_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Email: subscription lapsed 1 day ago (email-only users)."""
-        end_date = html.escape(str(context.get('end_date', '')))
-        subjects = {
-            'ru': 'Подписка закончилась',
-            'en': 'Your subscription has ended',
-            'zh': '订阅已结束',
-            'ua': 'Підписка закінчилася',
-        }
-        bodies = {
-            'ru': f'<h2>Подписка закончилась</h2><div class="highlight danger"><p>Ваша VPN-подписка истекла{f" ({end_date})" if end_date else ""} — доступ отключён.</p><p>Продлите подписку, чтобы вернуться в сервис.</p></div>{self._get_cabinet_button(language)}',
-            'en': f'<h2>Your subscription has ended</h2><div class="highlight danger"><p>Your VPN subscription has expired — access is off.</p><p>Renew it to get back online.</p></div>{self._get_cabinet_button(language)}',
-            'zh': f'<h2>订阅已结束</h2><div class="highlight danger"><p>您的 VPN 订阅已到期{f"（{end_date}）" if end_date else ""}，访问已关闭。</p><p>请续订以恢复使用。</p></div>{self._get_cabinet_button(language)}',
-            'ua': f'<h2>Підписка закінчилася</h2><div class="highlight danger"><p>Ваша VPN-підписка закінчилася{f" ({end_date})" if end_date else ""} — доступ вимкнено.</p><p>Продовжте підписку, щоб повернутися до сервісу.</p></div>{self._get_cabinet_button(language)}',
-        }
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(
-                bodies.get(language, bodies['ru']), language, context.get('unsubscribe_url', '')
-            ),
-        }
+        lang = self._modern_lang(language, ())
+        return self._modern_winback_expired_1d(lang, context)
 
     def _winback_discount_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Email: winback discount offer (email-only users). Offer is already on the account."""
-        percent = context.get('percent', '')
-        expires_at = html.escape(str(context.get('expires_at', '')))
-        subjects = {
-            'ru': f'Скидка {percent}% на продление',
-            'en': f'{percent}% off your renewal',
-            'zh': f'续订享 {percent}% 折扣',
-            'ua': f'Знижка {percent}% на продовження',
-        }
-        bodies = {
-            'ru': f'<h2>Скидка {percent}% на продление</h2><div class="highlight"><p>Возвращайтесь со скидкой <strong>{percent}%</strong>{f" — действует до {expires_at}" if expires_at else ""}.</p><p>Скидка уже привязана к вашему аккаунту и суммируется с промогруппой — просто продлите подписку в кабинете.</p></div>{self._get_cabinet_button(language)}',
-            'en': f'<h2>{percent}% off your renewal</h2><div class="highlight"><p>Come back with a <strong>{percent}%</strong> discount{f", valid until {expires_at}" if expires_at else ""}.</p><p>The discount is already applied to your account and stacks with your promo group — just renew in the dashboard.</p></div>{self._get_cabinet_button(language)}',
-            'zh': f'<h2>续订享 {percent}% 折扣</h2><div class="highlight"><p>回来享受 <strong>{percent}%</strong> 折扣{f"（有效期至 {expires_at}）" if expires_at else ""}。</p><p>折扣已绑定到您的账户，并与促销组叠加 — 只需在个人中心续订即可。</p></div>{self._get_cabinet_button(language)}',
-            'ua': f'<h2>Знижка {percent}% на продовження</h2><div class="highlight"><p>Повертайтеся зі знижкою <strong>{percent}%</strong>{f" — діє до {expires_at}" if expires_at else ""}.</p><p>Знижка вже прив’язана до вашого акаунта й сумується з промогрупою — просто продовжте підписку в кабінеті.</p></div>{self._get_cabinet_button(language)}',
-        }
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(
-                bodies.get(language, bodies['ru']), language, context.get('unsubscribe_url', '')
-            ),
-        }
+        lang = self._modern_lang(language, ())
+        return self._modern_winback_discount(lang, context)
 
     def _winback_trial_ending_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Email: trial ending soon (email-only users)."""
-        subjects = {
-            'ru': 'Пробная подписка скоро закончится',
-            'en': 'Your trial is ending soon',
-            'zh': '试用即将结束',
-            'ua': 'Пробна підписка скоро закінчиться',
-        }
-        bodies = {
-            'ru': f'<h2>Пробная подписка скоро закончится</h2><div class="highlight warning"><p>Ваша тестовая подписка скоро истекает.</p><p>Оформите подписку, чтобы не остаться без VPN — конфиг и устройства сохранятся.</p></div>{self._get_cabinet_button(language)}',
-            'en': f'<h2>Your trial is ending soon</h2><div class="highlight warning"><p>Your trial subscription is about to expire.</p><p>Subscribe to keep your VPN — your config and devices stay.</p></div>{self._get_cabinet_button(language)}',
-            'zh': f'<h2>试用即将结束</h2><div class="highlight warning"><p>您的试用订阅即将到期。</p><p>订阅以继续使用 VPN — 配置和设备将保留。</p></div>{self._get_cabinet_button(language)}',
-            'ua': f'<h2>Пробна підписка скоро закінчиться</h2><div class="highlight warning"><p>Ваша тестова підписка скоро закінчується.</p><p>Оформіть підписку, щоб не залишитися без VPN — конфіг і пристрої збережуться.</p></div>{self._get_cabinet_button(language)}',
-        }
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(
-                bodies.get(language, bodies['ru']), language, context.get('unsubscribe_url', '')
-            ),
-        }
+        lang = self._modern_lang(language, ())
+        return self._modern_winback_trial_ending(lang, context)
 
     def _subscription_activated_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for subscription activated notification."""
-        expires_at = context.get('expires_at', '')
-        tariff_name = html.escape(context.get('tariff_name', ''))
-        tariff_suffix_ru = f' «{tariff_name}»' if tariff_name else ''
-        tariff_suffix_en = f' "{tariff_name}"' if tariff_name else ''
-        tariff_line_ru = f'<p>Тариф: <strong>{tariff_name}</strong></p>' if tariff_name else ''
-        tariff_line_en = f'<p>Plan: <strong>{tariff_name}</strong></p>' if tariff_name else ''
-
-        subjects = {
-            'ru': f'Подписка{tariff_suffix_ru} активирована',
-            'en': f'Subscription{tariff_suffix_en} Activated',
-            'zh': '订阅已激活',
-            'ua': f'Підписку{tariff_suffix_ru} активовано',
-        }
-
-        bodies = {
-            'ru': f"""
-                <h2>Подписка активирована!</h2>
-                <div class="highlight success">
-                    {tariff_line_ru}
-                    <p>Ваша VPN подписка успешно активирована.</p>
-                    <p>Действует до: <strong>{expires_at}</strong></p>
-                </div>
-                <p>Теперь вы можете пользоваться VPN сервисом.</p>
-                {self._get_cabinet_button(language)}
-            """,
-            'en': f"""
-                <h2>Subscription Activated!</h2>
-                <div class="highlight success">
-                    {tariff_line_en}
-                    <p>Your VPN subscription has been successfully activated.</p>
-                    <p>Valid until: <strong>{expires_at}</strong></p>
-                </div>
-                <p>You can now use the VPN service.</p>
-                {self._get_cabinet_button(language)}
-            """,
-        }
-
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
-        }
+        lang = self._modern_lang(language, ())
+        return self._modern_subscription_activated(lang, context)
 
     # ============================================================================
     # Autopay Templates
     # ============================================================================
 
     def _autopay_success_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for successful autopay notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        new_expires_at = context.get('new_expires_at', '')
-
-        subjects = {
-            'ru': 'Автопродление выполнено',
-            'en': 'Auto-renewal Successful',
-            'zh': '自动续订成功',
-            'ua': 'Автопродовження виконано',
-        }
-
-        bodies = {
-            'ru': f"""
-                <h2>Автопродление выполнено</h2>
-                <div class="highlight success">
-                    <p>Ваша подписка была автоматически продлена.</p>
-                    <p>Списано с баланса: <strong>{amount}</strong></p>
-                    <p>Новая дата истечения: <strong>{new_expires_at}</strong></p>
-                </div>
-                {self._get_cabinet_button(language)}
-            """,
-            'en': f"""
-                <h2>Auto-renewal Successful</h2>
-                <div class="highlight success">
-                    <p>Your subscription has been automatically renewed.</p>
-                    <p>Charged from balance: <strong>{amount}</strong></p>
-                    <p>New expiration date: <strong>{new_expires_at}</strong></p>
-                </div>
-                {self._get_cabinet_button(language)}
-            """,
-        }
-
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
-        }
+        lang = self._modern_lang(language, ())
+        return self._modern_autopay_success(lang, context)
 
     def _autopay_failed_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for failed autopay notification."""
-        reason = html.escape(context.get('reason', ''))
-
-        subjects = {
-            'ru': 'Ошибка автопродления',
-            'en': 'Auto-renewal Failed',
-            'zh': '自动续订失败',
-            'ua': 'Помилка автопродовження',
-        }
-
-        bodies = {
-            'ru': f"""
-                <h2>Ошибка автопродления</h2>
-                <div class="highlight danger">
-                    <p>Не удалось автоматически продлить подписку.</p>
-                    {f'<p>Причина: {reason}</p>' if reason else ''}
-                </div>
-                <p>Пожалуйста, пополните баланс и продлите подписку вручную.</p>
-                {self._get_cabinet_button(language)}
-            """,
-            'en': f"""
-                <h2>Auto-renewal Failed</h2>
-                <div class="highlight danger">
-                    <p>Failed to automatically renew your subscription.</p>
-                    {f'<p>Reason: {reason}</p>' if reason else ''}
-                </div>
-                <p>Please top up your balance and renew manually.</p>
-                {self._get_cabinet_button(language)}
-            """,
-        }
-
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
-        }
+        lang = self._modern_lang(language, ())
+        return self._modern_autopay_failed(lang, context)
 
     def _autopay_insufficient_funds_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for autopay insufficient funds notification."""
-        required = context.get('required_amount', '')
-        balance = context.get('current_balance', '')
-
-        subjects = {
-            'ru': 'Недостаточно средств для автопродления',
-            'en': 'Insufficient Funds for Auto-renewal',
-            'zh': '余额不足无法自动续订',
-            'ua': 'Недостатньо коштів для автопродовження',
-        }
-
-        bodies = {
-            'ru': f"""
-                <h2>Недостаточно средств</h2>
-                <div class="highlight warning">
-                    <p>Недостаточно средств на балансе для автопродления подписки.</p>
-                    {f'<p>Требуется: <strong>{required}</strong></p>' if required else ''}
-                    {f'<p>На балансе: <strong>{balance}</strong></p>' if balance else ''}
-                </div>
-                <p>Пополните баланс, чтобы подписка была продлена автоматически.</p>
-                {self._get_cabinet_button(language)}
-            """,
-            'en': f"""
-                <h2>Insufficient Funds</h2>
-                <div class="highlight warning">
-                    <p>Insufficient balance for subscription auto-renewal.</p>
-                    {f'<p>Required: <strong>{required}</strong></p>' if required else ''}
-                    {f'<p>Balance: <strong>{balance}</strong></p>' if balance else ''}
-                </div>
-                <p>Top up your balance for automatic renewal.</p>
-                {self._get_cabinet_button(language)}
-            """,
-        }
-
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
-        }
+        lang = self._modern_lang(language, ())
+        return self._modern_autopay_insufficient_funds(lang, context)
 
     # ============================================================================
     # Daily Subscription Templates
     # ============================================================================
 
     def _daily_debit_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for daily subscription debit notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        balance = context.get('formatted_balance', f'{context.get("new_balance_rubles", 0):.2f} ₽')
-
-        subjects = {
-            'ru': f'Списание за подписку: {amount}',
-            'en': f'Subscription charge: {amount}',
-            'zh': f'订阅扣费: {amount}',
-            'ua': f'Списання за підписку: {amount}',
-        }
-
-        bodies = {
-            'ru': f"""
-                <h2>Ежедневное списание</h2>
-                <div class="highlight">
-                    <p>С вашего баланса списано: <strong>{amount}</strong></p>
-                    <p>Остаток на балансе: <strong>{balance}</strong></p>
-                </div>
-                {self._get_cabinet_button(language)}
-            """,
-            'en': f"""
-                <h2>Daily Charge</h2>
-                <div class="highlight">
-                    <p>Charged from your balance: <strong>{amount}</strong></p>
-                    <p>Remaining balance: <strong>{balance}</strong></p>
-                </div>
-                {self._get_cabinet_button(language)}
-            """,
-        }
-
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
-        }
+        lang = self._modern_lang(language, ())
+        return self._modern_daily_debit(lang, context)
 
     def _daily_insufficient_funds_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for daily subscription insufficient funds."""
-        subjects = {
-            'ru': 'Недостаточно средств для продления',
-            'en': 'Insufficient Funds',
-            'zh': '余额不足',
-            'ua': 'Недостатньо коштів',
-        }
-
-        bodies = {
-            'ru': f"""
-                <h2>Недостаточно средств</h2>
-                <div class="highlight danger">
-                    <p>На балансе недостаточно средств для продления подписки.</p>
-                    <p>Подписка будет приостановлена.</p>
-                </div>
-                <p>Пополните баланс, чтобы продолжить использование сервиса.</p>
-                {self._get_cabinet_button(language)}
-            """,
-            'en': f"""
-                <h2>Insufficient Funds</h2>
-                <div class="highlight danger">
-                    <p>Insufficient balance to continue subscription.</p>
-                    <p>Your subscription will be suspended.</p>
-                </div>
-                <p>Please top up your balance to continue using the service.</p>
-                {self._get_cabinet_button(language)}
-            """,
-        }
-
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
-        }
+        lang = self._modern_lang(language, ())
+        return self._modern_daily_insufficient_funds(lang, context)
 
     def _traffic_reset_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for traffic reset notification."""
@@ -1821,42 +2105,8 @@ class EmailNotificationTemplates:
     # ============================================================================
 
     def _payment_received_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for payment received notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        payment_method = context.get('payment_method', '')
-
-        subjects = {
-            'ru': f'Платёж получен: {amount}',
-            'en': f'Payment received: {amount}',
-            'zh': f'收到付款: {amount}',
-            'ua': f'Платіж отримано: {amount}',
-        }
-
-        bodies = {
-            'ru': f"""
-                <h2>Платёж успешно обработан</h2>
-                <div class="highlight success">
-                    <p>Сумма: <span class="amount">+{amount}</span></p>
-                    {f'<p>Способ оплаты: {payment_method}</p>' if payment_method else ''}
-                </div>
-                <p>Спасибо за оплату!</p>
-                {self._get_cabinet_button(language)}
-            """,
-            'en': f"""
-                <h2>Payment Successfully Processed</h2>
-                <div class="highlight success">
-                    <p>Amount: <span class="amount">+{amount}</span></p>
-                    {f'<p>Payment method: {payment_method}</p>' if payment_method else ''}
-                </div>
-                <p>Thank you for your payment!</p>
-                {self._get_cabinet_button(language)}
-            """,
-        }
-
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
-        }
+        lang = self._modern_lang(language, ())
+        return self._modern_payment_received(lang, context)
 
     # ============================================================================
     # Support Ticket Templates
@@ -1868,16 +2118,13 @@ class EmailNotificationTemplates:
             return ''
 
         texts = {
-            'ru': 'Открыть тикет',
-            'en': 'Open ticket',
+            'ru': 'Открыть обращение',
+            'en': 'Open request',
             'zh': '打开工单',
-            'ua': 'Відкрити тікет',
+            'ua': 'Відкрити звернення',
             'fa': 'باز کردن تیکت',
         }
-        text = texts.get(language, texts['en'])
-        url = f'{self.cabinet_url.rstrip("/")}/support'
-
-        return f'<p style="text-align: center;"><a href="{url}" class="button">{text}</a></p>'
+        return self._button(self._cabinet_link('/support'), texts.get(language) or texts['en'])
 
     def _promo_group_auto_assigned_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Промогруппа назначена автоматически за траты — какие скидки теперь действуют."""
@@ -1999,39 +2246,30 @@ class EmailNotificationTemplates:
     # ============================================================================
 
     def _email_verification_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for email verification."""
+        lang = self._modern_lang(language, ('fa', 'ua', 'zh'))
+        if lang is None:
+            return self._legacy_email_verification_template(language, context)
+        return self._modern_email_verification(lang, context)
+
+    def _legacy_email_verification_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Прежние тексты для языков без новой редакции. Template for email verification."""
         username = html.escape(context.get('username', ''))
         verification_url = html.escape(context.get('verification_url', '#'))
         expire_hours = context.get('expire_hours', 24)
 
         subjects = {
-            'ru': 'Подтверждение email адреса',
-            'en': 'Verify your email address',
             'zh': '验证您的邮箱地址',
             'ua': 'Підтвердження email адреси',
             'fa': 'تایید آدرس ایمیل',
         }
 
         greeting = {
-            'ru': f'Здравствуйте{", " + username if username else ""}!',
-            'en': f'Hello{", " + username if username else ""}!',
             'zh': f'您好{", " + username if username else ""}!',
             'ua': f'Вітаємо{", " + username if username else ""}!',
             'fa': f'سلام{" " + username if username else ""}!',
         }
 
         bodies = {
-            'ru': f"""
-                <h2>{greeting.get('ru')}</h2>
-                <p>Спасибо за регистрацию! Пожалуйста, подтвердите ваш email адрес, нажав на кнопку ниже:</p>
-                <p style="text-align: center;">
-                    <a href="{verification_url}" class="button">Подтвердить email</a>
-                </p>
-                <p>Или скопируйте и вставьте эту ссылку в браузер:</p>
-                <p><a href="{verification_url}">{verification_url}</a></p>
-                <p>Ссылка действительна в течение {expire_hours} часов.</p>
-                <p style="color: #666;">Если вы не создавали аккаунт, просто проигнорируйте это письмо.</p>
-            """,
             'fa': f"""
                 <h2>{greeting.get('fa')}</h2>
                 <p>از ثبت‌نام شما سپاسگزاریم! لطفاً با کلیک روی دکمه زیر ایمیل خود را تایید کنید:</p>
@@ -2042,17 +2280,6 @@ class EmailNotificationTemplates:
                 <p><a href="{verification_url}">{verification_url}</a></p>
                 <p>این لینک تا {expire_hours} ساعت معتبر است.</p>
                 <p style="color: #666;">اگر شما این حساب را ایجاد نکرده‌اید، این ایمیل را نادیده بگیرید.</p>
-            """,
-            'en': f"""
-                <h2>{greeting.get('en')}</h2>
-                <p>Thank you for registering! Please verify your email address by clicking the button below:</p>
-                <p style="text-align: center;">
-                    <a href="{verification_url}" class="button">Verify Email</a>
-                </p>
-                <p>Or copy and paste this link in your browser:</p>
-                <p><a href="{verification_url}">{verification_url}</a></p>
-                <p>This link will expire in {expire_hours} hours.</p>
-                <p style="color: #666;">If you didn't create an account, you can safely ignore this email.</p>
             """,
             'zh': f"""
                 <h2>{greeting.get('zh')}</h2>
@@ -2079,27 +2306,29 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            'subject': subjects[language],
+            'body_html': self._get_base_template(bodies[language], language),
         }
 
     def _password_reset_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for password reset."""
+        lang = self._modern_lang(language, ('fa', 'ua', 'zh'))
+        if lang is None:
+            return self._legacy_password_reset_template(language, context)
+        return self._modern_password_reset(lang, context)
+
+    def _legacy_password_reset_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Прежние тексты для языков без новой редакции. Template for password reset."""
         username = html.escape(context.get('username', ''))
         reset_url = html.escape(context.get('reset_url', '#'))
         expire_hours = context.get('expire_hours', 1)
 
         subjects = {
-            'ru': 'Сброс пароля',
-            'en': 'Reset your password',
             'zh': '重置您的密码',
             'ua': 'Скидання пароля',
             'fa': 'بازنشانی رمز عبور',
         }
 
         greeting = {
-            'ru': f'Здравствуйте{", " + username if username else ""}!',
-            'en': f'Hello{", " + username if username else ""}!',
             'zh': f'您好{", " + username if username else ""}!',
             'ua': f'Вітаємо{", " + username if username else ""}!',
             'fa': f'سلام{" " + username if username else ""}!',
@@ -2110,40 +2339,18 @@ class EmailNotificationTemplates:
                 <h2>{greeting.get('fa')}</h2>
                 <p>درخواستی برای بازنشانی رمز عبور شما دریافت شد. برای تعیین رمز جدید روی دکمه زیر بزنید:</p>
                 <p style="text-align: center;">
-                    <a href="{reset_url}" class="button" style="background-color: #dc3545;">بازنشانی رمز عبور</a>
+                    <a href="{reset_url}" class="button">بازنشانی رمز عبور</a>
                 </p>
                 <p>یا این لینک را در مرورگر خود کپی و باز کنید:</p>
                 <p><a href="{reset_url}">{reset_url}</a></p>
                 <p>این لینک تا {expire_hours} ساعت معتبر است.</p>
                 <p class="warning" style="color: #dc3545; font-weight: bold;">اگر شما درخواست بازنشانی رمز عبور نداده‌اید، این ایمیل را نادیده بگیرید یا با پشتیبانی تماس بگیرید.</p>
             """,
-            'ru': f"""
-                <h2>{greeting.get('ru')}</h2>
-                <p>Мы получили запрос на сброс вашего пароля. Нажмите на кнопку ниже, чтобы установить новый пароль:</p>
-                <p style="text-align: center;">
-                    <a href="{reset_url}" class="button" style="background-color: #dc3545;">Сбросить пароль</a>
-                </p>
-                <p>Или скопируйте и вставьте эту ссылку в браузер:</p>
-                <p><a href="{reset_url}">{reset_url}</a></p>
-                <p>Ссылка действительна в течение {expire_hours} часов.</p>
-                <p class="warning" style="color: #dc3545; font-weight: bold;">Если вы не запрашивали сброс пароля, проигнорируйте это письмо или свяжитесь с поддержкой.</p>
-            """,
-            'en': f"""
-                <h2>{greeting.get('en')}</h2>
-                <p>We received a request to reset your password. Click the button below to set a new password:</p>
-                <p style="text-align: center;">
-                    <a href="{reset_url}" class="button" style="background-color: #dc3545;">Reset Password</a>
-                </p>
-                <p>Or copy and paste this link in your browser:</p>
-                <p><a href="{reset_url}">{reset_url}</a></p>
-                <p>This link will expire in {expire_hours} hour(s).</p>
-                <p class="warning" style="color: #dc3545; font-weight: bold;">If you didn't request a password reset, please ignore this email or contact support.</p>
-            """,
             'zh': f"""
                 <h2>{greeting.get('zh')}</h2>
                 <p>我们收到了重置您密码的请求。点击下方按钮设置新密码：</p>
                 <p style="text-align: center;">
-                    <a href="{reset_url}" class="button" style="background-color: #dc3545;">重置密码</a>
+                    <a href="{reset_url}" class="button">重置密码</a>
                 </p>
                 <p>或将此链接复制并粘贴到浏览器中：</p>
                 <p><a href="{reset_url}">{reset_url}</a></p>
@@ -2154,7 +2361,7 @@ class EmailNotificationTemplates:
                 <h2>{greeting.get('ua')}</h2>
                 <p>Ми отримали запит на скидання вашого пароля. Натисніть на кнопку нижче, щоб встановити новий пароль:</p>
                 <p style="text-align: center;">
-                    <a href="{reset_url}" class="button" style="background-color: #dc3545;">Скинути пароль</a>
+                    <a href="{reset_url}" class="button">Скинути пароль</a>
                 </p>
                 <p>Або скопіюйте та вставте це посилання в браузер:</p>
                 <p><a href="{reset_url}">{reset_url}</a></p>
@@ -2164,27 +2371,29 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            'subject': subjects[language],
+            'body_html': self._get_base_template(bodies[language], language),
         }
 
     def _email_change_code_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for email change verification code."""
+        lang = self._modern_lang(language, ('fa', 'ua', 'zh'))
+        if lang is None:
+            return self._legacy_email_change_code_template(language, context)
+        return self._modern_email_change_code(lang, context)
+
+    def _legacy_email_change_code_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Прежние тексты для языков без новой редакции. Template for email change verification code."""
         username = html.escape(context.get('username', ''))
         code = html.escape(str(context.get('code', '')))
         expire_minutes = context.get('expire_minutes', 10)
 
         subjects = {
-            'ru': 'Код подтверждения для смены email',
-            'en': 'Email change verification code',
             'zh': '邮箱更换验证码',
             'ua': 'Код підтвердження для зміни email',
             'fa': 'کد تایید تغییر ایمیل',
         }
 
         greeting = {
-            'ru': f'Здравствуйте{", " + username if username else ""}!',
-            'en': f'Hello{", " + username if username else ""}!',
             'zh': f'您好{", " + username if username else ""}!',
             'ua': f'Вітаємо{", " + username if username else ""}!',
             'fa': f'سلام{" " + username if username else ""}!',
@@ -2197,20 +2406,6 @@ class EmailNotificationTemplates:
         """
 
         bodies = {
-            'ru': f"""
-                <h2>{greeting.get('ru')}</h2>
-                <p>Вы запросили смену email адреса. Используйте код ниже для подтверждения:</p>
-                {code_box}
-                <p>Код действителен в течение {expire_minutes} минут.</p>
-                <p style="color: #666;">Если вы не запрашивали смену email, просто проигнорируйте это письмо.</p>
-            """,
-            'en': f"""
-                <h2>{greeting.get('en')}</h2>
-                <p>You requested to change your email address. Use the code below to confirm:</p>
-                {code_box}
-                <p>This code will expire in {expire_minutes} minutes.</p>
-                <p style="color: #666;">If you didn't request an email change, you can safely ignore this email.</p>
-            """,
             'zh': f"""
                 <h2>{greeting.get('zh')}</h2>
                 <p>您请求更换邮箱地址。请使用以下验证码确认：</p>
@@ -2235,8 +2430,8 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            'subject': subjects[language],
+            'body_html': self._get_base_template(bodies[language], language),
         }
 
     # ============================================================================
