@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from importlib import import_module
 from typing import Any
 
@@ -14,6 +15,7 @@ from app.config import settings
 from app.database.models import PaymentMethod, Subscription, TransactionType
 from app.services.payment.common import topup_success_text
 from app.services.payment.payer_identity import PayerIdentity, payer_from_guest, resolve_user_payer
+from app.services.payment_problem_alert import alert_payment_not_applied
 from app.services.payment_reversal_alert import alert_paid_payment_reversed
 from app.services.platega_service import PlategaService
 from app.utils.formatters import format_human_date
@@ -36,6 +38,20 @@ def _parse_next_charge(raw: Any) -> datetime | None:
     except ValueError:
         return None
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def _callback_amount_kopeks(payload: Any) -> int | None:
+    """Сумма коллбека Platega (``Amount``/``amount``, рубли) в копейках."""
+    if not isinstance(payload, dict):
+        return None
+    raw = next((value for key, value in payload.items() if str(key).lower() == 'amount'), None)
+    if raw in (None, ''):
+        return None
+    try:
+        kopeks = (Decimal(str(raw)) * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP)
+    except (InvalidOperation, ValueError):
+        return None
+    return int(kopeks) if kopeks > 0 else None
 
 
 class PlategaPaymentMixin:
@@ -507,15 +523,16 @@ class PlategaPaymentMixin:
         if platega_id:
             found = await sub_crud.get_platega_subscription_by_platega_id(db, platega_id)
 
+        # n5: запасной канал корреляции — payload-токен
+        # platega-sub:{user_id}:{subscription_id}:{rand}, который Platega
+        # эхом возвращает в коллбеке (как у разовых платежей). Выручает,
+        # когда SubscriptionId отсутствует или битый. Lookup по
+        # subscription_id с любым статусом: CANCELLED-записи тоже нужны
+        # (was_cancelled-ветка ниже — чардж по локально отменённой записи
+        # продлевает честно, не воскрешая её). user_id из токена нужен и
+        # сиротскому списанию ниже — вернуть деньги на баланс.
+        hint = pr.parse_subscription_payload_token(pr.read_callback_payload(payload))
         if not found:
-            # n5: запасной канал корреляции — payload-токен
-            # platega-sub:{user_id}:{subscription_id}:{rand}, который Platega
-            # эхом возвращает в коллбеке (как у разовых платежей). Выручает,
-            # когда SubscriptionId отсутствует или битый. Lookup по
-            # subscription_id с любым статусом: CANCELLED-записи тоже нужны
-            # (was_cancelled-ветка ниже — чардж по локально отменённой записи
-            # продлевает честно, не воскрешая её).
-            hint = pr.parse_subscription_payload_token(pr.read_callback_payload(payload))
             if hint is not None:
                 candidate = await sub_crud.get_latest_platega_subscription_by_subscription(db, hint[1])
                 if candidate:
@@ -538,6 +555,19 @@ class PlategaPaymentMixin:
                 platega_subscription_id=platega_id,
                 status=status,
             )
+            if status is not None and status.upper() in pr.CHARGE_SUCCESS and charge_id:
+                # Деньги списаны по привязке, которой у нас нет (запись снесена
+                # вместе с пользователем/подпиской). Раньше — только warning и
+                # 200 OK: Platega списывала дальше, услуги не было.
+                await self._handle_orphan_platega_charge(
+                    db,
+                    record=None,
+                    platega_id=platega_id,
+                    charge_id=charge_id,
+                    user_id=hint[0] if hint is not None else None,
+                    amount_kopeks=_callback_amount_kopeks(payload),
+                    reason='привязка не найдена в базе',
+                )
             return
 
         # Блокируем строку перед изменением статуса/счётчиков — конкурентные
@@ -603,16 +633,22 @@ class PlategaPaymentMixin:
 
             from app.database.crud.transaction import create_transaction
 
-            subscription = await db.get(Subscription, record.subscription_id)
+            subscription = (
+                await db.get(Subscription, record.subscription_id) if record.subscription_id is not None else None
+            )
             if subscription is None:
-                # Не отмечаем charge_id/счётчики — реального продления не было,
-                # репортить успех нельзя. Практически недостижимо (CASCADE FK на
-                # subscription_id сносит и саму запись record), но на случай гонки
-                # молча притворяться успехом хуже, чем залогировать и выйти.
-                logger.error(
-                    'Platega subscription callback: Subscription не найдена для продления',
-                    subscription_id=record.subscription_id,
-                    platega_subscription_id=platega_id,
+                # Подписку удалили (FK SET NULL, миграция 0140) — продлевать
+                # нечего. Счётчики успеха не трогаем (продления не было), но и
+                # молча выходить нельзя: деньги списаны. Отменяем привязку у
+                # Platega, зачисляем сумму на баланс и зовём админа.
+                await self._handle_orphan_platega_charge(
+                    db,
+                    record=record,
+                    platega_id=platega_id,
+                    charge_id=charge_id,
+                    user_id=record.user_id,
+                    amount_kopeks=record.amount_kopeks or _callback_amount_kopeks(payload),
+                    reason='подписка удалена',
                 )
                 return
 
@@ -794,6 +830,133 @@ class PlategaPaymentMixin:
             platega_subscription_id=platega_id,
         )
 
+    async def _handle_orphan_platega_charge(
+        self,
+        db: AsyncSession,
+        *,
+        record: Any | None,
+        platega_id: str | None,
+        charge_id: str,
+        user_id: int | None,
+        amount_kopeks: int | None,
+        reason: str,
+    ) -> None:
+        """Успешное списание Platega, которое некуда применить.
+
+        Подписки (или самой записи привязки) больше нет — продлевать нечего,
+        а деньги уже списаны. Делаем три вещи, чтобы деньги не осели молча:
+
+        1. отменяем привязку на стороне Platega — иначе списания продолжатся;
+        2. зачисляем сумму на баланс пользователя (DEPOSIT с external_id =
+           charge Id), если пользователь известен и существует;
+        3. шлём админам оповещение с пользователем, суммой и SubscriptionId.
+
+        Идемпотентность: DEPOSIT пишется с ``external_id=charge_id`` — его видит
+        полноисторийная сверка дублей в вызывающем коде; для записи-сироты
+        дополнительно ставится ``last_charge_external_id``. Повторная проверка
+        дубля под блокировкой строки пользователя закрывает гонку ретраев для
+        случая без записи (её строку заблокировать нельзя).
+        """
+        from sqlalchemy import select as sa_select
+
+        from app.database.crud.transaction import create_transaction, emit_transaction_side_effects
+        from app.database.crud.user import get_user_by_id, lock_user_for_update
+        from app.database.models import Transaction
+
+        cancel_result = 'нет SubscriptionId'
+        platega_service = getattr(self, 'platega_service', None)
+        if platega_id and platega_service is not None:
+            try:
+                response = await platega_service.cancel_subscription(platega_id)
+                cancel_result = 'отменена' if response is not None else 'Platega не подтвердила отмену'
+            except Exception as cancel_error:  # pragma: no cover - best-effort
+                cancel_result = f'ошибка отмены: {cancel_error}'
+                logger.warning(
+                    'Не удалось отменить Platega-подписку по сиротскому списанию',
+                    platega_subscription_id=platega_id,
+                    error=str(cancel_error),
+                )
+        elif platega_id:
+            cancel_result = 'сервис Platega недоступен'
+
+        if record is not None:
+            record.status = 'CANCELLED'
+            record.last_charge_external_id = charge_id
+            record.last_charge_at = datetime.now(UTC)
+
+        credited = False
+        credit_note = 'пользователь неизвестен'
+        tx = None
+        user = await get_user_by_id(db, user_id) if user_id else None
+        if user_id and user is None:
+            credit_note = 'пользователь не найден (удалён?)'
+        elif user is not None and not amount_kopeks:
+            credit_note = 'сумма неизвестна'
+        elif user is not None:
+            user = await lock_user_for_update(db, user)
+            duplicate = (
+                await db.execute(
+                    sa_select(Transaction.id).where(
+                        Transaction.external_id == charge_id,
+                        Transaction.payment_method == PaymentMethod.PLATEGA.value,
+                    )
+                )
+            ).scalar_one_or_none()
+            if duplicate is not None:
+                await db.commit()
+                logger.info(
+                    'Platega: сиротское списание уже зачислено ранее',
+                    charge_id=charge_id,
+                    platega_subscription_id=platega_id,
+                )
+                return
+            tx = await create_transaction(
+                db,
+                user_id=user.id,
+                type=TransactionType.DEPOSIT,
+                amount_kopeks=amount_kopeks,
+                description='Возврат СБП-автопродления Platega на баланс: подписка удалена',
+                payment_method=PaymentMethod.PLATEGA,
+                external_id=charge_id,
+                is_completed=True,
+                commit=False,
+            )
+            user.balance_kopeks += amount_kopeks
+            user.updated_at = datetime.now(UTC)
+            credited = True
+            credit_note = 'зачислено на баланс'
+
+        await db.commit()
+
+        if tx is not None:
+            await emit_transaction_side_effects(
+                db,
+                tx,
+                amount_kopeks=amount_kopeks,
+                user_id=user_id,
+                type=TransactionType.DEPOSIT,
+                payment_method=PaymentMethod.PLATEGA,
+                external_id=charge_id,
+                description='Возврат СБП-автопродления Platega на баланс: подписка удалена',
+            )
+
+        await alert_payment_not_applied(
+            getattr(self, 'bot', None),
+            provider='Platega (СБП-автопродление)',
+            problem=(
+                f'Списание по удалённой подписке ({reason}) — '
+                + ('сумма зачислена на баланс' if credited else 'деньги НЕ зачислены, нужен возврат вручную')
+            ),
+            user_id=user_id,
+            amount_kopeks=amount_kopeks,
+            reference=charge_id,
+            details={
+                'SubscriptionId': platega_id,
+                'Отмена у Platega': cancel_result,
+                'Баланс': credit_note,
+            },
+        )
+
     async def _notify_sbp_recurring(
         self,
         db: AsyncSession,
@@ -845,7 +1008,9 @@ class PlategaPaymentMixin:
                 next_charge_text = format_human_date(record.next_charge_at)
             end_clause = ''
             try:
-                _subscription = await db.get(Subscription, record.subscription_id)
+                _subscription = (
+                    await db.get(Subscription, record.subscription_id) if record.subscription_id is not None else None
+                )
                 _end_date = getattr(_subscription, 'end_date', None) if _subscription else None
                 if _end_date:
                     _end_str = format_human_date(_end_date)

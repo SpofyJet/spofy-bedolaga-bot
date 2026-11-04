@@ -758,7 +758,9 @@ class PlategaSubscription(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
-    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False, index=True)
+    # SET NULL, не CASCADE (миграция 0140): удаление подписки не должно стирать
+    # привязку — иначе следующий чардж Platega не найти, а деньги списываются.
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='SET NULL'), nullable=True, index=True)
     tariff_id = Column(Integer, ForeignKey('tariffs.id'), nullable=True)
 
     platega_subscription_id = Column(String(255), unique=True, nullable=True, index=True)

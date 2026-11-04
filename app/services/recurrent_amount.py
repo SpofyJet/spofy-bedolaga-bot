@@ -222,7 +222,8 @@ async def list_provider_recurrent_subscription_ids(db: AsyncSession) -> set[int]
         from app.database.crud import platega_subscription as platega_crud
 
         for record in await platega_crud.list_platega_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE']):
-            ids.add(record.subscription_id)
+            if record.subscription_id is not None:
+                ids.add(record.subscription_id)
     except Exception:
         pass
     try:

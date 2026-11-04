@@ -404,30 +404,35 @@ async def test_confirmed_charge_with_empty_id_does_not_extend(monkeypatch):
 
 
 async def test_confirmed_charge_missing_subscription_does_not_report_false_success(monkeypatch):
-    """CONFIRMED, но привязанная Subscription отсутствует (гонка/рассинхрон,
-    практически недостижимо благодаря CASCADE FK на subscription_id) — не
-    должен инкрементить charges_success, писать аудитную транзакцию или
-    помечать charge_id как обработанный: реального продления не произошло,
-    репортить успех нельзя.
+    """CONFIRMED, но привязанная Subscription отсутствует (удалена — FK SET NULL,
+    миграция 0140) — продления не было: charges_success не растёт и
+    SUBSCRIPTION_PAYMENT не пишется. Но и молча выйти нельзя — деньги списаны:
+    привязка закрывается (CANCELLED, charge_id помечен), админ получает алерт.
+    Пользователя в базе нет — на баланс зачислять некому.
     """
+    from unittest.mock import patch
+
     from app.services.payment.platega import PlategaPaymentMixin
+    from tests.fixtures.sqlite_memory import memory_session
 
     class Svc(PlategaPaymentMixin):
-        """Без атрибута bot."""
+        """Без атрибута bot и platega_service."""
 
-    async with _memory_session(monkeypatch) as db:
+    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
         # subscription_id=1 указывает на несуществующую Subscription — FK в
-        # SQLite не форсится (см. docstring _memory_session).
+        # SQLite не форсится.
         rec = await _create_recurring_record(db, platega_subscription_id='ps-9')
 
-        await Svc().process_platega_subscription_callback(
-            db, {'Status': 'CONFIRMED', 'Id': 'charge-9', 'SubscriptionId': 'ps-9'}
-        )
+        with patch('app.services.payment.platega.alert_payment_not_applied', AsyncMock()) as alert:
+            await Svc().process_platega_subscription_callback(
+                db, {'Status': 'CONFIRMED', 'Id': 'charge-9', 'SubscriptionId': 'ps-9'}
+            )
 
         await db.refresh(rec)
         assert rec.charges_success == 0
-        assert rec.last_charge_external_id is None
-        assert rec.status == 'ACTIVE'
+        assert rec.last_charge_external_id == 'charge-9'
+        assert rec.status == 'CANCELLED'
+        alert.assert_awaited_once()
 
         transactions = (await db.execute(select(Transaction))).scalars().all()
         assert len(transactions) == 0

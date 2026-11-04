@@ -2267,7 +2267,11 @@ class MonitoringService:
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [build_miniapp_or_callback_button(text='💎 Купить подписку', callback_data='menu_buy', style='success')],
+                    [
+                        build_miniapp_or_callback_button(
+                            text='💎 Купить подписку', callback_data='menu_buy', style='success'
+                        )
+                    ],
                     [build_miniapp_or_callback_button(text='💰 Пополнить баланс', callback_data='balance_topup')],
                 ]
             )
@@ -2776,7 +2780,9 @@ class MonitoringService:
                     # Тот же текст, что у порога из панели: остаток в ГБ и что будет на нуле —
                     # на тарифе с обходами отключатся только обходы, обычные серверы работают.
                     note = texts.t(
-                        'WEBHOOK_BANDWIDTH_NOTE_BYPASS' if has_bypass_quota(subscription) else 'WEBHOOK_BANDWIDTH_NOTE_REGULAR',
+                        'WEBHOOK_BANDWIDTH_NOTE_BYPASS'
+                        if has_bypass_quota(subscription)
+                        else 'WEBHOOK_BANDWIDTH_NOTE_REGULAR',
                         '',
                     )
                     message = texts.t(
@@ -3256,6 +3262,10 @@ class MonitoringService:
         try:
             if not NotificationSettingsService.are_notifications_globally_enabled():
                 return
+            if record.subscription_id is None:
+                # Подписка удалена (FK SET NULL) — напоминать не о чем, а дедуп
+                # по SentNotification без subscription_id не записать.
+                return
             if await notification_sent(
                 db, record.user_id, record.subscription_id, 'platega_pending_reminder', record.id
             ):
@@ -3308,6 +3318,10 @@ class MonitoringService:
         """
         try:
             if not NotificationSettingsService.are_notifications_globally_enabled():
+                return
+            if record.subscription_id is None:
+                # Подписка удалена (FK SET NULL) — напоминать не о чем, а дедуп
+                # по SentNotification без subscription_id не записать.
                 return
             if await notification_sent(
                 db, record.user_id, record.subscription_id, 'platega_binding_expired', record.id
@@ -3402,6 +3416,10 @@ class MonitoringService:
                 try:
                     next_charge_at = record.next_charge_at
                     if next_charge_at is None or next_charge_at <= now or next_charge_at > horizon:
+                        continue
+                    if record.subscription_id is None:
+                        # Подписка удалена (FK SET NULL): списание уйдёт в
+                        # сиротскую ветку коллбека (отмена + возврат на баланс).
                         continue
                     cycle_key = int(next_charge_at.timestamp() // 86400)
                     if await notification_sent(
