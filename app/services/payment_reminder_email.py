@@ -58,6 +58,7 @@ async def send_payment_reminder_email(
 ) -> bool:
     """Шлёт письмо-напоминание. True — письмо реально отправлено."""
     from app.cabinet.services.email_service import email_service
+    from app.cabinet.services.email_templates import EmailNotificationTemplates
     from app.cabinet.services.email_unsubscribe import build_unsubscribe_url
     from app.config import settings
 
@@ -69,18 +70,20 @@ async def send_payment_reminder_email(
     )
     cabinet_url = (getattr(settings, 'CABINET_URL', '') or '').rstrip('/')
     path = '/balance/top-up' if kind == 'payment' else '/subscription/purchase'
-    link = f'{cabinet_url}{path}' if cabinet_url else ''
+    # Оплата: сразу экран способов оплаты с той же суммой, без повторного ввода.
+    query = f'?amount={(amount_kopeks + 99) // 100}' if kind == 'payment' and amount_kopeks > 0 else ''
+    link = f'{cabinet_url}{path}{query}' if cabinet_url else ''
     unsubscribe_url = build_unsubscribe_url(user_id, email) if user_id else ''
-    button_html = (
-        f'<p style="margin:24px 0"><a href="{html.escape(link, quote=True)}" '
-        'style="background:#2f80ed;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;'
-        f'font-weight:600">{html.escape(button)}</a></p>'
-        if link
-        else ''
-    )
-    body_html = (
-        '<div style="font-family:Arial,sans-serif;font-size:16px;line-height:1.5;color:#1f2937">'
-        f'<p>{body}</p>{button_html}<p style="color:#6b7280;font-size:13px">{html.escape(footer)}</p></div>'
+
+    lang = (language or 'ru').split('-')[0].lower()
+    body_html = EmailNotificationTemplates().render_simple_letter(
+        language=lang if lang in _TEXTS else 'ru',
+        title=subject,
+        body_html=body,
+        button_url=link,
+        button_text=button,
+        note=footer,
+        unsubscribe_url=unsubscribe_url or '',
     )
     try:
         # send_email: sync smtplib, в thread, чтобы не блокировать event loop

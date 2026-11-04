@@ -15,6 +15,7 @@
 """
 
 import html
+import re
 import time
 from typing import Any
 
@@ -46,6 +47,8 @@ LAYOUT_CONTEXT_VARS = [
     'username',
     'email',
     'date',
+    # Скрытая первая строка письма — её почтовики показывают в списке рядом с темой.
+    'preheader',
 ]
 # HTML-значения — не экранируем.
 _RAW_VARS = frozenset({'content', 'unsubscribe_block'})
@@ -71,101 +74,180 @@ UNSUBSCRIBE_TEXTS = {
     'fa': 'لغو اشتراک ایمیل‌های تبلیغاتی',
 }
 
+# Встроенная обёртка: таблицы и стили, которые переживают Gmail, Mail.ru,
+# Яндекс и Outlook. Классы тела письма (.highlight, .button, .details…) описаны
+# в <style> для браузеров и превью редактора, а перед отправкой
+# inline_email_styles() дублирует их в style="" — почтовики, режущие <style>,
+# показывают письмо так же. Атрибут data-sp-email помечает документы этой
+# обёртки: чужие сохранённые обёртки инлайнер не трогает.
 DEFAULT_EMAIL_LAYOUT = """<!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="x-apple-disable-message-reformatting">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
+    <title>{service_name}</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: #f5f5f5;
-            margin: 0;
-            padding: 0;
+        body { margin: 0; padding: 0; background-color: #eef2f7; -webkit-text-size-adjust: 100%; }
+        .sp-card { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #334155; }
+        .sp-card h1, .sp-card h2 { margin: 0 0 12px; font-size: 22px; line-height: 1.3; font-weight: 700; color: #0f172a; }
+        .sp-card h3 { margin: 18px 0 8px; font-size: 16px; font-weight: 700; color: #0f172a; }
+        .sp-card p { margin: 0 0 12px; }
+        .sp-card a { color: #2563eb; }
+        .sp-card strong { color: #0f172a; }
+        .lead { font-size: 16px; }
+        .highlight { background-color: #f1f5f9; border-left: 4px solid #3b82f6; border-radius: 10px; padding: 14px 18px 2px; margin: 18px 0; }
+        .highlight.success { border-left-color: #22c55e; }
+        .highlight.warning { border-left-color: #f59e0b; }
+        .highlight.danger { border-left-color: #ef4444; }
+        .details { width: 100%; border-collapse: collapse; margin: 4px 0 18px; }
+        .details td { padding: 9px 0; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+        .details .k { color: #64748b; }
+        .details .v { text-align: right; font-weight: 600; color: #0f172a; }
+        .cta { text-align: center; margin: 26px 0 22px; }
+        .button { display: inline-block; background-color: #2563eb; color: #ffffff !important; text-decoration: none; font-weight: 600; font-size: 16px; line-height: 20px; padding: 14px 28px; border-radius: 10px; }
+        .button.secondary { background-color: #e2e8f0; color: #0f172a !important; }
+        .code { font-family: 'SFMono-Regular', Menlo, Consolas, 'Courier New', monospace; font-size: 32px; font-weight: 700; letter-spacing: 8px; text-align: center; color: #0f172a; background-color: #f1f5f9; border-radius: 12px; padding: 18px 12px; margin: 18px 0; }
+        .note { font-size: 13px; line-height: 1.5; color: #64748b; }
+        .link { font-size: 13px; word-break: break-all; }
+        .amount { font-size: 22px; font-weight: 700; color: #16a34a; }
+        .amount.negative { color: #dc2626; }
+        @media (max-width: 600px) {
+            .sp-card { padding: 26px 20px 14px !important; }
+            .sp-header { padding: 18px 20px !important; }
+            .button { display: block !important; }
         }
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #ffffff;
-        }
-        .header {
-            text-align: center;
-            padding: 20px 0;
-            border-bottom: 2px solid #007bff;
-        }
-        .header h1 {
-            color: #007bff;
-            margin: 0;
-            font-size: 24px;
-        }
-        .content {
-            padding: 30px 20px;
-        }
-        .highlight {
-            background-color: #f8f9fa;
-            border-left: 4px solid #007bff;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        .success {
-            border-left-color: #28a745;
-        }
-        .warning {
-            border-left-color: #ffc107;
-        }
-        .danger {
-            border-left-color: #dc3545;
-        }
-        .button {
-            display: inline-block;
-            padding: 12px 24px;
-            background-color: #007bff;
-            color: white !important;
-            text-decoration: none;
-            border-radius: 5px;
-            margin: 20px 0;
-            font-weight: bold;
-        }
-        .button:hover {
-            background-color: #0056b3;
-        }
-        .footer {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
-            font-size: 12px;
-            color: #666;
-            text-align: center;
-        }
-        .amount {
-            font-size: 24px;
-            font-weight: bold;
-            color: #28a745;
-        }
-        .amount.negative {
-            color: #dc3545;
+        @media (prefers-color-scheme: dark) {
+            body, .sp-bg { background-color: #0a0f1a !important; }
+            .sp-card { background-color: #0f172a !important; color: #cbd5e1 !important; }
+            .sp-card h1, .sp-card h2, .sp-card h3, .sp-card strong, .details .v, .code { color: #f1f5f9 !important; }
+            .highlight, .code { background-color: #1e293b !important; }
+            .details td { border-bottom-color: #1e293b !important; }
+            .details .k, .note, .footer { color: #94a3b8 !important; }
+            .button.secondary { background-color: #1e293b !important; color: #f1f5f9 !important; }
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>{service_name}</h1>
-        </div>
-        <div class="content">
-            {content}
-        </div>
-        <div class="footer">
-            <p>&copy; {service_name}</p>
-            <p>{footer_text}</p>
-            {unsubscribe_block}
-        </div>
-    </div>
+<body data-sp-email="1" style="margin: 0; padding: 0; background-color: #eef2f7;">
+    <div class="preheader" style="display: none; max-height: 0; overflow: hidden; opacity: 0; mso-hide: all; font-size: 1px; line-height: 1px; color: #eef2f7;">{preheader}&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>
+    <table role="presentation" class="sp-bg" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eef2f7" style="background-color: #eef2f7;">
+        <tr>
+            <td align="center" style="padding: 24px 12px;">
+                <table role="presentation" class="container" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 560px; width: 100%;">
+                    <tr>
+                        <td class="sp-header" bgcolor="#0f172a" style="background-color: #0f172a; border-radius: 16px 16px 0 0; padding: 20px 28px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 700; color: #ffffff;">
+                            <span style="color: #3b82f6;">&#9679;</span>&nbsp;{service_name}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="sp-card content" bgcolor="#ffffff" style="background-color: #ffffff; border-radius: 0 0 16px 16px; padding: 32px 28px 18px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #334155;">
+                            {content}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="footer" align="center" style="padding: 18px 28px 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; line-height: 1.5; color: #64748b;">
+                            <p style="margin: 0 0 6px;">{footer_text}</p>
+                            {unsubscribe_block}
+                            <p style="margin: 6px 0 0;">&copy; {service_name}</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>"""
+
+
+# ============ Инлайн-стили перед отправкой ============
+
+LAYOUT_MARKER = 'data-sp-email="1"'
+_INLINED_MARKER = 'data-sp-email="inlined"'
+
+# Те же правила, что в <style> встроенной обёртки, — для почтовиков, которые
+# <style> вырезают. Порядок: стиль тега, потом классы, потом то, что уже
+# написано в style="" (оно побеждает как последнее).
+_TAG_STYLES = {
+    'h1': 'margin:0 0 12px;font-size:22px;line-height:1.3;font-weight:700;color:#0f172a;',
+    'h2': 'margin:0 0 12px;font-size:22px;line-height:1.3;font-weight:700;color:#0f172a;',
+    'h3': 'margin:18px 0 8px;font-size:16px;font-weight:700;color:#0f172a;',
+    'p': 'margin:0 0 12px;',
+    'a': 'color:#2563eb;',
+    'strong': 'color:#0f172a;',
+}
+_CLASS_STYLES = {
+    'lead': 'font-size:16px;',
+    'highlight': (
+        'background-color:#f1f5f9;border-left:4px solid #3b82f6;border-radius:10px;padding:14px 18px 2px;margin:18px 0;'
+    ),
+    'details': 'width:100%;border-collapse:collapse;margin:4px 0 18px;',
+    'k': 'padding:9px 12px 9px 0;border-bottom:1px solid #e2e8f0;font-size:14px;color:#64748b;',
+    'v': 'padding:9px 0;border-bottom:1px solid #e2e8f0;font-size:14px;text-align:right;font-weight:600;color:#0f172a;',
+    'cta': 'text-align:center;margin:26px 0 22px;',
+    'button': (
+        'display:inline-block;background-color:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;'
+        'font-size:16px;line-height:20px;padding:14px 28px;border-radius:10px;'
+    ),
+    'code': (
+        "font-family:'SFMono-Regular',Menlo,Consolas,'Courier New',monospace;font-size:32px;font-weight:700;"
+        'letter-spacing:8px;text-align:center;color:#0f172a;background-color:#f1f5f9;border-radius:12px;'
+        'padding:18px 12px;margin:18px 0;'
+    ),
+    'note': 'font-size:13px;line-height:1.5;color:#64748b;',
+    'link': 'font-size:13px;word-break:break-all;',
+    'amount': 'font-size:22px;font-weight:700;color:#16a34a;',
+}
+# Модификаторы действуют только вместе с базовым классом.
+_MODIFIER_STYLES = {
+    ('highlight', 'success'): 'border-left-color:#22c55e;',
+    ('highlight', 'warning'): 'border-left-color:#f59e0b;',
+    ('highlight', 'danger'): 'border-left-color:#ef4444;',
+    ('button', 'secondary'): 'background-color:#e2e8f0;color:#0f172a;',
+    ('amount', 'negative'): 'color:#dc2626;',
+}
+_TAG_RE = re.compile(r'<(h1|h2|h3|p|a|div|span|td|table|strong)\b([^>]*)>', re.IGNORECASE)
+_CLASS_RE = re.compile(r'\sclass="([^"]*)"', re.IGNORECASE)
+_STYLE_RE = re.compile(r'\sstyle="([^"]*)"', re.IGNORECASE)
+
+
+def _inline_tag(match: re.Match) -> str:
+    tag, attrs = match.group(1), match.group(2)
+    class_match = _CLASS_RE.search(attrs)
+    classes = class_match.group(1).split() if class_match else []
+    added = _TAG_STYLES.get(tag.lower(), '')
+    for name in classes:
+        added += _CLASS_STYLES.get(name, '')
+    for (base, modifier), style in _MODIFIER_STYLES.items():
+        if base in classes and modifier in classes:
+            added += style
+    if not added:
+        return match.group(0)
+    style_match = _STYLE_RE.search(attrs)
+    if style_match:
+        existing = style_match.group(1).strip()
+        merged = added + existing
+        attrs = attrs[: style_match.start()] + f' style="{merged}"' + attrs[style_match.end() :]
+    else:
+        self_closing = attrs.endswith('/')
+        attrs = (attrs[:-1] if self_closing else attrs) + f' style="{added}"' + ('/' if self_closing else '')
+    return f'<{tag}{attrs}>'
+
+
+def inline_email_styles(document: str) -> str:
+    """Дублирует стили классов встроенной обёртки в style="" — только у её писем и один раз.
+
+    Свои сохранённые обёртки и полные HTML-документы из редактора не трогаем:
+    у них свои стили, и метки data-sp-email у них нет.
+    """
+    if not document or LAYOUT_MARKER not in document:
+        return document
+    head, sep, body = document.partition('<body')
+    if not sep:
+        return document
+    body = _TAG_RE.sub(_inline_tag, body)
+    return head + sep + body.replace(LAYOUT_MARKER, _INLINED_MARKER, 1)
 
 
 def layout_is_valid(layout_html: str) -> bool:
@@ -178,7 +260,10 @@ def unsubscribe_block(unsubscribe_url: str, language: str) -> str:
     if not unsubscribe_url:
         return ''
     label = UNSUBSCRIBE_TEXTS.get(language, UNSUBSCRIBE_TEXTS['ru'])
-    return f'<p><a href="{html.escape(unsubscribe_url, quote=True)}" style="color: #666;">{label}</a></p>'
+    return (
+        f'<p style="margin: 0 0 6px;"><a href="{html.escape(unsubscribe_url, quote=True)}" '
+        f'style="color: #64748b; text-decoration: underline;">{label}</a></p>'
+    )
 
 
 def build_layout_context(language: str, *, content: str = '', unsubscribe_url: str = '') -> dict[str, str]:
@@ -203,6 +288,7 @@ def build_layout_context(language: str, *, content: str = '', unsubscribe_url: s
         'username': '',
         'email': '',
         'date': format_email_datetime(datetime.now(UTC), fmt='%d.%m.%Y'),
+        'preheader': '',
     }
 
 

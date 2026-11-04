@@ -81,7 +81,7 @@ def test_custom_layout_applies_to_default_templates():
     template = EmailNotificationTemplates().get_template(NotificationType.WINBACK_TRIAL_ENDING, 'ru', {})
     body = template['body_html']
     assert body.startswith('<!DOCTYPE html><html><body><div id="brand">')
-    assert 'Пробная подписка скоро закончится' in body
+    assert 'Пробный период скоро закончится' in body
     assert 'Это автоматическое сообщение' in body
     assert '{content}' not in body and '{footer_text}' not in body
 
