@@ -802,13 +802,59 @@ async def _try_delete_message_later(bot: Bot, chat_id: int, message_id: int, del
         pass
 
 
-async def reply_to_ticket(callback: types.CallbackQuery, state: FSMContext, db_user: User):
+def _ticket_reply_unavailable_view(texts, ticket: Ticket) -> tuple[str, types.InlineKeyboardMarkup]:
+    """Экран «ответить нельзя»: для закрытого обращения — создать новое или в меню."""
+    rows: list[list[types.InlineKeyboardButton]] = []
+    if ticket.status == TicketStatus.CLOSED.value:
+        text = texts.t('TICKET_CLOSED_NO_REPLY', '❌ Обращение закрыто, ответить невозможно.')
+        try:
+            from app.services.support_settings_service import SupportSettingsService
+
+            tickets_enabled = SupportSettingsService.is_tickets_enabled()
+        except Exception:
+            tickets_enabled = True
+        if tickets_enabled:
+            text += '\n\n' + texts.t('TICKET_CLOSED_CREATE_NEW_HINT', 'Если вопрос остался — создайте новое обращение.')
+            rows.append(
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('CREATE_TICKET_BUTTON', '🎫 Создать обращение'), callback_data='create_ticket'
+                    )
+                ]
+            )
+    else:
+        text = texts.t('TICKET_REPLY_BLOCKED', '❌ Отвечать в этом обращении сейчас нельзя.')
+    rows.append(
+        [types.InlineKeyboardButton(text=texts.t('BACK_TO_MENU', '🏠 В главное меню'), callback_data='back_to_menu')]
+    )
+    return text, types.InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def reply_to_ticket(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     """Начать ответ на тикет"""
-    ticket_id = int(callback.data.replace('reply_ticket_', ''))
+    texts = get_texts(db_user.language)
+    try:
+        ticket_id = int(callback.data.replace('reply_ticket_', ''))
+    except ValueError:
+        await callback.answer()
+        return
+
+    # Статус проверяем до того, как просить текст: раньше человек набирал ответ
+    # и только потом узнавал, что обращение закрыто, — текст пропадал.
+    ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=False)
+    if not ticket or ticket.user_id != db_user.id:
+        await callback.answer(texts.t('TICKET_NOT_FOUND', 'Обращение не найдено.'), show_alert=True)
+        return
+    if ticket.status == TicketStatus.CLOSED.value or ticket.is_user_reply_blocked:
+        text, keyboard = _ticket_reply_unavailable_view(texts, ticket)
+        try:
+            await callback.message.edit_text(text, reply_markup=keyboard)
+        except TelegramBadRequest:
+            await callback.message.answer(text, reply_markup=keyboard)
+        await callback.answer()
+        return
 
     await state.update_data(ticket_id=ticket_id)
-
-    texts = get_texts(db_user.language)
 
     try:
         await callback.message.edit_text(
@@ -885,38 +931,10 @@ async def _add_ticket_reply_from_batch(batch: _TicketInputBatch, state: FSMConte
             await message.answer(texts.t('TICKET_NOT_FOUND', 'Обращение не найдено.'))
             await state.clear()
             return
-        if ticket.status == TicketStatus.CLOSED.value:
-            await message.answer(
-                texts.t('TICKET_CLOSED', '✅ Обращение закрыто.'),
-                reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            types.InlineKeyboardButton(
-                                text=texts.t('CLOSE_NOTIFICATION', '❌ Закрыть уведомление'),
-                                callback_data=f'close_ticket_notification_{ticket.id}',
-                            )
-                        ]
-                    ]
-                ),
-            )
-            await state.clear()
-            return
-
-        # Блокируем добавление сообщения, если тикет закрыт или заблокирован админом
+        # Обращение могли закрыть, пока человек набирал ответ
         if ticket.status == TicketStatus.CLOSED.value or ticket.is_user_reply_blocked:
-            await message.answer(
-                texts.t('TICKET_CLOSED_NO_REPLY', '❌ Обращение закрыто, ответить невозможно.'),
-                reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            types.InlineKeyboardButton(
-                                text=texts.t('CLOSE_NOTIFICATION', '❌ Закрыть уведомление'),
-                                callback_data=f'close_ticket_notification_{ticket.id}',
-                            )
-                        ]
-                    ]
-                ),
-            )
+            text, keyboard = _ticket_reply_unavailable_view(texts, ticket)
+            await message.answer(text, reply_markup=keyboard)
             await state.clear()
             return
 

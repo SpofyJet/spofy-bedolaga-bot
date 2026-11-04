@@ -2308,6 +2308,8 @@
   "TICKET_ATTACHMENTS": "📎附件",
   "TICKET_CLOSED": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji>工单已关闭。",
   "TICKET_CLOSED_NO_REPLY": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji>工单已关闭，无法回复。",
+  "TICKET_CLOSED_CREATE_NEW_HINT": "如果问题仍未解决，请创建新的工单。",
+  "TICKET_REPLY_BLOCKED": "❌ 目前无法回复此工单。",
   "TICKET_CLOSE_ERROR": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji>关闭工单时出错。",
   "TICKET_CREATED_SUCCESS": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> 工单已创建！\n\n我们会尽快回复——通知会直接发到这里。",
   "TICKET_CREATED_DETAILS": "编号：<b>#{ticket_id}</b>\n主题：{title}",

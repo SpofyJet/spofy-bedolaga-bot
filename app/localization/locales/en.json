@@ -2308,6 +2308,8 @@
   "TICKET_ATTACHMENTS": "📎 Attachments",
   "TICKET_CLOSED": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> Ticket closed.",
   "TICKET_CLOSED_NO_REPLY": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> The ticket is closed; replying is not possible.",
+  "TICKET_CLOSED_CREATE_NEW_HINT": "If you still need help, create a new ticket.",
+  "TICKET_REPLY_BLOCKED": "❌ Replies to this ticket are not available right now.",
   "TICKET_CLOSE_ERROR": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> Error closing ticket.",
   "TICKET_CREATED_SUCCESS": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> Ticket created!\n\nWe will reply soon — the notification will arrive right here.",
   "TICKET_CREATED_DETAILS": "Number: <b>#{ticket_id}</b>\nSubject: {title}",

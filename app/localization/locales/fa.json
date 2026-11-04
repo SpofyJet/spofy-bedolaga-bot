@@ -2308,6 +2308,8 @@
   "TICKET_ATTACHMENTS": "📎 پیوست‌ها",
   "TICKET_CLOSED": "<tg-emoji emoji-id='5832546462478635761'>🔒</tg-emoji> تیکت بسته شده",
   "TICKET_CLOSED_NO_REPLY": "<tg-emoji emoji-id='5832546462478635761'>🔒</tg-emoji> تیکت بسته شده، پاسخ ممکن نیست",
+  "TICKET_CLOSED_CREATE_NEW_HINT": "اگر مشکل هنوز باقی است، یک درخواست جدید ثبت کنید.",
+  "TICKET_REPLY_BLOCKED": "❌ در حال حاضر امکان پاسخ به این درخواست وجود ندارد.",
   "TICKET_CLOSE_ERROR": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> خطا در بستن تیکت",
   "TICKET_CREATED_SUCCESS": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> درخواست ثبت شد!\n\nبه‌زودی پاسخ می‌دهیم — اعلان همین‌جا می‌آید.",
   "TICKET_CREATED_DETAILS": "شماره: <b>#{ticket_id}</b>\nموضوع: {title}",

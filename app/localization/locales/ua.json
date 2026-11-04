@@ -2308,6 +2308,8 @@
   "TICKET_ATTACHMENTS": "📎 Вкладення",
   "TICKET_CLOSED": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> Тікет закрито.",
   "TICKET_CLOSED_NO_REPLY": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> Тікет закрито, відповісти неможливо.",
+  "TICKET_CLOSED_CREATE_NEW_HINT": "Якщо питання лишилося — створіть нове звернення.",
+  "TICKET_REPLY_BLOCKED": "❌ Відповідати в цьому зверненні зараз не можна.",
   "TICKET_CLOSE_ERROR": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> Помилка при закритті тікета.",
   "TICKET_CREATED_SUCCESS": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> Звернення створено!\n\nВідповімо найближчим часом — сповіщення прийде прямо сюди.",
   "TICKET_CREATED_DETAILS": "Номер: <b>#{ticket_id}</b>\nТема: {title}",
