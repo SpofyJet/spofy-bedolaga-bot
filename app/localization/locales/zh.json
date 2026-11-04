@@ -1896,6 +1896,8 @@
   "REFERRAL_WITHDRAWAL_ENTER_DETAILS": "<tg-emoji emoji-id='5967548335542767952'>💳</tg-emoji> 请输入转账信息：\n\n例如：\n• SBP：+7 999 123-45-67（Sberbank）",
   "REFERRAL_WITHDRAWAL_INSUFFICIENT": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> 余额不足。可用：{amount}",
   "REFERRAL_WITHDRAWAL_INVALID_AMOUNT": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> 请输入正数金额",
+  "REFERRAL_WITHDRAWAL_AMOUNT_NOT_NUMBER": "❌ 无法识别金额。请发送以卢布为单位的数字，例如：1500",
+  "REFERRAL_WITHDRAWAL_DETAILS_TEXT_ONLY": "❌ 请以一条文字消息发送收款信息。",
   "REFERRAL_WITHDRAWAL_MIN_AMOUNT": "<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> 最低金额：<b>{amount}</b>",
   "REFERRAL_WITHDRAWAL_MIN_ERROR": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> 最低金额：{amount}",
   "REFERRAL_WITHDRAWAL_ONLY_REF_MODE": "<i><tg-emoji emoji-id='5879785854284599288'>ℹ️</tg-emoji> 仅可提现推荐余额</i>",

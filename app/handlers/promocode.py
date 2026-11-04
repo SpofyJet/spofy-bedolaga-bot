@@ -111,7 +111,8 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
     _lang = db_user.language  # Spofy: capture early (avoid MissingGreenlet on expired obj)
     texts = get_texts(_lang)
 
-    code = message.text.strip()
+    # Фото или стикер вместо промокода: message.text — None, раньше хендлер падал
+    code = (message.text or '').strip()
 
     if not code:
         await message.answer(

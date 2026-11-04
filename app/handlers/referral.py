@@ -1,5 +1,6 @@
 import hashlib
 import json
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
 from html import escape as html_escape
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from app.services.admin_notification_service import AdminNotificationService, No
 from app.services.referral_reward_service import format_reward_total
 from app.services.referral_withdrawal_service import referral_withdrawal_service
 from app.states import ReferralWithdrawalStates
+from app.utils.decorators import error_handler
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.user_utils import (
     get_detailed_referral_list,
@@ -728,62 +730,90 @@ async def start_withdrawal_request(callback: types.CallbackQuery, db_user: User,
     await callback.answer()
 
 
+# Верхняя граница разбора суммы (10^10 ₽): дальше — заведомо не сумма вывода, а «1e999999».
+_WITHDRAWAL_AMOUNT_MAX_DIGITS = 10
+
+
+def parse_withdrawal_amount_kopeks(raw: str | None) -> int | None:
+    """Сумма в рублях из текста → копейки; None, если это не конечное число разумного размера.
+
+    float('inf') раньше доходил до int() и ронял хендлер OverflowError, а NaN — ValueError
+    уже после того, как состояние было выставлено.
+    """
+    if not raw:
+        return None
+    cleaned = raw.strip().replace(',', '.').replace('₽', '').replace(' ', '').replace('\u00a0', '')
+    if not cleaned:
+        return None
+    try:
+        amount = Decimal(cleaned)
+        # adjusted() и copy_abs() точные: abs()/умножение на «1e999999999» сами бросают Overflow
+        if not amount.is_finite() or (amount and amount.adjusted() >= _WITHDRAWAL_AMOUNT_MAX_DIGITS):
+            return None
+        return int((amount * 100).to_integral_value(rounding=ROUND_DOWN))
+    except (InvalidOperation, ArithmeticError):
+        return None
+
+
+@error_handler
 async def process_withdrawal_amount(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
     """Обрабатывает ввод суммы для вывода."""
     texts = get_texts(db_user.language)
     data = await state.get_data()
     available = data.get('available_balance', 0)
 
-    try:
-        # Парсим сумму (в рублях)
-        amount_text = message.text.strip().replace(',', '.').replace('₽', '').replace(' ', '')
-        amount_rubles = float(amount_text)
-        amount_kopeks = int(amount_rubles * 100)
-
-        if amount_kopeks <= 0:
-            await message.answer(texts.t('REFERRAL_WITHDRAWAL_INVALID_AMOUNT', '❌ Введите положительную сумму'))
-            return
-
-        min_amount = settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS
-        if amount_kopeks < min_amount:
-            await message.answer(
-                texts.t('REFERRAL_WITHDRAWAL_MIN_ERROR', '❌ Минимальная сумма: {amount}').format(
-                    amount=texts.format_price(min_amount)
-                )
+    # Фото, стикер или «inf» вместо суммы — просим ввести число ещё раз
+    amount_kopeks = parse_withdrawal_amount_kopeks(message.text)
+    if amount_kopeks is None:
+        await message.answer(
+            texts.t(
+                'REFERRAL_WITHDRAWAL_AMOUNT_NOT_NUMBER',
+                '❌ Не получилось распознать сумму. Отправьте число в рублях, например: 1500',
             )
-            return
-
-        if amount_kopeks > available:
-            await message.answer(
-                texts.t('REFERRAL_WITHDRAWAL_INSUFFICIENT', '❌ Недостаточно средств. Доступно: {amount}').format(
-                    amount=texts.format_price(available)
-                )
-            )
-            return
-
-        # Сохраняем сумму и переходим к вводу реквизитов
-        await state.update_data(withdrawal_amount=amount_kopeks)
-        await state.set_state(ReferralWithdrawalStates.waiting_for_payment_details)
-
-        text = texts.t(
-            'REFERRAL_WITHDRAWAL_ENTER_DETAILS',
-            '💳 Введите реквизиты для перевода:\n\nНапример:\n• СБП: +7 999 123-45-67 (Сбербанк)',
         )
+        return
 
-        keyboard = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.t('CANCEL', '❌ Отмена'), callback_data='referral_withdrawal_cancel'
-                    )
-                ]
+    if amount_kopeks <= 0:
+        await message.answer(texts.t('REFERRAL_WITHDRAWAL_INVALID_AMOUNT', '❌ Введите положительную сумму'))
+        return
+
+    min_amount = settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS
+    if amount_kopeks < min_amount:
+        await message.answer(
+            texts.t('REFERRAL_WITHDRAWAL_MIN_ERROR', '❌ Минимальная сумма: {amount}').format(
+                amount=texts.format_price(min_amount)
+            )
+        )
+        return
+
+    if amount_kopeks > available:
+        await message.answer(
+            texts.t('REFERRAL_WITHDRAWAL_INSUFFICIENT', '❌ Недостаточно средств. Доступно: {amount}').format(
+                amount=texts.format_price(available)
+            )
+        )
+        return
+
+    # Сохраняем сумму и переходим к вводу реквизитов
+    await state.update_data(withdrawal_amount=amount_kopeks)
+    await state.set_state(ReferralWithdrawalStates.waiting_for_payment_details)
+
+    text = texts.t(
+        'REFERRAL_WITHDRAWAL_ENTER_DETAILS',
+        '💳 Введите реквизиты для перевода:\n\nНапример:\n• СБП: +7 999 123-45-67 (Сбербанк)',
+    )
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('CANCEL', '❌ Отмена'), callback_data='referral_withdrawal_cancel'
+                )
             ]
-        )
+        ]
+    )
 
-        await message.answer(text, reply_markup=keyboard)
-
-    except ValueError:
-        await message.answer(texts.t('REFERRAL_WITHDRAWAL_INVALID_AMOUNT', '❌ Введите корректную сумму'))
+    await message.answer(text, reply_markup=keyboard)
 
 
 async def process_withdrawal_amount_callback(
@@ -833,11 +863,18 @@ async def process_withdrawal_amount_callback(
     await callback.answer()
 
 
+@error_handler
 async def process_payment_details(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
     """Обрабатывает ввод реквизитов и показывает подтверждение."""
     texts = get_texts(db_user.language)
     data = await state.get_data()
     amount_kopeks = data.get('withdrawal_amount', 0)
+    if not message.text:
+        # Фото или стикер вместо реквизитов: раньше message.text.strip() ронял хендлер
+        await message.answer(
+            texts.t('REFERRAL_WITHDRAWAL_DETAILS_TEXT_ONLY', '❌ Отправьте реквизиты текстом одним сообщением.')
+        )
+        return
     payment_details = message.text.strip()
 
     if len(payment_details) < 10:
