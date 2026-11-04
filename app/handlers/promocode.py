@@ -106,6 +106,70 @@ async def _restore_previous_state(state: FSMContext) -> None:
         await state.set_data(prev_data)
 
 
+def promo_subscription_choice_keyboard(result: dict, code: str) -> types.InlineKeyboardMarkup:
+    """Выбор подписки для промокода на дни, когда подписок несколько (ошибка ``select_subscription``)."""
+    eligible = result.get('eligible_subscriptions', [])
+    promo_code = result.get('code', code)
+    buttons = []
+    for sub in eligible:
+        name = sub.get('tariff_name', f'#{sub["id"]}')
+        days = sub.get('days_left', 0)
+        buttons.append(
+            [
+                types.InlineKeyboardButton(
+                    text=f'{name} ({days} дн.)',
+                    callback_data=f'promo_sub:{sub["id"]}:{promo_code}',
+                )
+            ]
+        )
+    buttons.append([types.InlineKeyboardButton(text='❌ Отмена', callback_data='back_to_menu')])
+    return types.InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def promocode_error_text(texts, error: str | None) -> str:
+    """Текст для кода ошибки активации/проверки промокода (ручной ввод и ссылка promo_)."""
+    error_messages = {
+        'not_found': texts.PROMOCODE_INVALID,
+        'expired': texts.PROMOCODE_EXPIRED,
+        'inactive': texts.t('PROMOCODE_INACTIVE', '❌ Промокод деактивирован'),
+        'not_yet_valid': texts.t('PROMOCODE_NOT_YET_VALID', '❌ Промокод ещё не начал действовать'),
+        'used': texts.PROMOCODE_USED,
+        'already_used_by_user': texts.PROMOCODE_USED,
+        'user_not_found': texts.t('PROMOCODE_USER_NOT_FOUND', '❌ Пользователь не найден'),
+        'not_first_purchase': texts.t(
+            'PROMOCODE_NOT_FIRST_PURCHASE', '❌ Этот промокод доступен только для первой покупки'
+        ),
+        'active_discount_exists': texts.t(
+            'PROMOCODE_ACTIVE_DISCOUNT_EXISTS',
+            '❌ У вас уже есть активная скидка. Используйте её перед активацией новой.',
+        ),
+        'no_subscription_for_days': texts.t(
+            'PROMOCODE_NO_SUBSCRIPTION',
+            '❌ Для активации этого промокода необходима подписка (активная или просроченная).',
+        ),
+        'subscription_not_found': texts.t('PROMOCODE_SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена.'),
+        'traffic_not_applicable': texts.t(
+            'PROMOCODE_TRAFFIC_NOT_APPLICABLE',
+            '❌ Этот промокод даёт только трафик, а у вашей подписки он безлимитный. Код не потрачен.',
+        ),
+        'daily_limit': texts.t(
+            'PROMO_DAILY_LIMIT',
+            '❌ Достигнут лимит активаций промокодов на сегодня. Попробуйте завтра.',
+        ),
+        'trial_subscription_exists': texts.t(
+            'PROMOCODE_TRIAL_SUBSCRIPTION_EXISTS',
+            '❌ У вас уже есть подписка, поэтому триал-промокод применить нельзя.',
+        ),
+        'trial_provisioning_failed': texts.t(
+            'PROMOCODE_TRIAL_PROVISIONING_FAILED',
+            '❌ Не удалось выдать триал прямо сейчас. Попробуйте позже.',
+        ),
+        'server_error': texts.ERROR,
+    }
+
+    return error_messages.get(error, texts.PROMOCODE_INVALID)
+
+
 @error_handler
 async def process_promocode(message: types.Message, db_user: User, state: FSMContext, db: AsyncSession):
     _lang = db_user.language  # Spofy: capture early (avoid MissingGreenlet on expired obj)
@@ -166,27 +230,12 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
         await _restore_previous_state(state)
     elif result.get('error') == 'select_subscription':
         # Multi-tariff: user needs to choose which subscription to apply days to
-        eligible = result.get('eligible_subscriptions', [])
-        promo_code = result.get('code', code)
-        buttons = []
-        for sub in eligible:
-            name = sub.get('tariff_name', f'#{sub["id"]}')
-            days = sub.get('days_left', 0)
-            buttons.append(
-                [
-                    types.InlineKeyboardButton(
-                        text=f'{name} ({days} дн.)',
-                        callback_data=f'promo_sub:{sub["id"]}:{promo_code}',
-                    )
-                ]
-            )
-        buttons.append([types.InlineKeyboardButton(text='❌ Отмена', callback_data='back_to_menu')])
         await message.answer(
             texts.t(
                 'PROMOCODE_SELECT_SUBSCRIPTION',
                 '🎟️ К какой подписке применить промокод?',
             ),
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
+            reply_markup=promo_subscription_choice_keyboard(result, code),
         )
         await _restore_previous_state(state)
     else:
@@ -195,46 +244,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
             promo_limiter.record_failed_attempt(message.from_user.id)
             promo_limiter.cleanup()
 
-        error_messages = {
-            'not_found': texts.PROMOCODE_INVALID,
-            'expired': texts.PROMOCODE_EXPIRED,
-            'inactive': texts.t('PROMOCODE_INACTIVE', '❌ Промокод деактивирован'),
-            'not_yet_valid': texts.t('PROMOCODE_NOT_YET_VALID', '❌ Промокод ещё не начал действовать'),
-            'used': texts.PROMOCODE_USED,
-            'already_used_by_user': texts.PROMOCODE_USED,
-            'user_not_found': texts.t('PROMOCODE_USER_NOT_FOUND', '❌ Пользователь не найден'),
-            'not_first_purchase': texts.t(
-                'PROMOCODE_NOT_FIRST_PURCHASE', '❌ Этот промокод доступен только для первой покупки'
-            ),
-            'active_discount_exists': texts.t(
-                'PROMOCODE_ACTIVE_DISCOUNT_EXISTS',
-                '❌ У вас уже есть активная скидка. Используйте её перед активацией новой.',
-            ),
-            'no_subscription_for_days': texts.t(
-                'PROMOCODE_NO_SUBSCRIPTION',
-                '❌ Для активации этого промокода необходима подписка (активная или просроченная).',
-            ),
-            'subscription_not_found': texts.t('PROMOCODE_SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена.'),
-            'traffic_not_applicable': texts.t(
-                'PROMOCODE_TRAFFIC_NOT_APPLICABLE',
-                '❌ Этот промокод даёт только трафик, а у вашей подписки он безлимитный. Код не потрачен.',
-            ),
-            'daily_limit': texts.t(
-                'PROMO_DAILY_LIMIT',
-                '❌ Достигнут лимит активаций промокодов на сегодня. Попробуйте завтра.',
-            ),
-            'trial_subscription_exists': texts.t(
-                'PROMOCODE_TRIAL_SUBSCRIPTION_EXISTS',
-                '❌ У вас уже есть подписка, поэтому триал-промокод применить нельзя.',
-            ),
-            'trial_provisioning_failed': texts.t(
-                'PROMOCODE_TRIAL_PROVISIONING_FAILED',
-                '❌ Не удалось выдать триал прямо сейчас. Попробуйте позже.',
-            ),
-            'server_error': texts.ERROR,
-        }
-
-        error_text = error_messages.get(result['error'], texts.PROMOCODE_INVALID)
+        error_text = promocode_error_text(texts, result['error'])
         await message.answer(error_text, reply_markup=get_back_keyboard(_lang))
         await _restore_previous_state(state)
 

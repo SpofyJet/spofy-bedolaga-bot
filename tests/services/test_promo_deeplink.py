@@ -69,25 +69,68 @@ async def test_used_code_tells_the_person(env):
     assert message.answer.await_count == 1
 
 
-async def test_unknown_code_falls_through_and_counts_as_a_guess(env):
-    env.valid.return_value = {'valid': False}
-    assert await link.claim_promo_link(_message(), env.state, None, None, 'promo_NOPE') is False
+async def test_unknown_code_is_answered_and_counts_as_a_guess(env):
+    """Раньше параметр уходил в реферальную ветку: «Вы уже зарегистрированы… реферальная ссылка…»."""
+    env.valid.return_value = {'valid': False, 'error': 'not_found'}
+    message = _message()
+    assert await link.claim_promo_link(message, env.state, None, None, 'promo_NOPE') is True
     env.failed.assert_called_once()
+    assert 'Неверный промокод' in message.answer.await_args.args[0]
+
+
+@pytest.mark.parametrize(('error', 'expected'), [('expired', 'истек'), ('used', 'уже использован')])
+async def test_expired_or_exhausted_code_is_named(env, error, expected):
+    env.valid.return_value = {'valid': False, 'error': error}
+    user = SimpleNamespace(id=7, language='ru')
+    for who in (user, None):  # и зарегистрированному, и новому до регистрации
+        message = _message()
+        assert await link.claim_promo_link(message, env.state, who, None, 'promo_OLD-1') is True
+        assert expected in message.answer.await_args.args[0]
+    env.failed.assert_not_called()
+    env.activate.assert_not_awaited()
+    env.state.update_data.assert_not_awaited()
 
 
 async def test_campaign_named_promo_is_not_counted_as_a_guess(env):
-    env.valid.return_value = {'valid': False}
+    env.valid.return_value = {'valid': False, 'error': 'not_found'}
     env.campaign.return_value = object()
-    assert await link.claim_promo_link(_message(), env.state, None, None, 'promo_summer') is False
+    message = _message()
+    assert await link.claim_promo_link(message, env.state, None, None, 'promo_summer') is False
     env.failed.assert_not_called()
+    message.answer.assert_not_awaited()
 
 
-async def test_blocked_guesser_is_ignored(env, monkeypatch):
+async def test_blocked_guesser_gets_no_oracle(env, monkeypatch):
     monkeypatch.setattr(promo_limiter, 'is_blocked', lambda _id: True)
-    assert await link.claim_promo_link(_message(), env.state, None, None, 'promo_ABC-123') is False
+    message = _message()
+    assert await link.claim_promo_link(message, env.state, None, None, 'promo_ABC-123') is True
     env.valid.assert_not_awaited()
+    assert 'Слишком много попыток' in message.answer.await_args.args[0]
 
 
-async def test_bad_format_is_ignored(env):
-    assert await link.claim_promo_link(_message(), env.state, None, None, 'promo_a b!') is False
+async def test_bad_format_is_not_checked_but_answered(env):
+    message = _message()
+    assert await link.claim_promo_link(message, env.state, None, None, 'promo_a b!') is True
     env.valid.assert_not_awaited()
+    assert 'Неверный промокод' in message.answer.await_args.args[0]
+
+
+async def test_several_subscriptions_offer_the_choice_instead_of_invalid(env):
+    """Раньше валидный код на дни при нескольких подписках показывался как «❌ Неверный промокод»."""
+    env.activate.return_value = {
+        'success': False,
+        'error': 'select_subscription',
+        'code': 'DAYS-7',
+        'eligible_subscriptions': [
+            {'id': 11, 'tariff_name': 'Стандарт', 'days_left': 5},
+            {'id': 12, 'tariff_name': 'ULTIMA', 'days_left': 40},
+        ],
+    }
+    message = _message()
+    assert await link.claim_promo_link(message, env.state, SimpleNamespace(id=7, language='ru'), None, 'promo_DAYS-7')
+    text = message.answer.await_args.args[0]
+    assert 'Неверный' not in text and 'К какой подписке' in text
+    callbacks = [
+        b.callback_data for row in message.answer.await_args.kwargs['reply_markup'].inline_keyboard for b in row
+    ]
+    assert callbacks == ['promo_sub:11:DAYS-7', 'promo_sub:12:DAYS-7', 'back_to_menu']
