@@ -4,8 +4,9 @@ import html as html_mod
 
 import structlog
 from aiogram import Dispatcher, F, types
-from aiogram.types import InaccessibleMessage
+from aiogram.types import InaccessibleMessage, InlineKeyboardButton, InlineKeyboardMarkup
 
+from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import AsyncSessionLocal
 from app.localization.texts import get_texts
@@ -22,6 +23,27 @@ from app.services.guest_purchase_service import GuestPurchaseError
 logger = structlog.get_logger(__name__)
 
 _GIFT_NOT_FOUND = 'Подарок не найден или недоступен.'
+
+
+def _menu_keyboard(texts, *, with_subscription: bool = False) -> InlineKeyboardMarkup:
+    """«Моя подписка» (после активации) и «В главное меню» — чтобы экран не был тупиком."""
+    rows: list[list[InlineKeyboardButton]] = []
+    if with_subscription:
+        subscription_text = (
+            texts.t('MY_SUBSCRIPTIONS_BUTTON', '📱 Мои подписки')
+            if settings.is_multi_tariff_enabled()
+            else texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка')
+        )
+        rows.append([InlineKeyboardButton(text=subscription_text, callback_data='menu_subscription')])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '🏠 В главное меню'),
+                callback_data='back_to_menu',
+            )
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def handle_gift_activate(callback: types.CallbackQuery) -> None:
@@ -64,7 +86,8 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
         except (GiftClaimNotFoundError, GiftClaimAlreadyOwnedError):
             await callback.message.edit_text(
                 texts.t('GIFT_ACTIVATION_NOT_FOUND', _GIFT_NOT_FOUND),
-                parse_mode=None,
+                parse_mode='HTML',
+                reply_markup=_menu_keyboard(texts),
             )
             return
         except GiftClaimSelfActivationError:
@@ -73,13 +96,15 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
                     'GIFT_ACTIVATION_SELF_CLAIM_ERROR',
                     '⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
                 ),
-                parse_mode=None,
+                parse_mode='HTML',
+                reply_markup=_menu_keyboard(texts),
             )
             return
         except GiftClaimNotActivatableError:
             await callback.message.edit_text(
                 texts.t('GIFT_ACTIVATION_NOT_ACTIVATABLE_ERROR', '❌ Этот подарок невозможно активировать.'),
-                parse_mode=None,
+                parse_mode='HTML',
+                reply_markup=_menu_keyboard(texts),
             )
             return
         except GuestPurchaseError as exc:
@@ -95,7 +120,8 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
                         'GIFT_ACTIVATION_GENERIC_ERROR',
                         'Произошла ошибка при активации. Попробуйте позже.',
                     ),
-                    parse_mode=None,
+                    parse_mode='HTML',
+                    reply_markup=_menu_keyboard(texts),
                 )
             else:
                 await callback.message.edit_text(
@@ -103,7 +129,8 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
                         'GIFT_ACTIVATION_FAILED_PREFIX',
                         'Не удалось активировать подарок: {error}',
                     ).format(error=html_mod.escape(exc.message)),
-                    parse_mode=None,
+                    parse_mode='HTML',
+                    reply_markup=_menu_keyboard(texts),
                 )
             return
         except Exception:
@@ -117,7 +144,8 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
                     'GIFT_ACTIVATION_GENERIC_ERROR',
                     'Произошла ошибка при активации. Попробуйте позже.',
                 ),
-                parse_mode=None,
+                parse_mode='HTML',
+                reply_markup=_menu_keyboard(texts),
             )
             return
 
@@ -133,6 +161,8 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
             ).format(
                 tariff_text=tariff_text,
             ),
+            parse_mode='HTML',
+            reply_markup=_menu_keyboard(texts, with_subscription=True),
         )
 
 

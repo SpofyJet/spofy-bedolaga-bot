@@ -35,6 +35,7 @@ from app.services.subscription_checkout_service import (
 )
 from app.services.support_settings_service import SupportSettingsService
 from app.services.user_cart_service import user_cart_service
+from app.states import RegistrationStates
 from app.utils.display_mode import is_visible_in_bot
 from app.utils.lifetime import is_lifetime_end
 from app.utils.photo_message import edit_or_answer_photo
@@ -1235,6 +1236,7 @@ async def process_language_change(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext | None = None,
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
@@ -1274,6 +1276,11 @@ async def process_language_change(
         return
 
     resolved_language = available_map[normalized_selected].lower()
+
+    # Дальше показываем главное меню, как «Назад в меню»: незаконченный шаг ввода
+    # (обращение, сумма, промокод) иначе перехватил бы следующее сообщение.
+    if state is not None:
+        await state.clear()
 
     if db_user.language.lower() == normalized_selected:
         await show_main_menu(
@@ -1865,7 +1872,13 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(show_language_menu, F.data == 'menu_language')
 
-    dp.callback_query.register(process_language_change, F.data.startswith('language_select:'), StateFilter(None))
+    # Любое состояние, кроме выбора языка при регистрации (его ведёт start.process_language_selection):
+    # с StateFilter(None) смена языка молча не работала, пока был активен любой шаг ввода.
+    dp.callback_query.register(
+        process_language_change,
+        F.data.startswith('language_select:'),
+        ~StateFilter(RegistrationStates.waiting_for_language),
+    )
 
     dp.callback_query.register(handle_add_traffic, F.data == 'buy_traffic')
 
