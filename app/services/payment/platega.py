@@ -1312,6 +1312,16 @@ class PlategaPaymentMixin:
         user = await payment_module.get_user_by_id(db, payment.user_id)
         if not user:
             logger.error('Пользователь не найден для Platega', user_id=payment.user_id)
+            # Платёж уже помечен оплаченным и закоммитится вызывающим — повторов
+            # не будет, оповещение уходит один раз.
+            await alert_payment_not_applied(
+                getattr(self, 'bot', None),
+                provider='Platega',
+                problem='Оплата получена, но пользователь не найден — баланс не пополнен',
+                user_id=payment.user_id,
+                amount_kopeks=payment.amount_kopeks,
+                reference=str(payment.correlation_id),
+            )
             return payment
 
         # Убеждаемся, что промогруппы загружены в асинхронном контексте,

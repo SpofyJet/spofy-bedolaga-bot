@@ -16,13 +16,13 @@ import html
 from collections.abc import Mapping
 from typing import Any
 
-import structlog
 from aiogram import Bot
 
 from app.config import settings
 
-
-logger = structlog.get_logger(__name__)
+# payments.log, а не общий логгер: иначе Telegram-лог-хендлер продублировал бы
+# это же событие в чат вторым сообщением.
+from app.utils.payment_logger import payment_logger as logger
 
 
 def build_payment_problem_text(

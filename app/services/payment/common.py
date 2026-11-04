@@ -513,7 +513,23 @@ async def try_fulfill_guest_purchase(
                 purchase_id=existing.id,
                 provider=provider_name,
             )
+            already_failed = existing.status == GuestPurchaseStatus.FAILED.value
+            purchase_id = existing.id
+            expected_kopeks = existing.amount_kopeks
             await update_purchase_status(db, purchase_token, GuestPurchaseStatus.FAILED)
+            if not already_failed:
+                # Покупатель заплатил, покупка не выдана — без человека деньги
+                # зависнут. Ретраи того же вебхука видят FAILED и алерт не дублируют.
+                from app.services.payment_problem_alert import alert_payment_not_applied
+
+                await alert_payment_not_applied(
+                    None,
+                    provider=provider_name,
+                    problem='Сумма оплаты не совпала с покупкой — покупка не выдана (FAILED)',
+                    amount_kopeks=payment_amount_kopeks,
+                    reference=provider_payment_id,
+                    details={'Покупка': f'#{purchase_id}', 'Ожидалось': f'{expected_kopeks / 100:.2f} ₽'},
+                )
             return True  # consumed, even though failed
 
         # Idempotency: skip terminal states (and code-only gifts already in PAID)

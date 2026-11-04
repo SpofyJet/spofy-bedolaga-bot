@@ -14,6 +14,7 @@ from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, TransactionType
 from app.services.payment.common import topup_success_text
+from app.services.payment_problem_alert import alert_payment_not_applied
 from app.services.pricing_engine import RenewalPricing, pricing_engine
 from app.services.subscription_renewal_service import (
     RenewalPaymentDescriptor,
@@ -330,6 +331,16 @@ class XRocketPaymentMixin:
                         'xRocket: не удалось определить сумму начисления, платёж не обработан',
                         invoice_id=invoice_id,
                     )
+                    # status='paid' уже сброшен flush'ем и закоммитится вызывающим —
+                    # повторные вебхуки увидят «уже обработан», алерт уйдёт один раз.
+                    await alert_payment_not_applied(
+                        getattr(self, 'bot', None),
+                        provider='xRocket',
+                        problem='Инвойс оплачен, но сумма начисления не определена — баланс не пополнен',
+                        user_id=updated_payment.user_id,
+                        reference=invoice_id,
+                        details={'Оплачено': f'{updated_payment.amount} {updated_payment.asset}'},
+                    )
                     return False
 
                 amount_rubles_rounded = amount_kopeks / 100
@@ -357,6 +368,14 @@ class XRocketPaymentMixin:
                 user = await get_user_by_id(db, updated_payment.user_id)
                 if not user:
                     logger.error('Пользователь с ID не найден при пополнении баланса', user_id=updated_payment.user_id)
+                    await alert_payment_not_applied(
+                        getattr(self, 'bot', None),
+                        provider='xRocket',
+                        problem='Инвойс оплачен, но пользователь не найден — баланс не пополнен',
+                        user_id=updated_payment.user_id,
+                        amount_kopeks=amount_kopeks,
+                        reference=invoice_id,
+                    )
                     return False
 
                 # Lock user row to prevent concurrent balance race conditions
