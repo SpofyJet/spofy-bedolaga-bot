@@ -24,6 +24,7 @@ from app.services.referral_withdrawal_service import referral_withdrawal_service
 from app.states import ReferralWithdrawalStates
 from app.utils.decorators import error_handler
 from app.utils.photo_message import edit_or_answer_photo
+from app.utils.text_tidy import strip_tg_emoji
 from app.utils.user_utils import (
     get_detailed_referral_list,
     get_effective_referral_commission_percent,
@@ -494,25 +495,42 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
     await callback.answer()
 
 
+def _days_phrase(days: int, language: str) -> str:
+    """«2 дня» / «2 дні» / «2 days» — a whole word, not «2 дн.», in text a friend reads."""
+    lang = (language or 'ru').split('-')[0].lower()
+    if lang in {'ru', 'ua', 'uk'}:
+        forms = ('день', 'дня', 'дней') if lang == 'ru' else ('день', 'дні', 'днів')
+        if days % 10 == 1 and days % 100 != 11:
+            return f'{days} {forms[0]}'
+        if days % 10 in (2, 3, 4) and days % 100 not in (12, 13, 14):
+            return f'{days} {forms[1]}'
+        return f'{days} {forms[2]}'
+    if lang == 'en':
+        return f'{days} day' if days == 1 else f'{days} days'
+    return str(days)
+
+
 def _invite_trial_block(texts) -> str:
-    """Что получает друг: пробный период без карты и +N дн. за подключение по ссылке (квест)."""
+    """Что получает друг: пробный период без карты и +N дней за подключение по ссылке (квест)."""
     if (
         settings.TRIAL_DURATION_DAYS <= 0
         or settings.TRIAL_DISABLED_FOR == 'all'
         or settings.is_trial_paid_activation_enabled()
     ):
         return ''
-    block = '\n' + texts.t(
+    language = getattr(texts, 'language', 'ru')
+    trial_days = settings.TRIAL_DURATION_DAYS
+    block = '\n\n' + texts.t(
         'REFERRAL_INVITE_TRIAL',
-        '🎁 Бесплатный пробный период на {days} дн. — без карты!',
-    ).format(days=settings.TRIAL_DURATION_DAYS)
+        '🎁 {days_text} бесплатно — без карты.',
+    ).format(days=trial_days, days_text=_days_phrase(trial_days, language))
     if getattr(settings, 'TRIAL_QUESTS_ENABLED', True):
         from app.services.trial_quest_service import DAYS_FRIEND
 
         block += '\n' + texts.t(
             'REFERRAL_INVITE_FRIEND_DAYS',
-            '🤝 Подключишься по моей ссылке — получишь ещё {days} дн. в подарок.',
-        ).format(days=DAYS_FRIEND)
+            '🤝 По моей ссылке — ещё {days_text} в подарок, когда подключишься.',
+        ).format(days=DAYS_FRIEND, days_text=_days_phrase(DAYS_FRIEND, language))
     return block
 
 
@@ -534,7 +552,7 @@ def _build_referral_share_url(bot_referral_link: str, texts) -> str:
 
     share_text = texts.t(
         'REFERRAL_SHARE_TEXT',
-        'Привет! Пользуюсь Spofy VPN и советую тебе.{bonus_block}',
+        'Привет! Пользуюсь Spofy VPN — советую и тебе.{bonus_block}',
     )
     try:
         share_text = share_text.format(bonus_block=share_bonus_block)
@@ -543,6 +561,8 @@ def _build_referral_share_url(bot_referral_link: str, texts) -> str:
     # Без денежного бонуса в пересылаемом тексте не было ни одного повода перейти —
     # добавляем то, что друг получит на самом деле: пробный период и дни за подключение.
     share_text += _invite_trial_block(texts)
+    # The share dialog takes plain text: a <tg-emoji> tag would reach the friend as is.
+    share_text = strip_tg_emoji(share_text)
     return f'https://t.me/share/url?url={quote(bot_referral_link, safe="")}&text={quote(share_text, safe="")}'
 
 
@@ -596,7 +616,7 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User, db
 
     invite_template = texts.t(
         'REFERRAL_INVITE_TEXT',
-        'Привет! Пользуюсь Spofy VPN и советую тебе.{bonus_block}{trial_block}\n\n'
+        'Привет! Пользуюсь Spofy VPN — советую и тебе.{bonus_block}{trial_block}\n\n'
         '👇 Заходи по ссылке:\n'
         '{link}{cabinet_block}',
     )
@@ -606,6 +626,8 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User, db
         link=bot_referral_link,
         cabinet_block=cabinet_block,
     )
+    # Inside <code> the markup is escaped and copied as text, so custom emoji go plain.
+    invite_text = strip_tg_emoji(invite_text)
     invite_html = f'<code>{html_escape(invite_text)}</code>'
 
     keyboard = types.InlineKeyboardMarkup(

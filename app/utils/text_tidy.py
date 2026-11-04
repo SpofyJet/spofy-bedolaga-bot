@@ -29,6 +29,11 @@ _HTML_TAG_RE = re.compile(r'</?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^<>]*)?/?>')
 ALERT_TEXT_LIMIT = 200
 
 
+def strip_tg_emoji(text: str) -> str:
+    """<tg-emoji …>🎁</tg-emoji> → 🎁 for text that leaves the bot as plain text (copied, forwarded, shared)."""
+    return _TG_EMOJI_RE.sub(r'\1', text)
+
+
 def plain_alert_text(text: str) -> str:
     """Текст для всплывающего окна после нажатия кнопки: HTML там не разбирается.
 
