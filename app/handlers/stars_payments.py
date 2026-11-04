@@ -499,6 +499,28 @@ async def _handle_trial_payment(
 _PURCHASE_TOKEN_RE = __import__('re').compile(r'^[A-Za-z0-9_\-]{10,100}$')
 
 
+def _gift_purchase_problem(purchase, charge_id: str | None) -> str | None:
+    """Why a Stars payment for a gift can't be applied, or None when it can.
+
+    try_fulfill_guest_purchase treats a missing purchase and a purchase already paid by
+    another payment as «done», and the buyer would read «успешно оплачена» for money that
+    went nowhere. A redelivery of the same charge is fine: it is the payment already applied.
+    """
+    from app.database.models import GuestPurchaseStatus
+
+    if purchase is None:
+        return 'Подарочная покупка за Stars: покупка не найдена'
+    settled = {
+        GuestPurchaseStatus.PAID.value,
+        GuestPurchaseStatus.DELIVERED.value,
+        GuestPurchaseStatus.PENDING_ACTIVATION.value,
+        GuestPurchaseStatus.FAILED.value,
+    }
+    if purchase.status in settled and (not charge_id or purchase.payment_id != charge_id):
+        return f'Подарочная покупка за Stars: покупка уже в статусе {purchase.status}, второй платёж не применён'
+    return None
+
+
 async def _handle_guest_purchase_payment(
     message: types.Message,
     db: AsyncSession,
@@ -533,6 +555,20 @@ async def _handle_guest_purchase_payment(
 
         # Verify Stars amount matches expected price (±5% tolerance for conversion rounding)
         existing = await get_purchase_by_token(db, purchase_token)
+        problem = _gift_purchase_problem(existing, telegram_payment_charge_id)
+        if problem:
+            await _credit_to_balance_and_answer(
+                message,
+                db,
+                user,
+                texts,
+                stars_amount=stars_amount,
+                charge_id=telegram_payment_charge_id,
+                problem=problem,
+                reason=not_applied_reason,
+                details={'Покупка': f'#{existing.id}' if existing else 'не найдена'},
+            )
+            return
         if existing and existing.amount_kopeks:
             expected_stars = max(1, settings.rubles_to_stars(existing.amount_kopeks / 100))
             tolerance = max(1, round(expected_stars * 0.05))

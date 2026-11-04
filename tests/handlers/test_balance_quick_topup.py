@@ -106,7 +106,7 @@ async def test_provider_failure_is_reported_once_without_second_answer(monkeypat
     callback.message.answer.assert_awaited_once()
     assert callback.message.answer.await_args.args == ('❌ Ошибка обработки запроса',)
     markup = callback.message.answer.await_args.kwargs['reply_markup']
-    assert [b.callback_data for row in markup.inline_keyboard for b in row][0] == 'balance_topup'
+    assert next(b.callback_data for row in markup.inline_keyboard for b in row) == 'balance_topup'
 
 
 @pytest.mark.asyncio
