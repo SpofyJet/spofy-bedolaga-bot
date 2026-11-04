@@ -487,7 +487,13 @@ async def _activate_pending_gift_after_registration(
             )
             return
         except GiftClaimNotFoundError:
+            # Битая/устаревшая ссылка: раньше молча открывалось меню, и человек не понимал,
+            # почему подарок не пришёл.
             logger.warning('Gift not found for deep link token', token_length=len(gift_token))
+            await answer_func(
+                texts.t('GIFT_ACTIVATION_NOT_FOUND', 'Подарок не найден или недоступен.'),
+                parse_mode=ParseMode.HTML,
+            )
             return
 
         tariff_name = html.escape(gift_purchase.tariff.name) if gift_purchase.tariff else ''
