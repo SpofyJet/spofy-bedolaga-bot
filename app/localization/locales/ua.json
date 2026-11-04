@@ -1886,6 +1886,7 @@
   "REFERRAL_WITHDRAWAL_COMPLETED": "<tg-emoji emoji-id='5974217466270716579'>💸</tg-emoji> <b>Виплату за заявкою #{id} виконано!</b>\n\nСума: <b>{amount}</b>\n\nГроші надіслано на вказані реквізити.",
   "REFERRAL_WITHDRAWAL_CONFIRM_AMOUNT": "<tg-emoji emoji-id='5811989245761426317'>💰</tg-emoji> Сума: <b>{amount}</b>",
   "REFERRAL_WITHDRAWAL_CONFIRM_BUTTON": "✅ Підтвердити",
+  "REFERRAL_WITHDRAWAL_CONFIRM_STALE": "Цю заявку вже надіслано або вона застаріла. Відкрийте виведення знову.",
   "REFERRAL_WITHDRAWAL_CONFIRM_DETAILS": "<tg-emoji emoji-id='5967548335542767952'>💳</tg-emoji> Реквізити:\n<code>{details}</code>",
   "REFERRAL_WITHDRAWAL_CONFIRM_TITLE": "<tg-emoji emoji-id='5877597667231534929'>📋</tg-emoji> <b>Підтвердження заявки</b>",
   "REFERRAL_WITHDRAWAL_CONFIRM_WARNING": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Після надсилання заявку розгляне адміністрація",

@@ -1886,6 +1886,7 @@
   "REFERRAL_WITHDRAWAL_COMPLETED": "<tg-emoji emoji-id='5974217466270716579'>💸</tg-emoji> <b>Payout for request #{id} completed!</b>\n\nAmount: <b>{amount}</b>\n\nThe money has been sent to the specified details.",
   "REFERRAL_WITHDRAWAL_CONFIRM_AMOUNT": "<tg-emoji emoji-id='5811989245761426317'>💰</tg-emoji> Amount: <b>{amount}</b>",
   "REFERRAL_WITHDRAWAL_CONFIRM_BUTTON": "✅ Confirm",
+  "REFERRAL_WITHDRAWAL_CONFIRM_STALE": "This request has already been sent or is outdated. Open the withdrawal again.",
   "REFERRAL_WITHDRAWAL_CONFIRM_DETAILS": "<tg-emoji emoji-id='5967548335542767952'>💳</tg-emoji> Details:\n<code>{details}</code>",
   "REFERRAL_WITHDRAWAL_CONFIRM_TITLE": "<tg-emoji emoji-id='5877597667231534929'>📋</tg-emoji> <b>Request confirmation</b>",
   "REFERRAL_WITHDRAWAL_CONFIRM_WARNING": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Once submitted, the request will be reviewed by the administration",

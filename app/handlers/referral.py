@@ -1,5 +1,6 @@
 import hashlib
 import json
+import secrets
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
 from html import escape as html_escape
 from pathlib import Path
@@ -730,6 +731,9 @@ async def start_withdrawal_request(callback: types.CallbackQuery, db_user: User,
     await callback.answer()
 
 
+# callback «✅ Подтвердить»: referral_withdrawal_confirm_<nonce> (без nonce — кнопки до обновления)
+_WITHDRAWAL_CONFIRM_PREFIX = 'referral_withdrawal_confirm_'
+
 # Верхняя граница разбора суммы (10^10 ₽): дальше — заведомо не сумма вывода, а «1e999999».
 _WITHDRAWAL_AMOUNT_MAX_DIGITS = 10
 
@@ -881,8 +885,9 @@ async def process_payment_details(message: types.Message, db_user: User, db: Asy
         await message.answer(texts.t('REFERRAL_WITHDRAWAL_DETAILS_TOO_SHORT', '❌ Реквизиты слишком короткие'))
         return
 
-    # Сохраняем реквизиты
-    await state.update_data(payment_details=payment_details)
+    # Сохраняем реквизиты; nonce привязывает кнопку «Подтвердить» к этому экрану
+    confirm_nonce = secrets.token_hex(4)
+    await state.update_data(payment_details=payment_details, confirm_nonce=confirm_nonce)
     await state.set_state(ReferralWithdrawalStates.confirming)
 
     text = texts.t('REFERRAL_WITHDRAWAL_CONFIRM_TITLE', '📋 <b>Подтверждение заявки</b>') + '\n\n'
@@ -905,7 +910,7 @@ async def process_payment_details(message: types.Message, db_user: User, db: Asy
             [
                 types.InlineKeyboardButton(
                     text=texts.t('REFERRAL_WITHDRAWAL_CONFIRM_BUTTON', '✅ Подтвердить'),
-                    callback_data='referral_withdrawal_confirm',
+                    callback_data=f'{_WITHDRAWAL_CONFIRM_PREFIX}{confirm_nonce}',
                 )
             ],
             [
@@ -919,12 +924,44 @@ async def process_payment_details(message: types.Message, db_user: User, db: Asy
     await message.answer(text, reply_markup=keyboard)
 
 
+async def _retire_confirm_keyboard(callback: types.CallbackQuery, texts) -> None:
+    """Убирает «✅ Подтвердить» с отработавшего экрана, оставляя путь назад к выводу."""
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='referral_withdrawal')]]
+    )
+    try:
+        await callback.message.edit_reply_markup(reply_markup=keyboard)
+    except Exception as error:
+        logger.debug('Не удалось убрать кнопку подтверждения вывода', error=error)
+
+
+@error_handler
 async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     """Подтверждает и создаёт заявку на вывод."""
     texts = get_texts(db_user.language)
+    current_state = await state.get_state()
     data = await state.get_data()
     amount_kopeks = data.get('withdrawal_amount', 0)
     payment_details = data.get('payment_details', '')
+    expected_nonce = data.get('confirm_nonce')
+    nonce = (callback.data or '').removeprefix(_WITHDRAWAL_CONFIRM_PREFIX.rstrip('_')).lstrip('_')
+
+    # Кнопка живёт, пока открыт именно этот шаг: после ошибки или повторного
+    # оформления старое «Подтвердить» раньше давало «Некорректная сумма».
+    if (
+        current_state != ReferralWithdrawalStates.confirming.state
+        or not amount_kopeks
+        or (expected_nonce and nonce != expected_nonce)
+    ):
+        await callback.answer(
+            texts.t(
+                'REFERRAL_WITHDRAWAL_CONFIRM_STALE',
+                'Эта заявка уже отправлена или устарела. Откройте вывод заново.',
+            ),
+            show_alert=True,
+        )
+        await _retire_confirm_keyboard(callback, texts)
+        return
 
     await state.clear()
 
@@ -935,6 +972,7 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
 
     if error:
         await callback.answer(f'❌ {error}', show_alert=True)
+        await _retire_confirm_keyboard(callback, texts)
         return
 
     # Отправляем уведомление админам
@@ -1043,7 +1081,10 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(process_withdrawal_amount_callback, F.data.startswith('referral_withdrawal_amount_'))
 
-    dp.callback_query.register(confirm_withdrawal_request, F.data == 'referral_withdrawal_confirm')
+    dp.callback_query.register(
+        confirm_withdrawal_request,
+        (F.data == _WITHDRAWAL_CONFIRM_PREFIX.rstrip('_')) | F.data.startswith(_WITHDRAWAL_CONFIRM_PREFIX),
+    )
 
     dp.callback_query.register(cancel_withdrawal_request, F.data == 'referral_withdrawal_cancel')
 

@@ -1886,6 +1886,7 @@
   "REFERRAL_WITHDRAWAL_COMPLETED": "<tg-emoji emoji-id='5974217466270716579'>💸</tg-emoji> <b>申请 #{id} 的款项已支付！</b>\n\n金额：<b>{amount}</b>\n\n款项已发送至指定收款信息。",
   "REFERRAL_WITHDRAWAL_CONFIRM_AMOUNT": "<tg-emoji emoji-id='5811989245761426317'>💰</tg-emoji> 金额：<b>{amount}</b>",
   "REFERRAL_WITHDRAWAL_CONFIRM_BUTTON": "✅ 确认",
+  "REFERRAL_WITHDRAWAL_CONFIRM_STALE": "此申请已提交或已过期。请重新打开提现。",
   "REFERRAL_WITHDRAWAL_CONFIRM_DETAILS": "<tg-emoji emoji-id='5967548335542767952'>💳</tg-emoji> 收款信息：\n<code>{details}</code>",
   "REFERRAL_WITHDRAWAL_CONFIRM_TITLE": "<tg-emoji emoji-id='5877597667231534929'>📋</tg-emoji> <b>确认申请</b>",
   "REFERRAL_WITHDRAWAL_CONFIRM_WARNING": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> 提交后，申请将由管理员审核",
