@@ -93,16 +93,17 @@ _NO_SAVED_STATE = object()
 
 
 async def _restore_previous_state(state: FSMContext) -> None:
-    """Восстанавливает FSM-состояние, которое было до входа в промокод-флоу."""
+    """Выход из промокод-флоу: данные до входа (корзина, черновики) возвращаем, шаг ввода — нет.
+
+    Экран промокода заменил прежнее сообщение, так что его шаг ввода (тема обращения,
+    сумма пополнения и т.п.) уже не виден человеку; восстановленный, он перехватывал
+    следующее сообщение — например, оно становилось темой обращения.
+    """
     data = await state.get_data()
     prev_state = data.get('_prev_state', _NO_SAVED_STATE)
     prev_data = data.get('_prev_data') or {}
-    if prev_state is _NO_SAVED_STATE:
-        # Не было сохранённого состояния — defensive clear
-        await state.clear()
-    else:
-        # Восстанавливаем предыдущее состояние (включая None = меню без FSM)
-        await state.set_state(prev_state)
+    await state.clear()
+    if prev_state is not _NO_SAVED_STATE and prev_data:
         await state.set_data(prev_data)
 
 

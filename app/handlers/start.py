@@ -1227,6 +1227,15 @@ async def _continue_registration_after_language(
     logger.info('📋 LANGUAGE: Правила отправлены после выбора языка')
 
 
+async def _drop_leftover_input_state(state: FSMContext) -> None:
+    """Диплинк зарегистрированного открыл экран и вышел из /start раньше общего state.clear().
+
+    Без этого оставался прежний шаг ввода (тема обращения, сумма, промокод), и следующее
+    сообщение человека уходило туда. Обычный /start зарегистрированного делает то же.
+    """
+    await state.clear()
+
+
 async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession, db_user=None):
     logger.info('🚀 START: Обработка /start от', from_user_id=message.from_user.id)
 
@@ -1402,6 +1411,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                         agent=html.escape(context.get('agent') or '—'),
                     )
                 await message.answer(prompt, reply_markup=keyboard)
+                await _drop_leftover_input_state(state)
             else:
                 logger.warning('Web auth attempt from unregistered user', telegram_id=message.from_user.id)
                 await message.answer('❌ Сначала зарегистрируйтесь в боте, затем попробуйте войти в кабинет.')
@@ -1417,6 +1427,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             from app.handlers.contests import open_contests_menu_message
 
             await open_contests_menu_message(message, user, db)
+            await _drop_leftover_input_state(state)
             return
         # Unregistered → fall through to normal /start (contests need a subscription anyway).
         start_parameter = None
@@ -1427,6 +1438,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
         if user and user.status != UserStatus.DELETED.value:
             if await open_subscription_deeplink(message, user, db, start_parameter):
+                await _drop_leftover_input_state(state)
                 return
         start_parameter = None
 
@@ -1437,6 +1449,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
         if user and user.status != UserStatus.DELETED.value:
             if await open_ultima_offer(message, user, db, source=ultima_source):
+                await _drop_leftover_input_state(state)
                 return
         else:
             await state.update_data(pending_ultima=ultima_source)
