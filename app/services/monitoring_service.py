@@ -183,6 +183,30 @@ async def _reload_subscription(db: AsyncSession, subscription_id: int) -> Subscr
     return result.scalar_one_or_none()
 
 
+async def _rollback_quietly(db: AsyncSession, *, step: str) -> None:
+    """Откат общей сессии цикла после сбоя шага.
+
+    Шаги мониторинга идут один за другим в одной сессии. Ошибка базы оставляет
+    транзакцию «сломанной», и без отката все следующие шаги цикла (напоминания,
+    трафик, истечения) падают с PendingRollbackError / InFailedSQLTransaction.
+    """
+    try:
+        await db.rollback()
+    except Exception as rollback_error:
+        logger.warning('Не удалось откатить сессию после ошибки шага мониторинга', step=step, error=rollback_error)
+
+
+async def _fresh_record(db: AsyncSession, listed: Any, record_id: int, *, rolled_back: bool) -> Any:
+    """Запись из заранее загруженного списка; после отката — перечитанная по id.
+
+    Откат экспайрит все объекты сессии, и обращение к полям записи из старого
+    списка ушло бы в ленивую подгрузку (MissingGreenlet в асинхронном коде).
+    """
+    if not rolled_back:
+        return listed
+    return await db.get(type(listed), record_id, populate_existing=True)
+
+
 def _expires_by_own_date(subscription: Subscription, *, now: datetime) -> bool:
     """Подписка всё ещё та, что попала в выборку истёкших: ACTIVE с прошедшей датой."""
     end_date = subscription.end_date
@@ -445,6 +469,7 @@ class MonitoringService:
                             error=recurrent_error,
                             exc_info=True,
                         )
+                        await _rollback_quietly(db, step='recurrent_payments')
                 # Реконсилиация Platega SBP-подписок: страховка на случай потерянных
                 # коллбеков / зависших PENDING. Гейт внутри метода (PLATEGA_RECURRENT_ENABLED).
                 await self._reconcile_platega_subscriptions(db)
@@ -486,6 +511,7 @@ class MonitoringService:
 
             except Exception as e:
                 logger.error('Ошибка в цикле мониторинга', error=e)
+                await _rollback_quietly(db, step='monitoring_cycle')
                 try:
                     await self._log_monitoring_event(
                         db,
@@ -650,6 +676,7 @@ class MonitoringService:
 
         except Exception as e:
             logger.error('Ошибка проверки истёкших подписок', error=e)
+            await _rollback_quietly(db, step='expired_subscriptions')
 
     async def _expire_if_due(self, db: AsyncSession, subscription: Subscription) -> None:
         """Погасить одну подписку из выборки истёкших, если её не продлили ни в панели, ни в боте."""
@@ -1050,6 +1077,7 @@ class MonitoringService:
 
         except Exception as e:
             logger.error('Ошибка проверки истекающих подписок', error=e)
+            await _rollback_quietly(db, step='expiring_subscriptions')
 
     async def _run_activation_funnel(self, db: AsyncSession):
         try:
@@ -1059,6 +1087,7 @@ class MonitoringService:
             await funnel.process(db)
         except Exception as error:
             logger.error('Ошибка activation funnel', error=error, exc_info=True)
+            await _rollback_quietly(db, step='activation_funnel')
 
     async def _check_trial_expiring_soon(self, db: AsyncSession):
         if not NotificationSettingsService.are_notifications_globally_enabled():
@@ -1121,6 +1150,7 @@ class MonitoringService:
 
         except Exception as e:
             logger.error('Ошибка проверки истекающих тестовых подписок', error=e)
+            await _rollback_quietly(db, step='trial_expiring_soon')
 
     async def _check_trial_channel_subscriptions(self, db: AsyncSession):
         """Background reconciliation of channel subscriptions (rate-limited).
@@ -1418,6 +1448,7 @@ class MonitoringService:
 
         except Exception as error:
             logger.error('Error checking channel subscriptions', error=error)
+            await _rollback_quietly(db, step='trial_channel_subscriptions')
 
     async def _check_expired_subscription_followups(self, db: AsyncSession):
         if not NotificationSettingsService.are_notifications_globally_enabled():
@@ -1596,6 +1627,7 @@ class MonitoringService:
 
         except Exception as e:
             logger.error('Ошибка проверки напоминаний об истекшей подписке', error=e)
+            await _rollback_quietly(db, step='expired_followups')
 
     async def _get_expiring_paid_subscriptions(self, db: AsyncSession, days_before: int) -> list[Subscription]:
         current_time = datetime.now(UTC)
@@ -1999,6 +2031,7 @@ class MonitoringService:
 
         except Exception as e:
             logger.error('Ошибка обработки автоплатежей', error=e, exc_info=True)
+            await _rollback_quietly(db, step='autopayments')
 
     async def _send_subscription_expired_notification(
         self, user: User, subscription: Subscription, *, tariff_name: str | None = None
@@ -2782,6 +2815,7 @@ class MonitoringService:
                 logger.info('Recovered stuck PENDING purchases', recovered=recovered)
         except Exception:
             logger.error('Error recovering stuck PENDING guest purchases', exc_info=True)
+            await _rollback_quietly(db, step='guest_purchases')
 
         # Phase 2: Retry fulfillment for purchases in PAID status
         try:
@@ -2790,6 +2824,7 @@ class MonitoringService:
                 logger.info('Retried stuck guest purchases', retried=retried)
         except Exception:
             logger.error('Error retrying stuck PAID guest purchases', exc_info=True)
+            await _rollback_quietly(db, step='guest_purchases')
 
         # Phase 3: Retry activation for purchases in PENDING_ACTIVATION status
         try:
@@ -2798,6 +2833,7 @@ class MonitoringService:
                 logger.info('Retried stuck pending_activation purchases', retried=retried_pa)
         except Exception:
             logger.error('Error retrying stuck PENDING_ACTIVATION guest purchases', exc_info=True)
+            await _rollback_quietly(db, step='guest_purchases')
 
     async def _check_traffic_warnings(self, db: AsyncSession):
         """Check subscriptions approaching traffic limit and notify users."""
@@ -2921,6 +2957,7 @@ class MonitoringService:
 
         except Exception as error:
             logger.error('Error checking traffic warnings', error=error)
+            await _rollback_quietly(db, step='traffic_warnings')
 
     async def _check_low_balance_alerts(self, db: AsyncSession):
         """Check users with autopay enabled who have low balance and notify them.
@@ -3039,6 +3076,7 @@ class MonitoringService:
 
         except Exception as error:
             logger.error('Error checking low balance alerts', error=error)
+            await _rollback_quietly(db, step='low_balance_alerts')
 
     async def _cleanup_expired_refresh_tokens(self, db: AsyncSession):
         """Delete expired and revoked refresh tokens to prevent table bloat."""
@@ -3120,6 +3158,7 @@ class MonitoringService:
 
         except Exception as e:
             logger.error('Ошибка очистки неактивных пользователей', error=e)
+            await _rollback_quietly(db, step='inactive_users_cleanup')
 
     async def _sync_with_remnawave(self, db: AsyncSession):
         try:
@@ -3140,6 +3179,7 @@ class MonitoringService:
 
         except Exception as e:
             logger.error('Ошибка синхронизации с RemnaWave', error=e)
+            await _rollback_quietly(db, step='remnawave_sync')
             await self._log_monitoring_event(
                 db,
                 'remnawave_sync_error',
@@ -3180,8 +3220,12 @@ class MonitoringService:
 
             records = await sub_crud.list_platega_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE'])
 
-            for record in records:
+            rolled_back = False
+            for record_id, listed in [(listed.id, listed) for listed in records]:
                 try:
+                    record = await _fresh_record(db, listed, record_id, rolled_back=rolled_back)
+                    if record is None:
+                        continue
                     if record.platega_subscription_id:
                         remote, http_status = await service.get_subscription_status(record.platega_subscription_id)
                         if http_status in (401, 403):
@@ -3247,9 +3291,12 @@ class MonitoringService:
                 except Exception as record_error:
                     logger.warning(
                         'Не удалось реконсилировать Platega-подписку',
-                        local_id=getattr(record, 'id', None),
+                        local_id=record_id,
                         error=record_error,
                     )
+                    # Сбой базы на одной записи не должен ломать остальные записи и шаги цикла.
+                    await _rollback_quietly(db, step='platega_reconcile_record')
+                    rolled_back = True
 
             # Контрольный свип недавних отмен: локальный CANCELLED мог не дойти
             # до Platega (сеть при cancel-запросе) — тогда провайдер продолжит
@@ -3348,6 +3395,7 @@ class MonitoringService:
                 logger.warning('Ошибка свипа Platega-сирот', error=sweep_error)
         except Exception as e:
             logger.warning('Ошибка реконсиляции Platega-подписок', error=e)
+            await _rollback_quietly(db, step='platega_reconcile')
 
     async def _notify_platega_pending_binding(self, db: AsyncSession, record) -> None:
         """n2: разовое напоминание о незавершённой привязке СБП (~через час).
@@ -3509,8 +3557,12 @@ class MonitoringService:
             records = await sub_crud.list_platega_subscriptions_by_statuses(db, ['ACTIVE'])
             now = datetime.now(UTC)
             horizon = now + timedelta(hours=24)
-            for record in records:
+            rolled_back = False
+            for record_id, listed in [(listed.id, listed) for listed in records]:
                 try:
+                    record = await _fresh_record(db, listed, record_id, rolled_back=rolled_back)
+                    if record is None:
+                        continue
                     next_charge_at = record.next_charge_at
                     if next_charge_at is None or next_charge_at <= now or next_charge_at > horizon:
                         continue
@@ -3570,11 +3622,14 @@ class MonitoringService:
                 except Exception as record_error:
                     logger.debug(
                         'Не удалось отправить pre-bill по Platega-подписке',
-                        local_id=getattr(record, 'id', None),
+                        local_id=record_id,
                         error=record_error,
                     )
+                    await _rollback_quietly(db, step='platega_prebill_record')
+                    rolled_back = True
         except Exception as error:
             logger.warning('Ошибка pre-bill уведомлений Platega', error=error)
+            await _rollback_quietly(db, step='platega_prebill')
 
     async def _reconcile_lava_subscriptions(self, db: AsyncSession):
         """Safety net для рекуррентных подписок Lava — зеркало Platega-реконсиляции.
@@ -3604,8 +3659,12 @@ class MonitoringService:
 
             records = await sub_crud.list_lava_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE'])
 
-            for record in records:
+            rolled_back = False
+            for record_id, listed in [(listed.id, listed) for listed in records]:
                 try:
+                    record = await _fresh_record(db, listed, record_id, rolled_back=rolled_back)
+                    if record is None:
+                        continue
                     # Нет ни одного идентификатора — провайдер о подписке точно
                     # не знает (subscribe не дошёл).
                     remote_missing = True
@@ -3654,9 +3713,11 @@ class MonitoringService:
                 except Exception as record_error:
                     logger.warning(
                         'Не удалось реконсилировать Lava-подписку',
-                        local_id=getattr(record, 'id', None),
+                        local_id=record_id,
                         error=record_error,
                     )
+                    await _rollback_quietly(db, step='lava_reconcile_record')
+                    rolled_back = True
 
             # Контрольный свип недавних отмен: локальный CANCELLED мог не дойти
             # до Lava — тогда провайдер продолжит списывать.
@@ -3686,6 +3747,7 @@ class MonitoringService:
                     )
         except Exception as e:
             logger.warning('Ошибка реконсиляции Lava-подписок', error=e)
+            await _rollback_quietly(db, step='lava_reconcile')
 
     async def _reconcile_cashera_subscriptions(self, db: AsyncSession):
         """Safety net для подписок Cashera — зеркало Platega/Lava-реконсиляции.
@@ -3709,8 +3771,12 @@ class MonitoringService:
             agent = _CasheraRecurrentAgent(self.bot)
             records = await sub_crud.list_cashera_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE'])
 
-            for record in records:
+            rolled_back = False
+            for record_id, listed in [(listed.id, listed) for listed in records]:
                 try:
+                    record = await _fresh_record(db, listed, record_id, rolled_back=rolled_back)
+                    if record is None:
+                        continue
                     remote_missing = True
                     remote_status = None
                     if record.cashera_subscription_uuid:
@@ -3763,9 +3829,11 @@ class MonitoringService:
                 except Exception as record_error:
                     logger.warning(
                         'Не удалось реконсилировать подписку Cashera',
-                        local_id=getattr(record, 'id', None),
+                        local_id=record_id,
                         error=record_error,
                     )
+                    await _rollback_quietly(db, step='cashera_reconcile_record')
+                    rolled_back = True
 
             # Свип недавних отмен: локальный CANCELLED мог не дойти до Cashera.
             cancelled_records = await sub_crud.list_recently_cancelled_cashera_subscriptions(
@@ -3791,6 +3859,7 @@ class MonitoringService:
                     )
         except Exception as e:
             logger.warning('Ошибка реконсиляции подписок Cashera', error=e)
+            await _rollback_quietly(db, step='cashera_reconcile')
 
     async def _check_ticket_sla(self, db: AsyncSession):
         try:
@@ -4077,6 +4146,7 @@ class MonitoringService:
 
         except Exception as e:
             logger.error('Ошибка логирования события мониторинга', error=e)
+            await _rollback_quietly(db, step='monitoring_log')
 
     async def get_monitoring_status(self, db: AsyncSession) -> dict[str, Any]:
         try:

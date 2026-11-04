@@ -78,9 +78,16 @@ class DailySubscriptionService:
                 try:
                     subscriptions = await get_daily_subscriptions_for_charge(db)
                     stats['checked'] = len(subscriptions)
+                    # Только id: откат после сбоя (панель недоступна, ошибка базы) экспайрит
+                    # загруженный список, и следующая подписка падала бы на ленивой подгрузке —
+                    # за проход обрабатывалась бы одна подписка.
+                    subscription_ids = [subscription.id for subscription in subscriptions]
 
-                    for subscription in subscriptions:
+                    for subscription_id in subscription_ids:
                         try:
+                            subscription = await self._load_daily_subscription(db, subscription_id)
+                            if subscription is None:
+                                continue
                             result = await self._process_single_charge(db, subscription)
                             if result == 'charged':
                                 stats['charged'] += 1
@@ -91,11 +98,12 @@ class DailySubscriptionService:
                         except Exception as e:
                             logger.error(
                                 'Ошибка обработки суточной подписки',
-                                subscription_id=subscription.id,
+                                subscription_id=subscription_id,
                                 error=e,
                                 exc_info=True,
                             )
                             stats['errors'] += 1
+                            await self._rollback_quietly(db)
                 except Exception as e:
                     logger.error('Ошибка при обработке подписок', error=e, exc_info=True)
                     await db.rollback()
@@ -120,6 +128,27 @@ class DailySubscriptionService:
             .where(Subscription.id == subscription_id)
         )
         return result.scalar_one()
+
+    async def _load_daily_subscription(self, db, subscription_id: int) -> Subscription | None:
+        """Свежая подписка с user+tariff по id (None — подписку удалили во время прохода).
+
+        populate_existing: после отката предыдущей подписки объекты сессии экспайрены,
+        а связи должны прийти заново, а не ленивой подгрузкой.
+        """
+        result = await db.execute(
+            select(Subscription)
+            .options(selectinload(Subscription.user), selectinload(Subscription.tariff))
+            .execution_options(populate_existing=True)
+            .where(Subscription.id == subscription_id)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def _rollback_quietly(db) -> None:
+        try:
+            await db.rollback()
+        except Exception as rollback_error:
+            logger.warning('Не удалось откатить сессию суточных подписок', error=rollback_error)
 
     async def _process_single_charge(self, db, subscription) -> str:
         """
@@ -856,8 +885,11 @@ class DailySubscriptionService:
                 # 1. Возобновление DISABLED подписок (недостаточно средств → баланс пополнен)
                 try:
                     disabled_subs = await get_disabled_daily_subscriptions_for_resume(db)
-                    for subscription in disabled_subs:
+                    for _listed_id in [listed.id for listed in disabled_subs]:
                         try:
+                            subscription = await self._load_daily_subscription(db, _listed_id)
+                            if subscription is None:
+                                continue
                             # Только активируем — НЕ ставим last_daily_charge_at,
                             # чтобы _process_single_charge корректно его обновил при списании.
                             # Если списание упадёт, подписка останется без last_daily_charge_at
@@ -882,19 +914,23 @@ class DailySubscriptionService:
                         except Exception as e:
                             logger.error(
                                 'Ошибка возобновления DISABLED подписки',
-                                subscription_id=subscription.id,
+                                subscription_id=_listed_id,
                                 error=e,
                                 exc_info=True,
                             )
                             stats['errors'] += 1
+                            await self._rollback_quietly(db)
                 except Exception as e:
                     logger.error('Ошибка при обработке DISABLED подписок', error=e, exc_info=True)
 
                 # 2. Восстановление EXPIRED подписок (ошибочно экспайрены middleware/CRUD)
                 try:
                     expired_subs = await get_expired_daily_subscriptions_for_recovery(db)
-                    for subscription in expired_subs:
+                    for _listed_id in [listed.id for listed in expired_subs]:
                         try:
+                            subscription = await self._load_daily_subscription(db, _listed_id)
+                            if subscription is None:
+                                continue
                             # Восстанавливаем в ACTIVE — charge обновит end_date и last_daily_charge_at
                             _sub_id = subscription.id
                             subscription.status = SubscriptionStatus.ACTIVE.value
@@ -916,11 +952,12 @@ class DailySubscriptionService:
                         except Exception as e:
                             logger.error(
                                 'Ошибка восстановления EXPIRED подписки',
-                                subscription_id=subscription.id,
+                                subscription_id=_listed_id,
                                 error=e,
                                 exc_info=True,
                             )
                             stats['errors'] += 1
+                            await self._rollback_quietly(db)
                 except Exception as e:
                     logger.error('Ошибка при обработке EXPIRED подписок', error=e, exc_info=True)
 
@@ -928,8 +965,11 @@ class DailySubscriptionService:
                 # Оплата за новые сутки обнуляет счётчик — значит, и лимит снимается.
                 try:
                     limited_subs = await get_limited_daily_subscriptions_for_recovery(db)
-                    for subscription in limited_subs:
+                    for _listed_id in [listed.id for listed in limited_subs]:
                         try:
+                            subscription = await self._load_daily_subscription(db, _listed_id)
+                            if subscription is None:
+                                continue
                             if not should_reset_traffic_on_daily_charge(subscription.tariff):
                                 # Списание счётчик не обнулит: либо это выключено
                                 # настройкой (лимит тарифа задуман накопительным),
@@ -958,11 +998,12 @@ class DailySubscriptionService:
                         except Exception as e:
                             logger.error(
                                 'Ошибка возврата LIMITED подписки',
-                                subscription_id=subscription.id,
+                                subscription_id=_listed_id,
                                 error=e,
                                 exc_info=True,
                             )
                             stats['errors'] += 1
+                            await self._rollback_quietly(db)
                 except Exception as e:
                     logger.error('Ошибка при обработке LIMITED подписок', error=e, exc_info=True)
 
