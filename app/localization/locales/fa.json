@@ -2482,5 +2482,7 @@
   "REFERRAL_WELCOME_FRIEND_DAYS": "🎁 در دوره آزمایشی VPN را وصل کنید تا هر دو +{days} روز بگیرید.",
   "WHEEL_TOPUP_SPIN_EARNED": "🎡 <b>+{earned} چرخش در گردونه جایزه</b> — برای شارژ حساب.",
   "WHEEL_TOPUP_SPIN_PRIZES": "روز اضافه، تخفیف، اعتبار یا یک دستگاه بیشتر ببرید. چرخش‌ها: {available}.",
-  "WHEEL_TOPUP_SPIN_BUTTON": "🎡 چرخاندن گردونه"
+  "WHEEL_TOPUP_SPIN_BUTTON": "🎡 چرخاندن گردونه",
+  "AUTOPAY_CANNOT_RENEW": "⚠️ <b>تمدید خودکار اشتراک{tariff_label} انجام نشد</b>\n\nاشتراک شما تا {end_date} فعال است. برای قطع نشدن VPN، یک تعرفه انتخاب کنید و با دکمه زیر اشتراک را تمدید کنید.",
+  "AUTOPAY_CANNOT_RENEW_REASON": "تمدید خودکار اشتراک انجام نشد — یک تعرفه انتخاب کنید و آن را دستی تمدید کنید"
 }

@@ -2482,5 +2482,7 @@
   "REFERRAL_WELCOME_FRIEND_DAYS": "🎁 在试用期内连接 VPN，你们双方各得 +{days} 天。",
   "WHEEL_TOPUP_SPIN_EARNED": "🎡 <b>奖品转盘 +{earned} 次</b> — 充值奖励。",
   "WHEEL_TOPUP_SPIN_PRIZES": "可赢取天数、折扣、余额奖励或额外设备。剩余次数：{available}。",
-  "WHEEL_TOPUP_SPIN_BUTTON": "🎡 转动转盘"
+  "WHEEL_TOPUP_SPIN_BUTTON": "🎡 转动转盘",
+  "AUTOPAY_CANNOT_RENEW": "⚠️ <b>无法自动续订您的订阅{tariff_label}</b>\n\n订阅有效期至 {end_date}。为避免 VPN 中断，请选择套餐并通过下方按钮续订。",
+  "AUTOPAY_CANNOT_RENEW_REASON": "无法自动续订订阅 — 请选择套餐并手动续订"
 }

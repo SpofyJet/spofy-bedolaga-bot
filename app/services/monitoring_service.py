@@ -55,7 +55,7 @@ from app.external.remnawave_api import (
     is_user_not_found_error,
 )
 from app.localization.texts import get_texts
-from app.services.autopay_guard import lock_autopay_target
+from app.services.autopay_guard import lock_autopay_target_checked
 from app.services.autopay_period import resolve_autopay_period_candidate
 from app.services.grace_access_runtime import update_panel_user_grace_safe
 from app.services.notification_delivery_service import (
@@ -1731,12 +1731,18 @@ class MonitoringService:
 
             for sub_id_local, sub_user_id_local, expected_end_date in autopay_pairs:
                 try:
-                    target = await lock_autopay_target(
+                    lock = await lock_autopay_target_checked(
                         db, sub_user_id_local, sub_id_local, expected_end_date=expected_end_date
                     )
-                    if target is None:
+                    if lock.skip_reason is not None:
+                        if lock.skip_reason == 'tariff_inactive':
+                            # Тариф отключён — списание не пройдёт никогда, а напоминание
+                            # обещало «ничего делать не нужно». Говорим прямо (разово).
+                            await self._notify_autopay_cannot_renew(
+                                lock.user, lock.subscription, cause='tariff_inactive'
+                            )
                         continue
-                    user, subscription = target
+                    user, subscription = lock.user, lock.subscription
 
                     from app.database.crud.subscription import is_recently_updated_by_webhook
 
@@ -1784,6 +1790,10 @@ class MonitoringService:
                             error=str(e),
                         )
                         failed_count += 1
+                        # Уведомление не ходит в БД; объекты ещё загружены (rollback
+                        # ниже их экспайрит), а блокировки снимет этот же rollback.
+                        await self._notify_autopay_cannot_renew(user, subscription, cause='price_error')
+                        await db.rollback()
                         continue
 
                     # Ноль сам по себе не повод отказать: бесплатный период —
@@ -1799,6 +1809,7 @@ class MonitoringService:
                             renewal_cost=renewal_cost,
                         )
                         failed_count += 1
+                        await self._notify_autopay_cannot_renew(user, subscription, cause='period_unpriced')
                         continue
 
                     # calculate_renewal_price уже включает promo_group + promo_offer скидки.
@@ -2608,6 +2619,92 @@ class MonitoringService:
             )
         except Exception as e:
             logger.error('Ошибка отправки уведомления об автоплатеже пользователю', telegram_id=user.telegram_id, e=e)
+
+    async def _notify_autopay_cannot_renew(self, user, subscription, *, cause: str) -> None:
+        """Разово сказать, что автопродление этой подписки не сработает само.
+
+        Поводы — тариф отключён, цена не считается, у периода нет цены: деньги на
+        балансе есть, но списания не будет, а напоминание за дни до конца обещало
+        «ничего делать не нужно». Дедуп — одно сообщение на подписку за период
+        (end_date): in-memory + Redis с TTL до конца срока + 3 дня. Сам метод в БД
+        не ходит и исключений наружу не бросает.
+        """
+        try:
+            if user is None or subscription is None or subscription.end_date is None:
+                return
+            if not NotificationSettingsService.are_notifications_globally_enabled():
+                return
+            cycle_token = int(subscription.end_date.timestamp())
+            key = f'autopay_cannot_renew:{subscription.id}:{cycle_token}'
+            sent = self.__dict__.setdefault('_autopay_cannot_renew_sent', set())
+            if key in sent:
+                return
+            try:
+                if await cache.exists(key):
+                    sent.add(key)
+                    return
+            except Exception as redis_err:
+                logger.debug('Redis недоступен для дедупа autopay_cannot_renew', error=redis_err)
+
+            if user.telegram_id and not self.bot:
+                return  # бота нет — не помечаем, попробуем в следующем цикле
+
+            # Помечаем ДО отправки: «не больше одного раза» важнее доставки —
+            # заблокировавший бота не должен получать попытку каждый цикл.
+            sent.add(key)
+            hours_left = max(0.0, (subscription.end_date - datetime.now(UTC)).total_seconds() / 3600.0)
+            await cache.set(key, 1, expire=int(hours_left * 3600) + 72 * 3600)
+
+            texts = get_texts(user.language)
+            tariff = getattr(subscription, 'tariff', None)
+            tariff_label = f' «{tariff.name}»' if settings.is_multi_tariff_enabled() and tariff else ''
+            end_date = format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')
+            if user.telegram_id:
+                from aiogram.types import InlineKeyboardMarkup
+
+                message = texts.t(
+                    'AUTOPAY_CANNOT_RENEW',
+                    '⚠️ <b>Не получилось продлить подписку{tariff_label} автоматически</b>\n\n'
+                    'Подписка действует до {end_date}. Чтобы VPN не отключился, '
+                    'выберите тариф и продлите подписку по кнопке ниже.',
+                ).format(tariff_label=tariff_label, end_date=end_date)
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            build_subscription_extend_button(
+                                texts.t('BTN_RENEW_SUBSCRIPTION', '⏰ Продлить подписку'), subscription.id
+                            )
+                        ]
+                    ]
+                )
+                await self._send_message_with_logo(
+                    chat_id=user.telegram_id,
+                    text=message,
+                    parse_mode='HTML',
+                    reply_markup=keyboard,
+                    user=user,
+                )
+            else:
+                await notification_delivery_service.notify_autopay_failed(
+                    user=user,
+                    reason=texts.t(
+                        'AUTOPAY_CANNOT_RENEW_REASON',
+                        'Не получилось продлить подписку автоматически — выберите тариф и продлите её вручную',
+                    ),
+                )
+            logger.info(
+                '📨 Уведомление «автопродление не сработает» отправлено',
+                subscription_id=subscription.id,
+                user_id=user.id,
+                cause=cause,
+            )
+        except Exception as error:
+            logger.warning(
+                'Не удалось отправить уведомление «автопродление не сработает»',
+                subscription_id=getattr(subscription, 'id', None),
+                cause=cause,
+                error=error,
+            )
 
     async def _send_autopay_failed_notification(
         self,

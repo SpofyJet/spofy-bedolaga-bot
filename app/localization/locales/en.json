@@ -2482,5 +2482,7 @@
   "REFERRAL_WELCOME_FRIEND_DAYS": "🎁 Connect the VPN during your trial and you both get +{days} days.",
   "WHEEL_TOPUP_SPIN_EARNED": "🎡 <b>+{earned} spin on the prize wheel</b> — for your top-up.",
   "WHEEL_TOPUP_SPIN_PRIZES": "Win extra days, a discount, balance bonus or one more device. Spins: {available}.",
-  "WHEEL_TOPUP_SPIN_BUTTON": "🎡 Spin the wheel"
+  "WHEEL_TOPUP_SPIN_BUTTON": "🎡 Spin the wheel",
+  "AUTOPAY_CANNOT_RENEW": "⚠️ <b>We couldn't renew your subscription{tariff_label} automatically</b>\n\nYour subscription is active until {end_date}. To keep your VPN running, choose a plan and renew using the button below.",
+  "AUTOPAY_CANNOT_RENEW_REASON": "We couldn't renew your subscription automatically — choose a plan and renew it manually"
 }
