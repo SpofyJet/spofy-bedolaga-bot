@@ -29,6 +29,7 @@ from app.database.models import (
     PromoCode,
     PromoCodeType,
     Subscription,
+    SubscriptionStatus,
     User,
     WheelConfig,
     WheelPrize,
@@ -111,6 +112,18 @@ class SpinAvailability:
     eligible_subscriptions: list[EligibleSubscription] | None = None
     can_pay_free: bool = False
     free_spins: FreeSpinState | None = None
+
+
+def prize_days_end(end_date: datetime | None, days: int, now: datetime) -> datetime:
+    """Новый конец срока для дней-приза: истёкшей подписке — от сейчас, а не от прошедшей даты.
+
+    Раньше дни прибавлялись к end_date как есть: подписка, кончившаяся 1-го, за «+3 дня»
+    4-го получала конец «4-го вечером» и оставалась expired — приз фактически пропадал.
+    Тот же расчёт срока, что в crud extend_subscription (без её побочных действий для
+    оплаты — сброса израсходованного трафика).
+    """
+    expired = end_date is None or end_date <= now
+    return (now if expired else end_date) + timedelta(days=days)
 
 
 class FortuneWheelService:
@@ -605,9 +618,14 @@ class FortuneWheelService:
                     from app.services.grace_access_echo import undo_grace_overlay_echo
 
                     await undo_grace_overlay_echo(db, subscription)
-                    # Обычная подписка - добавляем дни и синхронизируем с RemnaWave
-                    subscription.end_date += timedelta(days=prize.prize_value)
-                    subscription.updated_at = datetime.now(UTC)
+                    # Обычная подписка - добавляем дни и синхронизируем с RemnaWave.
+                    # Истёкшей — от сейчас и снова активна; отключённую (disabled) и
+                    # упёршуюся в трафик (limited) приз не включает — статус за админом и трафиком.
+                    now = datetime.now(UTC)
+                    subscription.end_date = prize_days_end(subscription.end_date, prize.prize_value, now)
+                    if subscription.status == SubscriptionStatus.EXPIRED.value:
+                        subscription.status = SubscriptionStatus.ACTIVE.value
+                    subscription.updated_at = now
                     # Условия тарифа на новый срок: база тарифа + активные докупки.
                     from app.database.crud.subscription import reconcile_tariff_traffic_limit
 

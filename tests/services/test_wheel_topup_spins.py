@@ -439,3 +439,50 @@ def test_migration_0139_raises_seeded_prizes_and_leaves_admin_edits():
         assert rows() == before
         colors = conn.execute(sa.text('SELECT color FROM wheel_prizes ORDER BY id')).scalars().all()
         assert colors == [c for _t, _v, _n, _e, c, _k, _p in m38.DEFAULT_PRIZES]
+
+
+# ---------- дни-приз к истёкшей подписке ----------
+
+
+@pytest.mark.parametrize(
+    ('end_offset', 'expected_end_offset'),
+    [
+        (timedelta(days=10), timedelta(days=13)),  # активная: дни к текущему концу
+        # истёкшая 3 дня назад: от сейчас (раньше конец уезжал в «сегодня вечером»)
+        (timedelta(days=-3), timedelta(days=3)),
+        (timedelta(hours=-1), timedelta(days=3)),  # срок только что прошёл
+        (None, timedelta(days=3)),
+    ],
+)
+def test_prize_days_on_expired_subscription_start_from_now(end_offset, expected_end_offset):
+    from app.services.wheel_service import prize_days_end
+
+    end = NOW + end_offset if end_offset is not None else None
+    assert prize_days_end(end, 3, NOW) == NOW + expected_end_offset
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('status', 'expected'), [('expired', 'active'), ('disabled', 'disabled'), ('active', 'active')]
+)
+async def test_days_prize_reactivates_only_expired(status, expected):
+    from types import SimpleNamespace
+
+    svc = FortuneWheelService()
+    sub = SimpleNamespace(
+        id=1,
+        status=status,
+        end_date=datetime.now(UTC) - timedelta(days=3),
+        updated_at=None,
+        tariff=None,
+        is_daily=False,
+    )
+    prize = SimpleNamespace(prize_type=WheelPrizeType.SUBSCRIPTION_DAYS.value, prize_value=3, prize_value_kopeks=2100)
+    user = SimpleNamespace(id=7)
+    with (
+        patch('app.services.grace_access_echo.undo_grace_overlay_echo', AsyncMock()),
+        patch('app.database.crud.subscription.reconcile_tariff_traffic_limit', AsyncMock()),
+    ):
+        await svc._apply_prize(AsyncMock(), user, prize, _config(), sub, {})
+    assert sub.status == expected
+    assert sub.end_date > datetime.now(UTC) + timedelta(days=2, hours=23)
