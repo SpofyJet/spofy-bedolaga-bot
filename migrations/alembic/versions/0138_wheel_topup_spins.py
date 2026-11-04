@@ -27,10 +27,9 @@ def _columns(table: str) -> set[str]:
 
 # (prize_type, prize_value, display_name, emoji, color, prize_value_kopeks, manual_probability)
 DEFAULT_PRIZES = [
-    ('subscription_days', 1, '+1 день', '📅', '#3B82F6', 700, 0.30),
+    ('subscription_days', 1, '+1 день', '📅', '#3B82F6', 700, 0.35),
     ('discount', 10, 'Скидка 10%', '🏷️', '#8B5CF6', 2000, 0.20),
-    ('subscription_days', 3, '+3 дня', '🗓️', '#0EA5E9', 2000, 0.15),
-    ('traffic_gb', 10, '+10 ГБ обходов', '🚀', '#14B8A6', 1500, 0.10),
+    ('subscription_days', 3, '+3 дня', '🗓️', '#0EA5E9', 2000, 0.20),
     ('balance_bonus', 2500, '25 ₽ на баланс', '💰', '#F59E0B', 2500, 0.10),
     ('extra_spin', 1, 'Ещё спин', '🔄', '#EC4899', 1500, 0.09),
     ('device_slot', 1, '+1 устройство', '📱', '#22C55E', 5000, 0.05),
