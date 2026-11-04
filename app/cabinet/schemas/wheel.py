@@ -41,6 +41,9 @@ class WheelPrizeDisplay(BaseModel):
     emoji: str
     color: str
     prize_type: str
+    prize_value: int = 0
+    # Насколько часто выпадает: common / rare / jackpot (None — шанс считает RTP, не показываем)
+    rarity: str | None = None
 
     class Config:
         from_attributes = True
@@ -73,6 +76,8 @@ class WheelConfigResponse(BaseModel):
     topup_spin_threshold_kopeks: int = 0
     topup_progress_kopeks: int = 0
     topup_left_kopeks: int = 0
+    discount_days: int = 7
+    device_bonus_days: int = 30
 
 
 class SpinAvailabilityResponse(BaseModel):
@@ -189,8 +194,8 @@ class AdminWheelConfigResponse(BaseModel):
     promo_prefix: str
     promo_validity_days: int
     topup_spins_enabled: bool = False
-    topup_spin_threshold_kopeks: int = 15000
-    topup_spin_value_kopeks: int = 1500
+    topup_spin_threshold_kopeks: int = 100000
+    topup_spin_value_kopeks: int = 10000
     topup_spins_since: datetime | None = None
     prizes: list[WheelPrizeAdminResponse]
     created_at: datetime | None = None

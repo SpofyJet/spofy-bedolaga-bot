@@ -28,7 +28,7 @@ from app.database.crud.wheel import (
     get_wheel_prizes,
 )
 from app.database.models import User
-from app.services.wheel_service import wheel_service
+from app.services.wheel_service import WHEEL_DEVICE_BONUS_DAYS, prize_rarity, wheel_service
 
 
 logger = structlog.get_logger(__name__)
@@ -75,6 +75,8 @@ async def get_wheel_config(
             emoji=p.emoji,
             color=p.color,
             prize_type=p.prize_type,
+            prize_value=p.prize_value or 0,
+            rarity=prize_rarity(p.manual_probability),
         )
         for p in prizes
     ]
@@ -111,6 +113,8 @@ async def get_wheel_config(
         topup_spin_threshold_kopeks=free.threshold_kopeks,
         topup_progress_kopeks=free.progress_kopeks,
         topup_left_kopeks=free.left_kopeks,
+        discount_days=int(config.promo_validity_days or 7),
+        device_bonus_days=WHEEL_DEVICE_BONUS_DAYS,
     )
 
 

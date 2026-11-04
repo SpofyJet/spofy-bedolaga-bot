@@ -4668,9 +4668,9 @@ class WheelConfig(Base):
     # (DEPOSIT с платёжным методом, начиная с topup_spins_since) = 1 спин. Счёт выводится из
     # транзакций, поэтому ничего не задваивается и не теряется при сбоях уведомлений.
     topup_spins_enabled = Column(Boolean, default=False, server_default='false', nullable=False)
-    topup_spin_threshold_kopeks = Column(Integer, default=15000, server_default='15000', nullable=False)
+    topup_spin_threshold_kopeks = Column(Integer, default=100000, server_default='100000', nullable=False)
     # «Стоимость» бесплатного спина для RTP-расчёта и статистики (по умолчанию 10% от порога).
-    topup_spin_value_kopeks = Column(Integer, default=1500, server_default='1500', nullable=False)
+    topup_spin_value_kopeks = Column(Integer, default=10000, server_default='10000', nullable=False)
     topup_spins_since = Column(AwareDateTime(), nullable=True)
 
     created_at = Column(AwareDateTime(), default=func.now())

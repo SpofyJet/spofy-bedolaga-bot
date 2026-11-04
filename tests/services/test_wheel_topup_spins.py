@@ -312,3 +312,32 @@ def test_migration_0138_chain_and_prize_table():
     types = {p[0] for p in module.DEFAULT_PRIZES}
     assert {'device_slot', 'discount', 'extra_spin', 'subscription_days'} <= types
     assert 'nothing' not in types  # мини-бонус: каждый спин что-то даёт
+
+
+# ---------- витрина призов и порог 1000 ₽ ----------
+
+
+@pytest.mark.parametrize(
+    ('probability', 'rarity'),
+    [(None, None), (0, None), (0.35, 'common'), (0.15, 'common'), (0.09, 'rare'), (0.05, 'rare'), (0.01, 'jackpot')],
+)
+def test_prize_rarity(probability, rarity):
+    from app.services.wheel_service import prize_rarity
+
+    assert prize_rarity(probability) == rarity
+
+
+def test_migration_0139_threshold_and_palette():
+    spec = importlib.util.spec_from_file_location(
+        'm0139', Path('migrations/alembic/versions/0139_wheel_threshold_palette.py')
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert (module.revision, module.down_revision) == ('0139', '0138')
+    seeded = importlib.util.spec_from_file_location(
+        'm0138b', Path('migrations/alembic/versions/0138_wheel_topup_spins.py')
+    )
+    m38 = importlib.util.module_from_spec(seeded)
+    seeded.loader.exec_module(m38)
+    seeded_colors = {p[2]: p[4] for p in m38.DEFAULT_PRIZES}
+    assert {name: old for name, old, _ in module.PALETTE} == seeded_colors

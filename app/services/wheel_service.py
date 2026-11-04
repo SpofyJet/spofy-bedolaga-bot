@@ -44,6 +44,17 @@ WHEEL_DEVICE_BONUS_DAYS = 30  # сколько живёт выигранное �
 WHEEL_DEVICE_BONUS_MIN_DAYS = 3  # подписке осталось меньше — устройство бессмысленно, отдаём деньгами
 
 
+def prize_rarity(probability: float | None) -> str | None:
+    """Подпись редкости для витрины призов: часто / редко / джекпот."""
+    if probability is None or probability <= 0:
+        return None
+    if probability >= 0.15:
+        return 'common'
+    if probability >= 0.05:
+        return 'rare'
+    return 'jackpot'
+
+
 @dataclass
 class FreeSpinState:
     """Бесплатные спины за пополнения."""
