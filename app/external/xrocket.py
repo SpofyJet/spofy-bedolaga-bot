@@ -22,6 +22,9 @@ class XRocketService:
 
     # Публичный Trade API (курсы), авторизация не нужна
     TRADE_URL = 'https://trade.xrocket.exchange'
+    # Без таймаута зависший ответ xRocket держал вебхук/кнопку «Проверить статус»
+    # и цикл автопроверки сколько угодно долго (дефолт aiohttp — 5 минут).
+    REQUEST_TIMEOUT_SECONDS = 20
 
     def __init__(self):
         self.api_token = settings.XROCKET_API_TOKEN
@@ -41,7 +44,9 @@ class XRocketService:
         headers = {'Rocket-Pay-Key': self.api_token, 'Content-Type': 'application/json'}
 
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=self.REQUEST_TIMEOUT_SECONDS)
+            ) as session:
                 request_kwargs: dict[str, Any] = {'headers': headers}
 
                 if method.upper() in ('GET', 'DELETE'):

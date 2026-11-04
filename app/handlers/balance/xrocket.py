@@ -287,11 +287,22 @@ async def check_xrocket_payment_status(callback: types.CallbackQuery, db_user: U
 
         from app.database.crud.xrocket import get_xrocket_payment_by_id
 
+        # Владельца проверяем до запроса к провайдеру: id в callback_data подконтролен клиенту.
         payment = await get_xrocket_payment_by_id(db, local_payment_id)
 
         if not payment or payment.user_id != db_user.id:
             await callback.answer('❌ Платеж не найден', show_alert=True)
             return
+
+        if not payment.is_paid:
+            # Раньше кнопка читала только локальную запись: если вебхук xRocket
+            # потерялся, оплаченный счёт навсегда оставался «Ожидает оплаты».
+            # Сервис спрашивает xRocket и при статусе paid проводит зачисление
+            # штатным путём вебхука (блокировка строки + проверка status='paid' —
+            # повторное нажатие не зачислит дважды).
+            status_info = await PaymentService(callback.bot).get_xrocket_payment_status(db, local_payment_id)
+            if status_info and status_info.get('payment') is not None:
+                payment = status_info['payment']
 
         status_emoji = {'active': '⏳', 'paid': '✅', 'expired': '❌'}
 

@@ -84,6 +84,7 @@ SUPPORTED_MANUAL_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.WATA,
         PaymentMethod.HELEKET,
         PaymentMethod.CRYPTOBOT,
+        PaymentMethod.XROCKET,
         PaymentMethod.PLATEGA,
         PaymentMethod.CLOUDPAYMENTS,
         PaymentMethod.FREEKASSA,
@@ -110,6 +111,9 @@ SUPPORTED_AUTO_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.MULENPAY,
         PaymentMethod.PAL24,
         PaymentMethod.CRYPTOBOT,
+        # xRocket: get_xrocket_payment_status спрашивает API и проводит оплату
+        # путём вебхука (идемпотентно), если вебхук потерялся.
+        PaymentMethod.XROCKET,
         PaymentMethod.PLATEGA,
         PaymentMethod.HELEKET,
         # CloudPayments removed - API returns "Completed" during authorization
@@ -141,6 +145,8 @@ def method_display_name(method: PaymentMethod) -> str:
         return 'YooKassa'
     if method == PaymentMethod.WATA:
         return 'WATA'
+    if method == PaymentMethod.XROCKET:
+        return 'xRocket'
     if method == PaymentMethod.PLATEGA:
         return settings.get_platega_display_name()
     if method == PaymentMethod.PLATEGA_RECURRENT:
