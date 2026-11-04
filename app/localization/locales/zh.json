@@ -1903,6 +1903,8 @@
   "REFERRAL_WITHDRAWAL_ONLY_REF_MODE": "<i><tg-emoji emoji-id='5879785854284599288'>ℹ️</tg-emoji> 仅可提现推荐余额</i>",
   "REFERRAL_WITHDRAWAL_READY": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> 您可以申请提现",
   "REFERRAL_WITHDRAWAL_REJECTED": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> <b>提现申请 #{id} 已拒绝</b>\n\n金额：<b>{amount}</b>\n\n如有疑问，请联系客服。",
+  "REFERRAL_WITHDRAWAL_REJECTED_WITH_REASON": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> <b>提现申请 #{id} 已拒绝</b>\n\n金额：<b>{amount}</b>\n原因：{reason}\n\n如有疑问，请联系客服。",
+  "REFERRAL_WITHDRAWAL_ADMIN_COMMENT": "备注：{comment}",
   "REFERRAL_WITHDRAWAL_REQUEST_BUTTON": "📝 提交申请",
   "REFERRAL_WITHDRAWAL_STATS_AVAILABLE": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>可提现：{amount}</b>",
   "REFERRAL_WITHDRAWAL_STATS_EARNED": "<tg-emoji emoji-id='5776219138917668486'>📈</tg-emoji> 推荐总收入：<b>{amount}</b>",

@@ -799,6 +799,7 @@ class NotificationDeliveryService:
         comment: str | None = None,
         bot: Bot | None = None,
         telegram_message: str | None = None,
+        telegram_markup: Any | None = None,
     ) -> bool:
         """Notify user about withdrawal request approval."""
         context = {
@@ -814,6 +815,7 @@ class NotificationDeliveryService:
             context=context,
             bot=bot,
             telegram_message=telegram_message,
+            telegram_markup=telegram_markup,
         )
 
     async def notify_withdrawal_rejected(
@@ -823,6 +825,7 @@ class NotificationDeliveryService:
         comment: str | None = None,
         bot: Bot | None = None,
         telegram_message: str | None = None,
+        telegram_markup: Any | None = None,
     ) -> bool:
         """Notify user about withdrawal request rejection."""
         context = {
@@ -838,6 +841,7 @@ class NotificationDeliveryService:
             context=context,
             bot=bot,
             telegram_message=telegram_message,
+            telegram_markup=telegram_markup,
         )
 
     async def notify_daily_debit(

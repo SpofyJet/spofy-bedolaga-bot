@@ -17,8 +17,8 @@ from app.database.crud.referral import (
 from app.database.crud.user import get_user_by_id, get_user_by_telegram_id
 from app.database.models import ReferralEarning, User, WithdrawalRequest, WithdrawalRequestStatus
 from app.keyboards.withdrawal import get_withdrawal_request_keyboard
-from app.localization.texts import get_texts
 from app.services.referral_withdrawal_service import referral_withdrawal_service
+from app.services.withdrawal_notifications import DEFAULT_BOT_REJECT_COMMENT, notify_user_about_withdrawal_status
 from app.states import AdminStates
 from app.utils.chat_scope import callback_from_group
 from app.utils.decorators import admin_required, error_handler
@@ -543,23 +543,16 @@ async def approve_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     success, error = await referral_withdrawal_service.approve_request(db, request_id, db_user.id)
 
     if success:
-        # Уведомляем пользователя (только если есть telegram_id)
+        # Уведомляем пользователя (только если есть telegram_id) — тем же текстом, что и из кабинета
         user = await get_user_by_id(db, request.user_id)
-        if user and user.telegram_id:
-            try:
-                texts = get_texts(user.language)
-                await callback.bot.send_message(
-                    user.telegram_id,
-                    texts.t(
-                        'REFERRAL_WITHDRAWAL_APPROVED',
-                        '✅ <b>Заявка на вывод #{id} одобрена!</b>\n\n'
-                        'Сумма: <b>{amount}</b>\n'
-                        'Средства списаны с баланса.\n\n'
-                        'Ожидайте перевод на указанные реквизиты.',
-                    ).format(id=request.id, amount=texts.format_price(request.amount_kopeks)),
-                )
-            except Exception as e:
-                logger.error('Ошибка отправки уведомления пользователю', error=e)
+        await notify_user_about_withdrawal_status(
+            callback.bot,
+            user,
+            request_id=request.id,
+            amount_kopeks=request.amount_kopeks,
+            status=WithdrawalRequestStatus.APPROVED.value,
+            comment=None,
+        )
 
         await callback.answer('✅ Заявка одобрена, средства списаны с баланса')
 
@@ -582,27 +575,23 @@ async def reject_withdrawal_request(callback: types.CallbackQuery, db_user: User
         await callback.answer('Заявка не найдена', show_alert=True)
         return
 
+    # Отклонение в один тап (работает и в группе, где FSM-ввод причины недоступен):
+    # причины нет — человек получает нейтральный текст и кнопку «Поддержка».
     success, _error = await referral_withdrawal_service.reject_request(
-        db, request_id, db_user.id, 'Отклонено администратором'
+        db, request_id, db_user.id, DEFAULT_BOT_REJECT_COMMENT
     )
 
     if success:
-        # Уведомляем пользователя (только если есть telegram_id)
+        # Уведомляем пользователя (только если есть telegram_id) — тем же текстом, что и из кабинета
         user = await get_user_by_id(db, request.user_id)
-        if user and user.telegram_id:
-            try:
-                texts = get_texts(user.language)
-                await callback.bot.send_message(
-                    user.telegram_id,
-                    texts.t(
-                        'REFERRAL_WITHDRAWAL_REJECTED',
-                        '❌ <b>Заявка на вывод #{id} отклонена</b>\n\n'
-                        'Сумма: <b>{amount}</b>\n\n'
-                        'Если у вас есть вопросы, обратитесь в поддержку.',
-                    ).format(id=request.id, amount=texts.format_price(request.amount_kopeks)),
-                )
-            except Exception as e:
-                logger.error('Ошибка отправки уведомления пользователю', error=e)
+        await notify_user_about_withdrawal_status(
+            callback.bot,
+            user,
+            request_id=request.id,
+            amount_kopeks=request.amount_kopeks,
+            status=WithdrawalRequestStatus.REJECTED.value,
+            comment=None,
+        )
 
         await callback.answer('❌ Заявка отклонена')
 
@@ -628,22 +617,16 @@ async def complete_withdrawal_request(callback: types.CallbackQuery, db_user: Us
     success, _error = await referral_withdrawal_service.complete_request(db, request_id, db_user.id, 'Перевод выполнен')
 
     if success:
-        # Уведомляем пользователя (только если есть telegram_id)
+        # Уведомляем пользователя (только если есть telegram_id) — тем же текстом, что и из кабинета
         user = await get_user_by_id(db, request.user_id)
-        if user and user.telegram_id:
-            try:
-                texts = get_texts(user.language)
-                await callback.bot.send_message(
-                    user.telegram_id,
-                    texts.t(
-                        'REFERRAL_WITHDRAWAL_COMPLETED',
-                        '💸 <b>Выплата по заявке #{id} выполнена!</b>\n\n'
-                        'Сумма: <b>{amount}</b>\n\n'
-                        'Деньги отправлены на указанные реквизиты.',
-                    ).format(id=request.id, amount=texts.format_price(request.amount_kopeks)),
-                )
-            except Exception as e:
-                logger.error('Ошибка отправки уведомления пользователю', error=e)
+        await notify_user_about_withdrawal_status(
+            callback.bot,
+            user,
+            request_id=request.id,
+            amount_kopeks=request.amount_kopeks,
+            status=WithdrawalRequestStatus.COMPLETED.value,
+            comment=None,
+        )
 
         await callback.answer('✅ Заявка выполнена')
 

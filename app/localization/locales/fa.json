@@ -1903,6 +1903,8 @@
   "REFERRAL_WITHDRAWAL_ONLY_REF_MODE": "<i><tg-emoji emoji-id='5879785854284599288'>ℹ️</tg-emoji> فقط موجودی معرفی قابل برداشت است</i>",
   "REFERRAL_WITHDRAWAL_READY": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> می‌توانید درخواست برداشت بدهید",
   "REFERRAL_WITHDRAWAL_REJECTED": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> <b>درخواست برداشت #{id} رد شد</b>\n\nمبلغ: <b>{amount}</b>\n\nاگر سؤالی دارید، با پشتیبانی تماس بگیرید.",
+  "REFERRAL_WITHDRAWAL_REJECTED_WITH_REASON": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> <b>درخواست برداشت #{id} رد شد</b>\n\nمبلغ: <b>{amount}</b>\nدلیل: {reason}\n\nاگر سؤالی دارید، با پشتیبانی تماس بگیرید.",
+  "REFERRAL_WITHDRAWAL_ADMIN_COMMENT": "توضیح: {comment}",
   "REFERRAL_WITHDRAWAL_REQUEST_BUTTON": "📝 ثبت درخواست",
   "REFERRAL_WITHDRAWAL_STATS_AVAILABLE": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>قابل برداشت: {amount}</b>",
   "REFERRAL_WITHDRAWAL_STATS_EARNED": "<tg-emoji emoji-id='5776219138917668486'>📈</tg-emoji> کل درآمد از معرفی‌ها: <b>{amount}</b>",

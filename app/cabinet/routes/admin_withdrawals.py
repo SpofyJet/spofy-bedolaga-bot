@@ -15,6 +15,7 @@ from app.database.models import (
     WithdrawalRequestStatus,
 )
 from app.services.referral_withdrawal_service import referral_withdrawal_service
+from app.services.withdrawal_notifications import build_withdrawal_status_message
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.withdrawals import (
@@ -207,9 +208,14 @@ async def approve_withdrawal(
             withdrawal = await db.get(WithdrawalRequest, withdrawal_id)
             user = await db.get(User, withdrawal.user_id) if withdrawal else None
             if user and withdrawal:
-                formatted_amount = settings.format_price(withdrawal.amount_kopeks)
-                comment_text = f'\n{request.comment}' if request.comment else ''
-                tg_message = f'✅ Ваш запрос на вывод {formatted_amount} одобрен.{comment_text}'
+                # Тот же текст, что и из админки бота (язык пользователя)
+                tg_message, tg_markup = build_withdrawal_status_message(
+                    user.language,
+                    request_id=withdrawal.id,
+                    amount_kopeks=withdrawal.amount_kopeks,
+                    status=WithdrawalRequestStatus.APPROVED.value,
+                    comment=request.comment,
+                )
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_withdrawal_approved(
@@ -218,6 +224,7 @@ async def approve_withdrawal(
                         comment=request.comment,
                         bot=bot,
                         telegram_message=tg_message,
+                        telegram_markup=tg_markup,
                     )
                 finally:
                     await bot.session.close()
@@ -258,9 +265,14 @@ async def reject_withdrawal(
             withdrawal = await db.get(WithdrawalRequest, withdrawal_id)
             user = await db.get(User, withdrawal.user_id) if withdrawal else None
             if user and withdrawal:
-                formatted_amount = settings.format_price(withdrawal.amount_kopeks)
-                comment_text = f'\nПричина: {request.comment}' if request.comment else ''
-                tg_message = f'❌ Ваш запрос на вывод {formatted_amount} отклонён.{comment_text}'
+                # Тот же текст, что и из админки бота: причина и кнопка «Поддержка»
+                tg_message, tg_markup = build_withdrawal_status_message(
+                    user.language,
+                    request_id=withdrawal.id,
+                    amount_kopeks=withdrawal.amount_kopeks,
+                    status=WithdrawalRequestStatus.REJECTED.value,
+                    comment=request.comment,
+                )
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_withdrawal_rejected(
@@ -269,6 +281,7 @@ async def reject_withdrawal(
                         comment=request.comment,
                         bot=bot,
                         telegram_message=tg_message,
+                        telegram_markup=tg_markup,
                     )
                 finally:
                     await bot.session.close()

@@ -1903,6 +1903,8 @@
   "REFERRAL_WITHDRAWAL_ONLY_REF_MODE": "<i><tg-emoji emoji-id='5879785854284599288'>ℹ️</tg-emoji> Виводити можна лише реферальний баланс</i>",
   "REFERRAL_WITHDRAWAL_READY": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> Ви можете запросити виведення коштів",
   "REFERRAL_WITHDRAWAL_REJECTED": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> <b>Заявку на виведення #{id} відхилено</b>\n\nСума: <b>{amount}</b>\n\nЯкщо у вас є питання, зверніться до підтримки.",
+  "REFERRAL_WITHDRAWAL_REJECTED_WITH_REASON": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> <b>Заявку на виведення #{id} відхилено</b>\n\nСума: <b>{amount}</b>\nПричина: {reason}\n\nЯкщо у вас є питання, зверніться до підтримки.",
+  "REFERRAL_WITHDRAWAL_ADMIN_COMMENT": "Коментар: {comment}",
   "REFERRAL_WITHDRAWAL_REQUEST_BUTTON": "📝 Оформити заявку",
   "REFERRAL_WITHDRAWAL_STATS_AVAILABLE": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>Доступно до виведення: {amount}</b>",
   "REFERRAL_WITHDRAWAL_STATS_EARNED": "<tg-emoji emoji-id='5776219138917668486'>📈</tg-emoji> Усього зароблено з рефералів: <b>{amount}</b>",

@@ -1903,6 +1903,8 @@
   "REFERRAL_WITHDRAWAL_ONLY_REF_MODE": "<i><tg-emoji emoji-id='5879785854284599288'>ℹ️</tg-emoji> Only the referral balance can be withdrawn</i>",
   "REFERRAL_WITHDRAWAL_READY": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> You can request a withdrawal",
   "REFERRAL_WITHDRAWAL_REJECTED": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> <b>Withdrawal request #{id} rejected</b>\n\nAmount: <b>{amount}</b>\n\nIf you have any questions, please contact support.",
+  "REFERRAL_WITHDRAWAL_REJECTED_WITH_REASON": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> <b>Withdrawal request #{id} rejected</b>\n\nAmount: <b>{amount}</b>\nReason: {reason}\n\nIf you have any questions, please contact support.",
+  "REFERRAL_WITHDRAWAL_ADMIN_COMMENT": "Comment: {comment}",
   "REFERRAL_WITHDRAWAL_REQUEST_BUTTON": "📝 Submit a request",
   "REFERRAL_WITHDRAWAL_STATS_AVAILABLE": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>Available for withdrawal: {amount}</b>",
   "REFERRAL_WITHDRAWAL_STATS_EARNED": "<tg-emoji emoji-id='5776219138917668486'>📈</tg-emoji> Total earned from referrals: <b>{amount}</b>",
