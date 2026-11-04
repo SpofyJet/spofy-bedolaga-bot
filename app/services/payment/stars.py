@@ -774,7 +774,8 @@ async def credit_unapplied_stars_payment(
         db,
         user,
         amount_kopeks,
-        f'Оплата Telegram Stars зачислена на баланс: {problem} ({stars_amount} ⭐)',
+        # Описание видно человеку в истории баланса — без внутренних причин (они в алерте).
+        f'Оплата Telegram Stars зачислена на баланс ({stars_amount} ⭐)',
         transaction_type=TransactionType.DEPOSIT,
         payment_method=PaymentMethod.TELEGRAM_STARS,
         external_id=charge_id,
