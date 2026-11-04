@@ -341,3 +341,78 @@ def test_migration_0139_threshold_and_palette():
     seeded.loader.exec_module(m38)
     seeded_colors = {p[2]: p[4] for p in m38.DEFAULT_PRIZES}
     assert {name: old for name, old, _ in module.PALETTE} == seeded_colors
+
+
+def test_migration_0139_raises_seeded_prizes_and_leaves_admin_edits():
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    spec = importlib.util.spec_from_file_location(
+        'm0139c', Path('migrations/alembic/versions/0139_wheel_threshold_palette.py')
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    seeded = importlib.util.spec_from_file_location(
+        'm0138c', Path('migrations/alembic/versions/0138_wheel_topup_spins.py')
+    )
+    m38 = importlib.util.module_from_spec(seeded)
+    seeded.loader.exec_module(m38)
+
+    # The 0139 «before» rows are exactly what 0138 seeds, and the new set still sums to 1.
+    assert [(n, t, v, k, p) for (n, t, v, k, p), _ in module.PRIZES] == [
+        (name, ptype, value, kopeks, prob) for ptype, value, name, _e, _c, kopeks, prob in m38.DEFAULT_PRIZES
+    ]
+    assert abs(sum(new[4] for _, new in module.PRIZES) - 1) < 1e-9
+
+    engine = sa.create_engine('sqlite://')
+    with engine.begin() as conn:
+        conn.execute(
+            sa.text(
+                'CREATE TABLE wheel_configs (id INTEGER, topup_spin_threshold_kopeks INTEGER, topup_spin_value_kopeks INTEGER)'
+            )
+        )
+        conn.execute(sa.text('INSERT INTO wheel_configs VALUES (1, 15000, 1500)'))
+        conn.execute(
+            sa.text(
+                'CREATE TABLE wheel_prizes (id INTEGER, display_name TEXT, prize_type TEXT, prize_value INTEGER, '
+                'prize_value_kopeks INTEGER, manual_probability REAL, color TEXT)'
+            )
+        )
+        for i, (ptype, value, name, _emoji, color, kopeks, prob) in enumerate(m38.DEFAULT_PRIZES):
+            conn.execute(
+                sa.text('INSERT INTO wheel_prizes VALUES (:i, :n, :t, :v, :k, :p, :c)'),
+                {'i': i, 'n': name, 't': ptype, 'v': value, 'k': kopeks, 'p': prob, 'c': color},
+            )
+        # An admin already reweighted «Ещё спин»: 0139 must leave that prize alone.
+        conn.execute(sa.text("UPDATE wheel_prizes SET manual_probability = 0.2 WHERE display_name = 'Ещё спин'"))
+
+        def rows():
+            return conn.execute(
+                sa.text(
+                    'SELECT display_name, prize_type, prize_value, prize_value_kopeks, manual_probability FROM wheel_prizes ORDER BY id'
+                )
+            ).all()
+
+        before = rows()
+        with Operations.context(MigrationContext.configure(conn)):
+            module.upgrade()
+        after = rows()
+        assert [r[0] for r in after] == [
+            '+3 дня',
+            'Скидка 15%',
+            '+7 дней',
+            '100 ₽ на баланс',
+            'Ещё спин',
+            '+1 устройство',
+            '+30 дней',
+        ]
+        assert after[6][1:3] == ('subscription_days', 30)
+        assert after[4] == before[4]  # admin-edited prize untouched
+        assert conn.execute(sa.text('SELECT topup_spin_threshold_kopeks FROM wheel_configs')).scalar() == 100000
+
+        with Operations.context(MigrationContext.configure(conn)):
+            module.downgrade()
+        assert rows() == before
+        colors = conn.execute(sa.text('SELECT color FROM wheel_prizes ORDER BY id')).scalars().all()
+        assert colors == [c for _t, _v, _n, _e, c, _k, _p in m38.DEFAULT_PRIZES]
