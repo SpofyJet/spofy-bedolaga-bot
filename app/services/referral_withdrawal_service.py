@@ -20,6 +20,7 @@ from app.database.models import (
     WithdrawalRequest,
     WithdrawalRequestStatus,
 )
+from app.utils.timezone import format_local_datetime
 
 
 logger = structlog.get_logger(__name__)
@@ -231,6 +232,28 @@ class ReferralWithdrawalService:
         )
         return result.scalar_one_or_none()
 
+    async def get_pending_withdrawal_request(self, db: AsyncSession, user_id: int) -> WithdrawalRequest | None:
+        """Последняя заявка пользователя, которая ещё ждёт решения."""
+        result = await db.execute(
+            select(WithdrawalRequest)
+            .where(
+                WithdrawalRequest.user_id == user_id,
+                WithdrawalRequest.status == WithdrawalRequestStatus.PENDING.value,
+            )
+            .order_by(WithdrawalRequest.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    def format_pending_request_reason(request: WithdrawalRequest) -> str:
+        """«У вас уже есть активная заявка» — с номером, суммой и датой, чтобы было понятно, какая."""
+        return (
+            f'У вас уже есть активная заявка #{request.id} на {settings.format_price(request.amount_kopeks)} '
+            f'от {format_local_datetime(request.created_at, "%d.%m.%Y")} — она на рассмотрении. '
+            'Дождитесь решения по ней.'
+        )
+
     async def can_request_withdrawal(
         self, db: AsyncSession, user_id: int, *, stats: dict | None = None
     ) -> tuple[bool, str, dict]:
@@ -259,6 +282,13 @@ class ReferralWithdrawalService:
         # Проверяем доступный баланс
         if stats is None:
             stats = await self.get_referral_balance_stats(db, user_id)
+
+        # Активная заявка — первой: её сумма уже вычтена из доступного, и без этой
+        # проверки человек видел «Минимальная сумма вывода» вместо своей заявки.
+        pending_request = await self.get_pending_withdrawal_request(db, user_id)
+        if pending_request:
+            return False, self.format_pending_request_reason(pending_request), stats
+
         available = stats['available_total']
         min_amount = settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS
 
@@ -276,10 +306,6 @@ class ReferralWithdrawalService:
                 if datetime.now(UTC) < cooldown_end:
                     days_left = (cooldown_end - datetime.now(UTC)).days + 1
                     return False, f'Следующий запрос на вывод будет доступен через {days_left} дн.', stats
-
-            # Проверяем, нет ли активной заявки
-            if last_request.status == WithdrawalRequestStatus.PENDING.value:
-                return False, 'У вас уже есть активная заявка на рассмотрении', stats
 
         return True, 'OK', stats
 
