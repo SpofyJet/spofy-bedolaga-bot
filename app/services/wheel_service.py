@@ -20,7 +20,7 @@ from app.database.crud.wheel import (
     create_wheel_spin,
     get_free_spin_counters,
     get_or_create_wheel_config,
-    get_topup_deposits_kopeks,
+    get_topup_deposits_split,
     get_user_spins_today,
     get_wheel_prizes,
     get_wheel_statistics,
@@ -122,19 +122,24 @@ class FortuneWheelService:
     async def get_free_spin_state(self, db: AsyncSession, user_id: int, config: WheelConfig) -> FreeSpinState:
         """Сколько бесплатных спинов есть и сколько осталось пополнить до следующего.
 
-        Выводится из транзакций: каждые threshold копеек реальных пополнений с момента включения
-        = 1 спин, плюс выигранные «Ещё спин», минус уже прокрученные бесплатные.
+        Выводится из транзакций. Траты синхронизированы: прогресс к следующему спину идёт от
+        всех реальных пополнений за всё время, но спин дают только пороги, перейдённые
+        пополнениями с момента запуска (topup_spins_since). Пример при пороге 1 000 ₽: раньше
+        пополнил на 2 762 ₽ — спинов 0, до следующего 238 ₽; пополнил сегодня на 300 ₽ — 1 спин.
+        Плюс выигранные «Ещё спин» и выданные админом, минус уже прокрученные бесплатные.
         """
         threshold = int(getattr(config, 'topup_spin_threshold_kopeks', 0) or 0)
         if not getattr(config, 'topup_spins_enabled', False) or threshold <= 0:
             return FreeSpinState()
-        deposits = await get_topup_deposits_kopeks(db, user_id, getattr(config, 'topup_spins_since', None))
+        before, after = await get_topup_deposits_split(db, user_id, getattr(config, 'topup_spins_since', None))
+        total = before + after
+        earned = total // threshold - before // threshold
         won, used = await get_free_spin_counters(db, user_id)
         return FreeSpinState(
             enabled=True,
-            available=max(0, deposits // threshold + won - used),
+            available=max(0, earned + won - used),
             threshold_kopeks=threshold,
-            progress_kopeks=deposits % threshold,
+            progress_kopeks=total % threshold,
         )
 
     async def check_availability(self, db: AsyncSession, user: User) -> SpinAvailability:

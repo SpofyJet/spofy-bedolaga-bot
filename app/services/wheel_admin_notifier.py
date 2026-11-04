@@ -109,7 +109,7 @@ async def _notify(
             when=format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S'),
         )
 
-    await service.send_admin_notification(text, category=NotificationCategory.PROMO)
+    await service.send_admin_notification(text, category=NotificationCategory.WHEEL)
 
 
 async def _safe_notify(*args) -> None:

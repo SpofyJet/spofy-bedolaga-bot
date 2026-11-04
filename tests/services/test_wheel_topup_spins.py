@@ -57,7 +57,7 @@ def _config(**kw):
 async def test_free_spins_counted_from_deposits_won_and_used():
     svc = FortuneWheelService()
     with (
-        patch('app.services.wheel_service.get_topup_deposits_kopeks', AsyncMock(return_value=40000)),
+        patch('app.services.wheel_service.get_topup_deposits_split', AsyncMock(return_value=(0, 40000))),
         patch('app.services.wheel_service.get_free_spin_counters', AsyncMock(return_value=(1, 2))),
     ):
         state = await svc.get_free_spin_state(AsyncMock(), 7, _config())
@@ -65,6 +65,26 @@ async def test_free_spins_counted_from_deposits_won_and_used():
     assert state.available == 1
     assert state.progress_kopeks == 10000
     assert state.left_kopeks == 5000
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('before', 'after', 'available', 'progress'),
+    [
+        (40000, 0, 0, 10000),  # прошлые траты одни спинов не дают — только прогресс
+        (40000, 4000, 0, 14000),  # ещё не дошёл до порога
+        (40000, 6000, 1, 1000),  # сегодняшнее пополнение перешло порог — 1 спин
+        (0, 31000, 2, 1000),  # новый человек: всё с запуска
+    ],
+)
+async def test_past_spending_counts_toward_progress_not_spins(before, after, available, progress):
+    svc = FortuneWheelService()
+    with (
+        patch('app.services.wheel_service.get_topup_deposits_split', AsyncMock(return_value=(before, after))),
+        patch('app.services.wheel_service.get_free_spin_counters', AsyncMock(return_value=(0, 0))),
+    ):
+        state = await svc.get_free_spin_state(AsyncMock(), 7, _config())
+    assert (state.available, state.progress_kopeks) == (available, progress)
 
 
 @pytest.mark.asyncio
@@ -76,7 +96,7 @@ async def test_free_spins_off_when_disabled():
 
 @pytest.mark.asyncio
 async def test_deposit_query_counts_only_real_topups(monkeypatch):
-    from app.database.crud.wheel import get_free_spin_counters, get_topup_deposits_kopeks
+    from app.database.crud.wheel import get_free_spin_counters, get_topup_deposits_kopeks, get_topup_deposits_split
 
     since = NOW - timedelta(days=1)
     async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
@@ -118,6 +138,9 @@ async def test_deposit_query_counts_only_real_topups(monkeypatch):
 
         assert await get_topup_deposits_kopeks(db, 1, since) == 29900
         assert await get_topup_deposits_kopeks(db, 1, None) == 0
+        # те же фильтры, но с разбивкой «до запуска / с запуска» (20 000 до, 29 900 после)
+        assert await get_topup_deposits_split(db, 1, since) == (20000, 29900)
+        assert await get_topup_deposits_split(db, 1, None) == (0, 0)
         assert await get_free_spin_counters(db, 1) == (1, 1)
 
 

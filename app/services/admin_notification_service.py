@@ -88,6 +88,7 @@ class NotificationCategory(StrEnum):
     PROMO = 'promo'  # Промокоды, кампании, промогруппы
     PARTNERS = 'partners'  # Партнёрки, выводы, админ-действия
     TICKETS = 'tickets'  # Тикеты (уже существует)
+    WHEEL = 'wheel'  # Spofy: спины колеса призов
 
 
 logger = structlog.get_logger(__name__)
@@ -136,6 +137,7 @@ class AdminNotificationService:
             NotificationCategory.PROMO: getattr(settings, 'ADMIN_NOTIFICATIONS_PROMO_TOPIC_ID', None),
             NotificationCategory.PARTNERS: getattr(settings, 'ADMIN_NOTIFICATIONS_PARTNERS_TOPIC_ID', None),
             NotificationCategory.TICKETS: self.ticket_topic_id,
+            NotificationCategory.WHEEL: getattr(settings, 'ADMIN_NOTIFICATIONS_WHEEL_TOPIC_ID', None),
         }
 
         # Per-category enabled flags (default True — backwards compatible)

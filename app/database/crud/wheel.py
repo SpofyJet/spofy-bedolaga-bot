@@ -282,6 +282,28 @@ async def get_topup_deposits_kopeks(db: AsyncSession, user_id: int, since: datet
     return int(result.scalar() or 0)
 
 
+async def get_topup_deposits_split(db: AsyncSession, user_id: int, since: datetime | None) -> tuple[int, int]:
+    """Реальные пополнения (до since, с since). Без since акция не началась — (0, 0)."""
+    if since is None:
+        return 0, 0
+    is_topup = and_(
+        Transaction.user_id == user_id,
+        Transaction.type == TransactionType.DEPOSIT.value,
+        Transaction.is_completed.is_(True),
+        Transaction.payment_method.is_not(None),
+        Transaction.payment_method.not_in(NON_TOPUP_PAYMENT_METHODS),
+        Transaction.amount_kopeks > 0,
+    )
+    result = await db.execute(
+        select(
+            func.coalesce(func.sum(Transaction.amount_kopeks).filter(Transaction.created_at < since), 0),
+            func.coalesce(func.sum(Transaction.amount_kopeks).filter(Transaction.created_at >= since), 0),
+        ).where(is_topup)
+    )
+    before, after = result.one()
+    return int(before or 0), int(after or 0)
+
+
 async def get_free_spin_counters(db: AsyncSession, user_id: int) -> tuple[int, int]:
     """(выиграно спинов призом «Ещё спин», потрачено бесплатных спинов)."""
     won = await db.execute(

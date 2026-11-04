@@ -151,6 +151,8 @@ class Settings(BaseSettings):
     ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID: int | None = None  # Ошибки бота
     ADMIN_NOTIFICATIONS_PROMO_TOPIC_ID: int | None = None  # Промокоды, кампании, промогруппы
     ADMIN_NOTIFICATIONS_PARTNERS_TOPIC_ID: int | None = None  # Партнёрки, выводы, админ-действия
+    # Spofy: спины колеса призов (кто, чем платил, что выпало); пусто — общий топик
+    ADMIN_NOTIFICATIONS_WHEEL_TOPIC_ID: int | None = None
 
     # Per-category enable/disable (default True for backwards compatibility)
     ADMIN_NOTIFICATIONS_PURCHASES_ENABLED: bool = True

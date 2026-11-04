@@ -72,7 +72,7 @@ def build_spin_earned_message(
 
 async def _notify(user_id: int, amount_kopeks: int) -> None:
     await asyncio.sleep(NOTIFY_DELAY_SECONDS)
-    from app.database.crud.wheel import get_topup_deposits_kopeks, get_wheel_config
+    from app.database.crud.wheel import get_topup_deposits_split, get_wheel_config
     from app.database.database import AsyncSessionLocal
     from app.database.models import User
     from app.services.wheel_service import wheel_service
@@ -81,7 +81,10 @@ async def _notify(user_id: int, amount_kopeks: int) -> None:
         config = await get_wheel_config(db)
         if config is None or not config.is_enabled or not config.topup_spins_enabled:
             return
-        deposits = await get_topup_deposits_kopeks(db, user_id, config.topup_spins_since)
+        # Счёт синхронизирован со всеми прошлыми тратами: порог, перейдённый этим
+        # пополнением, считается от общей суммы (см. FortuneWheelService.get_free_spin_state).
+        before, after = await get_topup_deposits_split(db, user_id, config.topup_spins_since)
+        deposits = before + after
         earned = spins_earned(deposits, amount_kopeks, int(config.topup_spin_threshold_kopeks or 0))
         if earned <= 0:
             return
