@@ -220,6 +220,10 @@ class WheelSpinPaymentType(Enum):
     TELEGRAM_STARS = 'telegram_stars'
     SUBSCRIPTION_DAYS = 'subscription_days'
     TOPUP_CREDIT = 'topup_credit'  # бесплатный спин, заработанный пополнениями
+    # Не спин, а выдача бесплатных спинов админом (тест, подарок): prize_type=extra_spin,
+    # prize_value = сколько спинов. Счётчик бесплатных спинов её учитывает; история
+    # пользователя, дневной лимит и статистика колеса — нет.
+    ADMIN_GRANT = 'admin_grant'
 
 
 class YooKassaPayment(Base):

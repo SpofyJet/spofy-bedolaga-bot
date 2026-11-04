@@ -260,6 +260,17 @@ async def _handle_wheel_spin_payment(
         await db.commit()
         await wheel_service._sync_subscription_after_spin(user, selected_prize)
 
+        from app.services.wheel_admin_notifier import notify_admin_about_spin
+
+        notify_admin_about_spin(
+            user_id=user.id,
+            payment_type=WheelSpinPaymentType.TELEGRAM_STARS.value,
+            payment_amount=stars_amount,
+            prize_emoji=selected_prize.emoji,
+            prize_name=selected_prize.display_name,
+            promocode=generated_promocode,
+        )
+
         # Отправляем результат
         prize_message = wheel_service._get_prize_message(selected_prize, generated_promocode, wheel_outcome)
 

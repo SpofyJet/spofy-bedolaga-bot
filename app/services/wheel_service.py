@@ -991,6 +991,17 @@ class FortuneWheelService:
                 payment_type=payment_type,
             )
 
+            from app.services.wheel_admin_notifier import notify_admin_about_spin
+
+            notify_admin_about_spin(
+                user_id=user.id,
+                payment_type=payment_type,
+                payment_amount=payment_amount,
+                prize_emoji=selected_prize.emoji,
+                prize_name=selected_prize.display_name,
+                promocode=generated_promocode,
+            )
+
             # 7. Формируем результат
             message = self._get_prize_message(selected_prize, generated_promocode, outcome)
 

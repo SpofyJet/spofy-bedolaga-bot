@@ -249,7 +249,9 @@ async def get_user_spins_today(db: AsyncSession, user_id: int) -> int:
                 WheelSpin.user_id == user_id,
                 WheelSpin.created_at >= today_start,
                 # Бесплатные спины за пополнения заработаны деньгами — дневной лимит их не режет.
-                WheelSpin.payment_type != WheelSpinPaymentType.TOPUP_CREDIT.value,
+                WheelSpin.payment_type.not_in(
+                    (WheelSpinPaymentType.TOPUP_CREDIT.value, WheelSpinPaymentType.ADMIN_GRANT.value)
+                ),
             )
         )
     )
@@ -298,19 +300,43 @@ async def get_free_spin_counters(db: AsyncSession, user_id: int) -> tuple[int, i
     return int(won.scalar() or 0), int(used.scalar() or 0)
 
 
+async def grant_free_spins(db: AsyncSession, user_id: int, count: int, label: str | None = None) -> WheelSpin:
+    """Выдать пользователю бесплатные спины (тест, подарок). Коммит — на вызывающем."""
+    if count <= 0:
+        raise ValueError('count must be positive')
+    spin = WheelSpin(
+        user_id=user_id,
+        prize_id=None,
+        payment_type=WheelSpinPaymentType.ADMIN_GRANT.value,
+        payment_amount=0,
+        payment_value_kopeks=0,
+        prize_type=WheelPrizeType.EXTRA_SPIN.value,
+        prize_value=count,
+        prize_display_name=(label or f'Спины от администрации ×{count}')[:100],
+        prize_value_kopeks=0,
+        is_applied=True,
+        applied_at=datetime.now(UTC),
+    )
+    db.add(spin)
+    await db.flush()
+    return spin
+
+
 async def get_user_spin_history(
     db: AsyncSession, user_id: int, limit: int = 20, offset: int = 0
 ) -> tuple[list[WheelSpin], int]:
     """Получить историю спинов пользователя."""
     # Общее количество
-    count_result = await db.execute(select(func.count(WheelSpin.id)).where(WheelSpin.user_id == user_id))
+    # Выдача спинов админом — не прокрутка, в истории её нет.
+    own = and_(WheelSpin.user_id == user_id, WheelSpin.payment_type != WheelSpinPaymentType.ADMIN_GRANT.value)
+    count_result = await db.execute(select(func.count(WheelSpin.id)).where(own))
     total = count_result.scalar() or 0
 
     # Спины с пагинацией (eager load prize relationship)
     result = await db.execute(
         select(WheelSpin)
         .options(selectinload(WheelSpin.prize))
-        .where(WheelSpin.user_id == user_id)
+        .where(own)
         .order_by(desc(WheelSpin.created_at))
         .limit(limit)
         .offset(offset)
@@ -364,7 +390,8 @@ async def get_wheel_statistics(
     db: AsyncSession, date_from: datetime | None = None, date_to: datetime | None = None
 ) -> dict[str, Any]:
     """Получить статистику колеса удачи."""
-    conditions = []
+    # Выдача спинов админом — не спин: ни выручки, ни выплаты, RTP и счёт спинов не трогает.
+    conditions = [WheelSpin.payment_type != WheelSpinPaymentType.ADMIN_GRANT.value]
     if date_from:
         conditions.append(WheelSpin.created_at >= date_from)
     if date_to:
