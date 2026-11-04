@@ -340,18 +340,18 @@ async def process_platega_payment_amount(
         payment_result = None
 
     if not payment_result or not payment_result.get('redirect_url'):
-        from app.utils.payment_fallback import fallback_methods_keyboard, fallback_text
+        from app.utils.payment_fallback import answer_creation_failed
 
-        alternatives = fallback_methods_keyboard(amount_kopeks, db_user.language, 'platega')
-        if alternatives is not None:
-            await message.answer(fallback_text(db_user.language, amount_kopeks), reply_markup=alternatives)
-        else:
-            await message.answer(
-                texts.t(
-                    'PLATEGA_PAYMENT_ERROR',
-                    '❌ Ошибка создания платежа Platega. Попробуйте позже или обратитесь в поддержку.',
-                )
-            )
+        await answer_creation_failed(
+            message,
+            db_user.language,
+            amount_kopeks,
+            'platega',
+            texts.t(
+                'PLATEGA_PAYMENT_ERROR',
+                '❌ Ошибка создания платежа Platega. Попробуйте позже или обратитесь в поддержку.',
+            ),
+        )
         await state.clear()
         return
 

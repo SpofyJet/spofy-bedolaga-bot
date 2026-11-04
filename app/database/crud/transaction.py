@@ -276,6 +276,58 @@ async def get_user_transactions(db: AsyncSession, user_id: int, limit: int = 50,
     return result.scalars().all()
 
 
+# История в боте: сколько последних операций просматриваем, чтобы склеить дубли.
+BALANCE_HISTORY_SCAN_LIMIT = 1000
+
+
+def _history_merge_key(amount_kopeks: int, description: str | None, created_at: datetime | None) -> tuple:
+    minute = created_at.replace(second=0, microsecond=0) if created_at is not None else None
+    return (amount_kopeks, description, minute)
+
+
+async def get_user_history_page(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    page: int,
+    per_page: int,
+    scan_limit: int = BALANCE_HISTORY_SCAN_LIMIT,
+) -> tuple[list[Transaction], int]:
+    """Страница истории операций без дублей и общее число страниц-элементов.
+
+    Дубли (та же сумма и описание в ту же минуту) склеиваются по всему просмотренному
+    списку, а не внутри страницы — иначе страницы перекрывались и пропускали операции.
+    Читаются только лёгкие колонки последних ``scan_limit`` операций, полные строки —
+    только для показываемой страницы.
+    """
+    rows = (
+        await db.execute(
+            select(Transaction.id, Transaction.amount_kopeks, Transaction.description, Transaction.created_at)
+            .where(Transaction.user_id == user_id)
+            .order_by(Transaction.created_at.desc(), Transaction.id.desc())
+            .limit(scan_limit)
+        )
+    ).all()
+
+    seen: set[tuple] = set()
+    unique_ids: list[int] = []
+    for row in rows:
+        key = _history_merge_key(row.amount_kopeks, row.description, row.created_at)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_ids.append(row.id)
+
+    start = max(page - 1, 0) * per_page
+    page_ids = unique_ids[start : start + per_page]
+    if not page_ids:
+        return [], len(unique_ids)
+
+    loaded = (await db.execute(select(Transaction).where(Transaction.id.in_(page_ids)))).scalars().all()
+    by_id = {transaction.id: transaction for transaction in loaded}
+    return [by_id[transaction_id] for transaction_id in page_ids if transaction_id in by_id], len(unique_ids)
+
+
 async def get_user_transactions_count(
     db: AsyncSession, user_id: int, transaction_type: TransactionType | None = None
 ) -> int:

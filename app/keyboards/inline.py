@@ -1022,14 +1022,9 @@ def get_info_menu_keyboard(
         )
 
     # «Поддержка» живёт здесь (в главном меню не показываем — по решению владельца).
-    try:
-        from app.services.support_settings_service import SupportSettingsService
-
-        _support_on = SupportSettingsService.is_support_menu_enabled()
-    except Exception:
-        _support_on = settings.SUPPORT_MENU_ENABLED
-    if _support_on:
-        buttons.append([InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support')])
+    support_button = get_support_menu_button(language)
+    if support_button is not None:
+        buttons.append([support_button])
     if settings.is_language_selection_enabled():
         buttons.append([InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data='menu_language')])
 
@@ -1142,6 +1137,36 @@ def get_happ_download_link_keyboard(language: str, link: str) -> InlineKeyboardM
 def get_back_keyboard(language: str = DEFAULT_LANGUAGE, callback_data: str = 'back_to_menu') -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=texts.BACK, callback_data=callback_data)]])
+
+
+def get_support_menu_button(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardButton | None:
+    """Кнопка «Поддержка» (та же, что в «Инфо»); None, если раздел поддержки выключен."""
+    try:
+        from app.services.support_settings_service import SupportSettingsService
+
+        support_on = SupportSettingsService.is_support_menu_enabled()
+    except Exception:
+        support_on = settings.SUPPORT_MENU_ENABLED
+    if not support_on:
+        return None
+    return InlineKeyboardButton(text=get_texts(language).MENU_SUPPORT, callback_data='menu_support')
+
+
+def payment_error_navigation_rows(
+    language: str = DEFAULT_LANGUAGE, back_callback: str = 'balance_topup'
+) -> list[list[InlineKeyboardButton]]:
+    """«Назад» и «Поддержка» под сообщением о сбое оплаты — чтобы экран не был тупиком."""
+    rows = [[InlineKeyboardButton(text=get_texts(language).BACK, callback_data=back_callback)]]
+    support_button = get_support_menu_button(language)
+    if support_button is not None:
+        rows.append([support_button])
+    return rows
+
+
+def get_payment_error_keyboard(
+    language: str = DEFAULT_LANGUAGE, back_callback: str = 'balance_topup'
+) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=payment_error_navigation_rows(language, back_callback))
 
 
 def get_server_status_keyboard(

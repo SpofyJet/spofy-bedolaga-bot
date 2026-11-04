@@ -1,3 +1,4 @@
+import html
 from typing import Any
 
 import structlog
@@ -546,6 +547,31 @@ async def handle_sbp_recurring_menu(
     await callback.answer()
 
 
+class _OneShotCallbackReply:
+    """Ответ на нажатие ровно один раз; следующие сообщения — обычным сообщением.
+
+    Telegram принимает один answer() на нажатие: если до ошибки уже показали
+    предупреждение, второй ответ отвергается, и человек видел только предупреждение.
+    """
+
+    def __init__(self, callback: types.CallbackQuery):
+        self.callback = callback
+        self.answered = False
+
+    async def alert(self, text: str, *, show_alert: bool = True, escape: bool = False) -> None:
+        if not self.answered:
+            self.answered = True
+            await self.callback.answer(text, show_alert=show_alert)
+            return
+        if isinstance(self.callback.message, types.Message):
+            await self.callback.message.answer(html.escape(text) if escape else text)
+
+    async def done(self) -> None:
+        if not self.answered:
+            self.answered = True
+            await self.callback.answer()
+
+
 async def handle_sbp_recurring_enable(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
 ):
@@ -601,6 +627,8 @@ async def handle_sbp_recurring_enable(
         )
         return
 
+    reply = _OneShotCallbackReply(callback)
+
     # n2: предупреждение о смене движка: активная Lava-привязка или
     # баланс-автоплатёж этой подписки будут отключены при создании
     # СБП-привязки — предупреждаем alert'ом, флоу не прерываем.
@@ -610,18 +638,20 @@ async def handle_sbp_recurring_enable(
         _engines = await get_active_recurrent_engines(db, subscription)
         _warning = recurrent_engines_warning(texts, _engines, enabling='platega')
         if _warning:
-            await callback.answer(_warning, show_alert=True)
+            await reply.alert(_warning)
     except Exception:
         pass
 
     from app.services.payment.platega import enable_platega_sbp_recurring
 
+    # Если предупреждение о смене способа уже ответило на нажатие, ошибки ниже
+    # уходят сообщением (reply.alert) — иначе их не было бы видно.
     try:
         result = await enable_platega_sbp_recurring(db, user_id=db_user.id, subscription=subscription, tariff=tariff)
     except ValueError as error:
         # ValueError — осмысленная причина (период/цена/состояние подписки),
         # показываем её пользователю как есть вместо общей «попробуйте позже».
-        await callback.answer(str(error), show_alert=True)
+        await reply.alert(str(error), escape=True)
         return
     except RuntimeError as error:
         logger.warning(
@@ -629,12 +659,11 @@ async def handle_sbp_recurring_enable(
             error=str(error),
             subscription_id=subscription.id,
         )
-        await callback.answer(
+        await reply.alert(
             texts.t(
                 'SBP_RECURRING_ENABLE_ERROR',
                 '❌ Не удалось подключить автопродление через СБП. Попробуйте позже.',
-            ),
-            show_alert=True,
+            )
         )
         return
 
@@ -643,7 +672,9 @@ async def handle_sbp_recurring_enable(
         # Идемпотентный возврат уже существующей подписки без сохранённой
         # ссылки — показываем статус вместо кнопки с пустым url (Telegram
         # такую кнопку не примет).
-        await callback.answer(texts.t('SBP_RECURRING_ALREADY_ACTIVE', 'СБП-автопродление уже подключено.'))
+        await reply.alert(
+            texts.t('SBP_RECURRING_ALREADY_ACTIVE', 'СБП-автопродление уже подключено.'), show_alert=False
+        )
         await handle_sbp_recurring_menu(callback, db_user, db, state)
         return
 
@@ -681,7 +712,7 @@ async def handle_sbp_recurring_enable(
         ),
         keyboard,
     )
-    await callback.answer()
+    await reply.done()
 
 
 async def handle_sbp_recurring_enable_for(
@@ -744,6 +775,8 @@ async def handle_sbp_recurring_enable_for(
         )
         return
 
+    reply = _OneShotCallbackReply(callback)
+
     # n2: предупреждение о смене движка: активная Lava-привязка или
     # баланс-автоплатёж этой подписки будут отключены при создании
     # СБП-привязки — предупреждаем alert'ом, флоу не прерываем.
@@ -753,18 +786,20 @@ async def handle_sbp_recurring_enable_for(
         _engines = await get_active_recurrent_engines(db, subscription)
         _warning = recurrent_engines_warning(texts, _engines, enabling='platega')
         if _warning:
-            await callback.answer(_warning, show_alert=True)
+            await reply.alert(_warning)
     except Exception:
         pass
 
     from app.services.payment.platega import enable_platega_sbp_recurring
 
+    # Если предупреждение о смене способа уже ответило на нажатие, ошибки ниже
+    # уходят сообщением (reply.alert) — иначе их не было бы видно.
     try:
         result = await enable_platega_sbp_recurring(db, user_id=db_user.id, subscription=subscription, tariff=tariff)
     except ValueError as error:
         # ValueError — осмысленная причина (период/цена/состояние подписки),
         # показываем её пользователю как есть вместо общей «попробуйте позже».
-        await callback.answer(str(error), show_alert=True)
+        await reply.alert(str(error), escape=True)
         return
     except RuntimeError as error:
         logger.warning(
@@ -772,19 +807,20 @@ async def handle_sbp_recurring_enable_for(
             error=str(error),
             subscription_id=subscription.id,
         )
-        await callback.answer(
+        await reply.alert(
             texts.t(
                 'SBP_RECURRING_ENABLE_ERROR',
                 '❌ Не удалось подключить автопродление через СБП. Попробуйте позже.',
-            ),
-            show_alert=True,
+            )
         )
         return
 
     redirect_url = result.get('redirect_url')
     if not redirect_url:
         # Идемпотентный повтор по уже живой привязке без сохранённой ссылки.
-        await callback.answer(texts.t('SBP_RECURRING_ALREADY_ACTIVE', 'СБП-автопродление уже подключено.'))
+        await reply.alert(
+            texts.t('SBP_RECURRING_ALREADY_ACTIVE', 'СБП-автопродление уже подключено.'), show_alert=False
+        )
         return
 
     keyboard = types.InlineKeyboardMarkup(
@@ -821,7 +857,7 @@ async def handle_sbp_recurring_enable_for(
         ),
         keyboard,
     )
-    await callback.answer()
+    await reply.done()
 
 
 async def handle_sbp_recurring_cancel(

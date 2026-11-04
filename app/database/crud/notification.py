@@ -28,6 +28,34 @@ async def notification_sent(
     return result.scalars().first() is not None
 
 
+async def list_sent_notification_keys(
+    db: AsyncSession,
+    subscription_ids,
+    notification_type: str,
+) -> set[tuple[int, int, int | None]]:
+    """Все отметки «уже отправлено» одного типа для пачки подписок одним запросом.
+
+    Ключ — (user_id, subscription_id, days_before), как в ``notification_sent``.
+    """
+    ids = sorted({int(subscription_id) for subscription_id in subscription_ids})
+    if not ids:
+        return set()
+    keys: set[tuple[int, int, int | None]] = set()
+    for start in range(0, len(ids), 1000):
+        result = await db.execute(
+            select(
+                SentNotification.user_id,
+                SentNotification.subscription_id,
+                SentNotification.days_before,
+            ).where(
+                SentNotification.notification_type == notification_type,
+                SentNotification.subscription_id.in_(ids[start : start + 1000]),
+            )
+        )
+        keys.update((row[0], row[1], row[2]) for row in result.all())
+    return keys
+
+
 async def record_notification(
     db: AsyncSession,
     user_id: int,

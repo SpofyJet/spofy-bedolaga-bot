@@ -103,7 +103,10 @@ async def test_provider_failure_is_reported_once_without_second_answer(monkeypat
 
     error_log.assert_called_once()
     assert callback.answer.await_count == 1, 'на одно нажатие Telegram принимает один ответ'
-    callback.message.answer.assert_awaited_once_with('❌ Ошибка обработки запроса')
+    callback.message.answer.assert_awaited_once()
+    assert callback.message.answer.await_args.args == ('❌ Ошибка обработки запроса',)
+    markup = callback.message.answer.await_args.kwargs['reply_markup']
+    assert [b.callback_data for row in markup.inline_keyboard for b in row][0] == 'balance_topup'
 
 
 @pytest.mark.asyncio
@@ -118,7 +121,10 @@ async def test_unknown_method_is_reported_with_a_message(monkeypatch):
     await balance_main.handle_topup_amount_callback(callback, _user(), _state())
 
     assert callback.answer.await_count == 1
-    callback.message.answer.assert_awaited_once_with('❌ Неизвестный способ оплаты')
+    callback.message.answer.assert_awaited_once()
+    assert 'способ оплаты сейчас недоступен' in callback.message.answer.await_args.args[0]
+    markup = callback.message.answer.await_args.kwargs['reply_markup']
+    assert [b.callback_data for row in markup.inline_keyboard for b in row] == ['balance_topup']
 
 
 @pytest.mark.asyncio

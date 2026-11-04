@@ -54,6 +54,20 @@ def _callback_amount_kopeks(payload: Any) -> int | None:
     return int(kopeks) if kopeks > 0 else None
 
 
+# Сколько минут повторное «Подключить» отдаёт ту же ссылку незавершённой привязки.
+# Дольше — создаём новую: старая форма банка могла протухнуть.
+PENDING_BINDING_REUSE_MINUTES = 30
+
+
+def _pending_binding_is_abandoned(record, *, now: datetime | None = None) -> bool:
+    created_at = getattr(record, 'created_at', None)
+    if created_at is None:
+        return False
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=UTC)
+    return (now or datetime.now(UTC)) - created_at > timedelta(minutes=PENDING_BINDING_REUSE_MINUTES)
+
+
 class PlategaPaymentMixin:
     """Логика создания и обработки платежей Platega."""
 
@@ -255,6 +269,11 @@ class PlategaPaymentMixin:
                 # (pay.platega.io/subscription/<id>) — подписка по ней не
                 # привяжется. Пересоздаём через v1.
                 stale_reason = 'ссылка не на форму привязки (v2-инвойс)'
+            elif existing.status == 'PENDING' and _pending_binding_is_abandoned(existing):
+                # Привязку бросили: ссылка на форму банка могла протухнуть, а сверка с
+                # Platega (TTL 48 ч) при закрытом Subscription API не идёт вовсе — человек
+                # получал бы ту же мёртвую ссылку бесконечно. Повторное нажатие — новая ссылка.
+                stale_reason = f'PENDING старше {PENDING_BINDING_REUSE_MINUTES} мин'
             elif existing.tariff_id and tariff is not None and existing.tariff_id != getattr(tariff, 'id', None):
                 stale_reason = f'тариф записи #{existing.tariff_id} != выбранного #{getattr(tariff, "id", None)}'
             elif period_explicit and (existing.charge_days != charge_days or existing.interval != interval):

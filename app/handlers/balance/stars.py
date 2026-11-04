@@ -159,4 +159,6 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
 
     except Exception as e:
         logger.error('Ошибка создания Stars invoice', error=e)
-        await message.answer('⚠️ Ошибка создания платежа')
+        from app.utils.payment_fallback import answer_creation_failed
+
+        await answer_creation_failed(message, db_user.language, amount_kopeks, 'stars', '⚠️ Ошибка создания платежа')
