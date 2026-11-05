@@ -49,6 +49,7 @@ async def claim_promo_link(
         activate_promocode_for_registration,
         promo_subscription_choice_keyboard,
         promocode_error_text,
+        wheel_spin_keyboard,
     )
     from app.utils.promo_rate_limiter import promo_limiter, validate_promo_format
 
@@ -95,7 +96,10 @@ async def claim_promo_link(
     result = await activate_promocode_for_registration(db, user.id, code, message.bot)
     if result['success']:
         promo_limiter.record_activation(telegram_id)
-        await message.answer(texts.PROMOCODE_SUCCESS.format(description=result['description']))
+        await message.answer(
+            texts.PROMOCODE_SUCCESS.format(description=result['description']),
+            reply_markup=wheel_spin_keyboard(result, texts),
+        )
     elif result.get('error') == 'select_subscription':
         # Несколько подписок — тот же выбор, что при ручном вводе (promo_sub:<id>:<код>).
         await message.answer(

@@ -135,6 +135,12 @@ class PromoCodeService:
                 if getattr(user, 'has_had_paid_subscription', False):
                     return {'success': False, 'error': 'not_first_purchase'}
 
+            # Спин колеса — бонус платным клиентам. Отказ стоит до резерва: код не тратится.
+            if promocode.type == PromoCodeType.WHEEL_SPIN.value and not await self._has_active_paid_subscription(
+                db, user
+            ):
+                return {'success': False, 'error': 'paid_subscription_required'}
+
             balance_before_kopeks = user.balance_kopeks
 
             # Резервируем запись использования ДО применения эффектов (защита от race condition)
@@ -306,6 +312,17 @@ class PromoCodeService:
             logger.error('Ошибка активации промокода для пользователя', code=code, user_id=user_id, error=e)
             await self._rollback_keeping_user_usable(db, user)
             return {'success': False, 'error': 'server_error'}
+
+    async def _has_active_paid_subscription(self, db: AsyncSession, user: User) -> bool:
+        """Есть ли действующая подписка, которая не триал."""
+        if settings.is_multi_tariff_enabled():
+            from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+            subscriptions = await get_active_subscriptions_by_user_id(db, user.id)
+        else:
+            subscription = await get_subscription_by_user_id(db, user.id)
+            subscriptions = [subscription] if subscription else []
+        return any(item.is_active and not item.is_trial for item in subscriptions)
 
     async def _pick_target_subscription(
         self,
@@ -638,6 +655,12 @@ class PromoCodeService:
 
             balance_bonus_rubles = promocode.balance_bonus_kopeks / 100
             effects.append(f'💰 Баланс пополнен на {balance_bonus_rubles}₽')
+
+        if promocode.type == PromoCodeType.WHEEL_SPIN.value:
+            from app.database.crud.wheel import grant_free_spins
+
+            await grant_free_spins(db, user.id, 1, f'Промокод {promocode.code}')
+            effects.append('🎡 Бесплатный спин колеса призов')
 
         if promocode.type == PromoCodeType.TRIAL_SUBSCRIPTION.value:
             from app.database.crud.subscription import create_trial_subscription

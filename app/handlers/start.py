@@ -2952,7 +2952,11 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
     promocode_to_activate = data.get('promocode')
     if promocode_to_activate:
         try:
-            from app.handlers.promocode import activate_promocode_for_registration
+            from app.handlers.promocode import (
+                activate_promocode_for_registration,
+                promocode_error_text,
+                wheel_spin_keyboard,
+            )
 
             promocode_result = await activate_promocode_for_registration(
                 db, user.id, promocode_to_activate, message.bot
@@ -2962,7 +2966,8 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                 await message.answer(
                     texts.t('PROMOCODE_ACTIVATED_AT_REGISTRATION', '✅ Промокод активирован!\n\n{description}').format(
                         description=promocode_result['description']
-                    )
+                    ),
+                    reply_markup=wheel_spin_keyboard(promocode_result, texts),
                 )
                 logger.info(
                     '✅ Промокод активирован для пользователя',
@@ -2970,6 +2975,9 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                     user_id=user.id,
                 )
             else:
+                # Новичок пришёл по ссылке из канала: молчание выглядело бы как поломка.
+                if promocode_result.get('error') == 'paid_subscription_required':
+                    await message.answer(promocode_error_text(texts, 'paid_subscription_required'))
                 logger.warning(
                     '⚠️ Не удалось активировать промокод',
                     promocode_to_activate=promocode_to_activate,

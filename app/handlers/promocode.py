@@ -5,7 +5,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import InaccessibleMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import User
+from app.config import settings
+from app.database.models import PromoCodeType, User
 from app.keyboards.inline import get_back_keyboard
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
@@ -50,6 +51,18 @@ async def show_promocode_menu(callback: types.CallbackQuery, db_user: User, stat
     await state.set_state(PromoCodeStates.waiting_for_code)
     await state.update_data(_prev_state=previous_state, _prev_data=previous_data)
     await callback.answer()
+
+
+def wheel_spin_keyboard(result: dict, texts) -> types.InlineKeyboardMarkup | None:
+    """Кнопка мини-приложения на колесо после кода на спин; иначе None."""
+    promocode = result.get('promocode') or {}
+    if promocode.get('type') != PromoCodeType.WHEEL_SPIN.value or not settings.CABINET_URL:
+        return None
+    url = f'{settings.CABINET_URL.rstrip("/")}/wheel'
+    button = types.InlineKeyboardButton(
+        text=texts.t('PROMOCODE_WHEEL_BUTTON', '🎡 Крутить колесо'), web_app=types.WebAppInfo(url=url)
+    )
+    return types.InlineKeyboardMarkup(inline_keyboard=[[button]])
 
 
 async def activate_promocode_for_registration(
@@ -148,6 +161,10 @@ def promocode_error_text(texts, error: str | None) -> str:
             'PROMOCODE_NO_SUBSCRIPTION',
             '❌ Для активации этого промокода необходима подписка (активная или просроченная).',
         ),
+        'paid_subscription_required': texts.t(
+            'PROMOCODE_PAID_SUBSCRIPTION_REQUIRED',
+            '❌ Этот промокод работает только с активной платной подпиской. На пробном периоде он недоступен.',
+        ),
         'subscription_not_found': texts.t('PROMOCODE_SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена.'),
         'traffic_not_applicable': texts.t(
             'PROMOCODE_TRAFFIC_NOT_APPLICABLE',
@@ -227,7 +244,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
         promo_limiter.record_activation(message.from_user.id)
         await message.answer(
             texts.PROMOCODE_SUCCESS.format(description=result['description']),
-            reply_markup=get_back_keyboard(_lang),
+            reply_markup=wheel_spin_keyboard(result, texts) or get_back_keyboard(_lang),
         )
         await _restore_previous_state(state)
     elif result.get('error') == 'select_subscription':

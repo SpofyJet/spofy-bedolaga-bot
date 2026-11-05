@@ -126,6 +126,7 @@ async def activate_promocode(
         'no_subscription_for_days': 'This promo code requires an active or expired subscription',
         'subscription_not_found': 'Subscription not found',
         'not_first_purchase': 'This promo code is only available for first purchase',
+        'paid_subscription_required': 'This promo code requires an active paid subscription',
         'daily_limit': 'Too many promo code activations today',
         'trial_subscription_exists': 'You already have a subscription, so this trial code cannot be applied',
         'trial_provisioning_failed': 'Could not provision the trial right now, please try again later',
