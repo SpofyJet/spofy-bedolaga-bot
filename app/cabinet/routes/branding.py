@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 from typing import Literal
 
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cabinet.auth.email_auth_gate import EMAIL_AUTH_ENABLED_KEY, is_email_auth_enabled
 from app.config import settings
-from app.database.crud.system_setting import get_setting_value
+from app.database.crud.system_setting import get_setting_value as read_setting_value
 from app.database.models import SystemSetting, User
 from app.services.gift_purchase_service import GIFT_ENABLED_KEY, is_gift_enabled
 
@@ -359,6 +360,23 @@ def ensure_branding_dir():
     BRANDING_DIR.mkdir(parents=True, exist_ok=True)
 
 
+# Каждое открытие миниаппа читает здесь с десяток настроек. Кэш снимает эти запросы с базы:
+# в наплыв они занимали пул. Запись через set_setting_value видна сразу, правка мимо неё — за 30 с.
+_SETTING_CACHE_TTL_SECONDS = 30
+_setting_cache: dict[str, tuple[float, str | None]] = {}
+
+
+async def get_setting_value(db: AsyncSession, key: str) -> str | None:
+    """Read a setting through the short in-process cache."""
+    now = time.monotonic()
+    cached = _setting_cache.get(key)
+    if cached is not None and cached[0] > now:
+        return cached[1]
+    value = await read_setting_value(db, key)
+    _setting_cache[key] = (now + _SETTING_CACHE_TTL_SECONDS, value)
+    return value
+
+
 async def set_setting_value(db: AsyncSession, key: str, value: str):
     """Set a setting value in database."""
     result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
@@ -371,6 +389,7 @@ async def set_setting_value(db: AsyncSession, key: str, value: str):
         db.add(setting)
 
     await db.commit()
+    _setting_cache.pop(key, None)
 
 
 def get_logo_path() -> Path | None:

@@ -456,6 +456,8 @@ async def _apply_cabinet_account_guards(
     if settings.CHANNEL_IS_REQUIRED_SUB and user.telegram_id is not None and not is_user_admin_by_env(user).is_admin:
         from app.services.channel_subscription_service import channel_subscription_service
 
+        # Сервис берёт своё соединение: своё держать на это время нельзя, см. get_current_cabinet_user.
+        await db.commit()
         channels_with_status = await channel_subscription_service.get_channels_with_status(user.telegram_id)
         is_subscribed = (
             all(channel['is_subscribed'] for channel in channels_with_status) if channels_with_status else True

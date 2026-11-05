@@ -300,6 +300,9 @@ async def get_current_cabinet_user(
             if not is_admin:
                 from app.services.channel_subscription_service import channel_subscription_service
 
+                # Сервис берёт своё соединение и может ждать Telegram. Если держать здесь
+                # соединение запроса, в наплыв весь пул занят запросами, ждущими второе.
+                await db.commit()
                 channels_with_status = await channel_subscription_service.get_channels_with_status(user.telegram_id)
                 is_subscribed = (
                     all(ch['is_subscribed'] for ch in channels_with_status) if channels_with_status else True
