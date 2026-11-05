@@ -31,7 +31,7 @@ class CryptoBotService:
         headers = {'Crypto-Pay-API-Token': self.api_token, 'Content-Type': 'application/json'}
 
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15, connect=5)) as session:
                 request_kwargs: dict[str, Any] = {'headers': headers}
 
                 if method.upper() == 'GET':

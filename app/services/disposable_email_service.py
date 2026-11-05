@@ -73,7 +73,8 @@ class DisposableEmailService:
     async def _update_domains(self) -> None:
         """Fetch domains.txt from GitHub and swap the in-memory set."""
         try:
-            async with aiohttp.ClientSession() as session, session.get(self.DOMAINS_URL) as resp:
+            timeout = aiohttp.ClientTimeout(total=30, connect=10)
+            async with aiohttp.ClientSession(timeout=timeout) as session, session.get(self.DOMAINS_URL) as resp:
                 if resp.status != 200:
                     logger.error('Failed to fetch disposable domains: HTTP', resp_status=resp.status)
                     return

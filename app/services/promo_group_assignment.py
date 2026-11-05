@@ -112,22 +112,30 @@ async def maybe_assign_promo_group_by_total_spent(
         logger.debug('Не удалось найти пользователя для автовыдачи промогруппы', user_id=user_id)
         return None
 
-    # Блокируем строку пользователя для предотвращения гонок при конкурентных вебхуках
+    # Сначала проверяем без блокировки. Ранний выход после FOR UPDATE оставлял блокировку
+    # открытой: у xRocket и CryptoBot событие пишет вторая сессия, вставка с внешним ключом
+    # ждала эту же строку, и пополнение висело 60 секунд.
+    total_spent = await get_user_total_spent_kopeks(db, user_id)
+    if total_spent <= 0:
+        return None
+    if not await _get_best_group_for_spending(db, total_spent):
+        return None
+
+    # Блокируем строку пользователя для предотвращения гонок
     user = await lock_user_for_update(db, user)
 
     # Получаем текущую primary промогруппу
     old_group = user.get_primary_promo_group()
 
     total_spent = await get_user_total_spent_kopeks(db, user_id)
-    if total_spent <= 0:
-        return None
-
     previous_threshold = user.auto_promo_group_threshold_kopeks or 0
 
-    # Находим группу, соответствующую текущим тратам (без порогового фильтра,
-    # чтобы промокод-группы всегда очищались при покупке)
+    # Находим группу, соответствующую текущим тратам (без учёта порога),
+    # чтобы промокод-группы всегда очищались при покупке
     target_group = await _get_best_group_for_spending(db, total_spent)
     if not target_group:
+        # Траты могли измениться после проверки выше: блокировку отпускаем.
+        await db.commit()
         return None
 
     try:

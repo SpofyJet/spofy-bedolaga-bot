@@ -3,7 +3,7 @@ from __future__ import annotations
 from time import monotonic
 
 import structlog
-from sqlalchemy.exc import InterfaceError, OperationalError
+from sqlalchemy.exc import InterfaceError, OperationalError, TimeoutError as SQLAlchemyTimeoutError
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -11,6 +11,16 @@ from structlog.contextvars import bound_contextvars
 
 
 logger = structlog.get_logger('web_api')
+
+
+async def pool_exhausted_handler(request: Request, exc: SQLAlchemyTimeoutError) -> JSONResponse:
+    """Пул соединений занят: честный 503 с паузой, а не 500, который клиент сразу повторит."""
+    logger.warning('Пул соединений с базой занят', method=request.method, path=request.url.path)
+    return JSONResponse(
+        status_code=503,
+        content={'detail': 'Service temporarily unavailable. Please try again later.'},
+        headers={'Retry-After': '5'},
+    )
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):

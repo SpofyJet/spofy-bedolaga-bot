@@ -85,13 +85,11 @@ class RemnaWaveAutoSyncService:
         self._loop = asyncio.get_running_loop()
         self._initialized = True
 
-        run_immediately = self._pending_run_immediately
-        if self._pending_refresh:
-            self._pending_refresh = False
-            self._pending_run_immediately = False
-            await self.refresh_schedule(run_immediately=run_immediately)
-        else:
-            await self.refresh_schedule()
+        # Настройки при старте читаются как «только что включили», и каждый перезапуск
+        # запускал полную синхронизацию на две минуты. На старте работает только расписание.
+        self._pending_refresh = False
+        self._pending_run_immediately = False
+        await self.refresh_schedule()
 
     def refresh_configuration(self) -> None:
         """Rebuild the RemnaWave service instance using current settings."""

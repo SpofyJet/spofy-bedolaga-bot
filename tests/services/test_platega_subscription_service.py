@@ -3,6 +3,7 @@
 import contextlib
 import sys
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -264,6 +265,9 @@ def _ensure_real_aiosqlite(monkeypatch: pytest.MonkeyPatch) -> None:
 @contextlib.asynccontextmanager
 async def _memory_session(monkeypatch: pytest.MonkeyPatch):
     _ensure_real_aiosqlite(monkeypatch)
+    # Свип сирот в reconciler зовёт list_subscriptions. Без подмены запрос уходит в настоящую
+    # Platega с фиктивной парой m/s, а после 10 таких запросов она блокирует адрес на час.
+    monkeypatch.setattr(PlategaService, 'list_subscriptions', AsyncMock(return_value=None))
     engine = create_async_engine('sqlite+aiosqlite:///:memory:')
     async with engine.begin() as conn:
         await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=[PlategaSubscription.__table__]))

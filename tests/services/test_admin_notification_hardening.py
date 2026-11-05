@@ -18,6 +18,7 @@ from aiogram.exceptions import TelegramRetryAfter
 from app.services.admin_notification_service import (
     AdminNotificationService,
     NotificationCategory,
+    _flood_retry_tasks,
     _redact_telegram_secrets,
 )
 from app.services.remnawave_webhook_service import RemnaWaveWebhookService
@@ -71,6 +72,10 @@ def test_redact_telegram_secrets_handles_multiple_tokens() -> None:
 # ---------------------------------------------------------------------------
 
 
+async def _drain_flood_retries() -> None:
+    await asyncio.gather(*list(_flood_retry_tasks))
+
+
 @pytest.fixture
 def admin_service(monkeypatch: pytest.MonkeyPatch) -> AdminNotificationService:
     bot = MagicMock()
@@ -85,7 +90,7 @@ def admin_service(monkeypatch: pytest.MonkeyPatch) -> AdminNotificationService:
 async def test_send_message_retries_on_flood_control(
     admin_service: AdminNotificationService, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """RetryAfter on attempt 1, success on attempt 2 → exactly one sleep, returns True."""
+    """RetryAfter on attempt 1 → returns at once, background retry sleeps once and succeeds."""
     sleeps: list[float] = []
 
     async def fake_sleep(delay: float) -> None:
@@ -97,6 +102,7 @@ async def test_send_message_retries_on_flood_control(
     admin_service.bot.send_message = AsyncMock(side_effect=[flood_error, None])
 
     result = await admin_service._send_message('hello', category=NotificationCategory.INFRASTRUCTURE)
+    await _drain_flood_retries()
 
     assert result is True
     assert admin_service.bot.send_message.await_count == 2
@@ -118,7 +124,7 @@ async def test_send_message_respects_global_admin_switch(admin_service: AdminNot
 async def test_send_message_gives_up_after_three_flood_errors(
     admin_service: AdminNotificationService, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Three consecutive RetryAfter → two sleeps, third attempt returns False without sleeping."""
+    """Three consecutive RetryAfter → background retry stops after two sleeps."""
     sleeps: list[float] = []
 
     async def fake_sleep(delay: float) -> None:
@@ -130,10 +136,31 @@ async def test_send_message_gives_up_after_three_flood_errors(
     admin_service.bot.send_message = AsyncMock(side_effect=[flood, flood, flood])
 
     result = await admin_service._send_message('hi', category=NotificationCategory.INFRASTRUCTURE)
+    await _drain_flood_retries()
 
-    assert result is False
+    assert result is True  # accepted: the caller must not wait for Telegram
     assert admin_service.bot.send_message.await_count == 3
-    assert sleeps == [2, 2]  # third attempt does NOT sleep before returning False
+    assert sleeps == [2, 2]  # third attempt does NOT sleep afterwards
+
+
+@pytest.mark.asyncio
+async def test_send_message_does_not_wait_for_flood_pause(
+    admin_service: AdminNotificationService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The caller often holds a DB connection, so the pause must happen after it got its answer."""
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr('app.services.admin_notification_service.asyncio.sleep', fake_sleep)
+    flood = TelegramRetryAfter(method=SimpleNamespace(), message='flood', retry_after=9)
+    admin_service.bot.send_message = AsyncMock(side_effect=[flood, None])
+
+    assert await admin_service._send_message('hi', category=NotificationCategory.INFRASTRUCTURE) is True
+    assert sleeps == []
+    await _drain_flood_retries()
+    assert sleeps == [9]
 
 
 @pytest.mark.asyncio
@@ -152,6 +179,7 @@ async def test_send_message_caps_retry_after_at_30s(
     admin_service.bot.send_message = AsyncMock(side_effect=[flood, None])
 
     result = await admin_service._send_message('hi', category=NotificationCategory.INFRASTRUCTURE)
+    await _drain_flood_retries()
 
     assert result is True
     assert sleeps == [30]

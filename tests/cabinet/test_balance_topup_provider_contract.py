@@ -48,7 +48,7 @@ async def checkout(monkeypatch):
     application = FastAPI()
     application.include_router(balance.router)
     application.dependency_overrides[balance.get_current_cabinet_user] = lambda: user
-    db = SimpleNamespace(execute=AsyncMock(return_value=SimpleNamespace(scalar=lambda: False)))
+    db = SimpleNamespace(execute=AsyncMock(return_value=SimpleNamespace(scalar=lambda: False)), commit=AsyncMock())
     application.dependency_overrides[balance.get_cabinet_db] = lambda: db
     async with AsyncClient(transport=ASGITransport(app=application), base_url='https://cabinet.example') as client:
         yield client, methods, service

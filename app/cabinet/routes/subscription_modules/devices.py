@@ -991,6 +991,10 @@ async def get_devices(
             'device_limit': subscription.device_limit or 0,
         }
 
+    # Панель может отвечать секунды: отдаём соединение в пул на это время,
+    # иначе наплыв на этот запрос занимает весь пул.
+    await db.commit()
+
     try:
         service = RemnaWaveService()
         async with service.get_api_client() as api:

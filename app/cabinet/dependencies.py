@@ -326,11 +326,12 @@ async def get_current_cabinet_user(
     if not user.cabinet_last_login or (now - user.cabinet_last_login).total_seconds() > 300:
         user.cabinet_last_login = now
         touched = True
-    if touched:
-        try:
-            await db.commit()
-        except Exception:
-            pass
+    # Коммитим всегда, даже без изменений: иначе транзакция чтения остаётся открытой и
+    # соединение занято всё время обработчика, в том числе на вызовах панели и Telegram.
+    try:
+        await db.commit()
+    except Exception:
+        pass
 
     # Лог действий юзера в кабинете (мутации) для таймлайна «Активность».
     # Fire-and-forget: гейты (флаг, метод, исключения путей) внутри хелпера.

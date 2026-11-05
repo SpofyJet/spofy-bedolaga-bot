@@ -15,7 +15,8 @@ logger = structlog.get_logger(__name__)
 async def get_promocode_by_code(db: AsyncSession, code: str) -> PromoCode | None:
     result = await db.execute(
         select(PromoCode)
-        .options(selectinload(PromoCode.uses), selectinload(PromoCode.promo_group))
+        # uses здесь не нужны: на популярном коде это тысячи строк на каждую активацию.
+        .options(selectinload(PromoCode.promo_group))
         .where(PromoCode.code == code.upper())
     )
     return result.scalar_one_or_none()

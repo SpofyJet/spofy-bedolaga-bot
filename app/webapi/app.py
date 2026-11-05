@@ -4,12 +4,13 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from app.cabinet.apple_iap import apple_iap_only_router
 from app.config import settings
 from app.webapi.docs import add_redoc_endpoint
 
-from .middleware import RequestLoggingMiddleware, RequestPathContextMiddleware
+from .middleware import RequestLoggingMiddleware, RequestPathContextMiddleware, pool_exhausted_handler
 from .routes import (
     backups,
     ban_notifications,
@@ -214,6 +215,8 @@ def create_web_api_app(lifespan: Any = None) -> FastAPI:
             allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
             allow_headers=['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Telegram-Init-Data'],
         )
+
+    app.add_exception_handler(SQLAlchemyTimeoutError, pool_exhausted_handler)
 
     if settings.WEB_API_REQUEST_LOGGING:
         app.add_middleware(RequestLoggingMiddleware)

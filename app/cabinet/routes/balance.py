@@ -384,6 +384,9 @@ async def create_topup(
             detail=f'Maximum amount is {method.max_amount_kopeks / 100:.2f} RUB',
         )
 
+    # Провайдер может отвечать десятки секунд: соединение на это время не держим.
+    await db.commit()
+
     amount_rubles = request.amount_kopeks / 100
     payment_url = None
     payment_id = None

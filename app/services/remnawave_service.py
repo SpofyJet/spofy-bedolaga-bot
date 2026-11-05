@@ -1532,16 +1532,6 @@ class RemnaWaveService:
                     foreign_accounts_count=foreign_accounts_count,
                 )
 
-            # Для ускорения - подготовим данные о подписках
-            # Соберем все существующие подписки за один запрос
-            existing_subscriptions_result = await db.execute(
-                select(Subscription).join(User).options(selectinload(Subscription.user))
-            )
-            existing_subscriptions = existing_subscriptions_result.scalars().all()
-
-            # Создадим словарь для быстрого доступа к подпискам
-            {sub.user_id: sub for sub in existing_subscriptions}
-
             # Для оптимизации коммитим изменения каждые N пользователей
             batch_size = 50
             pending_panel_id_mutations: list[_PanelIdMapMutation] = []
@@ -1553,7 +1543,7 @@ class RemnaWaveService:
                     if not telegram_id:
                         continue
 
-                    if (i + 1) % 10 == 0:
+                    if (i + 1) % 1000 == 0:
                         logger.info(
                             '🔄 Обрабатываем пользователя',
                             i=i + 1,

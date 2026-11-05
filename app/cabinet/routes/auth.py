@@ -727,19 +727,24 @@ async def auth_telegram(
     JWT tokens for authenticated access.
     """
     client_ip = get_client_ip(raw_request)
-    if await RateLimitCache.is_ip_rate_limited(client_ip, 'telegram_initdata', limit=10, window=60, fail_closed=True):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
-            headers={'Retry-After': '60'},
-        )
     # Telegram Desktop/iOS cache initData with stale auth_date (known Telegram bug:
     # https://github.com/telegramdesktop/tdesktop/issues/28303).
     # Use generous max_age: HMAC signature proves authenticity,
     # JWT tokens handle actual session expiration after login.
     user_data = validate_telegram_init_data(request.init_data, max_age_seconds=86400 * 30)
 
+    # Лимит идёт после проверки подписи. На LTE за одним IP сидят сотни абонентов,
+    # поэтому общий лимит на IP резал настоящих людей. По IP считаем только неверные
+    # подписи, а верные считаем по telegram_id.
     if not user_data:
+        if await RateLimitCache.is_ip_rate_limited(
+            client_ip, 'telegram_initdata', limit=10, window=60, fail_closed=True
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail='Too many requests',
+                headers={'Retry-After': '60'},
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Invalid or expired Telegram authentication data',
@@ -750,6 +755,15 @@ async def auth_telegram(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Missing Telegram user ID',
+        )
+
+    if await RateLimitCache.is_ip_rate_limited(
+        f'tg:{telegram_id}', 'telegram_initdata', limit=10, window=60, fail_closed=True
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
         )
 
     user = await get_user_by_telegram_id(db, telegram_id)

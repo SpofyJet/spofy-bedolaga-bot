@@ -255,6 +255,21 @@ if _AiohttpSession is not None:
     _AiohttpSession.make_request = _guarded_make_request
 
 
+@pytest.fixture(autouse=True)
+def _block_real_platega(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Не пускает тесты в настоящую Platega: после 10 неверных пар она блокирует адрес на час."""
+    import aiohttp
+
+    real_request = aiohttp.ClientSession._request
+
+    async def guarded_request(self, method, url, **kwargs):
+        if 'platega.io' in str(url):
+            raise AssertionError(f'Тест пытался обратиться к настоящей Platega: {method} {url}')
+        return await real_request(self, method, url, **kwargs)
+
+    monkeypatch.setattr(aiohttp.ClientSession, '_request', guarded_request)
+
+
 @pytest.fixture
 def fixed_datetime() -> datetime:
     """Возвращает фиксированную отметку времени для воспроизводимых проверок."""

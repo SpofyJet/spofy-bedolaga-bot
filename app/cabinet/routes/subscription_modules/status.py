@@ -8,8 +8,11 @@ GET /subscription/app-config
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import copy
 import re
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -310,14 +313,32 @@ def _get_url_scheme_for_app(app: dict[str, Any]) -> tuple[str, bool]:
     return '', False
 
 
+# Конфиг один на всех, а экран подключения запрашивает его при каждом открытии.
+_APP_CONFIG_TTL_SECONDS = 60
+_app_config_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_app_config_lock = asyncio.Lock()
+
+
 async def _load_app_config_async() -> dict[str, Any] | None:
     """Load app config from RemnaWave API (if configured).
 
     Returns None when no Remnawave config is set or API fails.
+    The caller writes per-user links into the result, so it always gets its own copy:
+    a shared object would show one user's subscription link to another.
     """
     remnawave_uuid = _get_remnawave_config_uuid()
+    if not remnawave_uuid:
+        return None
 
-    if remnawave_uuid:
+    cached = _app_config_cache.get(remnawave_uuid)
+    if cached and time.monotonic() - cached[0] < _APP_CONFIG_TTL_SECONDS:
+        return copy.deepcopy(cached[1])
+
+    async with _app_config_lock:
+        cached = _app_config_cache.get(remnawave_uuid)
+        if cached and time.monotonic() - cached[0] < _APP_CONFIG_TTL_SECONDS:
+            return copy.deepcopy(cached[1])
+
         try:
             service = RemnaWaveService()
             async with service.get_api_client() as api:
@@ -326,11 +347,13 @@ async def _load_app_config_async() -> dict[str, Any] | None:
                     logger.debug('Loaded app config from RemnaWave', remnawave_uuid=remnawave_uuid)
                     raw = dict(config.config)
                     raw['_isRemnawave'] = True
-                    return raw
+                    _app_config_cache[remnawave_uuid] = (time.monotonic(), raw)
+                    return copy.deepcopy(raw)
         except Exception as e:
             logger.warning('Failed to load RemnaWave config', error=e)
 
-    return None
+    # Панель не ответила: лучше вчерашний конфиг, чем экран без приложений.
+    return copy.deepcopy(cached[1]) if cached else None
 
 
 def _create_deep_link(
@@ -449,6 +472,8 @@ async def get_app_config(
         except Exception as e:
             logger.debug('Could not generate crypto link', error=e)
 
+    # Панель может отвечать секунды: соединение на это время не держим.
+    await db.commit()
     config = await _load_app_config_async()
 
     if not config:

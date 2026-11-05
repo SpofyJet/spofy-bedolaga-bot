@@ -93,6 +93,11 @@ class NotificationCategory(StrEnum):
 
 logger = structlog.get_logger(__name__)
 
+# Повторы после flood control идут фоном: запрос пользователя не должен ждать Telegram.
+# Предел защищает от накопления задач, если Telegram долго отвечает отказом.
+_FLOOD_RETRY_MAX_PENDING = 100
+_flood_retry_tasks: set[asyncio.Task] = set()
+
 
 def _loaded_relationship(instance: object, name: str) -> Any:
     """Значение связи, только если она УЖЕ загружена; иначе None и никакого IO.
@@ -1742,6 +1747,33 @@ class AdminNotificationService:
 
         return 'none'  # личка постороннего — не показываем кнопки
 
+    async def _retry_after_flood(
+        self,
+        message_kwargs: dict[str, Any],
+        delay: int,
+        attempt: int,
+        max_attempts: int,
+    ) -> None:
+        """Фоновый повтор после flood control. Ошибки только в warning: см. комментарий в _send_message."""
+        while attempt <= max_attempts:
+            await asyncio.sleep(delay)
+            try:
+                await self.bot.send_message(**message_kwargs)
+                logger.info('Уведомление отправлено в чат после паузы', chat_id=self.chat_id, attempt=attempt)
+                return
+            except TelegramRetryAfter as e:
+                delay = min(max(1, int(getattr(e, 'retry_after', 1))), 30)
+                attempt += 1
+            except Exception as e:
+                logger.warning(
+                    'Повтор админ-уведомления не удался',
+                    chat_id=self.chat_id,
+                    error=_redact_telegram_secrets(str(e))[:200],
+                    error_type=type(e).__name__,
+                )
+                return
+        logger.warning('Админ-уведомление не отправлено после повторов', chat_id=self.chat_id)
+
     async def _send_message(
         self,
         text: str,
@@ -1845,10 +1877,17 @@ class AdminNotificationService:
                     log_kwargs['retry_after_requested'] = requested_retry_after
                     log_kwargs['clamped'] = True
                 logger.warning('Telegram flood control при отправке в админ-чат', **log_kwargs)
-                if attempt < max_attempts:
-                    await asyncio.sleep(retry_after)
-                    continue
-                return False
+                if len(_flood_retry_tasks) >= _FLOOD_RETRY_MAX_PENDING:
+                    logger.warning('Очередь повторов админ-уведомлений заполнена', chat_id=self.chat_id)
+                    return False
+                # Вызывающий код часто держит соединение с базой. Если ждать здесь,
+                # наплыв покупок занимает весь пул на время паузы Telegram.
+                task = asyncio.create_task(
+                    self._retry_after_flood(message_kwargs, retry_after, attempt + 1, max_attempts)
+                )
+                _flood_retry_tasks.add(task)
+                task.add_done_callback(_flood_retry_tasks.discard)
+                return True
 
             except (TelegramNetworkError, TelegramServerError) as e:
                 # Транзиентные сетевые/5xx — warning, не error.
