@@ -1267,6 +1267,11 @@ class AdminNotificationService:
         balance_before_kopeks: int | None = None,
         balance_after_kopeks: int | None = None,
     ) -> bool:
+        # Код на спин активируют сотни людей подряд, а сам спин и так приходит в админ-тему.
+        # Вызов идёт внутри запроса: ожидание flood control держало соединение с базой.
+        if promocode_data.get('type') == PromoCodeType.WHEEL_SPIN.value:
+            return True
+
         try:
             await self._record_subscription_event(
                 db,

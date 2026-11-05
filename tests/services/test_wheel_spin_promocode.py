@@ -11,6 +11,7 @@ from app.database.crud import promocode as promo_crud, wheel as wheel_crud
 from app.database.models import PromoCodeType, Subscription, SubscriptionStatus
 from app.handlers.promocode import promocode_error_text, wheel_spin_keyboard
 from app.services import promocode_service as module
+from app.services.admin_notification_service import AdminNotificationService
 
 
 def _subscription(status=SubscriptionStatus.ACTIVE.value, *, trial=False, days=10):
@@ -97,3 +98,18 @@ def test_wheel_keyboard_only_for_spin_codes(monkeypatch):
     markup = wheel_spin_keyboard({'promocode': {'type': PromoCodeType.WHEEL_SPIN.value}}, texts)
     assert markup.inline_keyboard[0][0].web_app.url == 'https://web.example.ru/wheel'
     assert wheel_spin_keyboard({'promocode': {'type': PromoCodeType.BALANCE.value}}, texts) is None
+
+
+async def test_spin_activation_sends_no_admin_message():
+    """Уведомление ждёт Telegram внутри запроса, а поток кодов упирается в flood control."""
+    service = AdminNotificationService(AsyncMock())
+    service._record_subscription_event = AsyncMock()
+    service._send_message = AsyncMock()
+
+    sent = await service.send_promocode_activation_notification(
+        AsyncMock(), SimpleNamespace(id=5), {'type': PromoCodeType.WHEEL_SPIN.value, 'code': 'SPIN'}, 'спин'
+    )
+
+    assert sent is True
+    service._record_subscription_event.assert_not_awaited()
+    service._send_message.assert_not_awaited()
