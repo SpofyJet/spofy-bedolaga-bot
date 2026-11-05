@@ -207,7 +207,7 @@ async def test_random_menu_message_remains_without_pending_checkout(monkeypatch)
     monkeypatch.setattr(menu_mod, 'build_test_access_hint', AsyncMock(return_value=None))
     monkeypatch.setattr(menu_mod, 'has_subscription_checkout_draft', AsyncMock(return_value=False))
     monkeypatch.setattr(menu_mod, 'should_offer_checkout_resume', lambda user, draft: False)
-    monkeypatch.setattr(menu_mod.user_cart_service, 'has_user_cart', AsyncMock(return_value=False))
+    monkeypatch.setattr(menu_mod, 'has_resumable_cart', AsyncMock(return_value=False))
     monkeypatch.setattr(menu_mod, 'get_random_active_message', AsyncMock(return_value='Random promo'))
 
     result = await menu_mod.get_main_menu_text(user, texts, AsyncMock())

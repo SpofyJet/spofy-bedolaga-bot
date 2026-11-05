@@ -1667,7 +1667,7 @@ async def _auto_add_devices(
 
     from app.database.crud.user import lock_user_for_pricing, subtract_user_balance
     from app.database.models import PaymentMethod
-    from app.utils.pricing_utils import apply_percentage_discount
+    from app.utils.pricing_utils import calculate_device_addon_price, count_chargeable_devices
 
     devices_to_add = _safe_int(cart_data.get('devices_to_add'))
     cart_price_kopeks = _safe_int(cart_data.get('price_kopeks'))
@@ -1764,19 +1764,20 @@ async def _auto_add_devices(
         return False
 
     # Recompute price fresh under lock (pricing config may have changed since cart was saved)
-    devices_price_per_month = devices_to_add * tariff_device_price
+    included_devices = (tariff.device_limit or 0) if tariff else settings.DEFAULT_DEVICE_LIMIT
     days_left = max(1, math.ceil((subscription.end_date - datetime.now(UTC)).total_seconds() / 86400))
     devices_discount_percent = PricingEngine.get_addon_discount_percent(
         user,
         'devices',
         days_left,
     )
-    discounted_per_month, _ = apply_percentage_discount(
-        devices_price_per_month,
-        devices_discount_percent,
+    price_kopeks = calculate_device_addon_price(
+        tariff_device_price,
+        count_chargeable_devices(devices_to_add, old_device_limit, included_devices),
+        days_left,
+        flat=bool(tariff and getattr(tariff, 'device_price_flat', False)),
+        discount_percent=devices_discount_percent,
     )
-    price_kopeks = int(discounted_per_month * days_left / 30)
-    price_kopeks = max(100, price_kopeks)
 
     if price_kopeks != cart_price_kopeks:
         logger.warning(
@@ -1806,31 +1807,33 @@ async def _auto_add_devices(
         )
         return False
 
-    # Списываем баланс
+    # Списываем баланс (бесплатные места и 100% скидка — без списания и без пустой транзакции)
     description = f'Покупка {devices_to_add} доп. устройств'
-    try:
-        success = await subtract_user_balance(
-            db,
-            user,
-            price_kopeks,
-            description,
-            create_transaction=True,
-            payment_method=PaymentMethod.BALANCE,
-            transaction_type=TransactionType.SUBSCRIPTION_PAYMENT,
-        )
-        if not success:
-            logger.warning(
-                '❌ Автопокупка устройств: не удалось списать баланс пользователя', format_user_id=_format_user_id(user)
+    if price_kopeks > 0:
+        try:
+            success = await subtract_user_balance(
+                db,
+                user,
+                price_kopeks,
+                description,
+                create_transaction=True,
+                payment_method=PaymentMethod.BALANCE,
+                transaction_type=TransactionType.SUBSCRIPTION_PAYMENT,
+            )
+            if not success:
+                logger.warning(
+                    '❌ Автопокупка устройств: не удалось списать баланс пользователя',
+                    format_user_id=_format_user_id(user),
+                )
+                return False
+        except Exception as error:
+            logger.error(
+                '❌ Автопокупка устройств: ошибка списания баланса пользователя',
+                format_user_id=_format_user_id(user),
+                error=error,
+                exc_info=True,
             )
             return False
-    except Exception as error:
-        logger.error(
-            '❌ Автопокупка устройств: ошибка списания баланса пользователя',
-            format_user_id=_format_user_id(user),
-            error=error,
-            exc_info=True,
-        )
-        return False
 
     # Re-lock subscription after subtract_user_balance committed (released locks)
     user = await lock_user_for_pricing(db, user.id)
@@ -1847,22 +1850,23 @@ async def _auto_add_devices(
 
     if subscription.device_limit == 0 or (tariff_max_device_limit and new_device_limit > tariff_max_device_limit):
         # Concurrent modification exceeded limit — refund
-        user_refund = await db.execute(
-            select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
-        )
-        refund_user = user_refund.scalar_one()
-        refund_user.balance_kopeks += price_kopeks
-        from app.database.crud.transaction import create_transaction
+        if price_kopeks > 0:
+            user_refund = await db.execute(
+                select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+            )
+            refund_user = user_refund.scalar_one()
+            refund_user.balance_kopeks += price_kopeks
+            from app.database.crud.transaction import create_transaction
 
-        await create_transaction(
-            db,
-            user.id,
-            TransactionType.REFUND,
-            price_kopeks,
-            'Возврат отменённой докупки устройств: условия подписки изменились',
-            payment_method=PaymentMethod.BALANCE,
-            commit=False,
-        )
+            await create_transaction(
+                db,
+                user.id,
+                TransactionType.REFUND,
+                price_kopeks,
+                'Возврат отменённой докупки устройств: условия подписки изменились',
+                payment_method=PaymentMethod.BALANCE,
+                commit=False,
+            )
         await db.commit()
         logger.warning(
             '🔁 Автопокупка устройств: лимит превышен после оплаты, баланс возвращён',

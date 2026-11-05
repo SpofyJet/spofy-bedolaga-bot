@@ -29,12 +29,12 @@ from app.services.faq_service import FaqService
 from app.services.main_menu_button_service import MainMenuButtonService
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
+from app.services.spofy_subpage_service import has_resumable_cart
 from app.services.subscription_checkout_service import (
     has_subscription_checkout_draft,
     should_offer_checkout_resume,
 )
 from app.services.support_settings_service import SupportSettingsService
-from app.services.user_cart_service import user_cart_service
 from app.states import RegistrationStates
 from app.utils.display_mode import is_visible_in_bot
 from app.utils.lifetime import is_lifetime_end
@@ -191,7 +191,7 @@ async def build_main_menu_keyboard(db_user: User, db: AsyncSession):
 
     # Проверяем наличие сохраненной корзины в Redis
     try:
-        has_saved_cart = await user_cart_service.has_user_cart(db_user.id)
+        has_saved_cart = await has_resumable_cart(db_user.id)
     except Exception as e:
         logger.error('Ошибка проверки сохраненной корзины для пользователя', db_user_id=db_user.id, error=e)
         has_saved_cart = False
@@ -1583,7 +1583,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
         draft_exists = await has_subscription_checkout_draft(user.id)
         has_pending_checkout = should_offer_checkout_resume(user, draft_exists)
         if not has_pending_checkout:
-            has_pending_checkout = await user_cart_service.has_user_cart(user.id)
+            has_pending_checkout = await has_resumable_cart(user.id)
     except Exception as e:
         logger.debug('Не удалось проверить незавершённое оформление для главного меню', error=e)
 

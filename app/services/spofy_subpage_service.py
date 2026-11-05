@@ -155,6 +155,17 @@ async def tag_current_cart_as_subpage(user_id: int, expected: dict[str, Any] | N
     return await user_cart_service.save_user_cart(user_id, cart)
 
 
+async def has_resumable_cart(user_id: int) -> bool:
+    """Есть ли корзина, которую меню может предложить продолжить.
+
+    Корзина страницы подписки ждёт свой платёж и с баланса не оплачивается, поэтому меню её
+    не предлагает. Кнопка в сообщении о деньгах без покупки (``_notify_orphan_topup``) не
+    зависит от этой проверки: там деньги уже на балансе.
+    """
+    cart = await user_cart_service.get_user_cart(user_id)
+    return bool(cart) and not is_subpage_cart(cart)
+
+
 async def bind_cart_to_payment(user_id: int, *, price_kopeks: int, requested_kopeks: int) -> bool:
     """Remember what the page asked the customer to pay for this cart.
 

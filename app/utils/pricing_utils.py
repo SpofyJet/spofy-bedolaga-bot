@@ -63,6 +63,39 @@ def calculate_prorated_price(monthly_price: int, end_date: datetime, min_charge_
     return total_price, days_to_charge
 
 
+def count_chargeable_devices(devices_to_add: int, current_devices: int, included_devices: int) -> int:
+    """Сколько докупаемых устройств платные: места в пределах тарифа бесплатны."""
+    free_devices = max(0, included_devices - current_devices)
+    return max(0, devices_to_add - free_devices)
+
+
+def calculate_device_addon_price(
+    device_price_kopeks: int,
+    chargeable_devices: int,
+    days_left: int,
+    *,
+    flat: bool,
+    discount_percent: int = 0,
+) -> int:
+    """Цена докупки устройств — та же, что показывает кабинет.
+
+    ``flat`` — тариф с разовой ценой устройства (``Tariff.device_price_flat``): цена не
+    зависит от остатка дней. Без этого подписка до 2099 года стоила бы как 26 тысяч дней.
+    """
+    if chargeable_devices <= 0:
+        return 0
+
+    base_price = device_price_kopeks * chargeable_devices
+    if not flat:
+        base_price = int(base_price * days_left / 30)
+    base_price = max(100, base_price)  # Минимум 1 рубль
+
+    if discount_percent <= 0:
+        return base_price
+    discounted_price, _ = apply_percentage_discount(base_price, discount_percent)
+    return discounted_price if discount_percent >= 100 else max(100, discounted_price)
+
+
 def apply_percentage_discount(amount: int, percent: int) -> tuple[int, int]:
     """Apply percentage discount using PricingEngine's floor division.
 

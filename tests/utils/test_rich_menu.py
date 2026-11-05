@@ -657,7 +657,7 @@ async def test_show_main_menu_prefers_rich_and_falls_back(monkeypatch):
 
     monkeypatch.setattr(menu_mod, 'has_subscription_checkout_draft', AsyncMock(return_value=False))
     monkeypatch.setattr(menu_mod, 'should_offer_checkout_resume', lambda *a, **k: False)
-    monkeypatch.setattr(menu_mod.user_cart_service, 'has_user_cart', AsyncMock(return_value=False))
+    monkeypatch.setattr(menu_mod, 'has_resumable_cart', AsyncMock(return_value=False))
     monkeypatch.setattr(menu_mod.SupportSettingsService, 'is_moderator', lambda tid: False)
     monkeypatch.setattr(type(settings), 'is_admin', lambda self, tid: False)
     monkeypatch.setattr(type(settings), 'is_text_main_menu_mode', lambda self: True)

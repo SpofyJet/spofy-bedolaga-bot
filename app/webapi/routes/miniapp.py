@@ -6246,6 +6246,7 @@ async def update_subscription_devices_endpoint(
     devices_difference = new_devices - current_devices
     price_to_charge = 0
     charged_days = 0
+    device_price_is_flat = bool(tariff and getattr(tariff, 'device_price_flat', False))
 
     if devices_difference > 0:
         current_chargeable = max(0, current_devices - settings.DEFAULT_DEVICE_LIMIT)
@@ -6259,10 +6260,14 @@ async def update_subscription_devices_endpoint(
         devices_discount = PricingEngine.get_addon_discount_percent(user, 'devices', period_hint_days)
 
         discounted_per_month = PricingEngine.apply_discount(price_per_month, devices_discount)
-        price_to_charge, charged_days = calculate_prorated_price(
-            discounted_per_month,
-            subscription.end_date,
-        )
+        if device_price_is_flat:
+            # Разовая цена устройства: без умножения на остаток дней
+            price_to_charge = discounted_per_month
+        else:
+            price_to_charge, charged_days = calculate_prorated_price(
+                discounted_per_month,
+                subscription.end_date,
+            )
 
     if price_to_charge > 0 and getattr(user, 'balance_kopeks', 0) < price_to_charge:
         missing = price_to_charge - getattr(user, 'balance_kopeks', 0)
@@ -6298,7 +6303,9 @@ async def update_subscription_devices_endpoint(
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=price_to_charge,
-            description=f'{description} за {charged_days or max(1, math.ceil((subscription.end_date - datetime.now(UTC)).total_seconds() / 86400))} дн.',
+            description=description
+            if device_price_is_flat
+            else f'{description} за {charged_days or max(1, math.ceil((subscription.end_date - datetime.now(UTC)).total_seconds() / 86400))} дн.',
         )
 
     if price_to_charge > 0:
