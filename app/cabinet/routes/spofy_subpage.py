@@ -461,6 +461,8 @@ async def _checkout(short_uuid: str, body: CheckoutRequest, db: AsyncSession) ->
         )
     if decision == 'wait':
         assert event is not None  # 'wait' always returns the in-flight checkout's event
+        # Ждём другой запрос до минуты: соединение с базой на это время не нужно.
+        await db.commit()
         try:
             await asyncio.wait_for(event.wait(), timeout=CHECKOUT_WAIT_TIMEOUT_S)
         except TimeoutError:

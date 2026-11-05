@@ -1204,6 +1204,8 @@ class PlategaPaymentMixin:
         remote_payload: dict[str, Any] | None = None
 
         if service and payment.platega_transaction_id:
+            # Запрос к провайдеру идёт секунды: соединение с базой на это время не держим.
+            await db.commit()
             try:
                 remote_payload = await service.get_transaction(payment.platega_transaction_id)
             except Exception as error:  # pragma: no cover - network errors

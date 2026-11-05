@@ -310,9 +310,10 @@ async def test_concurrent_same_checkout_replays_one_payment(monkeypatch, auto_on
     monkeypatch.setattr(bridge, 'bind_cart_to_payment', slow_bind)
     body = bridge.CheckoutRequest(kind='renew', period_days=30, payment_method='yookassa')
 
+    db = SimpleNamespace(commit=AsyncMock())
     first, second = await asyncio.gather(
-        bridge.checkout('abcdefgh', body, db=None),
-        bridge.checkout('abcdefgh', body, db=None),
+        bridge.checkout('abcdefgh', body, db=db),
+        bridge.checkout('abcdefgh', body, db=db),
     )
 
     assert bound == ['bind']  # cart bound exactly once: no interleaved second checkout
@@ -866,11 +867,13 @@ async def test_wait_branch_times_out_with_409_instead_of_hanging(monkeypatch, au
     monkeypatch.setattr(bridge, 'save_renewal_cart', stuck_checkout)
     body = bridge.CheckoutRequest(kind='renew', period_days=30, payment_method='yookassa')
 
-    first = asyncio.create_task(bridge.checkout('abcdefgh', body, db=None))
+    db = SimpleNamespace(commit=AsyncMock())
+    first = asyncio.create_task(bridge.checkout('abcdefgh', body, db=db))
     await asyncio.sleep(0)  # первый занял слот
     with pytest.raises(HTTPException) as error:
-        await bridge.checkout('abcdefgh', body, db=None)
+        await bridge.checkout('abcdefgh', body, db=db)
     assert error.value.status_code == 409
+    db.commit.assert_awaited()  # ожидание не держит соединение с базой
 
     first.cancel()
     with contextlib.suppress(asyncio.CancelledError):

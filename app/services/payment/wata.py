@@ -310,6 +310,8 @@ class WataPaymentMixin:
         transaction_id: str | None = None
 
         if getattr(self, 'wata_service', None) and payment.payment_link_id:
+            # Запрос к провайдеру идёт секунды: соединение с базой на это время не держим.
+            await db.commit()
             try:
                 remote_link = await self.wata_service.get_payment_link(payment.payment_link_id)  # type: ignore[union-attr]
             except WataAPIError as error:

@@ -675,6 +675,8 @@ class CryptoBotPaymentMixin:
             return {'payment': payment}
 
         invoice_id = payment.invoice_id
+        # Запрос к провайдеру идёт секунды: соединение с базой на это время не держим.
+        await db.commit()
         try:
             invoices = await self.cryptobot_service.get_invoices(invoice_ids=[invoice_id])
         except Exception as error:  # pragma: no cover - network errors

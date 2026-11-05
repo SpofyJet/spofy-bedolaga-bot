@@ -767,6 +767,8 @@ class XRocketPaymentMixin:
             return {'payment': payment}
 
         invoice_id = payment.invoice_id
+        # Запрос к провайдеру идёт секунды: соединение с базой на это время не держим.
+        await db.commit()
         try:
             remote_invoice = await self.xrocket_service.get_invoice(invoice_id)
         except Exception as error:  # pragma: no cover - network errors
