@@ -12,7 +12,9 @@ Telegram-лог (иначе чат тонет в шуме обычных рет�
 
 from __future__ import annotations
 
+import asyncio
 import html
+import time
 from collections.abc import Mapping
 from typing import Any
 
@@ -23,6 +25,18 @@ from app.config import settings
 # payments.log, а не общий логгер: иначе Telegram-лог-хендлер продублировал бы
 # это же событие в чат вторым сообщением.
 from app.utils.payment_logger import payment_logger as logger
+
+
+# Отказ провайдера в создании счёта. Явная блокировка (METHOD_BLOCKED) идёт в чат сразу:
+# при наших объёмах таких попыток две в день, порог бы её не увидел. Остальное (таймаут,
+# 5xx, пустой ответ) считаем: одиночные сбои обычны и проходят сами.
+INVOICE_FAILURE_THRESHOLD = 3
+INVOICE_FAILURE_WINDOW_SECONDS = 3600
+INVOICE_ALERT_COOLDOWN_SECONDS = 6 * 3600
+ALERT_SEND_TIMEOUT_SECONDS = 10
+
+_invoice_failures: dict[str, list[float]] = {}
+_invoice_last_alert: dict[str, float] = {}
 
 
 def build_payment_problem_text(
@@ -87,16 +101,69 @@ async def alert_payment_not_applied(
             reference=reference,
             details=details,
         )
-        from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
-
-        if bot is not None:
-            await AdminNotificationService(bot).send_admin_notification(text, category=NotificationCategory.ERRORS)
-            return
-        if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not settings.BOT_TOKEN:
-            return
-        from app.bot_factory import create_bot
-
-        async with create_bot() as own_bot:
-            await AdminNotificationService(own_bot).send_admin_notification(text, category=NotificationCategory.ERRORS)
+        await _send_to_admins(bot, text)
     except Exception:
         logger.exception('Не удалось отправить админам оповещение о платеже', provider=provider, reference=reference)
+
+
+async def _send_to_admins(bot: Bot | None, text: str) -> None:
+    from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
+
+    if bot is not None:
+        await AdminNotificationService(bot).send_admin_notification(text, category=NotificationCategory.ERRORS)
+        return
+    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not settings.BOT_TOKEN:
+        return
+    from app.bot_factory import create_bot
+
+    async with create_bot() as own_bot:
+        await AdminNotificationService(own_bot).send_admin_notification(text, category=NotificationCategory.ERRORS)
+
+
+def note_invoice_created(provider: str) -> None:
+    """Счёт создан: провайдер работает, накопленные сбои больше не считаются."""
+    _invoice_failures.pop(provider, None)
+
+
+async def alert_invoice_failed(
+    bot: Bot | None,
+    *,
+    provider: str,
+    reason: str,
+    blocked: bool = False,
+    user_id: int | None = None,
+    amount_kopeks: int | None = None,
+) -> None:
+    """Провайдер не создал счёт на реальную попытку оплаты.
+
+    ``blocked`` — провайдер прямо отказал нашему приложению: повторы не помогут, нужен
+    человек. Зовут из клиентского потока оплаты, поэтому не бросает и ждёт Telegram
+    недолго: сбой оповещения не должен менять то, что видит клиент.
+    """
+    now = time.monotonic()
+    recent = [t for t in _invoice_failures.get(provider, ()) if now - t < INVOICE_FAILURE_WINDOW_SECONDS]
+    recent.append(now)
+    _invoice_failures[provider] = recent
+
+    if not blocked and len(recent) < INVOICE_FAILURE_THRESHOLD:
+        return
+    # Блокировка не должна молчать из-за недавнего алерта о таймаутах того же провайдера.
+    cooldown_key = f'{provider}:{blocked}'
+    last_alert = _invoice_last_alert.get(cooldown_key)
+    if last_alert is not None and now - last_alert < INVOICE_ALERT_COOLDOWN_SECONDS:
+        return
+    _invoice_last_alert[cooldown_key] = now
+
+    logger.error('Провайдер не создаёт счета', provider=provider, reason=reason, failures=len(recent))
+    try:
+        text = build_payment_problem_text(
+            provider=provider,
+            problem='Провайдер блокирует счета: клиенты не могут оплатить' if blocked else 'Провайдер не создаёт счета',
+            user_id=user_id,
+            amount_kopeks=amount_kopeks,
+            reference=None,
+            details={'Причина': reason, 'Отказов за час': len(recent)},
+        )
+        await asyncio.wait_for(_send_to_admins(bot, text), ALERT_SEND_TIMEOUT_SECONDS)
+    except Exception:
+        logger.exception('Не удалось отправить админам оповещение о счёте', provider=provider)

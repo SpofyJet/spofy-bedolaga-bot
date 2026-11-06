@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.services.payment.common import topup_success_text
+from app.services.payment_problem_alert import alert_invoice_failed, note_invoice_created
 from app.services.payment_reversal_alert import alert_paid_payment_reversed
 from app.services.wata_service import WataAPIError, WataService
 from app.utils.payment_logger import payment_logger as logger
@@ -62,6 +63,31 @@ def _extract_transaction_id(payment: Any, remote_link: dict[str, Any] | None = N
         return candidate
 
     return None
+
+
+def _paid_transaction_id(payment: Any) -> str | None:
+    """ID транзакции, которой оплачена ссылка. Вебхук кладёт его в transactionId, API в id."""
+    metadata = getattr(payment, 'metadata_json', None)
+    transaction = metadata.get('transaction') if isinstance(metadata, dict) else None
+    if not isinstance(transaction, dict):
+        return None
+    value = transaction.get('transactionId') or transaction.get('id')
+    return str(value) if value else None
+
+
+def _is_other_attempt(payment: Any, payload: dict[str, Any]) -> bool:
+    """Вебхук о другой попытке оплаты той же ссылки, а не об оплаченной транзакции.
+
+    По одной ссылке можно начать несколько попыток: брошенная отклоняется уже после
+    успешной. Возврат приходит с originalTransactionId или другим kind, он сюда не попадает.
+    """
+    incoming_id = payload.get('transactionId')
+    paid_id = _paid_transaction_id(payment)
+    if not incoming_id or not paid_id or str(incoming_id) == paid_id:
+        return False
+    if payload.get('originalTransactionId'):
+        return False
+    return str(payload.get('kind') or 'Payment').lower() == 'payment'
 
 
 class WataPaymentMixin:
@@ -127,9 +153,23 @@ class WataPaymentMixin:
             )
         except WataAPIError as error:
             logger.error('Ошибка создания WATA платежа', error=error)
+            await alert_invoice_failed(
+                getattr(self, 'bot', None),
+                provider='WATA',
+                reason=str(error)[:200],
+                user_id=user_id,
+                amount_kopeks=amount_kopeks,
+            )
             return None
         except Exception as error:  # pragma: no cover - safety net
             logger.exception('Непредвиденная ошибка при создании WATA платежа', error=error)
+            await alert_invoice_failed(
+                getattr(self, 'bot', None),
+                provider='WATA',
+                reason=type(error).__name__,
+                user_id=user_id,
+                amount_kopeks=amount_kopeks,
+            )
             return None
 
         payment_link_id = response.get('id')
@@ -141,7 +181,16 @@ class WataPaymentMixin:
 
         if not payment_link_id:
             logger.error('WATA API не вернула идентификатор платежной ссылки', response=response)
+            await alert_invoice_failed(
+                getattr(self, 'bot', None),
+                provider='WATA',
+                reason='нет идентификатора ссылки',
+                user_id=user_id,
+                amount_kopeks=amount_kopeks,
+            )
             return None
+
+        note_invoice_created('WATA')
 
         expiration_raw = response.get('expirationDateTime')
         expires_at = WataService._parse_datetime(expiration_raw)
@@ -259,6 +308,17 @@ class WataPaymentMixin:
             await db.flush()
 
             await self._finalize_wata_payment(db, payment, payload)
+            return True
+
+        if payment.is_paid and _is_other_attempt(payment, payload):
+            # Оплата уже прошла другой транзакцией: статус не трогаем, это не возврат.
+            logger.info(
+                'WATA: другая попытка по оплаченной ссылке, статус не меняем',
+                payment_link_id=payment.payment_link_id,
+                transaction_id=payload.get('transactionId'),
+                transaction_status=transaction_status,
+            )
+            await db.commit()
             return True
 
         # Non-success statuses: safe to use update_wata_payment_status (commits)

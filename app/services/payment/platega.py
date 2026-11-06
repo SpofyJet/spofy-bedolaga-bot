@@ -15,7 +15,7 @@ from app.config import settings
 from app.database.models import PaymentMethod, Subscription, TransactionType
 from app.services.payment.common import topup_success_text
 from app.services.payment.payer_identity import PayerIdentity, payer_from_guest, resolve_user_payer
-from app.services.payment_problem_alert import alert_payment_not_applied
+from app.services.payment_problem_alert import alert_invoice_failed, alert_payment_not_applied, note_invoice_created
 from app.services.payment_reversal_alert import alert_paid_payment_reversed
 from app.services.platega_service import PlategaService
 from app.utils.formatters import format_human_date
@@ -140,11 +140,27 @@ class PlategaPaymentMixin:
             )
         except Exception as error:  # pragma: no cover - network errors
             logger.exception('Ошибка Platega при создании платежа', error=error)
+            await alert_invoice_failed(
+                getattr(self, 'bot', None),
+                provider='Platega',
+                reason=type(error).__name__,
+                user_id=user_id,
+                amount_kopeks=amount_kopeks,
+            )
             return None
 
         if not response:
             logger.error('Platega вернул пустой ответ при создании платежа')
+            await alert_invoice_failed(
+                getattr(self, 'bot', None),
+                provider='Platega',
+                reason='пустой ответ',
+                user_id=user_id,
+                amount_kopeks=amount_kopeks,
+            )
             return None
+
+        note_invoice_created('Platega')
 
         transaction_id = response.get('transactionId') or response.get('id')
         redirect_url = PlategaService.parse_redirect_url(response)

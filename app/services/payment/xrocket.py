@@ -14,7 +14,7 @@ from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, TransactionType
 from app.services.payment.common import topup_success_text
-from app.services.payment_problem_alert import alert_payment_not_applied
+from app.services.payment_problem_alert import alert_invoice_failed, alert_payment_not_applied, note_invoice_created
 from app.services.pricing_engine import RenewalPricing, pricing_engine
 from app.services.subscription_renewal_service import (
     RenewalPaymentDescriptor,
@@ -103,6 +103,13 @@ class XRocketPaymentMixin:
             rate = await self.xrocket_service.get_fiat_rate(asset, 'RUB')
             if not rate or rate <= 0:
                 logger.error('xRocket: не удалось получить курс, платёж отменён', asset=asset)
+                await alert_invoice_failed(
+                    getattr(self, 'bot', None),
+                    provider='xRocket',
+                    reason='нет курса',
+                    user_id=user_id,
+                    amount_kopeks=amount_kopeks,
+                )
                 return None
 
             # 1 asset = rate RUB  ->  amount_asset = rubles / rate
@@ -132,7 +139,16 @@ class XRocketPaymentMixin:
 
             if not invoice_data:
                 logger.error('Ошибка создания xRocket invoice')
+                await alert_invoice_failed(
+                    getattr(self, 'bot', None),
+                    provider='xRocket',
+                    reason='нет ответа',
+                    user_id=user_id,
+                    amount_kopeks=amount_kopeks,
+                )
                 return None
+
+            note_invoice_created('xRocket')
 
             xrocket_crud = import_module('app.database.crud.xrocket')
 

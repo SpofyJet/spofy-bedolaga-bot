@@ -36,7 +36,9 @@ async def test_create_invoice_uses_make_request(monkeypatch: pytest.MonkeyPatch)
 
     captured: dict[str, Any] = {}
 
-    async def fake_make_request(method: str, endpoint: str, data: dict[str, Any] | None = None):
+    async def fake_make_request(
+        method: str, endpoint: str, data: dict[str, Any] | None = None, api_error: dict[str, Any] | None = None
+    ):
         captured['method'] = method
         captured['endpoint'] = endpoint
         captured['data'] = data

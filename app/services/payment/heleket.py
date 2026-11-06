@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.services.payment.common import topup_success_text
+from app.services.payment_problem_alert import alert_invoice_failed, note_invoice_created
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
@@ -93,16 +94,28 @@ class HeleketPaymentMixin:
             response = await self.heleket_service.create_payment(payload)  # type: ignore[union-attr]
         except Exception as error:  # pragma: no cover - safety net
             logger.exception('Ошибка создания Heleket платежа', error=error)
-            return None
-
-        if not response:
-            logger.error('Heleket API вернул пустой ответ при создании платежа')
+            await alert_invoice_failed(
+                getattr(self, 'bot', None),
+                provider='Heleket',
+                reason=type(error).__name__,
+                user_id=user_id,
+                amount_kopeks=amount_kopeks,
+            )
             return None
 
         payment_result = response.get('result') if isinstance(response, dict) else None
         if not payment_result:
-            logger.error('Некорректный ответ Heleket API', response=response)
+            logger.error('Некорректный или пустой ответ Heleket API', response=response)
+            await alert_invoice_failed(
+                getattr(self, 'bot', None),
+                provider='Heleket',
+                reason='пустой или некорректный ответ',
+                user_id=user_id,
+                amount_kopeks=amount_kopeks,
+            )
             return None
+
+        note_invoice_created('Heleket')
 
         uuid = str(payment_result.get('uuid'))
         response_order_id = payment_result.get('order_id')

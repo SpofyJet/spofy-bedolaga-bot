@@ -14,6 +14,7 @@ from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, TransactionType
 from app.services.payment.common import topup_success_text
+from app.services.payment_problem_alert import alert_invoice_failed, note_invoice_created
 from app.services.pricing_engine import RenewalPricing, pricing_engine
 from app.services.subscription_renewal_service import (
     RenewalPaymentDescriptor,
@@ -71,17 +72,29 @@ class CryptoBotPaymentMixin:
         try:
             amount_str = f'{amount_usd:.2f}'
 
+            api_error: dict[str, Any] = {}
             invoice_data = await self.cryptobot_service.create_invoice(
                 amount=amount_str,
                 asset=asset,
                 description=description,
                 payload=payload or f'balance_topup_{user_id}_{int(amount_usd * 100)}',
                 expires_in=settings.get_cryptobot_invoice_expires_seconds(),
+                api_error=api_error,
             )
 
             if not invoice_data:
                 logger.error('Ошибка создания CryptoBot invoice')
+                await alert_invoice_failed(
+                    getattr(self, 'bot', None),
+                    provider='CryptoBot',
+                    reason=' '.join(str(api_error[k]) for k in ('code', 'name') if k in api_error) or 'нет ответа',
+                    # 423 METHOD_BLOCKED: приложение заблокировано, чинится только новым приложением.
+                    blocked=api_error.get('code') == 423 or api_error.get('name') == 'METHOD_BLOCKED',
+                    user_id=user_id,
+                )
                 return None
+
+            note_invoice_created('CryptoBot')
 
             cryptobot_crud = import_module('app.database.crud.cryptobot')
 

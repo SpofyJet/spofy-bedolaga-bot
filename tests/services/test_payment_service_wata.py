@@ -266,6 +266,111 @@ async def test_process_wata_webhook_updates_status(monkeypatch: pytest.MonkeyPat
     assert update_kwargs['is_paid'] is False
 
 
+def _paid_payment(transaction: dict[str, Any]) -> DummyWataPayment:
+    payment = DummyWataPayment()
+    payment.status = 'Paid'
+    payment.is_paid = True
+    payment.metadata_json = {'transaction': transaction}
+    return payment
+
+
+def _patch_reversal_flow(
+    monkeypatch: pytest.MonkeyPatch, payment: DummyWataPayment
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    updates: list[dict[str, Any]] = []
+    alerts: list[dict[str, Any]] = []
+
+    async def fake_get_by_order_id(*_: Any) -> DummyWataPayment:
+        return payment
+
+    async def fake_update_status(_db: Any, *, payment: DummyWataPayment, **kwargs: Any) -> DummyWataPayment:
+        updates.append(kwargs)
+        payment.status = kwargs.get('status', payment.status)
+        return payment
+
+    async def fake_lock(*_: Any) -> DummyWataPayment:
+        return payment
+
+    async def fake_alert(_bot: Any, **kwargs: Any) -> None:
+        alerts.append(kwargs)
+
+    monkeypatch.setattr(
+        'app.services.payment_service.get_wata_payment_by_order_id', fake_get_by_order_id, raising=False
+    )
+    monkeypatch.setattr('app.services.payment_service.update_wata_payment_status', fake_update_status, raising=False)
+    monkeypatch.setattr(wata_crud_module, 'get_wata_payment_by_id_for_update', fake_lock, raising=False)
+    monkeypatch.setattr('app.services.payment.wata.alert_paid_payment_reversed', fake_alert)
+    return updates, alerts
+
+
+@pytest.mark.anyio('asyncio')
+@pytest.mark.parametrize('id_key', ['transactionId', 'id'])
+async def test_declined_other_attempt_keeps_paid_status_without_alert(
+    monkeypatch: pytest.MonkeyPatch, id_key: str
+) -> None:
+    payment = _paid_payment({id_key: 'tx-paid'})
+    updates, alerts = _patch_reversal_flow(monkeypatch, payment)
+
+    processed = await _make_service(None).process_wata_webhook(
+        DummySession(),
+        {
+            'orderId': payment.order_id,
+            'transactionId': 'tx-abandoned',
+            'kind': 'Payment',
+            'originalTransactionId': None,
+            'transactionStatus': 'Declined',
+        },
+    )
+
+    assert processed is True
+    assert payment.status == 'Paid'
+    assert updates == []
+    assert alerts == []
+
+
+@pytest.mark.anyio('asyncio')
+@pytest.mark.parametrize(
+    'payload',
+    [
+        pytest.param({'transactionId': 'tx-paid', 'kind': 'Payment'}, id='same transaction'),
+        pytest.param({'transactionId': 'tx-refund', 'kind': 'Refund'}, id='refund kind'),
+        pytest.param(
+            {'transactionId': 'tx-refund', 'kind': 'Payment', 'originalTransactionId': 'tx-paid'},
+            id='linked to paid transaction',
+        ),
+        pytest.param({'kind': 'Payment'}, id='no transaction id'),
+    ],
+)
+async def test_real_reversal_of_paid_payment_still_alerts(
+    monkeypatch: pytest.MonkeyPatch, payload: dict[str, Any]
+) -> None:
+    payment = _paid_payment({'transactionId': 'tx-paid'})
+    _updates, alerts = _patch_reversal_flow(monkeypatch, payment)
+
+    processed = await _make_service(None).process_wata_webhook(
+        DummySession(),
+        {'orderId': payment.order_id, 'transactionStatus': 'Declined', **payload},
+    )
+
+    assert processed is True
+    assert payment.status == 'Declined'
+    assert len(alerts) == 1
+
+
+@pytest.mark.anyio('asyncio')
+async def test_decline_alerts_when_paid_transaction_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    payment = DummyWataPayment()
+    payment.is_paid = True
+    _updates, alerts = _patch_reversal_flow(monkeypatch, payment)
+
+    await _make_service(None).process_wata_webhook(
+        DummySession(),
+        {'orderId': payment.order_id, 'transactionId': 'tx-x', 'kind': 'Payment', 'transactionStatus': 'Declined'},
+    )
+
+    assert len(alerts) == 1
+
+
 @pytest.mark.anyio('asyncio')
 async def test_process_wata_webhook_finalizes_paid(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _make_service(None)

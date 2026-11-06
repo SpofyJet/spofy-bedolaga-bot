@@ -22,7 +22,9 @@ class CryptoBotService:
         method: str,
         endpoint: str,
         data: dict | None = None,
+        api_error: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
+        """``api_error``, если передан, получает поле error из отказа API."""
         if not self.api_token:
             logger.error('CryptoBot API token не настроен')
             return None
@@ -60,6 +62,8 @@ class CryptoBotService:
                     if response.status == 200 and response_data.get('ok'):
                         return response_data.get('result')
                     logger.error('CryptoBot API ошибка', response_data=response_data)
+                    if api_error is not None and isinstance(response_data.get('error'), dict):
+                        api_error.update(response_data['error'])
                     return None
 
         except Exception as e:
@@ -76,6 +80,7 @@ class CryptoBotService:
         description: str | None = None,
         payload: str | None = None,
         expires_in: int | None = None,
+        api_error: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         data = {'currency_type': 'crypto', 'asset': asset, 'amount': amount}
 
@@ -88,7 +93,7 @@ class CryptoBotService:
         if expires_in:
             data['expires_in'] = expires_in
 
-        result = await self._make_request('POST', 'createInvoice', data)
+        result = await self._make_request('POST', 'createInvoice', data, api_error=api_error)
 
         if result:
             logger.info('Создан CryptoBot invoice', get=result.get('invoice_id'), amount=amount, asset=asset)
