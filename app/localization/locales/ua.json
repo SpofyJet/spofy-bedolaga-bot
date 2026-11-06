@@ -2511,5 +2511,19 @@
   "WHEEL_TOPUP_SPIN_PRIZES": "Можна виграти дні, знижку, бонус на баланс або ще один пристрій. Спінів: {available}.",
   "WHEEL_TOPUP_SPIN_BUTTON": "🎡 Крутити колесо",
   "AUTOPAY_CANNOT_RENEW": "⚠️ <b>Не вдалося продовжити підписку{tariff_label} автоматично</b>\n\nПідписка діє до {end_date}. Щоб VPN не вимкнувся, оберіть тариф і продовжте підписку кнопкою нижче.",
-  "AUTOPAY_CANNOT_RENEW_REASON": "Не вдалося продовжити підписку автоматично — оберіть тариф і продовжте її вручну"
+  "AUTOPAY_CANNOT_RENEW_REASON": "Не вдалося продовжити підписку автоматично — оберіть тариф і продовжте її вручну",
+  "REFERRAL_NOTIFY_BUTTON_INVITE": "📤 Запросити ще друга",
+  "REFERRAL_NOTIFY_BUTTON_FRIENDS": "👥 Мої друзі",
+  "REFERRAL_NOTIFY_NEW_TITLE": "<tg-emoji emoji-id='5470063639446724040'>🐸</tg-emoji> <b>Новий друг за вашим посиланням: {name}</b>",
+  "REFERRAL_NOTIFY_NEW_BONUS": "За перше поповнення друга вам {bonus}.",
+  "REFERRAL_NOTIFY_NEW_PERCENT": "З кожного поповнення друга вам {percent}% на баланс.",
+  "REFERRAL_NOTIFY_NEW_QUEST": "Підкажіть другу підключитися у пробний період: ви обидва отримаєте по +{days} дн.",
+  "REFERRAL_NOTIFY_FRIENDS_TOTAL": "Усього друзів: {count}.",
+  "REFERRAL_NOTIFY_MONEY_TITLE": "<tg-emoji emoji-id='5375296873982604963'>💰</tg-emoji> <b>+{amount} на ваш баланс!</b>",
+  "REFERRAL_NOTIFY_MONEY_TOPUP": "Друг <b>{name}</b> поповнив баланс на {topup}, ваші {percent}% уже нараховано.",
+  "REFERRAL_NOTIFY_MONEY_FIRST": "Друг <b>{name}</b> зробив перше поповнення на {topup}.",
+  "REFERRAL_NOTIFY_MONEY_NEXT": "Тепер {percent}% з кожного його поповнення — ваші.",
+  "REFERRAL_NOTIFY_TOTAL": "Усього зароблено: {total}.",
+  "REFERRAL_NOTIFY_SPEND": "Цим можна оплатити підписку.",
+  "REFERRAL_NOTIFY_SPEND_WITHDRAW": "Цим можна оплатити підписку або вивести від {minimum}."
 }

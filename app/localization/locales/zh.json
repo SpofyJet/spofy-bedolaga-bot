@@ -2511,5 +2511,19 @@
   "WHEEL_TOPUP_SPIN_PRIZES": "可赢取天数、折扣、余额奖励或额外设备。剩余次数：{available}。",
   "WHEEL_TOPUP_SPIN_BUTTON": "🎡 转动转盘",
   "AUTOPAY_CANNOT_RENEW": "⚠️ <b>无法自动续订您的订阅{tariff_label}</b>\n\n订阅有效期至 {end_date}。为避免 VPN 中断，请选择套餐并通过下方按钮续订。",
-  "AUTOPAY_CANNOT_RENEW_REASON": "无法自动续订订阅 — 请选择套餐并手动续订"
+  "AUTOPAY_CANNOT_RENEW_REASON": "无法自动续订订阅 — 请选择套餐并手动续订",
+  "REFERRAL_NOTIFY_BUTTON_INVITE": "📤 再邀请一位好友",
+  "REFERRAL_NOTIFY_BUTTON_FRIENDS": "👥 我的好友",
+  "REFERRAL_NOTIFY_NEW_TITLE": "<tg-emoji emoji-id='5470063639446724040'>🐸</tg-emoji> <b>通过您的链接来了新好友:{name}</b>",
+  "REFERRAL_NOTIFY_NEW_BONUS": "好友首次充值,您可获得 {bonus}。",
+  "REFERRAL_NOTIFY_NEW_PERCENT": "好友每次充值,您可获得 {percent}% 到余额。",
+  "REFERRAL_NOTIFY_NEW_QUEST": "帮助好友在试用期内连接:你们各得 +{days} 天。",
+  "REFERRAL_NOTIFY_FRIENDS_TOTAL": "好友总数:{count}。",
+  "REFERRAL_NOTIFY_MONEY_TITLE": "<tg-emoji emoji-id='5375296873982604963'>💰</tg-emoji> <b>+{amount} 已到您的余额!</b>",
+  "REFERRAL_NOTIFY_MONEY_TOPUP": "好友 <b>{name}</b> 充值了 {topup},您的 {percent}% 已到账。",
+  "REFERRAL_NOTIFY_MONEY_FIRST": "好友 <b>{name}</b> 首次充值 {topup}。",
+  "REFERRAL_NOTIFY_MONEY_NEXT": "今后每次充值的 {percent}% 都归您。",
+  "REFERRAL_NOTIFY_TOTAL": "累计收益:{total}。",
+  "REFERRAL_NOTIFY_SPEND": "可用于支付订阅。",
+  "REFERRAL_NOTIFY_SPEND_WITHDRAW": "可用于支付订阅,满 {minimum} 可提现。"
 }

@@ -2511,5 +2511,19 @@
   "WHEEL_TOPUP_SPIN_PRIZES": "Win extra days, a discount, balance bonus or one more device. Spins: {available}.",
   "WHEEL_TOPUP_SPIN_BUTTON": "🎡 Spin the wheel",
   "AUTOPAY_CANNOT_RENEW": "⚠️ <b>We couldn't renew your subscription{tariff_label} automatically</b>\n\nYour subscription is active until {end_date}. To keep your VPN running, choose a plan and renew using the button below.",
-  "AUTOPAY_CANNOT_RENEW_REASON": "We couldn't renew your subscription automatically — choose a plan and renew it manually"
+  "AUTOPAY_CANNOT_RENEW_REASON": "We couldn't renew your subscription automatically — choose a plan and renew it manually",
+  "REFERRAL_NOTIFY_BUTTON_INVITE": "📤 Invite another friend",
+  "REFERRAL_NOTIFY_BUTTON_FRIENDS": "👥 My friends",
+  "REFERRAL_NOTIFY_NEW_TITLE": "<tg-emoji emoji-id='5470063639446724040'>🐸</tg-emoji> <b>New friend via your link: {name}</b>",
+  "REFERRAL_NOTIFY_NEW_BONUS": "You get {bonus} for your friend's first top-up.",
+  "REFERRAL_NOTIFY_NEW_PERCENT": "You get {percent}% of every top-up your friend makes.",
+  "REFERRAL_NOTIFY_NEW_QUEST": "Help your friend connect during the trial: you each get +{days} days.",
+  "REFERRAL_NOTIFY_FRIENDS_TOTAL": "Friends so far: {count}.",
+  "REFERRAL_NOTIFY_MONEY_TITLE": "<tg-emoji emoji-id='5375296873982604963'>💰</tg-emoji> <b>+{amount} to your balance!</b>",
+  "REFERRAL_NOTIFY_MONEY_TOPUP": "Your friend <b>{name}</b> topped up {topup}, your {percent}% is already credited.",
+  "REFERRAL_NOTIFY_MONEY_FIRST": "Your friend <b>{name}</b> made a first top-up of {topup}.",
+  "REFERRAL_NOTIFY_MONEY_NEXT": "From now on {percent}% of each top-up is yours.",
+  "REFERRAL_NOTIFY_TOTAL": "Total earned: {total}.",
+  "REFERRAL_NOTIFY_SPEND": "You can use it to pay for your subscription.",
+  "REFERRAL_NOTIFY_SPEND_WITHDRAW": "You can use it to pay for your subscription or withdraw from {minimum}."
 }

@@ -2511,5 +2511,19 @@
   "WHEEL_TOPUP_SPIN_PRIZES": "روز اضافه، تخفیف، اعتبار یا یک دستگاه بیشتر ببرید. چرخش‌ها: {available}.",
   "WHEEL_TOPUP_SPIN_BUTTON": "🎡 چرخاندن گردونه",
   "AUTOPAY_CANNOT_RENEW": "⚠️ <b>تمدید خودکار اشتراک{tariff_label} انجام نشد</b>\n\nاشتراک شما تا {end_date} فعال است. برای قطع نشدن VPN، یک تعرفه انتخاب کنید و با دکمه زیر اشتراک را تمدید کنید.",
-  "AUTOPAY_CANNOT_RENEW_REASON": "تمدید خودکار اشتراک انجام نشد — یک تعرفه انتخاب کنید و آن را دستی تمدید کنید"
+  "AUTOPAY_CANNOT_RENEW_REASON": "تمدید خودکار اشتراک انجام نشد — یک تعرفه انتخاب کنید و آن را دستی تمدید کنید",
+  "REFERRAL_NOTIFY_BUTTON_INVITE": "📤 دعوت از دوست دیگر",
+  "REFERRAL_NOTIFY_BUTTON_FRIENDS": "👥 دوستان من",
+  "REFERRAL_NOTIFY_NEW_TITLE": "<tg-emoji emoji-id='5470063639446724040'>🐸</tg-emoji> <b>دوست جدید از لینک شما: {name}</b>",
+  "REFERRAL_NOTIFY_NEW_BONUS": "برای اولین شارژ دوستتان {bonus} دریافت می‌کنید.",
+  "REFERRAL_NOTIFY_NEW_PERCENT": "از هر شارژ دوستتان {percent}% به موجودی شما اضافه می‌شود.",
+  "REFERRAL_NOTIFY_NEW_QUEST": "به دوستتان کمک کنید در دوره آزمایشی متصل شود: هر دو +{days} روز می‌گیرید.",
+  "REFERRAL_NOTIFY_FRIENDS_TOTAL": "تعداد دوستان: {count}.",
+  "REFERRAL_NOTIFY_MONEY_TITLE": "<tg-emoji emoji-id='5375296873982604963'>💰</tg-emoji> <b>+{amount} به موجودی شما!</b>",
+  "REFERRAL_NOTIFY_MONEY_TOPUP": "دوست شما <b>{name}</b> مبلغ {topup} شارژ کرد و {percent}% شما واریز شد.",
+  "REFERRAL_NOTIFY_MONEY_FIRST": "دوست شما <b>{name}</b> اولین شارژ خود را به مبلغ {topup} انجام داد.",
+  "REFERRAL_NOTIFY_MONEY_NEXT": "از این پس {percent}% از هر شارژ برای شماست.",
+  "REFERRAL_NOTIFY_TOTAL": "مجموع درآمد: {total}.",
+  "REFERRAL_NOTIFY_SPEND": "می‌توانید با آن اشتراک بخرید.",
+  "REFERRAL_NOTIFY_SPEND_WITHDRAW": "می‌توانید با آن اشتراک بخرید یا از {minimum} برداشت کنید."
 }

@@ -20,6 +20,7 @@ from app.keyboards.withdrawal import get_withdrawal_request_keyboard
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
 from app.services.referral_reward_service import format_reward_total
+from app.services.referral_service import REFERRAL_NOTIFY_FRIENDS_CALLBACK, REFERRAL_NOTIFY_INVITE_CALLBACK
 from app.services.referral_withdrawal_service import referral_withdrawal_service
 from app.states import ReferralWithdrawalStates
 from app.utils.decorators import error_handler
@@ -1082,11 +1083,15 @@ async def cancel_withdrawal_request(callback: types.CallbackQuery, db_user: User
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_referral_info, F.data == 'menu_referrals')
 
-    dp.callback_query.register(create_invite_message, F.data == 'referral_create_invite')
+    dp.callback_query.register(
+        create_invite_message, F.data.in_({'referral_create_invite', REFERRAL_NOTIFY_INVITE_CALLBACK})
+    )
 
     dp.callback_query.register(show_referral_qr, F.data == 'referral_show_qr')
 
-    dp.callback_query.register(show_detailed_referral_list, F.data == 'referral_list')
+    dp.callback_query.register(
+        show_detailed_referral_list, F.data.in_({'referral_list', REFERRAL_NOTIFY_FRIENDS_CALLBACK})
+    )
 
     dp.callback_query.register(show_referral_analytics, F.data == 'referral_analytics')
 

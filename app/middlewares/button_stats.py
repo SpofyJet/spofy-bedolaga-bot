@@ -74,6 +74,8 @@ BUILTIN_CALLBACKS: set[str] = {
     'referral_show_qr',
     'referral_list',
     'referral_analytics',
+    'referral_notify_invite',
+    'referral_notify_friends',
     # Поддержка
     'create_ticket',
     'my_tickets',
