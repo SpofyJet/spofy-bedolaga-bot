@@ -93,6 +93,11 @@ class NotificationCategory(StrEnum):
 
 logger = structlog.get_logger(__name__)
 
+# Spofy: у этих уведомлений в заголовке пишем, откуда покупка (бот / кабинет).
+_SOURCE_MARKED_CATEGORIES = frozenset(
+    {NotificationCategory.PURCHASES, NotificationCategory.RENEWALS, NotificationCategory.ADDONS}
+)
+
 # Повторы после flood control идут фоном: запрос пользователя не должен ждать Telegram.
 # Предел защищает от накопления задач, если Telegram долго отвечает отказом.
 _FLOOD_RETRY_MAX_PENDING = 100
@@ -1791,12 +1796,23 @@ class AdminNotificationService:
             return False
 
         # Spofy: покупка со страницы подписки — пометка в заголовке и (если задан) свой топик.
-        from app.services.spofy_subpage_context import is_subpage_purchase_context, mark_subpage_text
+        from app.services.spofy_subpage_context import (
+            SOURCE_MARKS,
+            SOURCE_SUBPAGE,
+            current_purchase_source,
+            mark_subpage_text,
+            mark_title,
+        )
 
-        if is_subpage_purchase_context():
+        if current_purchase_source() == SOURCE_SUBPAGE:
             text = mark_subpage_text(text)
             if settings.ADMIN_NOTIFICATIONS_SUBPAGE_TOPIC_ID:
                 thread_id = settings.ADMIN_NOTIFICATIONS_SUBPAGE_TOPIC_ID
+        elif category in _SOURCE_MARKED_CATEGORIES:
+            # Spofy: откуда покупка — бот или кабинет (не узнали — без пометки).
+            mark = SOURCE_MARKS.get(current_purchase_source() or '')
+            if mark:
+                text = mark_title(text, mark)
 
         # Явный thread_id (например, топик заявок на вывод) важнее топика категории
         if thread_id is None:

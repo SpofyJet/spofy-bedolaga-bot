@@ -195,7 +195,7 @@ async def test_button_with_still_insufficient_balance_sends_back_to_topup():
 
     resumed.assert_not_called()
     text = callback.message.edit_text.call_args.args[0]
-    assert 'недостаточно' in text.lower()
+    assert 'не хватает' in text.lower()
     assert '40' in text, 'не хватает 40 ₽ (5000 − 1000 копеек)'
     keyboard = callback.message.edit_text.call_args.kwargs['reply_markup']
     assert keyboard.inline_keyboard, 'предложены способы пополнения'

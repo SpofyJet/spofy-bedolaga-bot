@@ -53,6 +53,13 @@ from app.utils.subscription_utils import (
 logger = structlog.get_logger(__name__)
 
 
+def _purchase_error_keyboard(texts):
+    """«Назад» и «Поддержка» под ошибкой покупки — экран не должен быть тупиком."""
+    from app.keyboards.inline import get_payment_error_keyboard
+
+    return get_payment_error_keyboard(texts.language, back_callback='back_to_menu')
+
+
 async def _persist_failed_refund(
     user_id: int,
     amount_kopeks: int,
@@ -1769,7 +1776,8 @@ async def _confirm_tariff_checkout(callback, state, db_user, db, tariff, period)
     )
     if payment is None:
         await callback.message.edit_text(
-            texts.t('TARIFF_PURCHASE_ERROR', '❌ Произошла ошибка при оформлении подписки')
+            texts.t('TARIFF_PURCHASE_ERROR', '❌ Произошла ошибка при оформлении подписки'),
+            reply_markup=_purchase_error_keyboard(texts),
         )
         return True
     if not payment.is_completed:
@@ -1785,7 +1793,8 @@ async def _confirm_tariff_checkout(callback, state, db_user, db, tariff, period)
         subscription = next((sub for sub in active if sub.tariff_id == tariff_id), None)
     if subscription is None or subscription.tariff_id != tariff_id:
         await callback.message.edit_text(
-            texts.t('TARIFF_PURCHASE_ERROR', '❌ Произошла ошибка при оформлении подписки')
+            texts.t('TARIFF_PURCHASE_ERROR', '❌ Произошла ошибка при оформлении подписки'),
+            reply_markup=_purchase_error_keyboard(texts),
         )
         return True
     await db.refresh(tariff)
@@ -2427,7 +2436,10 @@ async def confirm_daily_tariff_purchase(
             commit=False,
         ):
             await db.rollback()
-            await callback.message.edit_text(texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса'))
+            await callback.message.edit_text(
+                texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса'),
+                reply_markup=_purchase_error_keyboard(texts),
+            )
             return
         if existing_subscription:
             # Обновляем существующую подписку на суточный тариф (атомарно:
@@ -2485,7 +2497,8 @@ async def confirm_daily_tariff_purchase(
             exc_info=True,
         )
         await callback.message.edit_text(
-            texts.t('TARIFF_PURCHASE_ERROR', '❌ Произошла ошибка при оформлении подписки')
+            texts.t('TARIFF_PURCHASE_ERROR', '❌ Произошла ошибка при оформлении подписки'),
+            reply_markup=_purchase_error_keyboard(texts),
         )
         return
 
@@ -3279,7 +3292,8 @@ async def confirm_tariff_extend(
                 await db.rollback()
                 try:
                     await callback.message.edit_text(
-                        texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса')
+                        texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса'),
+                        reply_markup=_purchase_error_keyboard(texts),
                     )
                 except Exception:
                     pass
@@ -3433,7 +3447,8 @@ async def confirm_tariff_extend(
         logger.error('Ошибка при продлении тарифа', error=e, exc_info=True)
         try:
             await callback.message.edit_text(
-                texts.t('TARIFF_RENEW_ERROR', '❌ Произошла ошибка при продлении подписки')
+                texts.t('TARIFF_RENEW_ERROR', '❌ Произошла ошибка при продлении подписки'),
+                reply_markup=_purchase_error_keyboard(texts),
             )
         except Exception:
             pass
@@ -4176,7 +4191,8 @@ async def confirm_tariff_switch(
                 await db.rollback()
                 try:
                     await callback.message.edit_text(
-                        texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса')
+                        texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса'),
+                        reply_markup=_purchase_error_keyboard(texts),
                     )
                 except Exception:
                     pass
@@ -4526,7 +4542,10 @@ async def confirm_daily_tariff_switch(
         )
         if not success:
             try:
-                await callback.message.edit_text(texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса'))
+                await callback.message.edit_text(
+                    texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса'),
+                    reply_markup=_purchase_error_keyboard(texts),
+                )
             except Exception:
                 pass
             return
@@ -5624,7 +5643,8 @@ async def confirm_instant_switch(
             if not success:
                 try:
                     await callback.message.edit_text(
-                        texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса')
+                        texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса'),
+                        reply_markup=_purchase_error_keyboard(texts),
                     )
                 except Exception:
                     pass

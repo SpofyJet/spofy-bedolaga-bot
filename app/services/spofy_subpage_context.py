@@ -39,13 +39,72 @@ def subpage_purchase_context(active: bool = True) -> Iterator[None]:
 
 
 def mark_subpage_text(text: str) -> str:
+    return mark_title(text, SUBPAGE_MARK)
+
+
+# ── Откуда покупка: бот / кабинет / страница подписки ──────────────────────────
+# Страница подписки помечается флагом выше. Бот и кабинет — этим значением:
+# бот ставит его на время обработки апдейта (middleware), автопокупка после
+# пополнения — по полю source корзины (кабинет пишет 'cabinet'). Запросы самого
+# кабинета узнаём по пути /cabinet/… Не узнали — пометки нет (автопродление,
+# фоновые задачи), чтобы не врать.
+
+SOURCE_BOT = 'bot'
+SOURCE_CABINET = 'cabinet'
+SOURCE_SUBPAGE = 'subpage'
+
+SOURCE_MARKS = {
+    SOURCE_BOT: '🤖 <b>БОТ</b>',
+    SOURCE_CABINET: '🖥 <b>КАБИНЕТ</b>',
+}
+
+_purchase_source: ContextVar[str | None] = ContextVar('spofy_purchase_source', default=None)
+
+
+@contextmanager
+def purchase_source_context(source: str | None) -> Iterator[None]:
+    token = _purchase_source.set(source)
+    try:
+        yield
+    finally:
+        _purchase_source.reset(token)
+
+
+def cart_purchase_source(cart: dict | None) -> str:
+    """Источник корзины: кабинет пишет source='cabinet', корзины бота поля не имеют."""
+    source = (cart or {}).get('source')
+    if source == SOURCE_CABINET:
+        return SOURCE_CABINET
+    if source == 'spofy_subpage':  # = spofy_subpage_service.SUBPAGE_SOURCE
+        return SOURCE_SUBPAGE
+    return SOURCE_BOT
+
+
+def current_purchase_source() -> str | None:
+    if _subpage_purchase.get():
+        return SOURCE_SUBPAGE
+    source = _purchase_source.get()
+    if source:
+        return source
+    try:
+        from app.services.user_action_log_service import current_request_path
+
+        path = current_request_path() or ''
+    except Exception:
+        path = ''
+    if path.startswith('/cabinet/') and not path.startswith(('/cabinet/spofy-subpage', '/cabinet/landing')):
+        return SOURCE_CABINET
+    return None
+
+
+def mark_title(text: str, mark: str) -> str:
     """Дописать пометку к первой строке — заголовку уведомления (в rich-виде это h6)."""
-    if SUBPAGE_MARK in text:
+    if mark in text:
         return text
     leading = text[: len(text) - len(text.lstrip('\n'))]
     body = text.lstrip('\n')
     title, sep, rest = body.partition('\n')
-    return f'{leading}{title} · {SUBPAGE_MARK}{sep}{rest}'
+    return f'{leading}{title} · {mark}{sep}{rest}'
 
 
 async def user_has_pending_subpage_purchase(user_id: int) -> bool:

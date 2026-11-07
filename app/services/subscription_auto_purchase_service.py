@@ -47,6 +47,7 @@ from app.services.gift_purchase_service import (
     quote_gift_purchase,
 )
 from app.services.pricing_engine import PricingEngine, pricing_engine
+from app.services.spofy_subpage_context import cart_purchase_source, purchase_source_context
 from app.services.subscription_checkout_service import clear_subscription_checkout_draft
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
@@ -3587,7 +3588,8 @@ async def auto_purchase_saved_cart_after_topup(
             )
             return False
 
-        succeeded = await _auto_purchase_gift(db, user, global_cart, bot=bot)
+        with purchase_source_context(cart_purchase_source(global_cart)):
+            succeeded = await _auto_purchase_gift(db, user, global_cart, bot=bot)
         if succeeded:
             await user_cart_service.delete_processed_cart(user.id, global_cart)
         return succeeded
@@ -3644,15 +3646,13 @@ async def auto_purchase_saved_cart_after_topup(
             continue
         cart_mode = cart_data.get('cart_mode') or cart_data.get('mode')
 
-        # For non-mode carts (legacy generic purchase), handle separately below
-        if cart_mode:
-            result = await _process_single_cart(db, user, cart_data, bot=bot)
-            if result:
-                any_succeeded = True
-            continue
-
-        # Legacy generic purchase flow (no cart_mode -- old-style cart from FSM state)
-        result = await _process_legacy_generic_cart(db, user, cart_data, bot=bot)
+        # Spofy: откуда покупка для админ-уведомления — по корзине (кабинет пишет source).
+        with purchase_source_context(cart_purchase_source(cart_data)):
+            if cart_mode:
+                result = await _process_single_cart(db, user, cart_data, bot=bot)
+            else:
+                # Legacy generic purchase flow (no cart_mode -- old-style cart from FSM state)
+                result = await _process_legacy_generic_cart(db, user, cart_data, bot=bot)
         if result:
             any_succeeded = True
 

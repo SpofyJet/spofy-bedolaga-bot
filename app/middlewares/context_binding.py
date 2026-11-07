@@ -23,5 +23,9 @@ class ContextVarsMiddleware(BaseMiddleware):
             ctx['username'] = event.from_user.username or ''
         if hasattr(event, 'chat') and event.chat:
             ctx['chat_id'] = event.chat.id
-        with bound_contextvars(**ctx):
+        # Spofy: покупки, оформленные при обработке апдейта бота, помечаются в
+        # админ-уведомлениях «БОТ» (кабинет и страница подписки — свои пометки).
+        from app.services.spofy_subpage_context import SOURCE_BOT, purchase_source_context
+
+        with bound_contextvars(**ctx), purchase_source_context(SOURCE_BOT):
             return await handler(event, data)

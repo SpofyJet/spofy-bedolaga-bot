@@ -380,8 +380,54 @@ async def get_offer(short_uuid: str, db: AsyncSession = Depends(get_cabinet_db))
         raise _bridge_failure(error, 'offer') from error
 
 
+SUBPAGE_OPENED_EVENT = 'subpage_opened'  # не 'funnel_*': иначе глушит напоминания воронки
+
+
+async def _record_subpage_open(db: AsyncSession, user: User, subscription: Subscription) -> None:
+    """Страница подписки запрашивает предложение при каждом открытии — это и есть
+    «человек открыл страницу». Пишем событие раз в сутки на человека: по нему видно,
+    дошли ли неподключившиеся пробники до страницы или потерялись раньше."""
+    from datetime import UTC, timedelta
+
+    from sqlalchemy import exists
+
+    from app.database.models import SubscriptionEvent
+
+    try:
+        since = datetime.now(UTC) - timedelta(hours=24)
+        seen = await db.scalar(
+            select(
+                exists().where(
+                    SubscriptionEvent.user_id == user.id,
+                    SubscriptionEvent.event_type == SUBPAGE_OPENED_EVENT,
+                    SubscriptionEvent.created_at > since,
+                )
+            )
+        )
+        if seen:
+            return
+        db.add(
+            SubscriptionEvent(
+                user_id=user.id,
+                subscription_id=subscription.id,
+                event_type=SUBPAGE_OPENED_EVENT,
+                message='subscription page opened',
+                extra={'trial': bool(subscription.is_trial)},
+                occurred_at=datetime.now(UTC),
+            )
+        )
+        await db.commit()
+    except Exception as error:
+        logger.warning('Spofy subpage: не записали открытие страницы', user_id=user.id, error=str(error))
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+
+
 async def _offer(short_uuid: str, db: AsyncSession) -> dict[str, Any]:
     user, subscription = await resolve_owner(db, short_uuid)
+    await _record_subpage_open(db, user, subscription)
     restriction = _restricted(user)
 
     methods = await _soft(get_payment_methods(user=user, db=db), [], 'payment_methods')
