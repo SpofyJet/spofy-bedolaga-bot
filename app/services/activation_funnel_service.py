@@ -227,8 +227,7 @@ def _app_idle_text(texts, key: str, app: str) -> str:
     defaults = {
         'FUNNEL_TRIAL_APP_IDLE': (
             '🔌 <b>Подписка уже {where}, осталось включить VPN</b>\n\n'
-            '1. Откройте {app_name}\n2. Нажмите большую кнопку включения\n'
-            '3. Если сайты не открываются — выберите сервер с пометкой «Обход»\n\n'
+            '1. Откройте {app_name}\n2. Нажмите большую кнопку включения{bypass_step}\n\n'
             'Не получается — напишите нам, разберёмся.'
         ),
         'TRIAL_INACTIVE_24H_APP_ADDED': (
@@ -237,7 +236,13 @@ def _app_idle_text(texts, key: str, app: str) -> str:
         ),
     }
     app_name = app or texts.t('FUNNEL_APP_NAME_UNKNOWN', 'приложение')
-    return texts.t(key, defaults[key]).format(where=where, app_name=app_name)
+    # Шаг про «Обход» — только если серверы обхода входят в пробный (напоминание шлём только пробным).
+    bypass_step = ''
+    if settings.BYPASS_INCLUDE_TRIAL and (settings.TRIAL_TRAFFIC_LIMIT_GB or 0) > 0:
+        bypass_step = texts.t(
+            'FUNNEL_APP_BYPASS_STEP', '\n3. Если сайты не открываются — выберите сервер с пометкой «Обход»'
+        )
+    return texts.t(key, defaults[key]).format(where=where, app_name=app_name, bypass_step=bypass_step)
 
 
 async def _already_nudged_recently(db: AsyncSession, user_id: int) -> bool:

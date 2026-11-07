@@ -52,10 +52,22 @@ async def test_no_devices_or_panel_error_is_none(monkeypatch):
     assert await funnel._added_app_name(SimpleNamespace(remnawave_id=None), _USER) is None
 
 
-def test_texts():
+def test_texts(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'BYPASS_INCLUDE_TRIAL', True)
+    monkeypatch.setattr(settings, 'TRIAL_TRAFFIC_LIMIT_GB', 5)
     texts = get_texts('ru')
     text = funnel._app_idle_text(texts, 'FUNNEL_TRIAL_APP_IDLE', 'INCY')
     assert 'Подписка уже в INCY' in text and 'Откройте INCY' in text and '«Обход»' in text
     generic = funnel._app_idle_text(texts, 'FUNNEL_TRIAL_APP_IDLE', '')
     assert 'в приложении' in generic and 'Откройте приложение' in generic
     assert 'в Happ' in funnel._app_idle_text(texts, 'TRIAL_INACTIVE_24H_APP_ADDED', 'Happ')
+
+
+def test_no_bypass_step_when_trial_has_no_bypass(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'BYPASS_INCLUDE_TRIAL', False)
+    text = funnel._app_idle_text(get_texts('ru'), 'FUNNEL_TRIAL_APP_IDLE', 'Happ')
+    assert 'Обход' not in text and 'Нажмите большую кнопку включения\n\nНе получается' in text
