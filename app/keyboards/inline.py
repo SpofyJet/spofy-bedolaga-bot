@@ -189,38 +189,43 @@ def _spins_word(count: int) -> str:
     return 'спинов'
 
 
-def _wheel_menu_button(texts, spins: int) -> InlineKeyboardButton | None:
-    """«🎡 Колесо призов · 1 спин» — открывает колесо в мини-приложении кабинета."""
-    if spins <= 0:
+def _wheel_menu_button(texts, spins: int | None) -> InlineKeyboardButton | None:
+    """Колесо призов в мини-приложении кабинета. None — колесо выключено: кнопки нет.
+    0 — «🎡 Колесо призов», есть спины — «🎡 Колесо призов · 1 спин» зелёной кнопкой."""
+    if spins is None:
         return None
     from app.services.wheel_topup_notifier import wheel_cabinet_url
 
     url = wheel_cabinet_url()
     if not url:
         return None
+    if spins <= 0:
+        return InlineKeyboardButton(text=texts.t('MENU_WHEEL', '🎡 Колесо призов'), web_app=types.WebAppInfo(url=url))
     text = texts.t('MENU_WHEEL_SPINS', '🎡 Колесо призов · {count} {spins_word}').format(
         count=spins, spins_word=_spins_word(spins)
     )
     return InlineKeyboardButton(text=text, web_app=types.WebAppInfo(url=url), style='success')
 
 
-async def _wheel_spins_for_menu(db: AsyncSession, user) -> int:
-    """Сколько бесплатных спинов ждёт человека; любая ошибка — 0, меню важнее кнопки."""
+async def _wheel_spins_for_menu(db: AsyncSession, user) -> int | None:
+    """Сколько бесплатных спинов ждёт человека; None — колесо выключено или ошибка (меню важнее кнопки)."""
     user_id = getattr(user, 'id', None)
     if db is None or user_id is None:
-        return 0
+        return None
     try:
         from app.database.crud.wheel import get_wheel_config
         from app.services.wheel_service import wheel_service
 
         config = await get_wheel_config(db)
-        if config is None or not config.is_enabled or not getattr(config, 'topup_spins_enabled', False):
+        if config is None or not config.is_enabled:
+            return None
+        if not getattr(config, 'topup_spins_enabled', False):
             return 0
         state = await wheel_service.get_free_spin_state(db, user_id, config)
         return max(0, int(state.available))
     except Exception as error:
         logger.warning('Не удалось посчитать спины колеса для меню', user_id=user_id, error=str(error))
-        return 0
+        return None
 
 
 _LANGUAGE_DISPLAY_NAMES = {
@@ -683,7 +688,7 @@ def get_main_menu_keyboard(
     custom_buttons: list[InlineKeyboardButton] | None = None,
     trial_already_used: bool | None = None,  # smart-trial-button
     traffic_topup_tariff_allowed: bool | None = None,  # n13: тариф поддерживает докупку трафика
-    wheel_spins_available: int = 0,  # непрокрученные спины колеса: кнопка видна только им
+    wheel_spins_available: int | None = None,  # None — колесо выключено; 0 — кнопка без счётчика
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
@@ -928,7 +933,7 @@ def get_main_menu_keyboard(
         row = paired_buttons[i : i + 2]
         keyboard.append(row)
 
-    # Колесо призов — только пока есть непрокрученный спин: покрутил, и кнопка ушла.
+    # Колесо призов — у всех, пока колесо включено; есть спин — зелёная со счётчиком.
     wheel_button = _wheel_menu_button(texts, wheel_spins_available)
     if wheel_button:
         keyboard.append([wheel_button])

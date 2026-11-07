@@ -1,4 +1,4 @@
-"""Кнопка «🎡 Колесо призов · N спинов» в главном меню: видна, только пока есть непрокрученный спин."""
+"""Кнопка «🎡 Колесо призов» в главном меню: у всех, пока колесо включено; со спином — зелёная со счётчиком."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -20,8 +20,15 @@ def _wheel_buttons(markup):
     return [b for row in markup.inline_keyboard for b in row if b.web_app and b.web_app.url.endswith('/wheel')]
 
 
-def test_no_spins_no_button():
+def test_wheel_off_no_button():
     assert _wheel_buttons(get_main_menu_keyboard(has_active_subscription=True, subscription_is_active=True)) == []
+
+
+def test_no_spins_plain_button_for_everyone():
+    kb = get_main_menu_keyboard(has_active_subscription=True, subscription_is_active=True, wheel_spins_available=0)
+    [button] = _wheel_buttons(kb)
+    assert button.text.endswith('Колесо призов')
+    assert button.style != 'success'
 
 
 def test_spin_shows_webapp_button_to_wheel_above_referrals(monkeypatch):
@@ -64,11 +71,14 @@ async def test_spins_for_menu_counts_only_when_topup_spins_enabled(monkeypatch):
     config.topup_spins_enabled = False
     assert await _wheel_spins_for_menu(object(), user) == 0
 
+    config.is_enabled = False
+    assert await _wheel_spins_for_menu(object(), user) is None
+
 
 async def test_spins_for_menu_never_breaks_the_menu(monkeypatch):
     from app.database.crud import wheel as wheel_crud
 
     monkeypatch.setattr(wheel_crud, 'get_wheel_config', AsyncMock(side_effect=RuntimeError('db down')))
-    assert await _wheel_spins_for_menu(object(), SimpleNamespace(id=7)) == 0
-    assert await _wheel_spins_for_menu(object(), None) == 0
+    assert await _wheel_spins_for_menu(object(), SimpleNamespace(id=7)) is None
+    assert await _wheel_spins_for_menu(object(), None) is None
     assert inline  # module imported

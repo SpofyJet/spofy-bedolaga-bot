@@ -2542,5 +2542,6 @@
   "FUNNEL_APP_WHERE_UNKNOWN": "в приложении",
   "FUNNEL_APP_NAME_UNKNOWN": "приложение",
   "FUNNEL_APP_BYPASS_STEP": "\n3. Если сайты не открываются — выберите сервер с пометкой «Обход»",
+  "MENU_WHEEL": "🎡 Колесо призов",
   "MENU_WHEEL_SPINS": "🎡 Колесо призов · {count} {spins_word}"
 }
