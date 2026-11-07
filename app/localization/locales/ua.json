@@ -2525,5 +2525,11 @@
   "REFERRAL_NOTIFY_MONEY_NEXT": "Тепер {percent}% з кожного його поповнення — ваші.",
   "REFERRAL_NOTIFY_TOTAL": "Усього зароблено: {total}.",
   "REFERRAL_NOTIFY_SPEND": "Цим можна оплатити підписку.",
-  "REFERRAL_NOTIFY_SPEND_WITHDRAW": "Цим можна оплатити підписку або вивести від {minimum}."
+  "REFERRAL_NOTIFY_SPEND_WITHDRAW": "Цим можна оплатити підписку або вивести від {minimum}.",
+  "BACK_TO_MENU_SHORT": "🏠 Main menu",
+  "UNKNOWN_MESSAGE_TO_SUPPORT": "<tg-emoji emoji-id='5873121512445187130'>❓</tg-emoji> The bot only reacts to buttons, so nobody has read this message yet.\n\nNeed help? Send it to support — the answer will arrive in this chat.",
+  "UNKNOWN_OPEN_SUPPORT": "💬 Contact support",
+  "UNKNOWN_SEND_TO_SUPPORT": "💬 Send to support",
+  "UNKNOWN_SENT_TO_SUPPORT": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> Sent to support, request #{ticket_id}.\nThe answer will arrive in this chat.",
+  "UNKNOWN_SUPPORT_EXPIRED": "This message was already sent or is too old. Please write it again."
 }

@@ -9,6 +9,10 @@ queries from those chats. Only private (DM) interactions are processed.
 ``app.keyboards.group_callbacks``. FSM-кнопки и меню админки в группе
 по-прежнему не обрабатываются.
 
+Ещё исключение — сообщения админов в ADMIN_NOTIFICATIONS_CHAT_ID: ответ (reply)
+на карточку обращения уходит пользователю, а /tickets показывает карточки
+обращений, ждущих ответа (app/handlers/admin/ticket_group_reply.py).
+
 Not registered on chat_member — channel_member.py needs ChatMemberUpdated
 events from groups/channels to track required channel subscriptions.
 Not registered on pre_checkout_query — no chat context, always private.
@@ -46,6 +50,20 @@ class ChatTypeFilterMiddleware(BaseMiddleware):
         if chat is not None and chat.type != ChatType.PRIVATE:
             if isinstance(event, CallbackQuery) and is_group_safe_callback(event.data):
                 return await handler(event, data)
+            if isinstance(event, Message):
+                # Ответ админа на карточку обращения — обрабатываем здесь же,
+                # остальные middleware для группы не нужны.
+                from app.handlers.admin.ticket_group_reply import (
+                    handle_admin_group_ticket_reply,
+                    handle_admin_group_tickets_command,
+                    is_admin_group_ticket_reply,
+                    is_admin_group_tickets_command,
+                )
+
+                if is_admin_group_tickets_command(event):
+                    return await handle_admin_group_tickets_command(event)
+                if is_admin_group_ticket_reply(event):
+                    return await handle_admin_group_ticket_reply(event)
             logger.debug(
                 'Dropping non-private chat event',
                 chat_id=chat.id,

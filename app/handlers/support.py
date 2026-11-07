@@ -1,5 +1,6 @@
 import structlog
 from aiogram import Dispatcher, F, types
+from aiogram.filters import Command
 
 from app.database.models import User
 from app.keyboards.inline import get_support_keyboard
@@ -23,5 +24,12 @@ async def show_support_info(callback: types.CallbackQuery, db_user: User):
     await callback.answer()
 
 
+async def cmd_support(message: types.Message, db_user: User):
+    """/support, /help и /paysupport (Telegram требует его при оплате звёздами)."""
+    support_info = SupportSettingsService.get_support_info_text(db_user.language)
+    await message.answer(support_info, reply_markup=get_support_keyboard(db_user.language), parse_mode='HTML')
+
+
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_support_info, F.data == 'menu_support')
+    dp.message.register(cmd_support, Command('support', 'help', 'paysupport'))

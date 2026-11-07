@@ -2816,6 +2816,13 @@ class AdminNotificationService:
                     'chat_id': self.chat_id,
                     media_type: media_file_id,
                 }
+                # Первая строка карточки («Обращение #N») — чтобы на вложение
+                # тоже можно было ответить из группы.
+                first_line = (text or '').split('\n', 1)[0].strip()
+                if first_line and len(first_line) <= 200:
+                    media_kwargs['caption'] = first_line
+                    media_kwargs['parse_mode'] = 'HTML'
+
                 if thread_id:
                     media_kwargs['message_thread_id'] = thread_id
                 await sender(**media_kwargs)

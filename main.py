@@ -365,6 +365,10 @@ async def main():
 
         await configure_chat_menu_button(bot)
 
+        from app.utils.bot_commands import configure_bot_commands
+
+        await configure_bot_commands(bot)
+
         monitoring_service.bot = bot
         grace_access_runtime.bot = bot
         maintenance_service.set_bot(bot)

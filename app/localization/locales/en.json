@@ -2422,7 +2422,7 @@
   "ULTIMA_LINK_USED": "You have already opened this offer. A new discount will be available in {hours} h. ULTIMA at the regular price:",
   "UNBLOCK": "✅ Unblock",
   "UNKNOWN_CALLBACK_ALERT": "<tg-emoji emoji-id='5873121512445187130'>❓</tg-emoji> Unknown action. Please try again.",
-  "UNKNOWN_COMMAND_MESSAGE": "<tg-emoji emoji-id='5873121512445187130'>❓</tg-emoji> I didn't understand that command. Use the menu buttons.",
+  "UNKNOWN_COMMAND_MESSAGE": "<tg-emoji emoji-id='5873121512445187130'>❓</tg-emoji> The bot only reacts to buttons. Open the main menu or contact support.",
   "USER_BLOCKED_FOREVER": "You are blocked from contacting support.",
   "USER_BLOCKED_UNTIL": "You are blocked until {time}",
   "USER_NOT_FOUND": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> User not found",
@@ -2525,5 +2525,11 @@
   "REFERRAL_NOTIFY_MONEY_NEXT": "From now on {percent}% of each top-up is yours.",
   "REFERRAL_NOTIFY_TOTAL": "Total earned: {total}.",
   "REFERRAL_NOTIFY_SPEND": "You can use it to pay for your subscription.",
-  "REFERRAL_NOTIFY_SPEND_WITHDRAW": "You can use it to pay for your subscription or withdraw from {minimum}."
+  "REFERRAL_NOTIFY_SPEND_WITHDRAW": "You can use it to pay for your subscription or withdraw from {minimum}.",
+  "UNKNOWN_MESSAGE_TO_SUPPORT": "<tg-emoji emoji-id='5873121512445187130'>❓</tg-emoji> The bot only reacts to buttons, so nobody has read this message yet.\n\nNeed help? Send it to support — the answer will arrive in this chat.",
+  "UNKNOWN_SEND_TO_SUPPORT": "💬 Send to support",
+  "UNKNOWN_OPEN_SUPPORT": "💬 Contact support",
+  "UNKNOWN_SUPPORT_EXPIRED": "This message was already sent or is too old. Please write it again.",
+  "UNKNOWN_SENT_TO_SUPPORT": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> Sent to support, request #{ticket_id}.\nThe answer will arrive in this chat.",
+  "BACK_TO_MENU_SHORT": "🏠 Main menu"
 }

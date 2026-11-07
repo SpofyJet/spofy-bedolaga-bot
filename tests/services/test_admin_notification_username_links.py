@@ -85,7 +85,7 @@ async def test_new_ticket_notification_links_username(monkeypatch):
 
     await tickets.notify_admins_about_new_ticket(ticket, db=None)
 
-    assert '<b>Username:</b> <a href="https://t.me/durov">@durov</a>' in captured['text']
+    assert ' · <a href="https://t.me/durov">@durov</a>' in captured['text']
     assert '@@' not in captured['text']
 
 
@@ -130,5 +130,5 @@ async def test_new_ticket_notification_without_username_has_no_stray_at(monkeypa
 
     await tickets.notify_admins_about_new_ticket(ticket, db=None)
 
-    assert '<b>Username:</b> отсутствует' in captured['text']
-    assert '@отсутствует' not in captured['text']
+    assert ' · @' not in captured['text']
+    assert 'отсутствует' not in captured['text']

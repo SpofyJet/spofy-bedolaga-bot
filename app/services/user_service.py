@@ -152,21 +152,16 @@ class UserService:
             # Пополнение
             emoji = '💰'
             amount_text = f'+{settings.format_price(amount_kopeks)}'
-            message = (
-                f'{emoji} <b>Баланс пополнен!</b>\n\n'
-                f'💵 <b>Сумма:</b> {amount_text}\n'
-                f'💳 <b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n'
-                f'Спасибо за использование нашего сервиса! 🎉'
-            )
+            # Тот же вид, что у пополнений через кассы: «Зачислено N · Баланс M».
+            message = f'{emoji} <b>Зачислено {amount_text}</b>\nБаланс: {settings.format_price(user.balance_kopeks)}'
         else:
             # Списание
             emoji = '💸'
             amount_text = f'-{settings.format_price(abs(amount_kopeks))}'
             message = (
-                f'{emoji} <b>Средства списаны с баланса</b>\n\n'
-                f'💵 <b>Сумма:</b> {amount_text}\n'
-                f'💳 <b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n'
-                f'Если у вас есть вопросы, обратитесь в поддержку.'
+                f'{emoji} <b>Списано {amount_text}</b>\n'
+                f'Баланс: {settings.format_price(user.balance_kopeks)}\n\n'
+                f'Есть вопросы — /support'
             )
 
         keyboard_rows = []

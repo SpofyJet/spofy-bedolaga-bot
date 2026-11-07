@@ -281,7 +281,7 @@ async def handle_promo_subscription_select(
         sub_id = int(parts[1])
         code = ':'.join(parts[2:])  # code may contain colons
     except (ValueError, IndexError):
-        await callback.answer('Ошибка', show_alert=True)
+        await callback.answer('Кнопка устарела. Откройте промокод заново.', show_alert=True)
         return
 
     texts = get_texts(db_user.language)

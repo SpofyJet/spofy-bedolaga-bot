@@ -740,7 +740,7 @@ class TestGiftCodeInputAndResultMapping:
             assert await state.get_state() == GiftActivationStates.waiting_for_code.state
             msg.answer.assert_awaited_once()
             ans_text = msg.answer.call_args[0][0]
-            assert 'ошибка при активации' in ans_text.lower() or 'личный кабинет' in ans_text.lower()
+            assert 'не получилось активировать подарок' in ans_text.lower()
             assert token not in ans_text
             reply_markup = msg.answer.call_args[1].get('reply_markup')
             assert reply_markup is not None

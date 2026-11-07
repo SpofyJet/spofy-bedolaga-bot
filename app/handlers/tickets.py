@@ -32,7 +32,6 @@ from app.utils.ticket_text import (
     TICKET_MESSAGE_MAX_LENGTH,
     TICKET_PAGE_MAX_LEN,
     build_ticket_pages,
-    preview_text,
     split_long_block,
 )
 from app.utils.timezone import format_local_datetime
@@ -1124,6 +1123,105 @@ def _build_ticket_notification_keyboard(service: AdminNotificationService, ticke
     return build_ticket_card_keyboard(ticket, user, role=role)
 
 
+_CARD_BODY_LIMIT = 2500
+
+
+async def _ticket_card_subscription_line(db: AsyncSession, user: User | None) -> str:
+    """Короткая строка о подписке автора: чтобы не открывать профиль в админке."""
+    if user is None:
+        return ''
+    try:
+        from app.database.crud.subscription import get_all_subscriptions_by_user_id
+
+        subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
+    except Exception as error:
+        logger.debug('Ticket card: subscriptions unavailable', error=error)
+        return ''
+    if not subscriptions:
+        line = '💳 Подписки нет'
+    else:
+        sub = subscriptions[0]
+        status = sub.actual_status
+        name = html.escape(
+            getattr(getattr(sub, 'tariff', None), 'name', None) or ('Пробная' if sub.is_trial else 'Подписка')
+        )
+        if sub.end_date and sub.end_date.year >= 2090:
+            until = 'навсегда'
+        elif sub.end_date:
+            until = ('до ' if status == 'active' else 'истекла ') + format_local_datetime(sub.end_date, '%d.%m.%Y')
+        else:
+            until = ''
+        state = {'disabled': ' · отключена', 'limited': ' · лимит трафика'}.get(status, '')
+        trial = ' (пробная)' if sub.is_trial and 'Проб' not in name else ''
+        devices = f' · {sub.device_limit} устр.' if sub.device_limit else ''
+        line = f'💳 {name}{trial} {until}{devices}{state}'.replace('  ', ' ')
+    balance = (getattr(user, 'balance_kopeks', 0) or 0) // 100
+    if balance > 0:
+        line += f'\n💰 Баланс {balance} ₽'
+    return line
+
+
+def _is_group_recipient(service) -> bool:
+    resolve = getattr(service, 'resolve_recipient_role', None)
+    try:
+        return callable(resolve) and resolve() == 'group'
+    except Exception:
+        return False
+
+
+async def build_ticket_card_text(
+    db: AsyncSession,
+    ticket: Ticket,
+    user: User | None,
+    body: str,
+    *,
+    kind: str,
+    in_group: bool,
+) -> str:
+    """Карточка обращения для админ-чата.
+
+    kind: 'new' — новое обращение, 'reply' — новое сообщение в открытом,
+    'waiting' — повтор карточки по команде /tickets в группе.
+    Номер стоит в первой строке в виде «Обращение #N»: по нему ответ из
+    группы (reply на карточку) находит тикет.
+    """
+    if kind == 'new':
+        head = f'🎫 <b>Обращение #{ticket.id}</b> · новое'
+    elif kind == 'waiting':
+        since = ticket.updated_at or ticket.created_at
+        when = f' с {format_local_datetime(since, "%d.%m %H:%M")}' if since else ''
+        head = f'📌 <b>Обращение #{ticket.id}</b> · ждёт ответа{when}'
+    else:
+        head = f'💬 <b>Обращение #{ticket.id}</b> · новое сообщение'
+    lines = [head]
+
+    if user is not None:
+        name = html.escape(user.full_name or '') or 'Без имени'
+        link = format_username_link(user.username, '')
+        handle = f' · {link}' if link else ''
+        ident = user.telegram_id or user.email or f'#{user.id}'
+        lines.append(f'👤 {name}{handle} · <code>{html.escape(str(ident))}</code>')
+    sub_line = await _ticket_card_subscription_line(db, user)
+    if sub_line:
+        lines.append(sub_line)
+
+    title = (ticket.title or '').strip()
+    if title and kind in ('new', 'waiting'):
+        lines.append('')
+        lines.append(f'<b>{html.escape(title[:200])}</b>')
+    body = (body or '').strip()
+    if body:
+        if len(body) > _CARD_BODY_LIMIT:
+            body = body[: _CARD_BODY_LIMIT - 1] + '…'
+        if kind == 'reply' or not title:
+            lines.append('')
+        lines.append(f'<blockquote>{html.escape(body)}</blockquote>')
+    if in_group:
+        lines.append('')
+        lines.append('<i>↩️ Ответьте на это сообщение — ответ сразу уйдёт пользователю</i>')
+    return '\n'.join(lines).replace('\n\n\n', '\n\n')
+
+
 async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
     """Уведомить админов о новом тикете"""
     try:
@@ -1135,46 +1233,20 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
             )
             return
 
-        get_texts(settings.DEFAULT_LANGUAGE)
-        title = (ticket.title or '').strip()
-        if len(title) > 60:
-            title = title[:57] + '...'
-
         try:
             user = await get_user_by_id(db, ticket.user_id)
         except Exception:
             user = None
-        full_name = html.escape(user.full_name or '') if user else 'Unknown'
-        telegram_id_display = (user.telegram_id or user.email or f'#{user.id}') if user else '—'
-        username_display = format_username_link(user.username if user else None, 'отсутствует')
 
-        # Загружаем первое сообщение для получения медиа и превью текста
+        # Первое сообщение: медиа и полный текст для карточки
         first_message = await TicketMessageCRUD.get_first_message(db, ticket.id)
         media_file_id = None
         media_type = None
-        message_preview = ''
+        body = ''
         if first_message:
             media_file_id = first_message.media_file_id if first_message.has_media else None
             media_type = first_message.media_type if first_message.has_media else None
-            msg_text = (first_message.message_text or '').strip()
-            if msg_text:
-                message_preview = preview_text(msg_text)
-
-        safe_title = html.escape(title) if title else '—'
-
-        notification_text = (
-            f'🎫 <b>НОВЫЙ ТИКЕТ</b>\n\n'
-            f'🆔 <b>ID:</b> <code>{ticket.id}</code>\n'
-            f'👤 <b>Пользователь:</b> {full_name}\n'
-            f'🆔 <b>ID:</b> <code>{telegram_id_display}</code>\n'
-            f'📱 <b>Username:</b> {username_display}\n'
-            f'📝 <b>Заголовок:</b> {safe_title}\n'
-        )
-
-        if message_preview:
-            notification_text += f'\n📩 <b>Сообщение:</b>\n{html.escape(message_preview)}\n'
-
-        notification_text += f'\n📅 <b>Создан:</b> {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
+            body = first_message.message_text or ''
 
         from app.services.maintenance_service import maintenance_service
 
@@ -1188,6 +1260,9 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
         # Определяем роль получателя до отправки (без I/O — данные в памяти).
         # В личном чате chat_id == telegram_id, что позволяет проверить права заранее.
         keyboard = _build_ticket_notification_keyboard(service, ticket, user)
+        notification_text = await build_ticket_card_text(
+            db, ticket, user, body, kind='new', in_group=_is_group_recipient(service)
+        )
 
         await service.send_ticket_event_notification(
             notification_text, keyboard, media_file_id=media_file_id, media_type=media_type
@@ -1213,30 +1288,10 @@ async def notify_admins_about_ticket_reply(
             logger.info('Admin notifications disabled. Reply to ticket', ticket_id=ticket.id)
             return
 
-        title = (ticket.title or '').strip()
-        if len(title) > 60:
-            title = title[:57] + '...'
-
         try:
             user = await get_user_by_id(db, ticket.user_id)
         except Exception:
             user = None
-        full_name = html.escape(user.full_name or '') if user else 'Unknown'
-        telegram_id_display = (user.telegram_id or user.email or f'#{user.id}') if user else '—'
-        username_display = format_username_link(user.username if user else None, 'отсутствует')
-
-        reply_preview = preview_text(reply_text)
-        safe_title = html.escape(title) if title else '—'
-
-        notification_text = (
-            f'💬 <b>ОТВЕТ НА ТИКЕТ</b>\n\n'
-            f'🆔 <b>ID тикета:</b> <code>{ticket.id}</code>\n'
-            f'📝 <b>Заголовок:</b> {safe_title}\n'
-            f'👤 <b>Пользователь:</b> {full_name}\n'
-            f'🆔 <b>ID:</b> <code>{telegram_id_display}</code>\n'
-            f'📱 <b>Username:</b> {username_display}\n\n'
-            f'📩 <b>Сообщение:</b>\n{html.escape(reply_preview)}\n'
-        )
 
         from app.services.maintenance_service import maintenance_service
 
@@ -1248,6 +1303,9 @@ async def notify_admins_about_ticket_reply(
         service = AdminNotificationService(bot)
 
         keyboard = _build_ticket_notification_keyboard(service, ticket, user)
+        notification_text = await build_ticket_card_text(
+            db, ticket, user, reply_text, kind='reply', in_group=_is_group_recipient(service)
+        )
 
         result = await service.send_ticket_event_notification(
             notification_text, keyboard, media_file_id=media_file_id, media_type=media_type
