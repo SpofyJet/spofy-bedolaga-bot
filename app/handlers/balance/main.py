@@ -272,7 +272,9 @@ async def show_balance_menu(callback: types.CallbackQuery, db_user: User, db: As
 
     balance_text = texts.BALANCE_INFO.format(balance=texts.format_price(db_user.balance_kopeks))
 
-    reply_markup = get_balance_keyboard(db_user.language)
+    from app.keyboards.inline import _wheel_spins_for_menu
+
+    reply_markup = get_balance_keyboard(db_user.language, await _wheel_spins_for_menu(db, db_user))
 
     try:
         if callback.message and callback.message.text:

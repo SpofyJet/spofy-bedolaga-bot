@@ -1,4 +1,5 @@
-"""Кнопка «🎡 Колесо призов» в главном меню: у всех, пока колесо включено; со спином — зелёная со счётчиком."""
+"""Кнопка «🎡 Колесо призов» в разделе «Оплата и баланс»: у всех, пока колесо включено; со спином — зелёная со счётчиком.
+В главном меню её нет."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -6,8 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.config import settings
-from app.keyboards import inline
-from app.keyboards.inline import _spins_word, _wheel_spins_for_menu, get_main_menu_keyboard
+from app.keyboards.inline import _spins_word, _wheel_spins_for_menu, get_balance_keyboard, get_main_menu_keyboard
 
 
 @pytest.fixture(autouse=True)
@@ -20,32 +20,34 @@ def _wheel_buttons(markup):
     return [b for row in markup.inline_keyboard for b in row if b.web_app and b.web_app.url.endswith('/wheel')]
 
 
-def test_wheel_off_no_button():
+def test_main_menu_has_no_wheel_button():
     assert _wheel_buttons(get_main_menu_keyboard(has_active_subscription=True, subscription_is_active=True)) == []
 
 
+def test_wheel_off_no_button():
+    assert _wheel_buttons(get_balance_keyboard('ru')) == []
+
+
 def test_no_spins_plain_button_for_everyone():
-    kb = get_main_menu_keyboard(has_active_subscription=True, subscription_is_active=True, wheel_spins_available=0)
-    [button] = _wheel_buttons(kb)
+    [button] = _wheel_buttons(get_balance_keyboard('ru', 0))
     assert button.text.endswith('Колесо призов')
     assert button.style != 'success'
 
 
-def test_spin_shows_webapp_button_to_wheel_above_referrals(monkeypatch):
-    monkeypatch.setattr(settings, 'REFERRAL_PROGRAM_ENABLED', True, raising=False)
-    kb = get_main_menu_keyboard(has_active_subscription=True, subscription_is_active=True, wheel_spins_available=2)
+def test_spin_shows_green_counter_after_topup_and_before_main_menu():
+    kb = get_balance_keyboard('ru', 2)
     [button] = _wheel_buttons(kb)
     assert button.web_app.url == 'https://web.spofyltd.ru/wheel'
     assert button.text.endswith('Колесо призов · 2 спина')
+    assert button.style == 'success'
     flat = [b for row in kb.inline_keyboard for b in row]
-    referrals = [i for i, b in enumerate(flat) if b.callback_data == 'menu_referrals']
-    if referrals:
-        assert flat.index(button) < referrals[0]
+    assert flat[0].callback_data == 'balance_topup'
+    assert flat[-1].callback_data == 'back_to_menu'
 
 
 def test_no_cabinet_url_no_button(monkeypatch):
     monkeypatch.setattr(settings, 'CABINET_URL', '', raising=False)
-    assert _wheel_buttons(get_main_menu_keyboard(wheel_spins_available=1)) == []
+    assert _wheel_buttons(get_balance_keyboard('ru', 1)) == []
 
 
 @pytest.mark.parametrize(
@@ -81,4 +83,3 @@ async def test_spins_for_menu_never_breaks_the_menu(monkeypatch):
     monkeypatch.setattr(wheel_crud, 'get_wheel_config', AsyncMock(side_effect=RuntimeError('db down')))
     assert await _wheel_spins_for_menu(object(), SimpleNamespace(id=7)) is None
     assert await _wheel_spins_for_menu(object(), None) is None
-    assert inline  # module imported

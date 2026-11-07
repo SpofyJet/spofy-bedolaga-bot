@@ -177,7 +177,6 @@ async def get_main_menu_keyboard_async(
         is_moderator=is_moderator,
         custom_buttons=custom_buttons,
         traffic_topup_tariff_allowed=traffic_topup_tariff_allowed,
-        wheel_spins_available=await _wheel_spins_for_menu(db, user),
     )
 
 
@@ -688,7 +687,6 @@ def get_main_menu_keyboard(
     custom_buttons: list[InlineKeyboardButton] | None = None,
     trial_already_used: bool | None = None,  # smart-trial-button
     traffic_topup_tariff_allowed: bool | None = None,  # n13: тариф поддерживает докупку трафика
-    wheel_spins_available: int | None = None,  # None — колесо выключено; 0 — кнопка без счётчика
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
@@ -932,11 +930,6 @@ def get_main_menu_keyboard(
     for i in range(0, len(paired_buttons), 2):
         row = paired_buttons[i : i + 2]
         keyboard.append(row)
-
-    # Колесо призов — у всех, пока колесо включено; есть спин — зелёная со счётчиком.
-    wheel_button = _wheel_menu_button(texts, wheel_spins_available)
-    if wheel_button:
-        keyboard.append([wheel_button])
 
     # Рефералы — отдельной строкой (как было)
     if settings.is_referral_program_enabled():
@@ -1993,7 +1986,9 @@ def get_subscription_confirm_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+def get_balance_keyboard(
+    language: str = DEFAULT_LANGUAGE, wheel_spins_available: int | None = None
+) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
     # n6-П4: «Пополнить» — главное действие, первым рядом на всю ширину
@@ -2004,6 +1999,10 @@ def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
             InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data='menu_promocode'),
         ],
     ]
+    # Колесо призов: у всех, пока колесо включено; есть спин — зелёная со счётчиком.
+    wheel_button = _wheel_menu_button(texts, wheel_spins_available)
+    if wheel_button:
+        keyboard.append([wheel_button])
     if settings.YOOKASSA_RECURRENT_ENABLED:
         keyboard.append(
             [
