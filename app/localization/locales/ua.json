@@ -2535,5 +2535,10 @@
   "MAIN_MENU_NEW_USER": "👋 <b>Hi! This is Spofy VPN.</b>\n\nSites and apps open like before, no slowdowns.\n🎁 First {trial} free, no card needed.\n\nTap the button — you'll be connected in a minute.",
   "TRIAL_NEXT_STEPS": "Two steps left:\n1. Download the app\n2. Tap «Add subscription»\n\nBoth are on one page — button below 👇",
   "TRIAL_HELP_BUTTON": "💬 Stuck? We will help",
-  "TARIFF_PERIOD_PER_MONTH": "{price} · {per_month}/mo"
+  "TARIFF_PERIOD_PER_MONTH": "{price} · {per_month}/mo",
+  "FUNNEL_TRIAL_APP_IDLE": "🔌 <b>Your subscription is already {where}, just turn the VPN on</b>\n\n1. Open {app_name}\n2. Tap the big power button\n3. If sites still don't open, pick a server marked «Обход»\n\nStuck? Message us and we'll sort it out.",
+  "TRIAL_INACTIVE_24H_APP_ADDED": "🛠 <b>A day has passed and the VPN is still off</b>\n\nYour subscription is already {where}. If you can't turn it on, message us — we'll help in a couple of minutes.",
+  "FUNNEL_APP_WHERE": "in {app}",
+  "FUNNEL_APP_WHERE_UNKNOWN": "in the app",
+  "FUNNEL_APP_NAME_UNKNOWN": "the app"
 }

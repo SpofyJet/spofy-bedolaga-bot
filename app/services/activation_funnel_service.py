@@ -69,6 +69,10 @@ TRIAL_ENDING_MIN_HOURS = int(getattr(settings, 'FUNNEL_TRIAL_ENDING_MIN_HOURS', 
 IDLE_TRIAL2_HOURS = int(getattr(settings, 'FUNNEL_IDLE_TRIAL2_HOURS', 24))
 
 EVENT_ACTIVE_TRIAL = 'funnel_active_trial'
+# Подписка уже в приложении (есть HWID-устройство в панели), а трафика нет: отдельный текст в тех же
+# напоминаниях 3 ч / 24 ч. Событие — только для замера, дедуп остаётся на EVENT_TRIAL_IDLE(_2).
+EVENT_TRIAL_APP_IDLE = 'funnel_trial_app_idle'
+_KNOWN_APPS = {'happ': 'Happ', 'incy': 'INCY', 'v2raytun': 'v2RayTun', 'streisand': 'Streisand', 'hiddify': 'Hiddify'}
 EVENT_TRIAL_FIRST_CONNECTED = 'trial_first_connected'
 # trial-nudge-fix-v2: nudge ставим не позднее (триал - lead ending-1d - кулдаун),
 # иначе он глушит напоминание «триал заканчивается» через глобальный 20ч кулдаун.
@@ -171,6 +175,69 @@ def _cryptobot_payload_kopeks(payload: str | None) -> int:
         return max(0, int(str(payload or '').rsplit('_', 1)[-1]))
     except ValueError:
         return 0
+
+
+async def _added_app_name(subscription: Subscription, user: User) -> str | None:
+    """Куда человек уже добавил подписку: имя приложения, '' — приложение не узнали, None — не добавлял.
+
+    Смотрим HWID-устройства панели: INCY и Happ регистрируют устройство при первом получении подписки,
+    ещё до включения VPN. Ошибка панели — None: тогда уйдёт обычное напоминание.
+    """
+    panel_user_id = getattr(subscription, 'remnawave_id', None) or getattr(user, 'remnawave_id', None)
+    if not panel_user_id:
+        return None
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+
+        async with RemnaWaveService().get_api_client() as api:
+            info = await api.get_user_devices_all(panel_user_id)
+    except Exception as error:
+        logger.debug('Funnel: устройства из панели не получены', user_id=user.id, error=str(error))
+        return None
+    devices = info.get('devices') or []
+    if not devices:
+        return None
+    agent = str(devices[0].get('userAgent') or '')
+    return _KNOWN_APPS.get(agent.split('/', maxsplit=1)[0].strip().lower(), '')
+
+
+def _app_idle_keyboard(texts, subscription) -> InlineKeyboardMarkup:
+    from app.keyboards.inline import build_connect_button
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t('TRIAL_HELP_BUTTON', '💬 Не получается? Поможем'),
+                    callback_data='menu_support',
+                    style='success',
+                )
+            ],
+            [build_connect_button(texts, subscription)],
+        ]
+    )
+
+
+def _app_idle_text(texts, key: str, app: str) -> str:
+    where = (
+        texts.t('FUNNEL_APP_WHERE', 'в {app}').format(app=app)
+        if app
+        else texts.t('FUNNEL_APP_WHERE_UNKNOWN', 'в приложении')
+    )
+    defaults = {
+        'FUNNEL_TRIAL_APP_IDLE': (
+            '🔌 <b>Подписка уже {where}, осталось включить VPN</b>\n\n'
+            '1. Откройте {app_name}\n2. Нажмите большую кнопку включения\n'
+            '3. Если сайты не открываются — выберите сервер с пометкой «Обход»\n\n'
+            'Не получается — напишите нам, разберёмся.'
+        ),
+        'TRIAL_INACTIVE_24H_APP_ADDED': (
+            '🛠 <b>Прошли сутки, а VPN так и не включился</b>\n\n'
+            'Подписка уже {where}. Если не получается включить — напишите нам, поможем за пару минут.'
+        ),
+    }
+    app_name = app or texts.t('FUNNEL_APP_NAME_UNKNOWN', 'приложение')
+    return texts.t(key, defaults[key]).format(where=where, app_name=app_name)
 
 
 async def _already_nudged_recently(db: AsyncSession, user_id: int) -> bool:
@@ -393,10 +460,16 @@ class ActivationFunnelService:
                     [InlineKeyboardButton(text=texts.t('MENU_SUPPORT', '🆘 Поддержка'), callback_data='menu_support')],
                 ]
             )
+            app = await _added_app_name(subscription, user)
+            if app is not None:
+                text = _app_idle_text(texts, 'FUNNEL_TRIAL_APP_IDLE', app)
+                keyboard = _app_idle_keyboard(texts, subscription)
             try:
                 sent = await self._send(user.telegram_id, text, reply_markup=keyboard, user=user)
                 if sent is not None:
                     await _record_event(db, user.id, EVENT_TRIAL_IDLE, subscription.id)
+                    if app is not None:
+                        await _record_event(db, user.id, EVENT_TRIAL_APP_IDLE, subscription.id)
             except Exception as error:
                 logger.debug('Funnel idle-trial nudge не доставлен', user_id=user.id, error=str(error))
                 await _record_event(db, user.id, EVENT_TRIAL_IDLE, subscription.id)
@@ -1197,10 +1270,16 @@ class ActivationFunnelService:
                     [InlineKeyboardButton(text=texts.t('MENU_SUPPORT', '🆘 Поддержка'), callback_data='menu_support')],
                 ]
             )
+            app = await _added_app_name(subscription, user)
+            if app is not None:
+                text = _app_idle_text(texts, 'TRIAL_INACTIVE_24H_APP_ADDED', app)
+                keyboard = _app_idle_keyboard(texts, subscription)
             try:
                 sent = await self._send(user.telegram_id, text, reply_markup=keyboard, user=user)
                 if sent is not None:
                     await _record_event(db, user.id, EVENT_TRIAL_IDLE_2, subscription.id)
+                    if app is not None:
+                        await _record_event(db, user.id, EVENT_TRIAL_APP_IDLE, subscription.id)
             except Exception as error:
                 logger.debug('Funnel idle-trial-2 nudge не доставлен', user_id=user.id, error=str(error))
                 await _record_event(db, user.id, EVENT_TRIAL_IDLE_2, subscription.id)

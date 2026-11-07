@@ -2535,5 +2535,10 @@
   "MAIN_MENU_NEW_USER": "<tg-emoji emoji-id='5994750571041525522'>👋</tg-emoji> <b>Привет! Это Spofy VPN.</b>\n\nСайты и приложения открываются как раньше, без тормозов.\n<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> Первые {trial} бесплатно, карта не нужна.\n\nНажмите кнопку — подключим за минуту.",
   "TRIAL_NEXT_STEPS": "Осталось два шага:\n1. Скачать приложение\n2. Нажать «Добавить подписку»\n\nОба — на одной странице, кнопка ниже <tg-emoji emoji-id='5886451926995833684'>👇</tg-emoji>",
   "TRIAL_HELP_BUTTON": "💬 Не получается? Поможем",
-  "TARIFF_PERIOD_PER_MONTH": "{price} · {per_month}/мес"
+  "TARIFF_PERIOD_PER_MONTH": "{price} · {per_month}/мес",
+  "FUNNEL_TRIAL_APP_IDLE": "<tg-emoji emoji-id='5843553939672274145'>🔌</tg-emoji> <b>Подписка уже {where}, осталось включить VPN</b>\n\n1. Откройте {app_name}\n2. Нажмите большую кнопку включения\n3. Если сайты не открываются — выберите сервер с пометкой «Обход»\n\nНе получается — напишите нам, разберёмся.",
+  "TRIAL_INACTIVE_24H_APP_ADDED": "<tg-emoji emoji-id='5988023995125993550'>🛠</tg-emoji> <b>Прошли сутки, а VPN так и не включился</b>\n\nПодписка уже {where}. Если не получается включить — напишите нам, поможем за пару минут.",
+  "FUNNEL_APP_WHERE": "в {app}",
+  "FUNNEL_APP_WHERE_UNKNOWN": "в приложении",
+  "FUNNEL_APP_NAME_UNKNOWN": "приложение"
 }
