@@ -217,9 +217,19 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
 
 
 async def cmd_referral(message: types.Message, db_user: User, db: AsyncSession):
-    """/referral из меню команд — тот же экран, что у кнопки «Пригласить друзей»."""
+    """/referral из меню команд — тот же экран, что у кнопки «Пригласить друзей».
+
+    Без баннера, как у кнопки (menu_referrals в TEXT_ONLY_CALLBACK_PREFIXES): иначе короткий экран
+    приходил с картинкой, а длинный (не влезает в подпись) — без неё.
+    """
+    from app.utils.message_patch import reset_banner_text_only, set_banner_text_only
+
     text, keyboard = await _referral_screen(message.bot, db_user, db)
-    await message.answer(text, reply_markup=keyboard, parse_mode='HTML')
+    token = set_banner_text_only(True)
+    try:
+        await message.answer(text, reply_markup=keyboard, parse_mode='HTML')
+    finally:
+        reset_banner_text_only(token)
 
 
 async def show_referral_qr(
