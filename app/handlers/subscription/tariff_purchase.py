@@ -396,13 +396,14 @@ def _period_button_text(tariff: Tariff, period: int, price: int, price_text: str
     период оператор отмечает в тарифе — в инлайн-кнопке рамку не нарисовать,
     поэтому отметка идёт подписью в начале текста.
     """
-    if period >= 60 and price > 0:
-        base_30 = prices.get('30') if prices else None
-        if base_30 and base_30 > 0:
-            per_month = int(round(price * 30 / period))
-            saving = 100 - (per_month * 100 // base_30)
-            if saving >= 5:
-                price_text = f'{price_text} (−{saving}%)'
+    if period >= 60 and price > 0 and not is_lifetime_period(period):
+        # «359 ₽ · 120 ₽/мес»: цена месяца понятнее процента. Месяцы — по календарю (365 дн. = 12),
+        # рубли округляем вверх, чтобы не занижать.
+        months = max(1, round(period / 30))
+        per_month_kopeks = -(-price // (months * 100)) * 100
+        price_text = texts.t('TARIFF_PERIOD_PER_MONTH', '{price} · {per_month}/мес').format(
+            price=price_text, per_month=format_price_kopeks(per_month_kopeks)
+        )
     label = f'📅 {format_period(period)} — {price_text}'
     if tariff.highlight_period_days is not None and int(tariff.highlight_period_days) == period:
         return f'{texts.t("TARIFF_PERIOD_BEST_VALUE_BADGE", "⭐ выгодно")} · {label}'

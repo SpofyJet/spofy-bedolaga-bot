@@ -64,7 +64,7 @@ def test_subscription_screen_main_actions(monkeypatch):
     )
     styles = _callbacks(markup)
     connect = next(
-        btn for row in markup.inline_keyboard for btn in row if 'Подключиться' in (btn.text or '')
+        btn for row in markup.inline_keyboard for btn in row if 'Подключить' in (btn.text or '')
     )
     assert connect.style == 'success'
     assert styles['subscription_extend'] == 'success'

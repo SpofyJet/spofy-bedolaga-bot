@@ -831,6 +831,23 @@ def _trial_activated_text(texts, subscription=None) -> str:
     return text
 
 
+def _trial_next_steps_text(texts) -> str:
+    return texts.t(
+        'TRIAL_NEXT_STEPS',
+        'Осталось два шага:\n1. Скачать приложение\n2. Нажать «Добавить подписку»\n\n'
+        'Оба — на одной странице, кнопка ниже 👇',
+    )
+
+
+def _trial_help_row(texts) -> list[InlineKeyboardButton]:
+    return [
+        InlineKeyboardButton(
+            text=texts.t('TRIAL_HELP_BUTTON', '💬 Не получается? Поможем'),
+            callback_data='menu_support',
+        )
+    ]
+
+
 def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = False) -> types.InlineKeyboardMarkup:
     """Создает клавиатуру с методами оплаты для платного триала."""
     texts = get_texts(language)
@@ -1318,16 +1335,9 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                     )
                 )
             else:
-                subscription_import_link = texts.t(
-                    'SUBSCRIPTION_IMPORT_LINK_SECTION',
-                    '🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\n<code>{subscription_url}</code>',
-                ).format(subscription_url=subscription_link)
-
-                trial_success_text = (
-                    f'{_trial_activated_text(texts, subscription)}\n\n'
-                    f'{subscription_import_link}\n\n'
-                    f'{texts.t("SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT", "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве")}'
-                )
+                # Сырая ссылка тут не нужна: человеку осталось два шага, и оба — на странице по кнопке.
+                # Ссылка для ручного ввода остаётся на экране «Подписка».
+                trial_success_text = f'{_trial_activated_text(texts, subscription)}\n\n{_trial_next_steps_text(texts)}'
 
             trial_success_text += payment_note
 
@@ -1392,6 +1402,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 happ_row = get_happ_download_button_row(texts)
                 if happ_row:
                     rows.append(happ_row)
+                rows.append(_trial_help_row(texts))
                 rows.append(
                     [
                         InlineKeyboardButton(
@@ -3778,16 +3789,9 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                     )
                 )
             else:
-                subscription_import_link = texts.t(
-                    'SUBSCRIPTION_IMPORT_LINK_SECTION',
-                    '🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\n<code>{subscription_url}</code>',
-                ).format(subscription_url=subscription_link)
-
-                trial_success_text = (
-                    f'{_trial_activated_text(texts, subscription)}\n\n'
-                    f'{subscription_import_link}\n\n'
-                    f'{texts.t("SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT", "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве")}'
-                )
+                # Сырая ссылка тут не нужна: человеку осталось два шага, и оба — на странице по кнопке.
+                # Ссылка для ручного ввода остаётся на экране «Подписка».
+                trial_success_text = f'{_trial_activated_text(texts, subscription)}\n\n{_trial_next_steps_text(texts)}'
 
             trial_success_text += payment_note
 

@@ -384,15 +384,12 @@ class ActivationFunnelService:
                     'Если что-то не выходит — поддержка ответит быстро.'
                 ),
             )
+            from app.keyboards.inline import build_connect_button
+
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
-                            callback_data='subscription_connect',
-                            style='success',
-                        )
-                    ],
+                    # Сразу страница с инструкцией (по CONNECT_BUTTON_MODE), без промежуточного экрана
+                    [build_connect_button(texts, subscription)],
                     [InlineKeyboardButton(text=texts.t('MENU_SUPPORT', '🆘 Поддержка'), callback_data='menu_support')],
                 ]
             )
@@ -1191,15 +1188,12 @@ class ActivationFunnelService:
                     'или напишите в поддержку — поможем подключиться!'
                 ),
             )
+            from app.keyboards.inline import build_connect_button
+
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
-                            callback_data='subscription_connect',
-                            style='success',
-                        )
-                    ],
+                    # Сразу страница с инструкцией (по CONNECT_BUTTON_MODE), без промежуточного экрана
+                    [build_connect_button(texts, subscription)],
                     [InlineKeyboardButton(text=texts.t('MENU_SUPPORT', '🆘 Поддержка'), callback_data='menu_support')],
                 ]
             )

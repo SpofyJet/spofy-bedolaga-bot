@@ -2531,5 +2531,9 @@
   "UNKNOWN_OPEN_SUPPORT": "💬 Contact support",
   "UNKNOWN_SUPPORT_EXPIRED": "This message was already sent or is too old. Please write it again.",
   "UNKNOWN_SENT_TO_SUPPORT": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> Sent to support, request #{ticket_id}.\nThe answer will arrive in this chat.",
-  "BACK_TO_MENU_SHORT": "🏠 Main menu"
+  "BACK_TO_MENU_SHORT": "🏠 Main menu",
+  "MAIN_MENU_NEW_USER": "👋 <b>Hi! This is Spofy VPN.</b>\n\nSites and apps open like before, no slowdowns.\n🎁 First {trial} free, no card needed.\n\nTap the button — you'll be connected in a minute.",
+  "TRIAL_NEXT_STEPS": "Two steps left:\n1. Download the app\n2. Tap «Add subscription»\n\nBoth are on one page — button below 👇",
+  "TRIAL_HELP_BUTTON": "💬 Stuck? We will help",
+  "TARIFF_PERIOD_PER_MONTH": "{price} · {per_month}/mo"
 }

@@ -1500,8 +1500,36 @@ def _get_website_line(texts) -> str:
     return texts.t('MAIN_MENU_WEBSITE_LINE', '🔗 Наш сайт: {url}').format(url=url) + '\n\n'
 
 
+def is_new_user_with_free_trial(user) -> bool:
+    """Ни одной подписки и бесплатный пробный ещё доступен — тот же гейт, что у кнопки пробного в меню."""
+    if settings.TRIAL_DURATION_DAYS <= 0 or settings.is_trial_paid_activation_enabled():
+        return False
+    try:
+        if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', None) or 'telegram'):
+            return False
+        return not user.is_trial_already_used() and not (user.subscriptions or [])
+    except Exception:
+        return False
+
+
+def _new_user_menu_text(texts) -> str:
+    """Первый экран: одна мысль и одна кнопка «Подключить бесплатно» (без «Выберите действие»)."""
+    from app.utils.formatting import format_period
+
+    return texts.t(
+        'MAIN_MENU_NEW_USER',
+        '👋 <b>Привет! Это Spofy VPN.</b>\n\n'
+        'Сайты и приложения открываются как раньше, без тормозов.\n'
+        '🎁 Первые {trial} бесплатно, карта не нужна.\n\n'
+        'Нажмите кнопку — подключим за минуту.',
+    ).format(trial=format_period(settings.TRIAL_DURATION_DAYS))
+
+
 async def get_main_menu_text(user, texts, db: AsyncSession):
     from app.config import settings
+
+    if is_new_user_with_free_trial(user):
+        return _new_user_menu_text(texts)
 
     website_line = _get_website_line(texts)
 
