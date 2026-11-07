@@ -14,13 +14,11 @@ logger = structlog.get_logger(__name__)
 COMMANDS = {
     'ru': [
         BotCommand(command='start', description='Главное меню'),
-        BotCommand(command='support', description='Написать в поддержку'),
-        BotCommand(command='paysupport', description='Помощь с оплатой'),
+        BotCommand(command='referral', description='Пригласить друзей'),
     ],
     'en': [
         BotCommand(command='start', description='Main menu'),
-        BotCommand(command='support', description='Contact support'),
-        BotCommand(command='paysupport', description='Payment help'),
+        BotCommand(command='referral', description='Invite friends'),
     ],
 }
 

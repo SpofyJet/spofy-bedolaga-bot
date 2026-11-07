@@ -161,7 +161,7 @@ class UserService:
             message = (
                 f'{emoji} <b>Списано {amount_text}</b>\n'
                 f'Баланс: {settings.format_price(user.balance_kopeks)}\n\n'
-                f'Есть вопросы — /support'
+                f'Есть вопросы — @spofysup'
             )
 
         keyboard_rows = []

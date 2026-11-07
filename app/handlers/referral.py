@@ -9,6 +9,7 @@ import qrcode
 import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,22 +59,17 @@ async def _reward_tariff_names(db) -> dict[int, str]:
     return {row.id: row.name for row in result.all()}
 
 
-async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    # Проверяем, включена ли реферальная программа
-    if not settings.is_referral_program_enabled():
-        texts = get_texts(db_user.language)
-        await callback.answer(texts.t('REFERRAL_PROGRAM_DISABLED', 'Реферальная программа отключена'), show_alert=True)
-        return
-
+async def _referral_screen(bot, db_user: User, db: AsyncSession) -> tuple[str, types.InlineKeyboardMarkup | None]:
+    """Экран «Пригласить друзей»: (текст, клавиатура) или (текст ошибки, None)."""
     texts = get_texts(db_user.language)
-
+    if not settings.is_referral_program_enabled():
+        return texts.t('REFERRAL_PROGRAM_DISABLED', 'Реферальная программа отключена'), None
     if not db_user.referral_code:
-        await callback.answer(texts.t('REFERRAL_CODE_NOT_ASSIGNED', 'Реферальный код не назначен'), show_alert=True)
-        return
+        return texts.t('REFERRAL_CODE_NOT_ASSIGNED', 'Реферальный код не назначен'), None
 
     summary = await get_user_referral_summary(db, db_user.id)
 
-    bot_username = (await callback.bot.get_me()).username
+    bot_username = (await bot.get_me()).username
     bot_referral_link = settings.get_bot_referral_link(db_user.referral_code, bot_username)
     cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
 
@@ -204,15 +200,26 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
             + f'\n{html_escape(cabinet_referral_link)}\n'
         )
 
-    await edit_or_answer_photo(
-        callback,
-        referral_text,
-        get_referral_keyboard(
-            db_user.language,
-            share_url=_build_referral_share_url(bot_referral_link, texts),
-        ),
+    keyboard = get_referral_keyboard(
+        db_user.language,
+        share_url=_build_referral_share_url(bot_referral_link, texts),
     )
+    return referral_text, keyboard
+
+
+async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    text, keyboard = await _referral_screen(callback.bot, db_user, db)
+    if keyboard is None:
+        await callback.answer(text, show_alert=True)
+        return
+    await edit_or_answer_photo(callback, text, keyboard)
     await callback.answer()
+
+
+async def cmd_referral(message: types.Message, db_user: User, db: AsyncSession):
+    """/referral из меню команд — тот же экран, что у кнопки «Пригласить друзей»."""
+    text, keyboard = await _referral_screen(message.bot, db_user, db)
+    await message.answer(text, reply_markup=keyboard, parse_mode='HTML')
 
 
 async def show_referral_qr(
@@ -1082,6 +1089,7 @@ async def cancel_withdrawal_request(callback: types.CallbackQuery, db_user: User
 
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_referral_info, F.data == 'menu_referrals')
+    dp.message.register(cmd_referral, Command('referral'))
 
     dp.callback_query.register(
         create_invite_message, F.data.in_({'referral_create_invite', REFERRAL_NOTIFY_INVITE_CALLBACK})
