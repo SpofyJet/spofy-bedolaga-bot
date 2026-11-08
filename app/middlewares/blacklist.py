@@ -6,6 +6,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, PreCheckoutQuery, TelegramObject, User as TgUser
 
 from app.services.blacklist_service import blacklist_service
+from app.utils.support_access import is_payment_support_handler
 
 
 logger = structlog.get_logger(__name__)
@@ -18,6 +19,10 @@ class BlacklistMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
+        # /paysupport answers everyone who paid (Telegram Stars rules), whatever else is set
+        if is_payment_support_handler(event, data):
+            return await handler(event, data)
+
         user: TgUser | None = None
         if isinstance(event, (Message, CallbackQuery, PreCheckoutQuery)):
             user = event.from_user

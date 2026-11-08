@@ -7,6 +7,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
 from app.database.models import SubscriptionStatus
+from app.utils.support_access import is_payment_support_handler
 
 
 logger = structlog.get_logger(__name__)
@@ -31,6 +32,10 @@ class SubscriptionStatusMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
+        # /paysupport answers everyone who paid (Telegram Stars rules), whatever else is set
+        if is_payment_support_handler(event, data):
+            return await handler(event, data)
+
         # Используем db и user из AuthMiddleware - не создаём новую сессию!
         db = data.get('db')
         user = data.get('db_user')

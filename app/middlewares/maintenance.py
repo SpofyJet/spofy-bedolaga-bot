@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery, Message, TelegramObject, User as TgUser
 
 from app.config import settings
 from app.services.maintenance_service import maintenance_service
+from app.utils.support_access import is_payment_support_handler
 from app.utils.telegram_delivery import is_user_unreachable
 
 
@@ -29,6 +30,10 @@ class MaintenanceMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
+        # /paysupport answers everyone who paid (Telegram Stars rules), whatever else is set
+        if is_payment_support_handler(event, data):
+            return await handler(event, data)
+
         user: TgUser = None
         if isinstance(event, (Message, CallbackQuery)):
             user = event.from_user
