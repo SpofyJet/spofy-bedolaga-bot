@@ -61,7 +61,7 @@ async def start_simple_subscription_purchase(
         keyboard = []
         if support_url:
             keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
-        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription')])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')])
 
         await callback.message.edit_text(
             f'🚫 <b>Покупка подписки ограничена</b>\n\n{reason}\n\n'
