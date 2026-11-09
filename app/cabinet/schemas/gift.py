@@ -144,3 +144,6 @@ class ActivateGiftResponse(BaseModel):
     status: str
     tariff_name: str | None = None
     period_days: int | None = None
+    # Фактический итог после пересчёта остатка прежней подписки.
+    end_date: datetime | None = None
+    is_lifetime: bool = False

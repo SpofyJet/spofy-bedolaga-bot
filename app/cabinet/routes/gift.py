@@ -51,6 +51,7 @@ from app.utils.cache import RateLimitCache
 from app.utils.gift_links import (
     build_gift_claim_artifacts,
 )
+from app.utils.gift_result import subscription_end_fields
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
@@ -783,4 +784,5 @@ async def activate_gift_by_code(
         status='activated',
         tariff_name=purchase.tariff.name if purchase.tariff else None,
         period_days=purchase.period_days,
+        **await subscription_end_fields(db, user.id),
     )

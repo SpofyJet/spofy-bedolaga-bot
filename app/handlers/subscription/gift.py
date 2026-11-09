@@ -56,11 +56,12 @@ from app.services.gift_purchase_service import (
     purchase_gift_from_balance,
     quote_gift_purchase,
 )
-from app.services.guest_purchase_service import GuestPurchaseError
+from app.services.guest_purchase_service import GiftLifetimeHolderError, GuestPurchaseError
 from app.services.user_cart_service import user_cart_service
 from app.states import GiftActivationStates, GiftPurchaseStates
 from app.utils.fsm_selection import mutate_fsm_if_current
 from app.utils.gift_links import build_gift_claim_artifacts
+from app.utils.gift_result import gift_valid_until_line
 from app.utils.lifetime import apply_lifetime_period
 
 
@@ -1493,6 +1494,16 @@ async def handle_gift_code_input(
             parse_mode='HTML',
         )
         return
+    except GiftLifetimeHolderError:
+        await message.answer(
+            texts.t(
+                'GIFT_ACTIVATION_LIFETIME_ERROR',
+                '⚠️ У вас подписка «Навсегда» — подарок к ней не применяется. Он остался неактивированным.',
+            ),
+            reply_markup=cancel_kb,
+            parse_mode='HTML',
+        )
+        return
     except GuestPurchaseError as exc:
         logger.warning(
             'Gift code activation failed with guest purchase error',
@@ -1533,12 +1544,16 @@ async def handle_gift_code_input(
     success_text = apply_lifetime_period(
         texts.t(
             'GIFT_ACTIVATION_SUCCESS_TEXT',
-            '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
+            '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\n{valid_until}',
         ),
         period_days,
         'period_days',
         texts.language,
-    ).format(tariff_name=tariff_name, period_days=period_days)
+    ).format(
+        tariff_name=tariff_name,
+        period_days=period_days,
+        valid_until=await gift_valid_until_line(db, texts, db_user.id),
+    )
 
     success_kb = InlineKeyboardMarkup(
         inline_keyboard=[

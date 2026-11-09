@@ -53,6 +53,7 @@ from app.services.registration_access_service import (
 from app.services.subscription_service import SubscriptionService
 from app.services.traffic_reset_policy import should_reset_traffic_on_tariff_purchase
 from app.utils.gift_links import GIFT_TOKEN_MIN_PREFIX_LENGTH
+from app.utils.lifetime import is_lifetime_end
 
 
 logger = structlog.get_logger(__name__)
@@ -175,6 +176,13 @@ class GuestPurchaseError(Exception):
         self.message = message
         self.status_code = status_code
         super().__init__(message)
+
+
+class GiftLifetimeHolderError(GuestPurchaseError):
+    """Подарок не применяется к подписке «Навсегда» и остаётся неактивированным."""
+
+    def __init__(self) -> None:
+        super().__init__('lifetime_subscription', status_code=409)
 
 
 async def create_purchase(
@@ -1339,6 +1347,15 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
             and existing_subscription.end_date is not None
             and (_aware(existing_subscription.end_date) > datetime.now(UTC))
         )
+        if (
+            purchase.is_gift
+            and has_time
+            and not existing_subscription.is_trial
+            and is_lifetime_end(existing_subscription.end_date)
+        ):
+            # Активация сменила бы тариф бессрочной подписки на тариф подарка
+            # (срок остался бы «Навсегда», а серверы и трафик — от подарка).
+            raise GiftLifetimeHolderError
         if existing_subscription is not None and (is_tariff_renewal or has_time):
             subscription = await extend_subscription(
                 db,
@@ -1349,6 +1366,8 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
                 device_limit=tariff.device_limit,
                 connected_squads=squads,
                 reset_used_traffic=reset_traffic if is_tariff_renewal else None,
+                # Тариф подарка получатель не выбирал: остаток сохраняет стоимость в обе стороны.
+                carry_value_both_ways=bool(purchase.is_gift),
                 commit=False,
             )
         elif existing_subscription is not None:

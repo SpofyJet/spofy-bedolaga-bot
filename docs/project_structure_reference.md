@@ -1309,7 +1309,7 @@
   Классы: `GraceReason`, `GraceSubscriptionKind`, `GraceAccessMode` (1 методов), `GraceSessionState`, `GraceCompletionReason`, `GraceRestoreOutcome`, `GracePanelTransitionPending`, `GracePanelTransitionConflict`, `GraceStartDecision`, `GraceAccessPolicy` (2 методов), `GraceBillingState`, `GracePanelSnapshot`, `GracePanelOverlay`, `GraceAccessSession`, `GraceStartResult`, `GraceReconcileResult`, `GraceSessionStore` (5 методов), `GracePanelGateway` (4 методов), `GraceBillingGateway` (1 методов), `GraceAccessService` (14 методов), `GraceEchoRepair`
   Функции: `build_incident_key` — Build a stable identifier so one incident receives grace only once., `billing_still_matches_session` — Compare canonical fields that identify the incident without panel metadata., `classify_subscription_kind` — Classify once, in priority order, so overlapping flags are unambiguous., `policy_allows_subscription`, `billing_incident_is_eligible` — Check current incident safety without applying new-issuance feature flags., `billing_is_eligible` — Apply incident safety and subscription-kind flags to a new grant., `billing_is_revoked` — Return whether grace must be removed immediately for safety., `panel_status_matches_reason`, `should_reset_used_traffic` — Обнулять ли счётчик расхода при выдаче grace (GRACE_ACCESS_RESET_TRAFFIC_ON_START)., `build_panel_overlay` — Calculate temporary panel values; consumed traffic is reset only on request., `billing_echoes_overlay` — В биллинге стоит дата, которую грейс сам выставил в панели., `plan_grace_echo_repair` — Вернуть подписке то, что грейс-оверлей в ней затёр., `squads_are_only_grace_echo` — Серверы подписки мог дать только грейс: ровно сквады оверлея, нигде не продаются., `billing_has_recovered` — Detect a real renewal or traffic purchase in the canonical billing state., `traffic_reset_ended_limited_incident` — Трафик сбросился, пока шёл грейс по лимиту, — инцидент закончился сам., `panel_matches_overlay` — Match only fields controlled by grace; used traffic is intentionally ignored., `panel_is_safe_pending_source` — Recognize only states that this PENDING activation could have produced.
 - `app/services/guest_purchase_service.py` — Python-модуль
-  Классы: `GuestPurchaseError` (1 методов)
+  Классы: `GuestPurchaseError` (1 методов), `GiftLifetimeHolderError` (1 методов)
   Функции: `get_claimable_gift` — Resolve one still-activatable gift by full token or deep-link prefix., `create_purchase` — Create a guest purchase record., `fulfill_purchase` — Fulfill a paid guest purchase by creating/extending the user account and subscription., `find_guest_purchase_user` — Find a guest-purchase user without mutating the account or session state., `evaluate_guest_purchase_registration` — Evaluate invite-only policy before a landing flow may mutate ``User``., `send_guest_notification` — Send notification for guest purchase delivery or activation requirement., `notify_gift_claim_available` — Best-effort: tell people a paid gift is waiting, with the CLAIM link., `activate_purchase` — Activate a PENDING_ACTIVATION purchase by replacing or creating a subscription., `retry_stuck_paid_purchases` — Retry fulfillment for purchases stuck in PAID status., `retry_stuck_pending_activation` — Retry activation for purchases stuck in PENDING_ACTIVATION status., `recover_stuck_pending_purchases` — Recover purchases stuck in PENDING by checking provider payment status.
 - `app/services/landing_payment_records.py` — Python-модуль
   Классы: нет
@@ -1907,6 +1907,9 @@
 - `app/utils/gift_links.py` — Python-модуль
   Классы: `GiftLinkError`, `InvalidGiftTokenError`, `InvalidBotUsernameError`, `MissingBotUsernameError`, `InvalidCabinetUrlError`, `MissingCabinetUrlError`, `InvalidClaimLinkError`, `InvalidShareTextError`, `GiftClaimArtifacts`
   Функции: `build_gift_public_code` — Build the canonical public gift code (``GIFT_<59_chars>``)., `parse_gift_claim_input` — Parse and normalize gift claim credentials from various user inputs., `build_gift_claim_artifacts` — Build immutable gift claim artifacts with public code and available channel URLs., `build_bot_gift_claim_link` — Build a canonical Telegram deep-link for claiming a gift subscription., `build_cabinet_gift_claim_link` — Build a canonical web cabinet claim link containing the full bearer token., `build_telegram_gift_share_url` — Build a native Telegram share URL (``https://t.me/share/url``) with prefilled text.
+- `app/utils/gift_result.py` — Python-модуль
+  Классы: нет
+  Функции: `gift_valid_until_line` — Строка «Подписка действует до …» по фактической дате окончания., `subscription_end_fields` — ``end_date`` и ``is_lifetime`` подписки после активации — для ответов кабинета.
 - `app/utils/incy_crypt1.py` — Python-модуль
   Классы: нет
   Функции: `encrypt_incy_link` — Шифрует ссылку подписки в ``incy://crypt1/...``., `wrap_incy_deep_link` — Подменяет ``incy://import|add/<url>`` на ``incy://crypt1/<зашифрованное>``.
@@ -1960,7 +1963,7 @@
   Функции: `configure_payment_logger` — Configure the payment logger with the given handler.
 - `app/utils/payment_utils.py` — Python-модуль
   Классы: нет
-  Функции: `verify_payment_amount` — Check that the received amount matches the expected amount within tolerance., `get_available_payment_methods` — Возвращает список доступных способов оплаты с их настройками, `get_payment_methods_text` — Генерирует текст с описанием доступных способов оплаты, `is_payment_method_available` — Проверяет, доступен ли конкретный способ оплаты, `xrocket_button_label` — Подпись кнопки xRocket: чем платят, а не через кого., `pay2328_button_label` — Подпись кнопки 2328.io: монету и сеть человек выбирает на странице счёта.
+  Функции: `verify_payment_amount` — Check that the received amount matches the expected amount within tolerance., `get_available_payment_methods` — Возвращает список доступных способов оплаты с их настройками, `get_payment_methods_text` — Генерирует текст с описанием доступных способов оплаты, `is_payment_method_available` — Проверяет, доступен ли конкретный способ оплаты
 - `app/utils/photo_message.py` — Python-модуль
   Классы: нет
   Функции: `safe_edit_or_resend` — Безопасно отредактировать текст сообщения или отправить новое при ошибке., `edit_or_answer_photo`
@@ -2884,9 +2887,6 @@
 - `tests/test_coupon_deeplink_pins.py` — Python-модуль
   Классы: нет
   Функции: `test_cmd_start_parses_coupon_deep_link`, `test_coupon_redeem_called_at_every_gift_activation_site`, `test_coupon_branch_only_swallows_existing_coupons` — `start_parameter = None` must sit INSIDE the is_coupon_token() guard AND, `test_redeem_flips_status_before_remnawave_sync`, `test_redeem_claims_under_row_lock_and_rechecks`, `test_redeem_aborts_when_remnawave_sync_returns_none`, `test_revoke_confirm_registered_before_revoke_prefix`, `test_create_confirm_is_guarded_against_stale_buttons_and_double_taps`, `test_admin_states_for_coupon_creation_exist`
-- `tests/test_crypto_button_labels.py` — Python-модуль
-  Классы: нет
-  Функции: `test_xrocket_button_lists_configured_coins`, `test_pay2328_button_does_not_name_the_provider`, `test_keyboard_and_text_above_it`
 - `tests/test_declared_dependencies.py` — Python-модуль
   Классы: нет
   Функции: `test_every_imported_package_is_declared` — Прямой импорт — прямая зависимость., `test_dependency_names_are_unique` — Один пакет не должен быть объявлен дважды с разными ограничениями., `test_previously_transitive_imports_stay_declared` — Именно эти пять держались на транзитивности — закрепляем результат.
@@ -2913,7 +2913,7 @@
   Функции: `test_no_grace_key_is_active_in_the_example`, `test_commented_values_match_the_code_defaults`
 - `tests/test_holes_20261109.py` — Python-модуль
   Классы: нет
-  Функции: `test_carry_to_pricier_tariff_is_by_value`, `test_carry_to_cheaper_or_equal_tariff_is_day_for_day`, `test_carry_with_broken_rate_is_day_for_day`, `test_buying_pricier_tariff_does_not_carry_days_one_to_one`, `test_buying_cheaper_tariff_keeps_days`, `test_renewing_same_tariff_keeps_days`, `test_cabinet_refuses_package_switch_on_tariff`, `test_bot_refuses_package_switch_on_tariff_and_trial`
+  Функции: `test_carry_to_pricier_tariff_is_by_value`, `test_carry_to_cheaper_or_equal_tariff_is_day_for_day`, `test_carry_with_broken_rate_is_day_for_day`, `test_buying_pricier_tariff_does_not_carry_days_one_to_one`, `test_buying_cheaper_tariff_keeps_days`, `test_renewing_same_tariff_keeps_days`, `test_cabinet_refuses_package_switch_on_tariff`, `test_bot_refuses_package_switch_on_tariff_and_trial`, `test_gift_carry_keeps_value_downwards`, `test_gift_carry_upwards_and_equal_match_purchase`, `test_gift_carry_never_turns_into_forever`, `test_gift_carry_with_broken_rates_is_day_for_day`, `test_gift_of_cheaper_tariff_keeps_the_value_of_the_rest`, `test_gift_of_pricier_tariff_is_not_day_for_day`, `test_gift_of_the_same_tariff_just_adds_days`, `test_gift_over_a_trial_is_not_recalculated`, `test_gift_carry_failure_falls_back_to_day_for_day`
 - `tests/test_lazy_package_exports.py` — Python-модуль
   Классы: нет
   Функции: `test_package_declares_exports`, `test_every_exported_name_resolves`, `test_unknown_name_still_raises` — __getattr__ не должен выдавать что попало вместо AttributeError.
@@ -4240,7 +4240,7 @@
   Классы: нет
   Функции: `test_callback_success_is_html_with_subscription_and_menu_buttons`, `test_callback_error_is_html_and_not_a_dead_end`, `test_unknown_gift_deeplink_says_not_found_instead_of_silent_menu`
 - `tests/handlers/test_gift_deeplink_activation.py` — Python-модуль
-  Классы: `TestGiftDeeplinkActivation` (7 методов), `TestGiftSubscriptionActivationMultiTariff` (3 методов), `TestGiftSubscriptionActivationSingleTariff` (3 методов), `TestGiftProvisioningInvariants` (2 методов)
+  Классы: `TestGiftDeeplinkActivation` (7 методов), `TestGiftSubscriptionActivationMultiTariff` (3 методов), `TestGiftSubscriptionActivationSingleTariff` (3 методов), `TestGiftProvisioningInvariants` (2 методов), `TestGiftOverAnotherSubscription` (5 методов)
   Функции: нет
 - `tests/handlers/test_gift_share_screens.py` — Python-модуль
   Классы: `TestAccessControl` (4 методов), `TestQrScreen` (3 методов), `TestCopyTextScreen` (3 методов), `TestGiftCardOwnership` (2 методов)

@@ -897,3 +897,139 @@ class TestGiftProvisioningInvariants:
 
                 # Invariant: exactly one provisioning call at claim time
                 mock_prov.assert_awaited_once()
+
+
+# ── Подарок поверх другой подписки: «Навсегда», пересчёт остатка, итоговая дата ──
+
+
+async def _gift_over(db, *, held_tariff, gift_tariff, end_date, is_trial=False, gift_days=30):
+    recipient = User(telegram_id=33333, username='holder', balance_kopeks=0)
+    db.add(recipient)
+    await db.commit()
+    await db.refresh(recipient)
+    now = datetime.now(UTC)
+    sub = Subscription(
+        user_id=recipient.id,
+        tariff_id=held_tariff.id,
+        status=SubscriptionStatus.ACTIVE.value,
+        is_trial=is_trial,
+        start_date=now - timedelta(days=10),
+        end_date=end_date,
+        traffic_limit_gb=50,
+        device_limit=2,
+    )
+    db.add(sub)
+    token = generate_purchase_token()
+    db.add(
+        GuestPurchase(
+            token=token,
+            contact_type='telegram',
+            contact_value=str(recipient.telegram_id),
+            is_gift=True,
+            status=GuestPurchaseStatus.PENDING_ACTIVATION.value,
+            tariff_id=gift_tariff.id,
+            period_days=gift_days,
+            amount_kopeks=30000,
+            user_id=recipient.id,
+        )
+    )
+    await db.commit()
+    return recipient, sub, token
+
+
+class TestGiftOverAnotherSubscription:
+    @pytest.mark.asyncio
+    async def test_forever_holder_keeps_tariff_and_gift_stays_unactivated(self, monkeypatch):
+        from app.services.guest_purchase_service import GiftLifetimeHolderError
+        from app.utils.lifetime import LIFETIME_END
+
+        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
+        async with memory_session(monkeypatch, _TABLES) as db:
+            t1, t2 = await _seed_tariffs_and_settings(db)
+            _, sub, token = await _gift_over(db, held_tariff=t1, gift_tariff=t2, end_date=LIFETIME_END)
+            held_tariff_id, subscription_id = t1.id, sub.id
+
+            with patch('app.services.subscription_service.SubscriptionService.create_remnawave_user', AsyncMock()):
+                with pytest.raises(GiftLifetimeHolderError) as error:
+                    await activate_purchase(db, token, skip_notification=True)
+
+            assert error.value.status_code == 409
+            assert error.value.message == 'lifetime_subscription'
+            purchase = (await db.execute(select(GuestPurchase).where(GuestPurchase.token == token))).scalar_one()
+            assert purchase.status == GuestPurchaseStatus.PENDING_ACTIVATION.value
+            kept = (await db.execute(select(Subscription).where(Subscription.id == subscription_id))).scalar_one()
+            assert kept.tariff_id == held_tariff_id
+
+    @pytest.mark.asyncio
+    async def test_trial_holder_gets_the_gift(self, monkeypatch):
+        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
+        async with memory_session(monkeypatch, _TABLES) as db:
+            t1, t2 = await _seed_tariffs_and_settings(db)
+            now = datetime.now(UTC)
+            _, sub, token = await _gift_over(
+                db, held_tariff=t1, gift_tariff=t2, end_date=now + timedelta(days=3), is_trial=True
+            )
+
+            with patch('app.services.subscription_service.SubscriptionService.create_remnawave_user', AsyncMock()):
+                activated = await activate_purchase(db, token, skip_notification=True)
+
+            assert activated.status == GuestPurchaseStatus.DELIVERED.value
+            await db.refresh(sub)
+            assert sub.tariff_id == t2.id
+            assert sub.is_trial is False
+            left = (sub.end_date.replace(tzinfo=UTC) if sub.end_date.tzinfo is None else sub.end_date) - now
+            assert timedelta(days=29, hours=23) < left < timedelta(days=33, hours=1)
+
+    @pytest.mark.asyncio
+    async def test_activation_passes_the_gift_carry_rule(self, monkeypatch):
+        import app.services.guest_purchase_service as service
+
+        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
+        seen = {}
+        real_extend = service.extend_subscription
+
+        async def spy(db, subscription, days, **kwargs):
+            seen.update(kwargs)
+            return await real_extend(db, subscription, days, **kwargs)
+
+        monkeypatch.setattr(service, 'extend_subscription', spy)
+        async with memory_session(monkeypatch, _TABLES) as db:
+            t1, t2 = await _seed_tariffs_and_settings(db)
+            _, _, token = await _gift_over(
+                db, held_tariff=t1, gift_tariff=t2, end_date=datetime.now(UTC) + timedelta(days=20)
+            )
+            with patch('app.services.subscription_service.SubscriptionService.create_remnawave_user', AsyncMock()):
+                await activate_purchase(db, token, skip_notification=True)
+
+        assert seen['carry_value_both_ways'] is True
+
+    @pytest.mark.asyncio
+    async def test_result_line_shows_the_real_end_date(self, monkeypatch):
+        from app.localization.texts import get_texts
+        from app.utils.gift_result import gift_valid_until_line, subscription_end_fields
+        from app.utils.lifetime import LIFETIME_END
+
+        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
+        async with memory_session(monkeypatch, _TABLES) as db:
+            t1, t2 = await _seed_tariffs_and_settings(db)
+            end = datetime(2027, 3, 14, 9, tzinfo=UTC)
+            recipient, sub, _ = await _gift_over(db, held_tariff=t1, gift_tariff=t2, end_date=end)
+
+            assert await gift_valid_until_line(db, get_texts('ru'), recipient.id) == 'Подписка действует до 14.03.2027.'
+            assert (await subscription_end_fields(db, recipient.id))['is_lifetime'] is False
+
+            sub.end_date = LIFETIME_END
+            await db.commit()
+            assert await gift_valid_until_line(db, get_texts('ru'), recipient.id) == 'Подписка действует навсегда.'
+            assert (await subscription_end_fields(db, recipient.id))['is_lifetime'] is True
+
+            assert await gift_valid_until_line(db, get_texts('ru'), 999999) == 'Ваша подписка обновлена.'
+
+    def test_success_texts_carry_the_end_date_line(self):
+        from app.localization.texts import get_texts
+
+        for language in ('ru', 'en'):
+            texts = get_texts(language)
+            for key in ('GIFT_ACTIVATION_SUCCESS_TEXT', 'GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT'):
+                assert '{valid_until}' in texts.t(key, '')
+            assert 'spofysup' in texts.t('GIFT_ACTIVATION_LIFETIME_ERROR', '')

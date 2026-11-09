@@ -17,7 +17,8 @@ from app.services.gift_claim_service import (
     GiftClaimSelfActivationError,
     claim_bound_gift_for_user,
 )
-from app.services.guest_purchase_service import GuestPurchaseError
+from app.services.guest_purchase_service import GiftLifetimeHolderError, GuestPurchaseError
+from app.utils.gift_result import gift_valid_until_line
 
 
 logger = structlog.get_logger(__name__)
@@ -107,6 +108,16 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
                 reply_markup=_menu_keyboard(texts),
             )
             return
+        except GiftLifetimeHolderError:
+            await callback.message.edit_text(
+                texts.t(
+                    'GIFT_ACTIVATION_LIFETIME_ERROR',
+                    '⚠️ У вас подписка «Навсегда» — подарок к ней не применяется. Он остался неактивированным.',
+                ),
+                parse_mode='HTML',
+                reply_markup=_menu_keyboard(texts),
+            )
+            return
         except GuestPurchaseError as exc:
             logger.warning(
                 'Gift activation via callback failed',
@@ -157,9 +168,10 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
         await callback.message.edit_text(
             texts.t(
                 'GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT',
-                '✅ <b>Подарок активирован!</b>\n{tariff_text}\n\nВаша подписка обновлена.',
+                '✅ <b>Подарок активирован!</b>\n{tariff_text}\n\n{valid_until}',
             ).format(
                 tariff_text=tariff_text,
+                valid_until=await gift_valid_until_line(db, texts, user.id),
             ),
             parse_mode='HTML',
             reply_markup=_menu_keyboard(texts, with_subscription=True),

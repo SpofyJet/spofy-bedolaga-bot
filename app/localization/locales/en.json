@@ -1161,7 +1161,7 @@
   "FUNNEL_TRIAL_EXPIRED_2": "<tg-emoji emoji-id='5877613700344450910'>⏳</tg-emoji> <b>Your {percent}% discount is about to expire</b>\n\nWe are holding it for you, but after <b>{expires_at}</b> only the full price remains.",
   "FUNNEL_TRIAL_IDLE": "<tg-emoji emoji-id='5843553939672274145'>🔌</tg-emoji> <b>VPN is on, but not connected</b>\n\nPick your device and tap “Connect”, it takes a minute. Stuck? Message support and we'll connect it together.",
   "GIFT_ACTIVATION_ALREADY_OWNED_ERROR": "<tg-emoji emoji-id='5879785854284599288'>ℹ️</tg-emoji> This gift has already been activated.",
-  "GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>Gift activated!</b>\n{tariff_text}\n\nYour subscription has been updated.",
+  "GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>Gift activated!</b>\n{tariff_text}\n\n{valid_until}",
   "GIFT_ACTIVATION_CANCEL_BUTTON": "❌ Cancel",
   "GIFT_ACTIVATION_FAILED_PREFIX": "Failed to activate gift: {error}",
   "GIFT_ACTIVATION_GENERIC_ERROR": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> An error occurred while activating the gift. Please try activating via the personal cabinet.",
@@ -1171,7 +1171,7 @@
   "GIFT_ACTIVATION_NOT_FOUND": "Gift not found or unavailable.",
   "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "Message is outdated. Try /start.",
   "GIFT_ACTIVATION_SELF_CLAIM_ERROR": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> You cannot activate your own gift.\nSend the code to a friend!",
-  "GIFT_ACTIVATION_SUCCESS_TEXT": "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> <b>Gift activated!</b>\n{tariff_name} — {period_days} days\n\nYour subscription has been updated.",
+  "GIFT_ACTIVATION_SUCCESS_TEXT": "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> <b>Gift activated!</b>\n{tariff_name} — {period_days} days\n\n{valid_until}",
   "GIFT_AUTO_PURCHASE_FAILED": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> Could not automatically complete gift purchase: selected tariff or service is no longer available.",
   "GIFT_BACK_TO_PERIODS_BUTTON": "⬅️ Back to periods",
   "GIFT_BACK_TO_SUBSCRIPTION_BUTTON": "⬅️ Back to subscription",
@@ -2371,5 +2371,9 @@
   "FUNNEL_APP_WHERE": "in {app}",
   "FUNNEL_APP_WHERE_UNKNOWN": "in the app",
   "FUNNEL_APP_NAME_UNKNOWN": "the app",
-  "FUNNEL_APP_BYPASS_STEP": "\n3. If sites still don't open, pick a server marked «Обход»"
+  "FUNNEL_APP_BYPASS_STEP": "\n3. If sites still don't open, pick a server marked «Обход»",
+  "GIFT_ACTIVATION_LIFETIME_ERROR": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> You have a Forever subscription, so the gift can't be applied to it. It stays unactivated. If you need help, write to @spofysup.",
+  "GIFT_ACTIVATION_UPDATED_LINE": "Your subscription has been updated.",
+  "GIFT_ACTIVATION_VALID_FOREVER": "Your subscription is valid forever.",
+  "GIFT_ACTIVATION_VALID_UNTIL": "Your subscription is valid until {end_date}."
 }

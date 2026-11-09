@@ -37,6 +37,7 @@ from app.utils.cache import RateLimitCache
 from app.utils.gift_links import (
     build_gift_claim_artifacts,
 )
+from app.utils.gift_result import subscription_end_fields
 
 
 logger = structlog.get_logger(__name__)
@@ -75,6 +76,9 @@ class PurchaseStatusResponse(BaseModel):
     gift_code: str | None = None
     bot_claim_url: str | None = None
     cabinet_claim_url: str | None = None
+    # Только в ответе на активацию: до какого числа теперь действует подписка.
+    end_date: datetime | None = None
+    is_lifetime: bool = False
 
 
 def _validate_contact(contact_type: str, contact_value: str) -> None:
@@ -108,6 +112,10 @@ class GiftClaimResponse(BaseModel):
     subscription_url: str | None = None
     subscription_crypto_link: str | None = None
     auto_login_token: str | None = None
+    # Фактический итог: остаток прежней подписки пересчитывается по стоимости,
+    # поэтому period_days подарка итогового срока не показывает.
+    end_date: datetime | None = None
+    is_lifetime: bool = False
 
 
 # ============ Helpers ============
@@ -314,7 +322,12 @@ async def activate_purchase(
     except GuestPurchaseError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
-    return _build_purchase_status_response(purchase)
+    response = _build_purchase_status_response(purchase)
+    user_id = getattr(purchase, 'user_id', None)
+    if user_id and purchase.status == GuestPurchaseStatus.DELIVERED.value:
+        for field, value in (await subscription_end_fields(db, user_id)).items():
+            setattr(response, field, value)
+    return response
 
 
 @router.get('/gift/{token}', response_model=PurchaseStatusResponse)
@@ -436,4 +449,5 @@ async def claim_gift(
         subscription_url=purchase.subscription_url,
         subscription_crypto_link=purchase.subscription_crypto_link,
         auto_login_token=purchase.auto_login_token,
+        **await subscription_end_fields(db, user.id),
     )

@@ -1161,7 +1161,7 @@
   "FUNNEL_TRIAL_EXPIRED_2": "<tg-emoji emoji-id='5877613700344450910'>⏳</tg-emoji> <b>Скидка {percent}% скоро сгорит</b>\n\nМы держим её за вами, но после <b>{expires_at}</b> останется только полная цена.",
   "FUNNEL_TRIAL_IDLE": "<tg-emoji emoji-id='5843553939672274145'>🔌</tg-emoji> <b>Пробный период идёт, а VPN ещё не подключён</b>\n\nЭто минута: нажмите «Подключить VPN», а на странице — «Добавить подписку». Не выходит — напишите нам, разберёмся.",
   "GIFT_ACTIVATION_ALREADY_OWNED_ERROR": "<tg-emoji emoji-id='5879785854284599288'>ℹ️</tg-emoji> Этот подарок уже был активирован.",
-  "GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>Подарок активирован!</b>\n{tariff_text}\n\nВаша подписка обновлена.",
+  "GIFT_ACTIVATION_CALLBACK_SUCCESS_TEXT": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>Подарок активирован!</b>\n{tariff_text}\n\n{valid_until}",
   "GIFT_ACTIVATION_CANCEL_BUTTON": "❌ Отмена",
   "GIFT_ACTIVATION_FAILED_PREFIX": "Не удалось активировать подарок: {error}",
   "GIFT_ACTIVATION_GENERIC_ERROR": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> Не получилось активировать подарок. Попробуйте ещё раз через минуту, а если повторится — напишите в поддержку @spofysup.",
@@ -1171,7 +1171,7 @@
   "GIFT_ACTIVATION_NOT_FOUND": "Подарок не найден или недоступен.",
   "GIFT_ACTIVATION_OBSOLETE_MESSAGE": "Сообщение устарело. Попробуйте /start.",
   "GIFT_ACTIVATION_SELF_CLAIM_ERROR": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Нельзя активировать свой собственный подарок.\nОтправьте код другу!",
-  "GIFT_ACTIVATION_SUCCESS_TEXT": "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.",
+  "GIFT_ACTIVATION_SUCCESS_TEXT": "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\n{valid_until}",
   "GIFT_AUTO_PURCHASE_FAILED": "<tg-emoji emoji-id='5778527486270770928'>❌</tg-emoji> Не удалось автоматически оформить подарок: выбранный тариф или услуга более недоступны.",
   "GIFT_BACK_TO_PERIODS_BUTTON": "⬅️ К периодам",
   "GIFT_BACK_TO_SUBSCRIPTION_BUTTON": "⬅️ К подписке",
@@ -2374,5 +2374,9 @@
   "FUNNEL_APP_BYPASS_STEP": "\n3. Если сайты не открываются — выберите сервер с пометкой «Обход»",
   "MENU_WHEEL": "🎡 Колесо призов",
   "MENU_WHEEL_SPINS": "🎡 Колесо призов · {count} {spins_word}",
-  "PAYMENT_SUPPORT_INFO": "<b>Помощь с оплатой</b>\n\nДеньги списались, а баланс или подписка не пополнились, или нужен возврат — напишите нам: дата, сумма и способ оплаты."
+  "PAYMENT_SUPPORT_INFO": "<b>Помощь с оплатой</b>\n\nДеньги списались, а баланс или подписка не пополнились, или нужен возврат — напишите нам: дата, сумма и способ оплаты.",
+  "GIFT_ACTIVATION_LIFETIME_ERROR": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> У вас подписка «Навсегда» — подарок к ней не применяется. Он остался неактивированным. Если нужна помощь, напишите @spofysup.",
+  "GIFT_ACTIVATION_UPDATED_LINE": "Ваша подписка обновлена.",
+  "GIFT_ACTIVATION_VALID_FOREVER": "Подписка действует навсегда.",
+  "GIFT_ACTIVATION_VALID_UNTIL": "Подписка действует до {end_date}."
 }

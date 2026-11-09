@@ -58,6 +58,7 @@ from app.services.gift_claim_service import (
     GiftClaimSelfActivationError,
     claim_gift_for_user,
 )
+from app.services.guest_purchase_service import GiftLifetimeHolderError
 from app.services.main_menu_button_service import MainMenuButtonService
 from app.services.phantom_service import claim_phantom, merge_phantom_into_user
 from app.services.pinned_message_service import (
@@ -89,6 +90,7 @@ from app.services.web_auth_service import (
 from app.states import RegistrationStates
 from app.utils.background import spawn_background_task
 from app.utils.gift_links import InvalidGiftTokenError, parse_gift_claim_input
+from app.utils.gift_result import gift_valid_until_line
 from app.utils.lifetime import apply_lifetime_period
 from app.utils.long_messages import answer_long_text, edit_long_text, send_long_text
 from app.utils.rich_menu import try_answer_rich_main_menu, try_send_rich_main_menu
@@ -484,6 +486,15 @@ async def _activate_pending_gift_after_registration(
                 parse_mode=ParseMode.HTML,
             )
             return
+        except GiftLifetimeHolderError:
+            await answer_func(
+                texts.t(
+                    'GIFT_ACTIVATION_LIFETIME_ERROR',
+                    '⚠️ У вас подписка «Навсегда» — подарок к ней не применяется. Он остался неактивированным.',
+                ),
+                parse_mode=ParseMode.HTML,
+            )
+            return
         except GiftClaimNotFoundError:
             # Битая/устаревшая ссылка: раньше молча открывалось меню, и человек не понимал,
             # почему подарок не пришёл.
@@ -499,7 +510,7 @@ async def _activate_pending_gift_after_registration(
             apply_lifetime_period(
                 texts.t(
                     'GIFT_ACTIVATION_SUCCESS_TEXT',
-                    '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\nВаша подписка обновлена.',
+                    '🎁 <b>Подарок активирован!</b>\n{tariff_name} — {period_days} дн.\n\n{valid_until}',
                 ),
                 gift_purchase.period_days,
                 'period_days',
@@ -507,6 +518,7 @@ async def _activate_pending_gift_after_registration(
             ).format(
                 tariff_name=tariff_name,
                 period_days=gift_purchase.period_days,
+                valid_until=await gift_valid_until_line(db, texts, user.id),
             ),
             parse_mode=ParseMode.HTML,
         )
