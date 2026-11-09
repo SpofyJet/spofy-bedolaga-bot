@@ -33,19 +33,6 @@ def test_new_user_has_no_empty_balance_but_has_promocode_and_info():
     assert ['menu_promocode', 'menu_info'] in _callbacks(kb)
 
 
-def test_saved_cart_is_the_first_cta_and_wins_over_checkout_draft():
-    kb = get_main_menu_keyboard(show_resume_checkout=True, has_saved_cart=True)
-    callbacks = _callbacks(kb)
-    assert callbacks[0] == ['return_to_saved_cart']
-    assert _flat(kb).count('return_to_saved_cart') == 1
-    assert 'subscription_resume_checkout' not in _flat(kb)
-
-
-def test_checkout_draft_is_the_first_cta_without_saved_cart():
-    kb = get_main_menu_keyboard(show_resume_checkout=True, has_saved_cart=False)
-    assert _callbacks(kb)[0] == ['subscription_resume_checkout']
-
-
 def test_balance_stays_for_people_with_money_or_paid_history():
     with_money = get_main_menu_keyboard(
         has_had_paid_subscription=False, has_active_subscription=False, balance_kopeks=5000
@@ -197,3 +184,11 @@ async def test_free_trial_is_activated_in_one_tap(monkeypatch):
     await purchase.show_trial_offer(callback, user, MagicMock())
     activate.assert_awaited_once()
     callback.message.edit_text.assert_not_awaited()  # экрана «Активировать?» больше нет
+
+
+def test_saved_cart_is_the_first_cta():
+    kb = get_main_menu_keyboard(has_saved_cart=True)
+    callbacks = _callbacks(kb)
+    assert callbacks[0] == ['return_to_saved_cart']
+    assert _flat(kb).count('return_to_saved_cart') == 1
+    assert 'subscription_resume_checkout' not in _flat(kb)

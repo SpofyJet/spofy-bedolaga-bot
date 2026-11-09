@@ -1211,8 +1211,9 @@ def upgrade() -> None:
 
     non_empty = [table for table in present if bind.execute(sa.text(f'SELECT 1 FROM {table} LIMIT 1')).first()]
     if non_empty:
-        logger.warning('Keeping removed payment provider tables because they hold rows: %s', non_empty)
-    elif present:
+        logger.warning('Keeping removed payment providers because their tables hold rows: %s', non_empty)
+        return
+    if present:
         op.execute('DROP TABLE IF EXISTS ' + ', '.join(present))
 
     op.execute('ALTER TABLE tariffs DROP COLUMN IF EXISTS lava_product_id')

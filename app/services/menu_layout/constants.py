@@ -678,13 +678,6 @@ AVAILABLE_CALLBACKS: list[dict[str, Any]] = [
         'text': {'ru': '🗑️ Очистить корзину', 'en': '🗑️ Clear cart'},
     },
     {
-        'callback_data': 'subscription_confirm',
-        'name': 'Подтвердить покупку',
-        'category': 'purchase',
-        'icon': '✅',
-        'text': {'ru': '✅ Подтвердить', 'en': '✅ Confirm'},
-    },
-    {
         'callback_data': 'subscription_cancel',
         'name': 'Отменить покупку',
         'category': 'purchase',

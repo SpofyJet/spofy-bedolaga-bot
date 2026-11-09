@@ -6,6 +6,7 @@ Revises: 0144
 
 from collections.abc import Sequence
 
+import sqlalchemy as sa
 from alembic import op
 
 
@@ -19,6 +20,9 @@ COPIED_SETTINGS = ('MARKUP_PERCENT', 'RETURN_URL', 'SUCCESS_URL')
 
 
 def _rename(old: str, new: str) -> None:
+    # На чистой базе create_all уже создал таблицу под новым именем.
+    if f'{old}_payments' not in sa.inspect(op.get_bind()).get_table_names():
+        return
     op.execute(f'ALTER TABLE {old}_payments RENAME TO {new}_payments')
     op.execute(f'ALTER SEQUENCE IF EXISTS {old}_payments_id_seq RENAME TO {new}_payments_id_seq')
     op.execute(f'ALTER INDEX IF EXISTS {old}_payments_pkey RENAME TO {new}_payments_pkey')

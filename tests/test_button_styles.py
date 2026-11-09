@@ -37,20 +37,6 @@ def _patch_subscription_screen(monkeypatch):
     monkeypatch.setattr(kb, 'get_display_subscription_link', lambda sub: 'https://example.com/sub')
 
 
-def test_confirm_keyboard_styles():
-    styles = _callbacks(kb.get_subscription_confirm_keyboard('ru'))
-    assert styles['subscription_confirm'] == 'success'
-    assert styles['checkout_toggle_autopay'] is None
-    assert styles['subscription_cancel'] is None
-
-
-def test_clear_saved_cart_is_danger():
-    styles = _callbacks(kb.get_subscription_confirm_keyboard_with_cart('ru'))
-    assert styles['clear_saved_cart'] == 'danger'
-    assert styles['subscription_confirm'] == 'success'
-    assert styles['checkout_toggle_autopay'] is None
-
-
 def test_subscription_screen_main_actions(monkeypatch):
     _patch_subscription_screen(monkeypatch)
     markup = kb.get_subscription_keyboard('ru', has_subscription=True, is_trial=False, subscription=_fake_sub('active'))

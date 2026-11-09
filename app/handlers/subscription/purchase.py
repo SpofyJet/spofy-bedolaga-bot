@@ -80,6 +80,9 @@ from .autopay import (
     handle_sbp_recurring_enable,
     handle_sbp_recurring_enable_for,
     handle_sbp_recurring_menu,
+    handle_subscription_cancel,
+    set_autopay_days,
+    set_autopay_period,
     show_autopay_days,
     show_autopay_period,
     toggle_autopay,
@@ -87,7 +90,9 @@ from .autopay import (
 from .common import update_traffic_prices
 from .countries import (
     _should_show_countries_management,
+    apply_countries_changes,
     handle_add_countries,
+    handle_manage_country,
 )
 from .devices import (
     confirm_add_devices,
@@ -110,8 +115,11 @@ from .devices import (
 from .happ import (
     handle_happ_download_back,
     handle_happ_download_close,
+    handle_happ_download_platform_choice,
+    handle_happ_download_request,
 )
 from .links import handle_connect_subscription, handle_open_subscription_link
+from .promo import claim_discount_offer, handle_promo_offer_close
 from .traffic import (
     confirm_reset_traffic,
     confirm_switch_traffic,
@@ -1678,6 +1686,9 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_trial_offer, F.data == 'menu_trial')
 
     dp.callback_query.register(activate_trial, F.data == 'trial_activate')
+    dp.callback_query.register(
+        start_subscription_purchase, F.data.in_(['menu_buy', 'subscription_upgrade', 'subscription_purchase'])
+    )
 
     # Хендлеры платного триала
 
@@ -1736,6 +1747,29 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_sbp_recurring_cancel, F.data == 'sbp_recurring_cancel')
 
     dp.callback_query.register(handle_sbp_recurring_cancel_confirm, F.data == 'sbp_recurring_cancel_confirm')
+    dp.callback_query.register(handle_subscription_cancel, F.data == 'subscription_cancel')
+    dp.callback_query.register(set_autopay_days, F.data.startswith('autopay_days_'))
+    dp.callback_query.register(set_autopay_period, F.data.startswith('autopay_period_'))
+    dp.callback_query.register(handle_manage_country, F.data.startswith('country_manage_'))
+    dp.callback_query.register(apply_countries_changes, F.data == 'countries_apply')
+    dp.callback_query.register(claim_discount_offer, F.data.startswith('claim_discount_'))
+    dp.callback_query.register(
+        handle_promo_offer_close,
+        F.data == 'promo_offer_close',
+    )
+    dp.callback_query.register(handle_happ_download_request, F.data == 'subscription_happ_download')
+    dp.callback_query.register(
+        handle_happ_download_platform_choice,
+        F.data.in_(
+            [
+                'happ_download_ios',
+                'happ_download_android',
+                'happ_download_pc',
+                'happ_download_macos',
+                'happ_download_windows',
+            ]
+        ),
+    )
 
     dp.callback_query.register(handle_happ_download_close, F.data == 'happ_download_close')
 

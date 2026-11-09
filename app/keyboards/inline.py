@@ -6,8 +6,7 @@ from aiogram import types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import PERIOD_PRICES, settings
-from app.database.models import User
+from app.config import settings
 from app.keyboards.button_icons import apply_button_icons
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
@@ -36,7 +35,6 @@ async def get_main_menu_keyboard_async(
     subscription_is_active: bool = False,
     balance_kopeks: int = 0,
     subscription=None,
-    show_resume_checkout: bool = False,
     has_saved_cart: bool = False,
     *,
     is_moderator: bool = False,
@@ -125,7 +123,6 @@ async def get_main_menu_keyboard_async(
             has_had_paid_subscription=has_had_paid_subscription,
             balance_kopeks=balance_kopeks,
             subscription=subscription,
-            show_resume_checkout=show_resume_checkout,
             has_saved_cart=has_saved_cart,
             custom_buttons=custom_buttons or [],
             # Добавляем данные для плейсхолдеров
@@ -172,7 +169,6 @@ async def get_main_menu_keyboard_async(
         subscription_is_active=subscription_is_active,
         balance_kopeks=balance_kopeks,
         subscription=subscription,
-        show_resume_checkout=show_resume_checkout,
         has_saved_cart=has_saved_cart,
         is_moderator=is_moderator,
         custom_buttons=custom_buttons,
@@ -680,7 +676,6 @@ def get_main_menu_keyboard(
     subscription_is_active: bool = False,
     balance_kopeks: int = 0,
     subscription=None,
-    show_resume_checkout: bool = False,
     has_saved_cart: bool = False,  # Новый параметр для отображения уведомления о сохраненной корзине
     *,
     is_moderator: bool = False,
@@ -724,13 +719,12 @@ def get_main_menu_keyboard(
 
     # Незавершённый заказ — это продолжение собственного выбора, а не рядовой
     # пункт меню. Возвращаем его первым CTA независимо от остальных состояний.
-    if show_resume_checkout or has_saved_cart:
-        resume_callback = 'return_to_saved_cart' if has_saved_cart else 'subscription_resume_checkout'
+    if has_saved_cart:
         keyboard.append(
             [
                 InlineKeyboardButton(
                     text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                    callback_data=resume_callback,
+                    callback_data='return_to_saved_cart',
                     style='success',
                 )
             ]
@@ -1633,42 +1627,6 @@ def get_payment_methods_keyboard_with_cart(
     return keyboard
 
 
-def get_subscription_confirm_keyboard_with_cart(
-    language: str = 'ru',
-    autopay_available: bool = True,
-    autopay_enabled: bool = False,
-) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                text='✅ Подтвердить покупку',
-                callback_data='subscription_confirm',
-                style='success',
-            )
-        ],
-    ]
-    if autopay_available:
-        autopay_text = (
-            texts.t('CHECKOUT_AUTOPAY_BUTTON_ON', '🔁 Автопродление: вкл')
-            if autopay_enabled
-            else texts.t('CHECKOUT_AUTOPAY_BUTTON_OFF', '🔁 Автопродление: выкл')
-        )
-        keyboard.append([InlineKeyboardButton(text=autopay_text, callback_data='checkout_toggle_autopay')])
-    keyboard.extend(
-        [
-            [InlineKeyboardButton(text='🗑️ Очистить корзину', callback_data='clear_saved_cart', style='danger')],
-            [
-                InlineKeyboardButton(
-                    text=texts.BACK,
-                    callback_data='subscription_config_back',  # Изменили на возврат к настройке
-                )
-            ],
-        ]
-    )
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
 def get_insufficient_balance_keyboard_with_cart(
     language: str = 'ru',
     amount_kopeks: int = 0,
@@ -1734,94 +1692,12 @@ def _spofy_days_label(days: int, language: str = 'ru') -> str:
     return f'{n} {_spofy_days_word(n)}'
 
 
-def get_subscription_period_keyboard(
-    language: str = DEFAULT_LANGUAGE, user: User | None = None
-) -> InlineKeyboardMarkup:
-    """
-    Generate subscription period selection keyboard with personalized pricing.
-
-    Args:
-        language: User's language code
-        user: User object for personalized discounts (None = default discounts)
-
-    Returns:
-        InlineKeyboardMarkup with period buttons showing personalized prices
-    """
-    from app.utils.price_display import calculate_user_price
-
-    texts = get_texts(language)
-    keyboard = []
-
-    available_periods = settings.get_available_subscription_periods()
-
-    for days in available_periods:
-        # Get base price for this period
-        base_price = PERIOD_PRICES.get(days, 0)
-
-        # Calculate personalized price with user's discounts
-        price_info = calculate_user_price(user, base_price, days, 'period')
-
-        # Spofy: период в днях + длинное тире + цена за месяц (как было до обновления)
-        _days_label = f'{days} {_spofy_days_word(days)}'
-        if price_info.final_price == 0:
-            button_text = f'📅 {_days_label}'
-        elif getattr(price_info, 'has_discount', False):
-            button_text = (
-                f'📅 {_days_label} — '
-                f'{texts.format_price(price_info.base_price)} → '
-                f'{texts.format_price(price_info.final_price)} '
-                f'(-{price_info.discount_percent}%)'
-            )
-        else:
-            button_text = f'📅 {_days_label} — {texts.format_price(price_info.final_price)}'
-
-        # n6-П5: цену за месяц с кнопки убрали — кнопка короткая, детали в тексте экрана
-
-        keyboard.append([InlineKeyboardButton(text=button_text, callback_data=f'period_{days}')])
-
-    # Кнопка "Простая покупка" была убрана из выбора периода подписки
-
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
 def _get_device_declension(count: int) -> str:
     if count % 10 == 1 and count % 100 != 11:
         return 'устройство'
     if count % 10 in [2, 3, 4] and count % 100 not in [12, 13, 14]:
         return 'устройства'
     return 'устройств'
-
-
-def get_subscription_confirm_keyboard(
-    language: str = DEFAULT_LANGUAGE,
-    autopay_available: bool = True,
-    autopay_enabled: bool = False,
-) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                text=texts.CONFIRM,
-                callback_data='subscription_confirm',
-                style='success',
-            ),
-        ],
-    ]
-    if autopay_available:
-        autopay_text = (
-            texts.t('CHECKOUT_AUTOPAY_BUTTON_ON', '🔁 Автопродление: вкл')
-            if autopay_enabled
-            else texts.t('CHECKOUT_AUTOPAY_BUTTON_OFF', '🔁 Автопродление: выкл')
-        )
-        keyboard.append([InlineKeyboardButton(text=autopay_text, callback_data='checkout_toggle_autopay')])
-    keyboard.append(
-        [
-            InlineKeyboardButton(text=texts.CANCEL, callback_data='subscription_cancel'),
-        ],
-    )
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_balance_keyboard(
