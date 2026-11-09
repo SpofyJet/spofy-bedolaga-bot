@@ -1015,12 +1015,12 @@ async def _notify_ticket_reply_by_email(user: User, ticket: Ticket, reply_text: 
     Тумблер уведомлений общий с Telegram-каналом и уже проверен вызывающей
     функцией.
     """
-    if not getattr(user, 'email', None) or not getattr(user, 'email_verified', False):
+    if not user.email or not user.email_verified:
         logger.warning(
             'Cannot notify ticket user: no telegram_id and no verified email',
             ticket_id=ticket.id,
-            username=getattr(user, 'username', None),
-            auth_type=getattr(user, 'auth_type', None),
+            username=user.username,
+            auth_type=user.auth_type,
         )
         return
 

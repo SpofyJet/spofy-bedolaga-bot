@@ -286,7 +286,7 @@ def _get_autopay_day_options(subscription: Subscription | None) -> list[int]:
         options.add(default_setting)
 
     if subscription is not None:
-        current = _normalize_autopay_days(getattr(subscription, 'autopay_days_before', None))
+        current = _normalize_autopay_days(subscription.autopay_days_before)
         if current is not None:
             options.add(current)
 
@@ -299,8 +299,8 @@ def _build_autopay_payload(
     if subscription is None:
         return None
 
-    enabled = bool(getattr(subscription, 'autopay_enabled', False))
-    days_before = _normalize_autopay_days(getattr(subscription, 'autopay_days_before', None))
+    enabled = bool(subscription.autopay_enabled)
+    days_before = _normalize_autopay_days(subscription.autopay_days_before)
     options = _get_autopay_day_options(subscription)
 
     default_days = days_before
@@ -610,7 +610,7 @@ async def _resolve_user_from_init_data(
         )
 
     # Block access for banned/deleted users
-    user_status = getattr(user, 'status', None)
+    user_status = user.status
     if user_status in ('blocked', 'deleted'):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
@@ -1589,10 +1589,10 @@ def _format_offer_message(
         replacements.setdefault(key, value if value is not None else template_value)
 
     if replacements.get('active_discount_hours') is None and template:
-        replacements['active_discount_hours'] = getattr(template, 'valid_hours', None)
+        replacements['active_discount_hours'] = template.valid_hours
 
     if replacements.get('test_duration_hours') is None and template:
-        replacements['test_duration_hours'] = getattr(template, 'test_duration_hours', None)
+        replacements['test_duration_hours'] = template.test_duration_hours
 
     if server_name:
         replacements.setdefault('server_name', server_name)
@@ -1616,11 +1616,11 @@ def _extract_offer_duration_hours(
     if effect_type == 'test_access':
         source = extra.get('test_duration_hours')
         if source is None and template is not None:
-            source = getattr(template, 'test_duration_hours', None)
+            source = template.test_duration_hours
     else:
         source = extra.get('active_discount_hours')
         if source is None and template is not None:
-            source = getattr(template, 'active_discount_hours', None)
+            source = template.active_discount_hours
 
     try:
         if source is None:
@@ -1971,7 +1971,7 @@ async def _load_devices_info(user: User, subscription=None) -> tuple[int, list[M
     if subscription is not None and settings.is_multi_tariff_enabled():
         panel_user_id = getattr(subscription, 'remnawave_id', None)
     else:
-        panel_user_id = getattr(user, 'remnawave_id', None)
+        panel_user_id = user.remnawave_id
     if not panel_user_id:
         return 0, []
 
@@ -2092,7 +2092,7 @@ async def _build_referral_info(
     db: AsyncSession,
     user: User,
 ) -> MiniAppReferralInfo | None:
-    referral_code = getattr(user, 'referral_code', None)
+    referral_code = user.referral_code
     referral_settings = settings.get_referral_settings() or {}
 
     referral_link = None
@@ -2260,13 +2260,13 @@ def _is_trial_available_for_user(user: User) -> bool:
     if settings.TRIAL_DURATION_DAYS <= 0:
         return False
 
-    if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', 'telegram')):
+    if settings.is_trial_disabled_for_user(user.auth_type):
         return False
 
-    if getattr(user, 'has_had_paid_subscription', False):
+    if user.has_had_paid_subscription:
         return False
 
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     return not any(s.is_active for s in subs)
 
 
@@ -2626,11 +2626,11 @@ async def get_subscription_details(
 
     if subscription and getattr(subscription, 'tariff_id', None):
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
-        if tariff and getattr(tariff, 'is_daily', False):
+        if tariff and tariff.is_daily:
             is_daily_tariff = True
             is_daily_paused = getattr(subscription, 'is_daily_paused', False)
             daily_tariff_name = tariff.name
-            daily_price_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
+            daily_price_kopeks = tariff.daily_price_kopeks
             # Применяем скидку промогруппы + promo-offer для отображения
             if daily_price_kopeks > 0:
                 _promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
@@ -2814,7 +2814,7 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
     promo_group = PricingEngine.resolve_promo_group(user) if user else None
 
     # Лимит докупки трафика
-    max_topup_traffic_gb = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
+    max_topup_traffic_gb = tariff.max_topup_traffic_gb or 0
     current_subscription_traffic = subscription.traffic_limit_gb or 0
 
     # Рассчитываем доступный лимит докупки
@@ -2823,7 +2823,7 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
         available_topup_gb = max(0, max_topup_traffic_gb - current_subscription_traffic)
 
     # Пакеты докупки трафика
-    traffic_topup_enabled = getattr(tariff, 'traffic_topup_enabled', False) and tariff.traffic_limit_gb > 0
+    traffic_topup_enabled = tariff.traffic_topup_enabled and tariff.traffic_limit_gb > 0
     traffic_topup_packages = []
 
     if traffic_topup_enabled and hasattr(tariff, 'get_traffic_topup_packages'):
@@ -2927,7 +2927,7 @@ async def update_subscription_autopay_endpoint(
 
     requested_days = payload.days_before
     normalized_days = _normalize_autopay_days(requested_days)
-    current_days = _normalize_autopay_days(getattr(subscription, 'autopay_days_before', None))
+    current_days = _normalize_autopay_days(subscription.autopay_days_before)
     if normalized_days is None:
         normalized_days = current_days
 
@@ -3014,7 +3014,7 @@ async def activate_subscription_trial_endpoint(
 ) -> MiniAppSubscriptionTrialResponse:
     user = await _authorize_miniapp_user(payload.init_data, db)
 
-    existing_subscription = getattr(user, 'subscription', None)
+    existing_subscription = user.subscription
     if existing_subscription is not None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -3026,7 +3026,7 @@ async def activate_subscription_trial_endpoint(
 
     if not _is_trial_available_for_user(user):
         error_code = 'trial_unavailable'
-        if getattr(user, 'has_had_paid_subscription', False):
+        if user.has_had_paid_subscription:
             error_code = 'trial_expired'
         elif settings.TRIAL_DURATION_DAYS <= 0:
             error_code = 'trial_disabled'
@@ -3286,7 +3286,7 @@ async def activate_subscription_trial_endpoint(
 
     return MiniAppSubscriptionTrialResponse(
         message=message,
-        subscription_id=getattr(subscription, 'id', None),
+        subscription_id=subscription.id,
         trial_status='activated',
         trial_duration_days=duration_days,
         charged_amount_kopeks=charged_amount if charged_amount > 0 else None,
@@ -3490,7 +3490,7 @@ async def claim_promo_offer(
             detail={'code': 'offer_expired', 'message': 'Offer expired'},
         )
 
-    effect_type = _normalize_effect_type(getattr(offer, 'effect_type', None))
+    effect_type = _normalize_effect_type(offer.effect_type)
 
     if effect_type == 'test_access':
         success, newly_added, expires_at, error_code = await promo_offer_service.grant_test_access(
@@ -3524,7 +3524,7 @@ async def claim_promo_offer(
 
         return MiniAppPromoOfferClaimResponse(success=True, code='test_access_claimed')
 
-    discount_percent = int(getattr(offer, 'discount_percent', 0) or 0)
+    discount_percent = int(offer.discount_percent or 0)
     if discount_percent <= 0:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
@@ -3617,7 +3617,7 @@ async def remove_connected_device(
     # на User (ср. _load_devices_info), но запрос не несёт subscription_id, поэтому
     # выбрать нужного панель-юзера не из чего и хендлер отдаёт 409. Поведение то же,
     # что и до 3.0.0; починка требует расширения контракта миниаппа.
-    panel_user_id = getattr(user, 'remnawave_id', None)
+    panel_user_id = user.remnawave_id
     if not panel_user_id:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -3695,11 +3695,11 @@ def _extract_promo_discounts(group: PromoGroup | None) -> dict[str, Any]:
         }
 
     return {
-        'server_discount_percent': max(0, _safe_int(getattr(group, 'server_discount_percent', 0))),
-        'traffic_discount_percent': max(0, _safe_int(getattr(group, 'traffic_discount_percent', 0))),
-        'device_discount_percent': max(0, _safe_int(getattr(group, 'device_discount_percent', 0))),
-        'period_discounts': _normalize_period_discounts(getattr(group, 'period_discounts', None)),
-        'apply_discounts_to_addons': bool(getattr(group, 'apply_discounts_to_addons', True)),
+        'server_discount_percent': max(0, _safe_int(group.server_discount_percent)),
+        'traffic_discount_percent': max(0, _safe_int(group.traffic_discount_percent)),
+        'device_discount_percent': max(0, _safe_int(group.device_discount_percent)),
+        'period_discounts': _normalize_period_discounts(group.period_discounts),
+        'apply_discounts_to_addons': bool(group.apply_discounts_to_addons),
     }
 
 
@@ -3757,7 +3757,7 @@ def _build_renewal_success_message(
     date_label = format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M') if subscription.end_date else ''
 
     tariff_label = ''
-    if settings.is_multi_tariff_enabled() and getattr(subscription, 'tariff', None):
+    if settings.is_multi_tariff_enabled() and subscription.tariff:
         tariff_label = f' «{subscription.tariff.name}»'
 
     if language_code in {'ru', 'fa'}:
@@ -3842,7 +3842,7 @@ async def _prepare_subscription_renewal_options(
     option_payloads: list[tuple[MiniAppSubscriptionRenewalPeriod, dict[str, Any]]] = []
 
     # Определяем доступные периоды: из тарифа или из настроек
-    tariff_id = getattr(subscription, 'tariff_id', None)
+    tariff_id = subscription.tariff_id
     tariff = None
     if tariff_id:
         tariff = await get_tariff_by_id(db, tariff_id)
@@ -3881,7 +3881,7 @@ async def _prepare_subscription_renewal_options(
 
         label = format_period_description(
             period_days,
-            getattr(user, 'language', settings.DEFAULT_LANGUAGE),
+            user.language,
         )
 
         price_label = settings.format_price(pricing_result.final_total)
@@ -4030,7 +4030,7 @@ async def _authorize_miniapp_user(
         )
 
     # Block access for banned/deleted users
-    user_status = getattr(user, 'status', None)
+    user_status = user.status
     if user_status in ('blocked', 'deleted'):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
@@ -4060,7 +4060,7 @@ def _ensure_paid_subscription(
     allowed_statuses: Collection[str] | None = None,
     subscription_id: int | None = None,
 ) -> Subscription:
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     if subscription_id:
         subscription = next((s for s in subs if s.id == subscription_id), None)
     else:
@@ -4132,7 +4132,7 @@ async def _prepare_server_catalog(
 ]:
     available_servers = await get_available_server_squads(
         db,
-        promo_group_id=getattr(user, 'promo_group_id', None),
+        promo_group_id=user.promo_group_id,
     )
     available_by_uuid = {server.squad_uuid: server for server in available_servers}
 
@@ -4397,8 +4397,8 @@ async def get_subscription_renewal_options_endpoint(
         return MiniAppSubscriptionRenewalOptionsResponse(
             periods=[],
             currency=(getattr(user, 'balance_currency', None) or 'RUB').upper(),
-            balance_kopeks=getattr(user, 'balance_kopeks', 0),
-            balance_label=settings.format_price(getattr(user, 'balance_kopeks', 0)),
+            balance_kopeks=user.balance_kopeks,
+            balance_label=settings.format_price(user.balance_kopeks),
             status_message='Classic subscriptions cannot be renewed. Please purchase a tariff.',
             sales_mode=settings.get_sales_mode(),
         )
@@ -4409,10 +4409,10 @@ async def get_subscription_renewal_options_endpoint(
         subscription,
     )
 
-    balance_kopeks = getattr(user, 'balance_kopeks', 0)
+    balance_kopeks = user.balance_kopeks
     currency = (getattr(user, 'balance_currency', None) or 'RUB').upper()
 
-    promo_group = getattr(user, 'promo_group', None)
+    promo_group = user.promo_group
     promo_group_model = (
         MiniAppPromoGroup(
             id=promo_group.id,
@@ -4462,7 +4462,7 @@ async def get_subscription_renewal_options_endpoint(
         autopay_days_options=renewal_autopay_days_options,
         autopay=renewal_autopay_payload,
         autopay_settings=renewal_autopay_payload,
-        is_trial=bool(getattr(subscription, 'is_trial', False)),
+        is_trial=bool(subscription.is_trial),
         sales_mode=settings.get_sales_mode(),
         **renewal_autopay_extras,
     )
@@ -4526,7 +4526,7 @@ async def submit_subscription_renewal_endpoint(
     # Валидация периода и расчёт цены через PricingEngine
     from app.services.pricing_engine import pricing_engine
 
-    tariff_id = getattr(subscription, 'tariff_id', None)
+    tariff_id = subscription.tariff_id
     tariff = None
     if tariff_id:
         tariff = await get_tariff_by_id(db, tariff_id)
@@ -4792,7 +4792,7 @@ async def subscription_purchase_preview_endpoint(
     pricing = await purchase_service.calculate_pricing(db, context, selection)
     preview_payload = purchase_service.build_preview_payload(context, pricing)
 
-    balance_label = settings.format_price(getattr(user, 'balance_kopeks', 0))
+    balance_label = settings.format_price(user.balance_kopeks)
 
     return MiniAppSubscriptionPurchasePreviewResponse(
         preview=preview_payload,
@@ -4923,7 +4923,7 @@ async def update_subscription_servers_endpoint(
         subscription_id=payload.subscription_id,
     )
     _validate_subscription_id(payload.subscription_id, subscription)
-    old_servers = list(getattr(subscription, 'connected_squads', []) or [])
+    old_servers = list(subscription.connected_squads or [])
 
     raw_selection: list[str] = []
     for collection in (
@@ -5754,7 +5754,7 @@ async def get_tariffs_endpoint(
     tariffs = await get_tariffs_for_user(db, promo_group_id)
 
     # Текущий тариф пользователя
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     active = [s for s in subs if s.is_active]
     if active:
         non_daily = [s for s in active if not getattr(s, 'is_daily_tariff', False)]
@@ -5862,7 +5862,7 @@ async def purchase_tariff_endpoint(
         )
 
     # For daily tariffs, force period_days=1 (protect against client manipulation)
-    is_daily_tariff = getattr(tariff, 'is_daily', False)
+    is_daily_tariff = tariff.is_daily
     if is_daily_tariff:
         payload.period_days = 1
 
@@ -6013,7 +6013,7 @@ async def purchase_tariff_endpoint(
         )
 
     # Инициализация daily полей при покупке суточного тарифа
-    is_daily_tariff = getattr(tariff, 'is_daily', False)
+    is_daily_tariff = tariff.is_daily
     if is_daily_tariff:
         subscription.is_daily_paused = False
         subscription.last_daily_charge_at = datetime.now(UTC)
@@ -6109,7 +6109,7 @@ async def preview_tariff_switch_endpoint(
             detail={'code': 'tariffs_mode_disabled', 'message': 'Tariffs mode is not enabled'},
         )
 
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     active = [s for s in subs if s.is_active and s.tariff_id]
     subscription = active[0] if len(active) == 1 else None
     if not subscription:
@@ -6327,8 +6327,8 @@ async def switch_tariff_endpoint(
     upgrade_cost = switch_result.upgrade_cost
     new_period_days = switch_result.new_period_days
 
-    current_is_daily = getattr(current_tariff, 'is_daily', False) if current_tariff else False
-    new_is_daily = getattr(new_tariff, 'is_daily', False)
+    current_is_daily = current_tariff.is_daily if current_tariff else False
+    new_is_daily = new_tariff.is_daily
     switching_from_daily = current_is_daily and not new_is_daily
 
     # Списываем доплату если апгрейд
@@ -6425,7 +6425,7 @@ async def switch_tariff_endpoint(
         subscription.traffic_used_gb = 0.0
 
     # Обработка daily полей при смене тарифа
-    new_is_daily = getattr(new_tariff, 'is_daily', False)
+    new_is_daily = new_tariff.is_daily
     old_is_daily = getattr(current_tariff, 'is_daily', False)
 
     if new_is_daily:
@@ -6542,7 +6542,7 @@ async def purchase_traffic_topup_endpoint(
         )
 
     # Проверяем наличие тарифа
-    tariff_id = getattr(subscription, 'tariff_id', None)
+    tariff_id = subscription.tariff_id
     if not tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -6563,7 +6563,7 @@ async def purchase_traffic_topup_endpoint(
         )
 
     # Проверяем, разрешена ли докупка трафика
-    if not getattr(tariff, 'traffic_topup_enabled', False):
+    if not tariff.traffic_topup_enabled:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
@@ -6583,7 +6583,7 @@ async def purchase_traffic_topup_endpoint(
         )
 
     # Проверяем лимит докупки трафика
-    max_topup_limit = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
+    max_topup_limit = tariff.max_topup_traffic_gb or 0
     if max_topup_limit > 0:
         current_traffic = subscription.traffic_limit_gb or 0
         new_traffic = current_traffic + payload.gb
@@ -6760,7 +6760,7 @@ async def toggle_daily_subscription_pause_endpoint(
             detail={'code': 'not_daily_tariff', 'message': 'Subscription is not on a daily tariff'},
         )
 
-    raw_daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+    raw_daily_price = tariff.daily_price_kopeks
 
     # Lock user BEFORE reading state and mutating to prevent TOCTOU on promo group
     # and to ensure is_daily_paused mutation is not overwritten by populate_existing

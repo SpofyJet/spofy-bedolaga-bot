@@ -666,9 +666,7 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
     texts = get_texts(db_user.language)
 
     # Триал отключён глобально (нулевая длительность) либо для этого типа пользователя
-    if settings.TRIAL_DURATION_DAYS <= 0 or settings.is_trial_disabled_for_user(
-        getattr(db_user, 'auth_type', 'telegram')
-    ):
+    if settings.TRIAL_DURATION_DAYS <= 0 or settings.is_trial_disabled_for_user(db_user.auth_type):
         await callback.message.edit_text(
             texts.t('TRIAL_DISABLED_FOR_USER_TYPE', 'Пробный период недоступен'),
             reply_markup=get_back_keyboard(db_user.language),
@@ -916,8 +914,8 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
     texts = get_texts(db_user.language)
 
     # Проверка ограничения на покупку/продление подписки
-    if getattr(db_user, 'restriction_subscription', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+    if db_user.restriction_subscription:
+        reason = html.escape(db_user.restriction_reason or 'Действие ограничено администратором')
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
@@ -933,9 +931,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
         return
 
     # Триал отключён глобально (нулевая длительность) либо для этого типа пользователя
-    if settings.TRIAL_DURATION_DAYS <= 0 or settings.is_trial_disabled_for_user(
-        getattr(db_user, 'auth_type', 'telegram')
-    ):
+    if settings.TRIAL_DURATION_DAYS <= 0 or settings.is_trial_disabled_for_user(db_user.auth_type):
         await callback.message.edit_text(
             texts.t('TRIAL_DISABLED_FOR_USER_TYPE', 'Пробный период недоступен'),
             reply_markup=get_back_keyboard(db_user.language),
@@ -964,7 +960,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
 
     if trial_price_kopeks > 0:
         # Платный триал - показываем экран с выбором метода оплаты
-        user_balance_kopeks = getattr(db_user, 'balance_kopeks', 0) or 0
+        user_balance_kopeks = db_user.balance_kopeks or 0
         can_pay_from_balance = user_balance_kopeks >= trial_price_kopeks
 
         # Берём параметры из триального тарифа если доступен
@@ -1486,7 +1482,7 @@ async def start_subscription_purchase(
 
     # Multi-tariff note: this path is only reached in classic (non-tariff) mode.
     # Tariff mode redirects to show_tariffs_list above. db_user.subscription is safe.
-    subscription = getattr(db_user, 'subscription', None)
+    subscription = db_user.subscription
 
     if settings.is_devices_selection_enabled():
         initial_devices = settings.DEFAULT_DEVICE_LIMIT
@@ -1884,7 +1880,7 @@ async def handle_extend_subscription(
         from app.database.crud.tariff import get_tariff_by_id
 
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
-        if tariff and getattr(tariff, 'is_daily', False):
+        if tariff and tariff.is_daily:
             # Суточный тариф: перенаправляем на страницу подписки (там кнопка «Возобновить»)
             await show_subscription_info(callback, db_user, db)
             return
@@ -2745,7 +2741,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
             # Выбор автопродления в checkout важнее дефолта конверсии триала
             if data.get('checkout_autopay'):
-                _sub_tariff = getattr(existing_subscription, 'tariff', None)
+                _sub_tariff = existing_subscription.tariff
                 if not (_sub_tariff and getattr(_sub_tariff, 'is_daily', False)):
                     existing_subscription.autopay_enabled = True
 
@@ -3520,7 +3516,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
         await callback.answer('❌ Ошибка: триал бесплатный', show_alert=True)
         return
 
-    user_balance_kopeks = getattr(db_user, 'balance_kopeks', 0) or 0
+    user_balance_kopeks = db_user.balance_kopeks or 0
     if user_balance_kopeks < trial_price_kopeks:
         topup_needed_kopeks = trial_price_kopeks - user_balance_kopeks
         await callback.answer(
@@ -4523,7 +4519,7 @@ async def handle_simple_subscription_purchase(
         await callback.answer('Выберите подписку через «Мои подписки»', show_alert=True)
         return
 
-    if getattr(db_user, 'restriction_subscription', False):
+    if db_user.restriction_subscription:
         await callback.answer('Покупка подписки ограничена администратором', show_alert=True)
         return
 
@@ -4577,7 +4573,7 @@ async def handle_simple_subscription_purchase(
     await state.update_data(subscription_params=subscription_params)
 
     # Проверяем баланс пользователя
-    user_balance_kopeks = getattr(db_user, 'balance_kopeks', 0)
+    user_balance_kopeks = db_user.balance_kopeks
     # Рассчитываем цену подписки
     price_kopeks, price_breakdown = await _calculate_simple_subscription_price(
         db,

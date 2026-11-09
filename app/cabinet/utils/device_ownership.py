@@ -33,10 +33,10 @@ def _collect_panel_user_ids(user: User) -> list[int]:
     first.
     """
     seen: dict[int, None] = {}  # ordered set
-    panel_user_id = getattr(user, 'remnawave_id', None)
+    panel_user_id = user.remnawave_id
     if panel_user_id:
         seen[panel_user_id] = None
-    for sub in getattr(user, 'subscriptions', None) or []:
+    for sub in user.subscriptions or []:
         sub_panel_user_id = getattr(sub, 'remnawave_id', None)
         if sub_panel_user_id:
             seen.setdefault(sub_panel_user_id, None)
@@ -79,7 +79,7 @@ async def verify_hwid_belongs_to_user(user: User, hwid: str) -> bool:
                 except RemnaWaveInvalidUserIdError as invalid_id_error:
                     logger.warning(
                         'Unusable panel user id during hwid validation, skipping',
-                        user_id=getattr(user, 'id', None),
+                        user_id=user.id,
                         error=str(invalid_id_error)[:200],
                     )
                     continue
@@ -92,7 +92,7 @@ async def verify_hwid_belongs_to_user(user: User, hwid: str) -> bool:
     except Exception as remnawave_error:
         logger.warning(
             'RemnaWave unreachable during hwid validation, degrading open',
-            user_id=getattr(user, 'id', None),
+            user_id=user.id,
             panel_user_id_count=len(panel_user_ids),
             error=str(remnawave_error)[:200],
         )

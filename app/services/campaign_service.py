@@ -116,7 +116,7 @@ class AdvertisingCampaignService:
         except Exception:
             logger.exception(
                 'Failed to attribute campaign',
-                user_id=getattr(user, 'id', None),
+                user_id=user.id,
                 campaign_slug=campaign_slug,
             )
             try:

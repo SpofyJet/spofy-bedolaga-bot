@@ -195,7 +195,7 @@ async def get_payment_methods(
         if method_id == 'platega' and settings.PLATEGA_INLINE_METHODS:
             from app.localization.texts import get_texts as _get_texts
 
-            _texts = _get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+            _texts = _get_texts(user.language or settings.DEFAULT_LANGUAGE)
             _PLATEGA_OPTION_DESCRIPTIONS = {
                 2: 'Система быстрых платежей (QR)',
                 11: 'Банковская карта РФ (RUB)',
@@ -520,7 +520,7 @@ async def create_topup(
                 description=settings.get_balance_payment_description(
                     request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
-                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                language=user.language or settings.DEFAULT_LANGUAGE,
                 payment_method_code=method_code,
                 return_url=cabinet_success_url,
                 failed_url=cabinet_failed_url,
@@ -550,7 +550,7 @@ async def create_topup(
                 description=settings.get_balance_payment_description(
                     request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
-                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                language=user.language or settings.DEFAULT_LANGUAGE,
                 return_url=cabinet_return_url,
                 success_url=cabinet_success_url,
             )
@@ -579,7 +579,7 @@ async def create_topup(
                 description=settings.get_balance_payment_description(
                     request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
-                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                language=user.language or settings.DEFAULT_LANGUAGE,
                 return_url=cabinet_success_url,
                 failed_url=cabinet_failed_url,
             )

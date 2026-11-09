@@ -123,7 +123,7 @@ def _build_subscription_preview(sub: Subscription | None) -> dict[str, Any] | No
 
 def _build_user_preview(user: User) -> dict[str, Any]:
     """Формирует превью данных пользователя для предварительного просмотра мержа."""
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     return {
         'id': user.id,
         'username': user.username,
@@ -282,7 +282,7 @@ async def _sync_transferred_subscriptions_to_panel(
         full_name=primary.full_name,
         username=primary.username,
         telegram_id=primary.telegram_id,
-        email=getattr(primary, 'email', None),
+        email=primary.email,
         user_id=primary.id,
     )
 
@@ -295,7 +295,7 @@ async def _sync_transferred_subscriptions_to_panel(
                         user_id=sub.remnawave_id,
                         description=new_description,
                         telegram_id=primary.telegram_id,
-                        email=getattr(primary, 'email', None),
+                        email=primary.email,
                     )
                     logger.info(
                         'Synced transferred subscription description to panel',
@@ -473,8 +473,8 @@ async def _handle_subscription_merge(
     # Multi-tariff mode: transfer ALL subscriptions from secondary to primary
     # Handles uq_subscriptions_user_tariff_active: (user_id, tariff_id) WHERE status IN ('active','trial')
     if settings.is_multi_tariff_enabled():
-        secondary_subs = list(getattr(secondary, 'subscriptions', None) or [])
-        primary_subs = list(getattr(primary, 'subscriptions', None) or [])
+        secondary_subs = list(secondary.subscriptions or [])
+        primary_subs = list(primary.subscriptions or [])
         secondary_legacy_panel_id = secondary.remnawave_id
 
         # Build set of primary's active tariff_ids for conflict detection
@@ -574,8 +574,8 @@ async def _handle_subscription_merge(
         return
 
     # Legacy single-subscription mode
-    primary_subs = getattr(primary, 'subscriptions', None) or []
-    secondary_subs = getattr(secondary, 'subscriptions', None) or []
+    primary_subs = primary.subscriptions or []
+    secondary_subs = secondary.subscriptions or []
     primary_sub = primary_subs[0] if primary_subs else None
     secondary_sub = secondary_subs[0] if secondary_subs else None
     has_primary_sub = primary_sub is not None
@@ -789,7 +789,7 @@ async def execute_merge(
         transferred_email = secondary.email
         transferred_verified = secondary.email_verified
         transferred_verified_at = secondary.email_verified_at
-        transferred_source = getattr(secondary, 'email_verification_source', None)
+        transferred_source = secondary.email_verification_source
         transferred_password_hash = secondary.password_hash
         # Очищаем на secondary и flush перед установкой на primary
         secondary.email = None
@@ -1172,9 +1172,9 @@ async def execute_merge(
         )
 
     # 13b. Промогруппа — остаётся более высокая по приоритету: скидки не должны пропасть.
-    secondary_group_id = getattr(secondary, 'promo_group_id', None)
+    secondary_group_id = secondary.promo_group_id
     if secondary_group_id is not None:
-        primary_group_id = getattr(primary, 'promo_group_id', None)
+        primary_group_id = primary.promo_group_id
         secondary_priority = await _promo_group_priority(db, secondary_group_id)
         primary_priority = await _promo_group_priority(db, primary_group_id)
         if primary_group_id is None or secondary_priority > primary_priority:

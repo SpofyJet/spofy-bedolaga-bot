@@ -57,8 +57,8 @@ async def start_simple_subscription_purchase(
         return
 
     # Проверка ограничения на покупку/продление подписки
-    if getattr(db_user, 'restriction_subscription', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+    if db_user.restriction_subscription:
+        reason = html.escape(db_user.restriction_reason or 'Действие ограничено администратором')
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
@@ -115,7 +115,7 @@ async def start_simple_subscription_purchase(
     )
 
     period_days = subscription_params['period_days']
-    user_balance_kopeks = getattr(db_user, 'balance_kopeks', 0)
+    user_balance_kopeks = db_user.balance_kopeks
 
     logger.warning(
         'SIMPLE_SUBSCRIPTION_DEBUG_START | user=%s | period=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s | total=%s | squads=%s',
@@ -145,10 +145,10 @@ async def start_simple_subscription_purchase(
     has_active_paid_subscription = False
     trial_notice = ''
     if current_subscription:
-        if not getattr(current_subscription, 'is_trial', False) and current_subscription.is_active:
+        if not current_subscription.is_trial and current_subscription.is_active:
             # Это платная активная подписка - требуем подтверждение
             has_active_paid_subscription = True
-        elif getattr(current_subscription, 'is_trial', False):
+        elif current_subscription.is_trial:
             # Это тестовая подписка
             try:
                 days_left = local_days_until(current_subscription.end_date)
@@ -403,7 +403,7 @@ async def handle_simple_subscription_pay_with_balance(
 
     current_subscription = await get_subscription_by_user_id(db, db_user.id)
 
-    if current_subscription and not getattr(current_subscription, 'is_trial', False) and current_subscription.is_active:
+    if current_subscription and not current_subscription.is_trial and current_subscription.is_active:
         # У пользователя есть активная платная подписка - требуем подтверждение
         await callback.answer(
             '⚠️ У вас уже есть активная платная подписка. Пожалуйста, подтвердите покупку.', show_alert=True
@@ -498,7 +498,7 @@ async def handle_simple_subscription_pay_with_balance(
         if existing_subscription:
             # Если подписка уже существует (платная или тестовая), продлеваем её
             # Сохраняем информацию о текущей подписке, особенно является ли она пробной
-            was_trial = getattr(existing_subscription, 'is_trial', False)
+            was_trial = existing_subscription.is_trial
 
             subscription = await extend_subscription(
                 db=db,
@@ -770,7 +770,7 @@ async def handle_simple_subscription_other_payment_methods(
         resolved_squad_uuid=resolved_squad_uuid,
     )
 
-    user_balance_kopeks = getattr(db_user, 'balance_kopeks', 0)
+    user_balance_kopeks = db_user.balance_kopeks
     can_pay_from_balance = user_balance_kopeks >= price_kopeks
     logger.warning(
         'SIMPLE_SUBSCRIPTION_DEBUG_METHODS',
@@ -866,7 +866,7 @@ async def handle_simple_subscription_payment_method(
 
     current_subscription = await get_subscription_by_user_id(db, db_user.id)
 
-    if current_subscription and not getattr(current_subscription, 'is_trial', False) and current_subscription.is_active:
+    if current_subscription and not current_subscription.is_trial and current_subscription.is_active:
         # У пользователя есть активная платная подписка - показываем сообщение
         await callback.answer(
             '⚠️ У вас уже есть активная платная подписка. Пожалуйста, подтвердите покупку через главное меню.',
@@ -1605,7 +1605,7 @@ async def confirm_simple_subscription_purchase(
         if existing_subscription:
             # Если подписка уже существует, продлеваем её
             # Сохраняем информацию о текущей подписке, особенно является ли она пробной
-            was_trial = getattr(existing_subscription, 'is_trial', False)
+            was_trial = existing_subscription.is_trial
 
             subscription = await extend_subscription(
                 db=db,

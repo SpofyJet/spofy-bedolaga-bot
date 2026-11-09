@@ -724,7 +724,7 @@ async def sync_tariff_squads(
                 return 'skipped'
 
             remnawave_id = (
-                getattr(sub, 'remnawave_id', None)
+                sub.remnawave_id
                 if settings.is_multi_tariff_enabled()
                 else (sub.user.remnawave_id if sub.user else None)
             )

@@ -73,7 +73,7 @@ async def _ensure_not_blocked(db: AsyncSession, user: User) -> None:
 
 def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
     """Convert TicketMessage to response."""
-    raw_items = getattr(message, 'media_items', None) or None
+    raw_items = message.media_items or None
     items = None
     if raw_items:
         try:

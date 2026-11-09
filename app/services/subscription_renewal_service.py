@@ -359,7 +359,7 @@ class SubscriptionRenewalService:
         description: str | None = None,
         payment_method: PaymentMethod | None = None,
     ) -> SubscriptionRenewalResult:
-        if not getattr(subscription, 'is_trial', False) and is_lifetime_end(getattr(subscription, 'end_date', None)):
+        if not subscription.is_trial and is_lifetime_end(subscription.end_date):
             # ULTIMA «Навсегда»: продление ничего не даёт — деньги не списываем.
             raise SubscriptionRenewalError('Subscription is lifetime and cannot be renewed')
 
@@ -507,7 +507,7 @@ class SubscriptionRenewalService:
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription_after.id,
                 user_id=subscription_after.user_id,
-                action='create' if getattr(subscription_after, 'remnawave_id', None) is None else 'update',
+                action='create' if subscription_after.remnawave_id is None else 'update',
                 reset_traffic=reset_traffic,
                 reset_reason='subscription renewal',
             )
@@ -519,7 +519,7 @@ class SubscriptionRenewalService:
 
                 rw_service = RemnaWaveService()
                 _panel_user_id = (
-                    getattr(subscription_after, 'remnawave_id', None)
+                    subscription_after.remnawave_id
                     if settings.is_multi_tariff_enabled()
                     else getattr(user, 'remnawave_id', None)
                 )

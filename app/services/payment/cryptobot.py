@@ -451,7 +451,7 @@ class CryptoBotPaymentMixin:
             return False
 
         # Validate period_days against allowed periods
-        tariff = getattr(subscription, 'tariff', None)
+        tariff = subscription.tariff
         if tariff and tariff.period_prices:
             allowed_periods = [int(p) for p in tariff.period_prices.keys()]
         else:
@@ -634,8 +634,8 @@ class CryptoBotPaymentMixin:
                     context.old_balance,
                     topup_status=context.topup_status,
                     referrer_info=context.referrer_info,
-                    subscription=getattr(user, 'subscription', None),
-                    promo_group=getattr(user, 'promo_group', None),
+                    subscription=user.subscription,
+                    promo_group=user.promo_group,
                     db=session,
                 )
             except Exception as error:

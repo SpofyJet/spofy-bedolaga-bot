@@ -141,7 +141,7 @@ async def apply_unsubscribe(db: AsyncSession, token: str) -> bool:
         logger.warning('Отписка: токен не прошёл проверку', user_id=user_id)
         return False
 
-    current = dict(getattr(user, 'notification_settings', None) or {})
+    current = dict(user.notification_settings or {})
     for key in CATEGORY_PREF_KEYS[category]:
         current[key] = False
     # Присваиваем новый dict целиком: мутация на месте не помечает JSONB грязным.

@@ -97,7 +97,7 @@ async def clear_email_queue(
     removed = result.rowcount or 0
     logger.info(
         'Очередь писем очищена администратором',
-        admin_id=getattr(admin, 'id', None),
+        admin_id=admin.id,
         removed=removed,
         pending_only=pending_only,
     )

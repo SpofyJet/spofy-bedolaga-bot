@@ -178,8 +178,8 @@ def _subscription_to_response(
         traffic_used_percent = 0
 
     # Check if this is a daily tariff
-    is_daily_paused = getattr(subscription, 'is_daily_paused', False) or False
-    tariff_id = getattr(subscription, 'tariff_id', None)
+    is_daily_paused = subscription.is_daily_paused or False
+    tariff_id = subscription.tariff_id
 
     # Use subscription's is_daily_tariff property if available
     is_daily = False
@@ -209,7 +209,7 @@ def _subscription_to_response(
     # Calculate next daily charge time (24 hours after last charge)
     next_daily_charge_at = None
     if is_daily and not is_daily_paused:
-        last_charge = getattr(subscription, 'last_daily_charge_at', None)
+        last_charge = subscription.last_daily_charge_at
         if last_charge:
             next_charge = last_charge + timedelta(days=1)
             # Если время списания уже прошло — не показываем (DailySubscriptionService обработает)

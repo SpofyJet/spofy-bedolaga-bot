@@ -72,7 +72,7 @@ def _serialize_promo_group(group: PromoGroup | None) -> PromoGroupSummary | None
         server_discount_percent=group.server_discount_percent,
         traffic_discount_percent=group.traffic_discount_percent,
         device_discount_percent=group.device_discount_percent,
-        apply_discounts_to_addons=getattr(group, 'apply_discounts_to_addons', True),
+        apply_discounts_to_addons=group.apply_discounts_to_addons,
     )
 
 
@@ -80,7 +80,7 @@ def _serialize_subscription(subscription: Subscription | None) -> SubscriptionSu
     if not subscription:
         return None
 
-    tariff = getattr(subscription, 'tariff', None)
+    tariff = subscription.tariff
     return SubscriptionSummary(
         id=subscription.id,
         status=subscription.status,
@@ -102,9 +102,9 @@ def _serialize_subscription(subscription: Subscription | None) -> SubscriptionSu
 
 
 def _serialize_user(user: User) -> UserResponse:
-    subscription = getattr(user, 'subscription', None)
-    promo_group = getattr(user, 'promo_group', None)
-    all_subscriptions = getattr(user, 'subscriptions', None) or []
+    subscription = user.subscription
+    promo_group = user.promo_group
+    all_subscriptions = user.subscriptions or []
 
     return UserResponse(
         id=user.id,

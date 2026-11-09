@@ -239,7 +239,7 @@ def _build_user_list_item(user: User, spending_stats: dict = None, highlight: st
     device_limit = 0
     days_remaining = 0
 
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     subscription = _row_subscription(subs, highlight)
     if subscription:
         has_subscription = True
@@ -415,8 +415,8 @@ async def _sync_subscription_to_panel(
         # диагностировать нечем.
         logger.warning(
             'Skipped panel sync: selected subscription has no panel user id',
-            user_id=getattr(user, 'id', None),
-            subscription_id=getattr(subscription, 'id', None),
+            user_id=user.id,
+            subscription_id=subscription.id,
         )
         return {'skipped': True, 'reason': 'Selected subscription has no panel user id'}
 
@@ -803,7 +803,7 @@ async def get_user_detail(
     user_stats = spending_stats.get(user.id, {'total_spent': 0, 'purchase_count': 0})
 
     # Build subscription info (all subscriptions + legacy single)
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     all_subscriptions_info = []
     for sub in subs:
         all_subscriptions_info.append(await _build_subscription_info_async(db, sub))
@@ -1063,7 +1063,7 @@ async def get_subscription_request_history(
     if subscription_id is not None:
         panel_user_id = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_id
     else:
-        panel_user_id = getattr(user, 'remnawave_id', None)
+        panel_user_id = user.remnawave_id
 
     if not panel_user_id:
         return {'total': 0, 'records': []}
@@ -1291,7 +1291,7 @@ async def update_user_subscription(
             detail='User not found',
         )
 
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     is_multi_tariff = settings.is_multi_tariff_enabled()
 
     # Select target subscription
@@ -1765,9 +1765,7 @@ async def update_user_subscription(
         await _sync_subscription_to_panel(db, user, subscription)
 
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        _enable_panel_user_id = (
-            subscription.remnawave_id if settings.is_multi_tariff_enabled() else getattr(user, 'remnawave_id', None)
-        )
+        _enable_panel_user_id = subscription.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
         if _enable_panel_user_id and subscription.status == 'active':
             from app.services.subscription_service import SubscriptionService
 
@@ -1994,7 +1992,7 @@ async def get_user_available_tariffs(
     # Get current subscription tariff
     current_tariff_id = None
     current_tariff_name = None
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
     if subscription and subscription.tariff_id:
         current_tariff_id = subscription.tariff_id
@@ -2698,7 +2696,7 @@ async def get_user_devices(
                 )
 
             device_limit = 0
-            subs = getattr(user, 'subscriptions', None) or []
+            subs = user.subscriptions or []
             subscription = selected_subscription or next((s for s in subs if s.is_active), subs[0] if subs else None)
             if subscription:
                 device_limit = subscription.device_limit or 0
@@ -3000,7 +2998,7 @@ async def reset_user_trial(
     subscription_deleted = False
 
     # Delete subscriptions if any exist
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     if subs:
         from app.database.crud.subscription import is_active_paid_subscription
 
@@ -3084,7 +3082,7 @@ async def reset_user_subscription(
     panel_deactivated = False
     panel_error: str | None = None
 
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     if not subs:
         return ResetSubscriptionResponse(
             success=True,
@@ -3222,7 +3220,7 @@ async def disable_user(
     # Deactivate subscriptions in panel (skip if active paid subscription)
     from app.database.crud.subscription import deactivate_subscription, is_active_paid_subscription
 
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     has_active_paid = any(is_active_paid_subscription(s) for s in subs)
 
     if has_active_paid:
@@ -3452,7 +3450,7 @@ async def get_user_sync_status(
     bot_device_limit = 0
     bot_squads: list[str] = []
 
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     if subscription_id:
         active_sub = next((s for s in subs if s.id == subscription_id), None)
         if not active_sub:
@@ -3668,7 +3666,7 @@ async def sync_user_from_panel(
         panel_info = None
 
         # Select the target subscription for sync
-        from_subs = getattr(user, 'subscriptions', None) or []
+        from_subs = user.subscriptions or []
         if subscription_id:
             selected_sub = next((s for s in from_subs if s.id == subscription_id), None)
             if not selected_sub:
@@ -3938,7 +3936,7 @@ async def sync_user_to_panel(
             detail='User not found',
         )
 
-    push_subs = getattr(user, 'subscriptions', None) or []
+    push_subs = user.subscriptions or []
     if subscription_id:
         push_sub = next((s for s in push_subs if s.id == subscription_id), None)
         if not push_sub:

@@ -93,7 +93,7 @@ async def _notify_email_user_auto_purchase(
     роутер сам проверяет email_verified и статус аккаунта. Сбои глотаем —
     подписка уже оформлена, уведомление не должно ронять flow.
     """
-    if user is None or getattr(user, 'telegram_id', None) or not getattr(user, 'email', None):
+    if user is None or user.telegram_id or not user.email:
         return
     try:
         from app.services.notification_delivery_service import (
@@ -120,7 +120,7 @@ async def _notify_email_user_auto_purchase(
     except Exception as error:
         logger.error(
             'Не удалось отправить email-уведомление об автопокупке',
-            user_id=getattr(user, 'id', None),
+            user_id=user.id,
             error=error,
         )
 
@@ -386,7 +386,7 @@ async def _prepare_auto_extend_context(
                 format_user_id=_format_user_id(user),
             )
             return None
-        if _tariff and _tariff.period_prices and not getattr(_tariff, 'is_daily', False):
+        if _tariff and _tariff.period_prices and not _tariff.is_daily:
             available_periods = [int(p) for p in _tariff.period_prices.keys()]
             if period_days not in available_periods:
                 logger.warning(
@@ -717,10 +717,10 @@ async def _auto_extend_subscription(
     await _delete_cart_for_subscription(user.id, cart_data)
     await clear_subscription_checkout_draft(user.id)
 
-    texts = get_texts(getattr(user, 'language', 'ru'))
+    texts = get_texts(user.language)
     period_label = format_period_description(
         prepared.period_days,
-        getattr(user, 'language', 'ru'),
+        user.language,
     )
     new_end_date = updated_subscription.end_date
     end_date_label = format_local_datetime(new_end_date, '%d.%m.%Y %H:%M')
@@ -887,7 +887,7 @@ async def _auto_purchase_tariff(
         return False
 
     # Validate period_days against tariff's configured periods (prevent arbitrary periods from saved cart)
-    is_daily_tariff = getattr(tariff, 'is_daily', False)
+    is_daily_tariff = tariff.is_daily
     if not is_daily_tariff:
         if tariff.period_prices:
             available_periods = [int(p) for p in tariff.period_prices.keys()]
@@ -1358,7 +1358,7 @@ async def _auto_purchase_daily_tariff(
         )
         return False
 
-    if not getattr(tariff, 'is_daily', False):
+    if not tariff.is_daily:
         logger.warning(
             '🔁 Автопокупка суточного тарифа: тариф не является суточным для пользователя',
             tariff_id=tariff_id,
@@ -1366,7 +1366,7 @@ async def _auto_purchase_daily_tariff(
         )
         return False
 
-    daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+    daily_price = tariff.daily_price_kopeks
     if daily_price <= 0:
         logger.warning(
             '🔁 Автопокупка суточного тарифа: некорректная цена тарифа для пользователя',
@@ -3401,7 +3401,7 @@ async def _auto_purchase_gift(
             )
         return delivered
 
-    texts = get_texts(getattr(user, 'language', 'ru'))
+    texts = get_texts(user.language)
 
     # Requote to ensure current availability and pricing
     try:
@@ -3418,7 +3418,7 @@ async def _auto_purchase_gift(
             error=str(term_err),
         )
         await user_cart_service.delete_processed_cart(user.id, cart_data)
-        if bot and getattr(user, 'telegram_id', None) and settings.is_notifications_enabled():
+        if bot and user.telegram_id and settings.is_notifications_enabled():
             try:
                 err_msg = texts.t(
                     'GIFT_AUTO_PURCHASE_FAILED',
@@ -3566,7 +3566,7 @@ async def auto_purchase_saved_cart_after_topup(
     if not settings.is_auto_purchase_after_topup_enabled():
         return False
 
-    if not user or not getattr(user, 'id', None):
+    if not user or not user.id:
         return False
 
     # Check for explicit global gift_purchase cart first (isolated from subscription carts)
@@ -3742,7 +3742,7 @@ async def _process_legacy_generic_cart(
     subscription = purchase_result.get('subscription')
     transaction = purchase_result.get('transaction')
     was_trial_conversion = purchase_result.get('was_trial_conversion', False)
-    texts = get_texts(getattr(user, 'language', 'ru'))
+    texts = get_texts(user.language)
 
     if bot:
         try:
@@ -3768,7 +3768,7 @@ async def _process_legacy_generic_cart(
             try:
                 period_label = format_period_description(
                     selection.period.days,
-                    getattr(user, 'language', 'ru'),
+                    user.language,
                 )
                 auto_message = texts.t(
                     'AUTO_PURCHASE_SUBSCRIPTION_SUCCESS',

@@ -390,7 +390,7 @@ async def handle_subscription_devices(
         from app.database.crud.tariff import get_tariff_by_id
 
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
-        tariff_device_price = getattr(tariff, 'device_price_kopeks', None) if tariff else None
+        tariff_device_price = tariff.device_price_kopeks if tariff else None
         can_buy_devices = bool(tariff_device_price and tariff_device_price > 0)
     else:
         can_buy_devices = settings.is_devices_selection_enabled()

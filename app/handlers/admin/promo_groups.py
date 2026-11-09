@@ -53,7 +53,7 @@ def _format_discount_lines(texts, group) -> list[str]:
 
 
 def _format_addon_discounts_line(texts, group: PromoGroup) -> str:
-    enabled = getattr(group, 'apply_discounts_to_addons', True)
+    enabled = group.apply_discounts_to_addons
     if enabled:
         return texts.t(
             'ADMIN_PROMO_GROUP_ADDON_DISCOUNT_ENABLED',
@@ -66,7 +66,7 @@ def _format_addon_discounts_line(texts, group: PromoGroup) -> str:
 
 
 def _get_addon_discounts_button_text(texts, group: PromoGroup) -> str:
-    enabled = getattr(group, 'apply_discounts_to_addons', True)
+    enabled = group.apply_discounts_to_addons
     if enabled:
         return texts.t(
             'ADMIN_PROMO_GROUP_TOGGLE_ADDON_DISCOUNT_DISABLE',
@@ -97,7 +97,7 @@ def _normalize_periods_dict(raw: dict | None) -> dict[int, int]:
 
 
 def _collect_period_discounts(group: PromoGroup) -> dict[int, int]:
-    discounts = _normalize_periods_dict(getattr(group, 'period_discounts', None))
+    discounts = _normalize_periods_dict(group.period_discounts)
 
     if discounts:
         return dict(sorted(discounts.items()))
@@ -211,7 +211,7 @@ def _format_rubles(amount_kopeks: int) -> str:
 
 
 def _format_priority_line(texts, group: PromoGroup) -> str:
-    priority = getattr(group, 'priority', 0)
+    priority = group.priority
     return texts.t(
         'ADMIN_PROMO_GROUP_PRIORITY_LINE',
         '🎯 Приоритет: {priority}',
@@ -219,7 +219,7 @@ def _format_priority_line(texts, group: PromoGroup) -> str:
 
 
 def _format_auto_assign_line(texts, group: PromoGroup) -> str:
-    threshold = getattr(group, 'auto_assign_total_spent_kopeks', 0) or 0
+    threshold = group.auto_assign_total_spent_kopeks or 0
 
     if threshold <= 0:
         return texts.t(
@@ -882,7 +882,7 @@ async def prompt_edit_promo_group_field(
         prompt = texts.t(
             'ADMIN_PROMO_GROUP_EDIT_PRIORITY_PROMPT',
             'Введите новый приоритет (текущий: {current}):',
-        ).format(current=getattr(group, 'priority', 0))
+        ).format(current=group.priority)
     elif field == 'traffic':
         await state.set_state(AdminStates.editing_promo_group_traffic_discount)
         prompt = texts.t(
@@ -903,7 +903,7 @@ async def prompt_edit_promo_group_field(
         ).format(current=group.device_discount_percent)
     elif field == 'periods':
         await state.set_state(AdminStates.editing_promo_group_period_discount)
-        current_discounts = _normalize_periods_dict(getattr(group, 'period_discounts', None))
+        current_discounts = _normalize_periods_dict(group.period_discounts)
         prompt = texts.t(
             'ADMIN_PROMO_GROUP_EDIT_PERIOD_PROMPT',
             'Введите новые скидки на периоды (текущие: {current}). Отправьте 0, если без скидок.',

@@ -193,7 +193,7 @@ def _match_subscription(
 
     suffix = f'_{subscription.remnawave_short_id}' if subscription.remnawave_short_id else ''
 
-    telegram_id = getattr(user, 'telegram_id', None) if user is not None else None
+    telegram_id = user.telegram_id if user is not None else None
     if telegram_id is not None:
         candidates = index.by_telegram_id.get(int(telegram_id), [])
         if len(candidates) == 1:
@@ -217,7 +217,7 @@ def _match_subscription(
                     return panel_user, 'reconstructed_username'
                 foreign_name_match = True
 
-    email = (getattr(user, 'email', None) or '').strip().lower() if user is not None else ''
+    email = (user.email or '').strip().lower() if user is not None else ''
     if email:
         candidates = index.by_email.get(email, [])
         if len(candidates) == 1:
@@ -238,12 +238,12 @@ def _account_created_for(panel_user: RemnaWaveUser, user: User) -> bool:
     не создавал: его завёл админ руками по тому же шаблону. Привязать к нему
     строку — значит дальше писать в чужой аккаунт наш Telegram id и дату.
     """
-    telegram_id = getattr(user, 'telegram_id', None)
+    telegram_id = user.telegram_id
     if telegram_id is not None:
         panel_telegram_id = getattr(panel_user, 'telegram_id', None)
         return panel_telegram_id is not None and int(panel_telegram_id) == int(telegram_id)
 
-    email = (getattr(user, 'email', None) or '').strip().lower()
+    email = (user.email or '').strip().lower()
     if email:
         return (getattr(panel_user, 'email', None) or '').strip().lower() == email
 
@@ -254,10 +254,10 @@ def _rebuild_username(user: User, suffix: str) -> str | None:
     """Best-effort reconstruction of the panel username from local data."""
     try:
         return settings.build_remnawave_subscription_username(
-            full_name=getattr(user, 'full_name', '') or '',
-            username=getattr(user, 'username', None),
-            telegram_id=getattr(user, 'telegram_id', None),
-            email=getattr(user, 'email', None),
+            full_name=user.full_name or '',
+            username=user.username,
+            telegram_id=user.telegram_id,
+            email=user.email,
             user_id=int(user.id),
             suffix=suffix,
         )

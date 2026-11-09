@@ -99,7 +99,7 @@ async def _notify(
             user_display=service._get_user_display(user),
             user_id_label=service._get_user_identifier_label(user),
             user_id_display=service._get_user_identifier_display(user),
-            username_link=format_username_link(getattr(user, 'username', None), 'отсутствует'),
+            username_link=format_username_link(user.username, 'отсутствует'),
             payment_type=payment_type,
             payment_amount=payment_amount,
             free_left=free_left,

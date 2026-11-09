@@ -65,7 +65,7 @@ def _serialize_promo_group(group: PromoGroup) -> PromoGroupSummary:
         server_discount_percent=group.server_discount_percent,
         traffic_discount_percent=group.traffic_discount_percent,
         device_discount_percent=group.device_discount_percent,
-        apply_discounts_to_addons=getattr(group, 'apply_discounts_to_addons', True),
+        apply_discounts_to_addons=group.apply_discounts_to_addons,
     )
 
 
@@ -73,7 +73,7 @@ def _serialize_server(server: ServerSquad) -> ServerResponse:
     promo_groups = [
         _serialize_promo_group(group)
         for group in sorted(
-            getattr(server, 'allowed_promo_groups', []) or [],
+            server.allowed_promo_groups or [],
             key=lambda pg: pg.name.lower() if getattr(pg, 'name', None) else '',
         )
     ]
@@ -92,14 +92,14 @@ def _serialize_server(server: ServerSquad) -> ServerResponse:
         sort_order=int(server.sort_order or 0),
         max_users=server.max_users,
         current_users=int(server.current_users or 0),
-        created_at=getattr(server, 'created_at', None),
-        updated_at=getattr(server, 'updated_at', None),
+        created_at=server.created_at,
+        updated_at=server.updated_at,
         promo_groups=promo_groups,
     )
 
 
 def _serialize_connected_user(user: User) -> ServerConnectedUser:
-    subscription = getattr(user, 'subscription', None)
+    subscription = user.subscription
     subscription_status = getattr(subscription, 'status', None)
     if hasattr(subscription_status, 'value'):
         subscription_status = subscription_status.value
@@ -110,7 +110,7 @@ def _serialize_connected_user(user: User) -> ServerConnectedUser:
         username=user.username,
         first_name=user.first_name,
         last_name=user.last_name,
-        status=getattr(getattr(user, 'status', None), 'value', user.status),
+        status=getattr(user.status, 'value', user.status),
         balance_kopeks=int(user.balance_kopeks or 0),
         balance_rubles=round((user.balance_kopeks or 0) / 100, 2),
         subscription_id=getattr(subscription, 'id', None),

@@ -118,7 +118,7 @@ def _known_subscriptions(user: User, fallback: Subscription | None = None) -> li
     MissingGreenlet — на удалении подписки это падало прямо в ответ админу.
     """
     try:
-        subs = getattr(user, 'subscriptions', None)
+        subs = user.subscriptions
     except SQLAlchemyError as exc:
         if not is_missing_greenlet(exc):
             raise
@@ -139,7 +139,7 @@ def _resolve_subscription(user: User, override: Subscription | None = None) -> S
     """
     if override is not None:
         return override
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     return next((s for s in subs if s.is_active), subs[0] if subs else None)
 
 
@@ -400,9 +400,7 @@ async def _do_add_traffic(
     await _sync_subscription_to_panel(db, user, sub)
 
     # Explicitly enable user on panel (PATCH may not clear LIMITED status)
-    _enable_panel_user_id = (
-        sub.remnawave_id if settings.is_multi_tariff_enabled() else getattr(user, 'remnawave_id', None)
-    )
+    _enable_panel_user_id = sub.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
     if _enable_panel_user_id and sub.status == 'active':
         try:
             from app.services.subscription_service import SubscriptionService
@@ -602,7 +600,7 @@ async def _do_delete_subscription(
         )
 
     # Deactivate in RemnaWave panel first
-    _sub_panel_user_id = sub.remnawave_id if settings.is_multi_tariff_enabled() else getattr(user, 'remnawave_id', None)
+    _sub_panel_user_id = sub.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
     if _sub_panel_user_id:
         try:
             from app.services.subscription_service import SubscriptionService
@@ -697,7 +695,7 @@ async def _do_grant_subscription(
 ) -> BulkUserResult:
     days = params.days  # already validated
     is_multi_tariff = settings.is_multi_tariff_enabled()
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
 
     # Check for existing active subscription
     if is_multi_tariff:
@@ -765,7 +763,7 @@ async def _do_grant_subscription(
 
     # Refresh user to get updated subscriptions list
     await db.refresh(user, ['subscriptions'])
-    refreshed_subs = getattr(user, 'subscriptions', None) or []
+    refreshed_subs = user.subscriptions or []
 
     return BulkUserResult(
         user_id=user.id,

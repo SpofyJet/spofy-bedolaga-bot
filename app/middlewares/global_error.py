@@ -218,7 +218,7 @@ async def send_error_to_admin_chat(
 
     chat_id = settings.ADMIN_NOTIFICATIONS_CHAT_ID
     # Используем топик для ошибок, если настроен, иначе общий
-    topic_id = settings.ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID or getattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None)
+    topic_id = settings.ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID or settings.ADMIN_NOTIFICATIONS_TOPIC_ID
     enabled = settings.ADMIN_NOTIFICATIONS_ENABLED
 
     if not enabled or not chat_id:

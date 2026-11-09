@@ -126,7 +126,7 @@ async def _notify_admins(bot: Any, event: GraceEvent, subscription: Subscription
         event=event,
         user=subscription.user,
         subscription=subscription,
-        tariff_name=getattr(tariff, 'name', None) if tariff else None,
+        tariff_name=tariff.name if tariff else None,
         reason=details.reason,
         grace_until=details.grace_until,
         hours=details.hours,
@@ -160,7 +160,7 @@ async def _notify_user(bot: Any, event: GraceEvent, subscription: Subscription, 
         return
 
     tariff = subscription.tariff
-    tariff_name = str(getattr(tariff, 'name', '') or '') if tariff else ''
+    tariff_name = str(tariff.name or '') if tariff else ''
     # Всё, что попадает в HTML Telegram и письма, экранируется: фразу «что доступно»
     # и имя тарифа пишет оператор, а разметку сообщения — мы.
     allowed = html.escape(grace_allowed_services(), quote=False)

@@ -156,7 +156,7 @@ class BlockedUsersService:
 
     async def _check_single_user(self, user: User) -> BlockCheckResult:
         """Проверяет одного пользователя."""
-        sub_ids = [s.remnawave_id for s in (getattr(user, 'subscriptions', None) or []) if s.remnawave_id]
+        sub_ids = [s.remnawave_id for s in (user.subscriptions or []) if s.remnawave_id]
         remnawave_ids = sub_ids or ([user.remnawave_id] if user.remnawave_id else [])
 
         if not user.telegram_id:

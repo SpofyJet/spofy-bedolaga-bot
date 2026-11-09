@@ -72,7 +72,7 @@ def get_display_subscription_link(subscription: Subscription | None) -> str | No
     base_link = getattr(subscription, 'subscription_url', None)
 
     if settings.is_happ_cryptolink_mode():
-        crypto_link = getattr(subscription, 'subscription_crypto_link', None)
+        crypto_link = subscription.subscription_crypto_link
         return crypto_link or base_link
 
     return base_link
@@ -215,7 +215,7 @@ def resolve_hwid_device_limit(subscription: Subscription | None) -> int | None:
             _logger.info(
                 'DEVICES_SELECTION disabled, using forced limit',
                 forced_limit=forced_limit,
-                subscription_device_limit=getattr(subscription, 'device_limit', None),
+                subscription_device_limit=subscription.device_limit,
                 subscription_id=getattr(subscription, 'id', None),
             )
             return forced_limit + active_wheel_bonus_devices(subscription)

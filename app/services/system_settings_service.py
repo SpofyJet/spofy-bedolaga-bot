@@ -1857,7 +1857,7 @@ class BotConfigurationService:
 
     @staticmethod
     def _build_simple_subscription_period_choices() -> list[ChoiceOption]:
-        raw_periods = str(getattr(settings, 'AVAILABLE_SUBSCRIPTION_PERIODS', '') or '')
+        raw_periods = str(settings.AVAILABLE_SUBSCRIPTION_PERIODS or '')
         period_values: set[int] = set()
 
         for segment in raw_periods.split(','):
@@ -1871,7 +1871,7 @@ class BotConfigurationService:
             if period > 0:
                 period_values.add(period)
 
-        fallback_period = getattr(settings, 'SIMPLE_SUBSCRIPTION_PERIOD_DAYS', 30) or 30
+        fallback_period = settings.SIMPLE_SUBSCRIPTION_PERIOD_DAYS or 30
         try:
             fallback_period = int(fallback_period)
         except (TypeError, ValueError):
@@ -1898,19 +1898,19 @@ class BotConfigurationService:
 
     @classmethod
     def _build_simple_subscription_device_choices(cls) -> list[ChoiceOption]:
-        default_limit = getattr(settings, 'DEFAULT_DEVICE_LIMIT', 1) or 1
+        default_limit = settings.DEFAULT_DEVICE_LIMIT or 1
         try:
             default_limit = int(default_limit)
         except (TypeError, ValueError):
             default_limit = 1
 
-        max_limit = getattr(settings, 'MAX_DEVICES_LIMIT', default_limit) or default_limit
+        max_limit = settings.MAX_DEVICES_LIMIT or default_limit
         try:
             max_limit = int(max_limit)
         except (TypeError, ValueError):
             max_limit = default_limit
 
-        current_limit = getattr(settings, 'SIMPLE_SUBSCRIPTION_DEVICE_LIMIT', default_limit) or default_limit
+        current_limit = settings.SIMPLE_SUBSCRIPTION_DEVICE_LIMIT or default_limit
         try:
             current_limit = int(current_limit)
         except (TypeError, ValueError):
@@ -1946,7 +1946,7 @@ class BotConfigurationService:
             if gb >= 0:
                 traffic_values.add(gb)
 
-        default_limit = getattr(settings, 'DEFAULT_TRAFFIC_LIMIT_GB', 0) or 0
+        default_limit = settings.DEFAULT_TRAFFIC_LIMIT_GB or 0
         try:
             default_limit = int(default_limit)
         except (TypeError, ValueError):
@@ -1954,7 +1954,7 @@ class BotConfigurationService:
         if default_limit >= 0:
             traffic_values.add(default_limit)
 
-        current_limit = getattr(settings, 'SIMPLE_SUBSCRIPTION_TRAFFIC_GB', default_limit)
+        current_limit = settings.SIMPLE_SUBSCRIPTION_TRAFFIC_GB
         try:
             current_limit = int(current_limit)
         except (TypeError, ValueError):

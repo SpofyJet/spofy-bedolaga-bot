@@ -379,7 +379,7 @@ def _parse_cryptobot_amount_kopeks(payment: CryptoBotPayment) -> int:
 
 def _parse_xrocket_amount_kopeks(payment: XRocketPayment) -> int:
     # Сумма зафиксирована при создании инвойса — крипту обратно не пересчитываем.
-    stored = int(getattr(payment, 'amount_kopeks', 0) or 0)
+    stored = int(payment.amount_kopeks or 0)
     if stored > 0:
         return stored
     payload = payment.payload or ''

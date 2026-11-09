@@ -35,7 +35,7 @@ def _serialize_media_items(message: TicketMessage) -> list[TicketMediaItemRespon
     Схема ответа поле объявляла, но сериализатор его не заполнял — внешние
     интеграции видели только первый файл и не могли добраться до остальных.
     """
-    raw_items = getattr(message, 'media_items', None) or None
+    raw_items = message.media_items or None
     if not raw_items:
         return None
     try:

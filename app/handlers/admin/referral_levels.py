@@ -753,8 +753,7 @@ async def _render_level(
         [
             types.InlineKeyboardButton(text='🎖 Рефералов для открытия', callback_data=f'{prefix}:required_referrals'),
             types.InlineKeyboardButton(
-                text='👥 Считать: '
-                + ('с пополнением' if getattr(level, 'required_referrals_active_only', True) else 'всех'),
+                text='👥 Считать: ' + ('с пополнением' if level.required_referrals_active_only else 'всех'),
                 callback_data=f'admin_ref_lvl_countmode:{level.level}',
             ),
         ]
@@ -885,7 +884,7 @@ async def toggle_threshold_population(
         await callback.answer('Уровень не найден', show_alert=True)
         return
 
-    active_only = not bool(getattr(level, 'required_referrals_active_only', True))
+    active_only = not bool(level.required_referrals_active_only)
     await upsert_reward_level(db, level_number, required_referrals_active_only=active_only)
     await callback.answer('Считаем рефералов с пополнением' if active_only else 'Считаем всех приглашённых')
     await _render_level(callback, db, level_number)

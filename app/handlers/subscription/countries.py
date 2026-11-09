@@ -786,7 +786,7 @@ async def _should_show_countries_management(user: User | None = None) -> bool:
     try:
         promo_group_id = user.promo_group_id if user else None
 
-        promo_group = getattr(user, 'promo_group', None) if user else None
+        promo_group = user.promo_group if user else None
         if promo_group and getattr(promo_group, 'server_squads', None):
             allowed_servers = [
                 server for server in promo_group.server_squads if server.is_available and not server.is_full

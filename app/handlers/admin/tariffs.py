@@ -150,7 +150,7 @@ def get_tariff_view_keyboard(
         ]
     )
     # Цены за периоды только для обычных тарифов (не суточных)
-    is_daily = getattr(tariff, 'is_daily', False)
+    is_daily = tariff.is_daily
     if not is_daily:
         buttons.append(
             [
@@ -289,7 +289,7 @@ def _format_traffic_reset_mode(mode: str | None) -> str:
 
 def _format_traffic_topup_packages(tariff: Tariff) -> str:
     """Форматирует пакеты докупки трафика для отображения."""
-    if not getattr(tariff, 'traffic_topup_enabled', False):
+    if not tariff.traffic_topup_enabled:
         return '❌ Отключено'
 
     packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
@@ -328,21 +328,21 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
     trial_status = '✅ Да' if tariff.is_trial_available else '❌ Нет'
 
     # Форматируем дни триала
-    trial_days = getattr(tariff, 'trial_duration_days', None)
+    trial_days = tariff.trial_duration_days
     if trial_days:
         trial_days_display = f'{trial_days} дней'
     else:
         trial_days_display = f'По умолчанию ({settings.TRIAL_DURATION_DAYS} дней)'
 
     # Форматируем цену за устройство
-    device_price = getattr(tariff, 'device_price_kopeks', None)
+    device_price = tariff.device_price_kopeks
     if device_price is not None and device_price > 0:
         device_price_display = format_price_kopeks(device_price) + '/мес'
     else:
         device_price_display = 'Недоступно'
 
     # Форматируем макс. устройств
-    max_devices = getattr(tariff, 'max_device_limit', None)
+    max_devices = tariff.max_device_limit
     if max_devices is not None and max_devices > 0:
         max_devices_display = str(max_devices)
     else:
@@ -356,12 +356,12 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
     panel_settings_display = format_panel_settings(tariff)
 
     # Форматируем режим сброса трафика
-    traffic_reset_mode = getattr(tariff, 'traffic_reset_mode', None)
+    traffic_reset_mode = tariff.traffic_reset_mode
     traffic_reset_display = _format_traffic_reset_mode(traffic_reset_mode)
 
     # Форматируем суточный тариф
-    is_daily = getattr(tariff, 'is_daily', False)
-    daily_price_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
+    is_daily = tariff.is_daily
+    daily_price_kopeks = tariff.daily_price_kopeks
 
     # Формируем блок цен в зависимости от типа тарифа
     if is_daily:
@@ -673,7 +673,7 @@ async def start_edit_daily_price(
         await callback.answer('Тариф не найден', show_alert=True)
         return
 
-    current_price = getattr(tariff, 'daily_price_kopeks', 0)
+    current_price = tariff.daily_price_kopeks
     current_price / 100 if current_price else 0
 
     await state.set_state(AdminStates.editing_tariff_daily_price)
@@ -1635,7 +1635,7 @@ async def start_edit_tariff_device_price(
     await state.set_state(AdminStates.editing_tariff_device_price)
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
-    device_price = getattr(tariff, 'device_price_kopeks', None)
+    device_price = tariff.device_price_kopeks
     if device_price is not None and device_price > 0:
         current_price = format_price_kopeks(device_price) + '/мес'
     else:
@@ -1725,7 +1725,7 @@ async def start_edit_tariff_max_devices(
     await state.set_state(AdminStates.editing_tariff_max_devices)
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
-    max_devices = getattr(tariff, 'max_device_limit', None)
+    max_devices = tariff.max_device_limit
     if max_devices is not None and max_devices > 0:
         current_max = str(max_devices)
     else:
@@ -1816,7 +1816,7 @@ async def start_edit_tariff_trial_days(
     await state.set_state(AdminStates.editing_tariff_trial_days)
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
-    trial_days = getattr(tariff, 'trial_duration_days', None)
+    trial_days = tariff.trial_duration_days
     if trial_days:
         current_days = f'{trial_days} дней'
     else:
@@ -1948,9 +1948,9 @@ async def start_edit_tariff_traffic_topup(
         await callback.answer('Докупка недоступна для безлимитного тарифа', show_alert=True)
         return
 
-    is_enabled = getattr(tariff, 'traffic_topup_enabled', False)
+    is_enabled = tariff.traffic_topup_enabled
     packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
-    max_topup_traffic = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
+    max_topup_traffic = tariff.max_topup_traffic_gb or 0
 
     # Форматируем текущие настройки
     if is_enabled:
@@ -2245,7 +2245,7 @@ async def start_edit_max_topup_traffic(
     await state.set_state(AdminStates.editing_tariff_max_topup_traffic)
     await state.update_data(tariff_id=tariff_id)
 
-    current_limit = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
+    current_limit = tariff.max_topup_traffic_gb or 0
     if current_limit > 0:
         current_display = f'{current_limit} ГБ'
     else:
@@ -2962,7 +2962,7 @@ async def start_edit_traffic_reset_mode(
         await callback.answer('Тариф не найден', show_alert=True)
         return
 
-    current_mode = getattr(tariff, 'traffic_reset_mode', None)
+    current_mode = tariff.traffic_reset_mode
 
     await callback.message.edit_text(
         f'🔄 <b>Режим сброса трафика для тарифа «{html.escape(tariff.name)}»</b>\n\n'

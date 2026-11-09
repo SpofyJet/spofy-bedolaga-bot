@@ -147,7 +147,7 @@ async def preview_tariff_switch(
     # Use get_primary_promo_group() for correct promo group resolution
     promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
     if promo_group is None:
-        promo_group = getattr(user, 'promo_group', None)
+        promo_group = user.promo_group
     promo_group_id = promo_group.id if promo_group else None
     if not new_tariff.is_available_for_promo_group(promo_group_id):
         raise HTTPException(
@@ -399,12 +399,12 @@ async def switch_tariff(
         )
 
     # Validate daily price for switching TO daily
-    new_is_daily = getattr(new_tariff, 'is_daily', False)
-    current_is_daily = getattr(current_tariff, 'is_daily', False) if current_tariff else False
+    new_is_daily = new_tariff.is_daily
+    current_is_daily = current_tariff.is_daily if current_tariff else False
     switching_to_daily = not current_is_daily and new_is_daily
     switching_from_daily = current_is_daily and not new_is_daily
 
-    if switching_to_daily and (getattr(new_tariff, 'daily_price_kopeks', 0) or 0) <= 0:
+    if switching_to_daily and (new_tariff.daily_price_kopeks or 0) <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Daily tariff has invalid price',
@@ -547,7 +547,7 @@ async def switch_tariff(
         subscription.end_date = datetime.now(UTC) + timedelta(days=new_period_days)
         subscription.pending_panel_expire_at = subscription.end_date
         subscription.is_daily_paused = False
-    elif getattr(new_tariff, 'switch_full_price', False) and new_period_days:
+    elif new_tariff.switch_full_price and new_period_days:
         # «Вечный» тариф: переход оплачен по полной цене периода — начисляем его поверх остатка
         _base_sw = (
             subscription.end_date

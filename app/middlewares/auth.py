@@ -252,7 +252,7 @@ class AuthMiddleware(BaseMiddleware):
                             username=db_user.username,
                             telegram_id=db_user.telegram_id,
                         )
-                        for sub in getattr(db_user, 'subscriptions', None) or []:
+                        for sub in db_user.subscriptions or []:
                             if sub.remnawave_id and sub.remnawave_id != db_user.remnawave_id:
                                 spawn_background_task(
                                     _refresh_remnawave_description(

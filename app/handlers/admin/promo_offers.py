@@ -468,9 +468,9 @@ def _build_user_button_label(user: User) -> str:
         UserStatus.BLOCKED.value: '🚫',
         UserStatus.DELETED.value: '🗑️',
     }
-    status_emoji = status_emoji_map.get(getattr(user, 'status', None), '❓')
+    status_emoji = status_emoji_map.get(user.status, '❓')
 
-    subscription = getattr(user, 'subscription', None)
+    subscription = user.subscription
     if subscription:
         if subscription.is_trial:
             subscription_emoji = '🎁'
@@ -503,7 +503,7 @@ def _build_user_button_label(user: User) -> str:
 
     parts = [status_emoji, subscription_emoji, name, identifier]
 
-    balance = getattr(user, 'balance_kopeks', 0)
+    balance = user.balance_kopeks
     if balance:
         parts.append(f'💰 {settings.format_price(balance)}')
 
@@ -1454,7 +1454,7 @@ async def show_selected_user_details(
 
     name = html.escape(user.full_name or user.username or str(user.telegram_id or user.id))
     username = html.escape(user.username) if user.username else None
-    balance = getattr(user, 'balance_kopeks', 0)
+    balance = user.balance_kopeks
 
     lines = [
         texts.t('ADMIN_PROMO_OFFER_SEND_USER_PROFILE', '👤 <b>{name}</b>').format(name=name),
@@ -1476,8 +1476,8 @@ async def show_selected_user_details(
             )
         )
 
-    subscription = getattr(user, 'subscription', None)
-    subscriptions_list = getattr(user, 'subscriptions', None) or []
+    subscription = user.subscription
+    subscriptions_list = user.subscriptions or []
     if settings.is_multi_tariff_enabled() and subscriptions_list:
         lines.append('')
         lines.append(texts.t('ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION', '💳 <b>Подписки</b>'))
@@ -1568,10 +1568,10 @@ async def show_selected_user_details(
     now = datetime.now(UTC)
     percent = 0
     try:
-        percent = int(getattr(user, 'promo_offer_discount_percent', 0) or 0)
+        percent = int(user.promo_offer_discount_percent or 0)
     except (TypeError, ValueError):
         percent = 0
-    expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
+    expires_at = user.promo_offer_discount_expires_at
     if percent > 0 and (not expires_at or expires_at > now):
         discount_line = texts.t(
             'ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_DISCOUNT',
@@ -1590,7 +1590,7 @@ async def show_selected_user_details(
                     'ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_DISCOUNT_UNTIL',
                     ' (до {date})',
                 ).format(date=date_text)
-        source = getattr(user, 'promo_offer_discount_source', None)
+        source = user.promo_offer_discount_source
         if source:
             discount_line += texts.t(
                 'ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_DISCOUNT_SOURCE',
@@ -2289,7 +2289,7 @@ async def send_offer_to_user(callback: CallbackQuery, db_user: User, db: AsyncSe
     users_to_send: list[User] = [user]
     skipped = 0
     if template.offer_type == 'test_access' and squad_uuid:
-        subscription = getattr(user, 'subscription', None)
+        subscription = user.subscription
         connected = set(subscription.connected_squads or []) if subscription else set()
         if squad_uuid in connected:
             users_to_send = []

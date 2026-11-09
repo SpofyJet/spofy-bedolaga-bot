@@ -1061,7 +1061,7 @@ async def _tariff_base_traffic_limit(db: AsyncSession, subscription: Subscriptio
     tariff = await get_tariff_by_id(db, subscription.tariff_id)
     if tariff is None:
         return None
-    if getattr(tariff, 'custom_traffic_enabled', False):
+    if tariff.custom_traffic_enabled:
         current_base = max((subscription.traffic_limit_gb or 0) - (subscription.purchased_traffic_gb or 0), 0)
         if current_base > 0:
             return current_base
@@ -1206,7 +1206,7 @@ async def reconcile_subscription_traffic_limit(
     from app.database.models import TrafficPurchase
 
     if tariff is None:
-        tariff_id = getattr(subscription, 'tariff_id', None)
+        tariff_id = subscription.tariff_id
         if not tariff_id:
             return False, subscription.traffic_limit_gb or 0
         from app.database.crud.tariff import get_tariff_by_id
@@ -1602,7 +1602,7 @@ async def extend_subscription(
             or getattr(subscription, 'last_daily_charge_at', None) is not None
         )
 
-        if new_tariff and getattr(new_tariff, 'is_daily', False):
+        if new_tariff and new_tariff.is_daily:
             # Переход на суточный тариф - сбрасываем флаги
             subscription.is_daily_paused = False
             subscription.last_daily_charge_at = None  # Будет установлено при первом списании
@@ -1710,7 +1710,7 @@ async def add_subscription_traffic(db: AsyncSession, subscription: Subscription,
     db.add(new_purchase)
 
     # Обновляем общий счетчик докупленного трафика
-    current_purchased = getattr(subscription, 'purchased_traffic_gb', 0) or 0
+    current_purchased = subscription.purchased_traffic_gb or 0
     subscription.purchased_traffic_gb = current_purchased + gb
 
     # Устанавливаем traffic_reset_at на ближайшую дату истечения из всех активных докупок
@@ -1929,7 +1929,7 @@ async def update_subscription_autopay(
         except Exception as platega_error:  # pragma: no cover - хелпер сам best-effort
             logger.warning(
                 'Не удалось отменить СБП-автопродление при включении автоплатежа',
-                subscription_id=getattr(subscription, 'id', None),
+                subscription_id=subscription.id,
                 error=str(platega_error),
             )
 
@@ -2614,7 +2614,7 @@ async def check_and_update_subscription_status(db: AsyncSession, subscription: S
 
     # Для суточных тарифов с паузой не меняем статус на expired
     # (время "заморожено" пока пользователь на паузе)
-    is_daily_paused = getattr(subscription, 'is_daily_paused', False)
+    is_daily_paused = subscription.is_daily_paused
     if is_daily_paused:
         logger.info('⏸️ Суточная подписка на паузе, пропускаем проверку истечения', subscription_id=subscription.id)
         return subscription
@@ -2623,7 +2623,7 @@ async def check_and_update_subscription_status(db: AsyncSession, subscription: S
     # end_date у них всего +24ч, и между проверками (30 мин) она может формально истечь.
     # Используем getattr(subscription, 'tariff', None) вместо property is_daily_tariff,
     # т.к. property может вызвать MissingGreenlet при ленивой загрузке в async-контексте.
-    tariff = getattr(subscription, 'tariff', None)
+    tariff = subscription.tariff
     is_active_daily = tariff is not None and getattr(tariff, 'is_daily', False) and not is_daily_paused
     if is_active_daily:
         logger.debug(

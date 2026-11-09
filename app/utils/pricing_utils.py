@@ -268,7 +268,7 @@ def _build_simple_subscription_breakdown(
         'total_before_discount': total_before_discount,
         'total_discount': total_discount,
         'resolved_squad_uuids': resolved_uuids,
-        'applied_promo_group_id': getattr(promo_group, 'id', None) if promo_group else None,
+        'applied_promo_group_id': promo_group.id if promo_group else None,
         'period_discount_percent': period_discount_percent,
         'traffic_discount_percent': traffic_discount_percent,
         'devices_discount_percent': devices_discount_percent,

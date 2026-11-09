@@ -809,10 +809,10 @@ class DailySubscriptionService:
 
         service = SubscriptionService()
         if settings.is_multi_tariff_enabled():
-            panel_user_id = getattr(subscription, 'remnawave_id', None)
+            panel_user_id = subscription.remnawave_id
         else:
             user = await get_user_by_id(db, subscription.user_id)
-            panel_user_id = getattr(user, 'remnawave_id', None) if user else None
+            panel_user_id = user.remnawave_id if user else None
         if panel_user_id is None:
             return None
 

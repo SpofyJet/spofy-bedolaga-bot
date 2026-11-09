@@ -90,7 +90,7 @@ class UserService:
             )
 
         keyboard_rows = []
-        subs = getattr(user, 'subscriptions', None) or []
+        subs = user.subscriptions or []
         has_extendable = any(sub.status in {'active', 'expired', 'trial'} for sub in subs)
         if has_extendable:
             extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
@@ -606,7 +606,7 @@ class UserService:
 
             from app.database.crud.subscription import deactivate_subscription, is_active_paid_subscription
 
-            subs = getattr(user, 'subscriptions', None) or []
+            subs = user.subscriptions or []
             has_active_paid = any(is_active_paid_subscription(sub) for sub in subs)
 
             if has_active_paid:
@@ -672,7 +672,7 @@ class UserService:
             from app.database.models import SubscriptionStatus
 
             now = datetime.now(UTC)
-            for sub in getattr(user, 'subscriptions', None) or []:
+            for sub in user.subscriptions or []:
                 if sub.end_date and sub.end_date > now and sub.status != SubscriptionStatus.ACTIVE.value:
                     sub.status = SubscriptionStatus.ACTIVE.value
                     try:
@@ -731,7 +731,7 @@ class UserService:
             from app.database.crud.subscription import is_active_paid_subscription
 
             # Collect all panel user ids to process
-            subs = getattr(user, 'subscriptions', None) or []
+            subs = user.subscriptions or []
             from app.services.grace_access_runtime import (
                 GraceAccessDeletionBlocked,
                 ensure_no_open_grace_for_subscriptions,
@@ -1111,7 +1111,7 @@ class UserService:
 
             try:
                 async with db.begin_nested():
-                    subs = getattr(user, 'subscriptions', None) or []
+                    subs = user.subscriptions or []
                     if subs:
                         all_squad_ids: set[str] = set()
                         for sub in subs:

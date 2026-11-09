@@ -328,7 +328,7 @@ async def claim_discount_offer(
 
     if not amount_text:
         try:
-            bonus_amount = int(getattr(offer, 'bonus_amount_kopeks', 0))
+            bonus_amount = int(offer.bonus_amount_kopeks)
         except (TypeError, ValueError):
             bonus_amount = 0
         if bonus_amount > 0:
@@ -346,7 +346,7 @@ async def claim_discount_offer(
     if isinstance(extra_data, dict):
         offer_type = extra_data.get('offer_type')
 
-    subscription = getattr(db_user, 'subscription', None)
+    subscription = db_user.subscription
 
     if offer_type == 'purchase_discount':
         button_text = texts.get('MENU_BUY_SUBSCRIPTION', '💎 Купить подписку')

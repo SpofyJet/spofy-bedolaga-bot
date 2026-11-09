@@ -79,7 +79,7 @@ async def sync_tariff_squads_in_background(tariff_id: int, admin_id: int) -> Non
                 async def _sync_one(sub: Subscription) -> None:
                     nonlocal updated, failed
                     remnawave_id = (
-                        getattr(sub, 'remnawave_id', None)
+                        sub.remnawave_id
                         if settings.is_multi_tariff_enabled()
                         else (sub.user.remnawave_id if sub.user else None)
                     )

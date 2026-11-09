@@ -30,10 +30,10 @@ def _format_custom_traffic_value(value: int | None, suffix: str = '') -> str:
 
 def format_custom_traffic_settings(tariff: Tariff) -> str:
     """Format custom-traffic state for the main tariff card."""
-    enabled = getattr(tariff, 'custom_traffic_enabled', False)
-    price = getattr(tariff, 'traffic_price_per_gb_kopeks', None)
-    minimum = getattr(tariff, 'min_traffic_gb', None)
-    maximum = getattr(tariff, 'max_traffic_gb', None)
+    enabled = tariff.custom_traffic_enabled
+    price = tariff.traffic_price_per_gb_kopeks
+    minimum = tariff.min_traffic_gb
+    maximum = tariff.max_traffic_gb
 
     status = '✅ Включено' if enabled else '❌ Выключено'
     price_display = format_price_kopeks(price) if price is not None and price > 0 else 'Не задано'
@@ -50,10 +50,10 @@ def format_custom_traffic_settings(tariff: Tariff) -> str:
 
 def render_custom_traffic_settings(tariff: Tariff) -> str:
     """Render the dedicated custom-traffic settings screen."""
-    enabled = getattr(tariff, 'custom_traffic_enabled', False)
-    price = getattr(tariff, 'traffic_price_per_gb_kopeks', None)
-    minimum = getattr(tariff, 'min_traffic_gb', None)
-    maximum = getattr(tariff, 'max_traffic_gb', None)
+    enabled = tariff.custom_traffic_enabled
+    price = tariff.traffic_price_per_gb_kopeks
+    minimum = tariff.min_traffic_gb
+    maximum = tariff.max_traffic_gb
 
     status = '✅ Включён' if enabled else '❌ Выключен'
     price_display = format_price_kopeks(price) if price is not None and price > 0 else 'Не задано'
@@ -75,7 +75,7 @@ def render_custom_traffic_settings(tariff: Tariff) -> str:
 def get_custom_traffic_keyboard(tariff: Tariff, language: str) -> InlineKeyboardMarkup:
     """Build the dedicated custom-traffic settings keyboard."""
     texts = get_texts(language)
-    enabled = getattr(tariff, 'custom_traffic_enabled', False)
+    enabled = tariff.custom_traffic_enabled
     toggle_text = '❌ Выключить' if enabled else '✅ Включить'
 
     return InlineKeyboardMarkup(
@@ -225,7 +225,7 @@ async def start_edit_custom_traffic_price(
         await callback.answer('Тариф не найден', show_alert=True)
         return
 
-    price = getattr(tariff, 'traffic_price_per_gb_kopeks', None)
+    price = tariff.traffic_price_per_gb_kopeks
     current = format_price_kopeks(price) if price is not None and price > 0 else 'Не задано'
     await _start_custom_traffic_field_edit(
         callback,
@@ -254,7 +254,7 @@ async def start_edit_custom_traffic_min(
         await callback.answer('Тариф не найден', show_alert=True)
         return
 
-    current = _format_custom_traffic_value(getattr(tariff, 'min_traffic_gb', None), ' ГБ')
+    current = _format_custom_traffic_value(tariff.min_traffic_gb, ' ГБ')
     await _start_custom_traffic_field_edit(
         callback,
         db_user,
@@ -282,7 +282,7 @@ async def start_edit_custom_traffic_max(
         await callback.answer('Тариф не найден', show_alert=True)
         return
 
-    current = _format_custom_traffic_value(getattr(tariff, 'max_traffic_gb', None), ' ГБ')
+    current = _format_custom_traffic_value(tariff.max_traffic_gb, ' ГБ')
     await _start_custom_traffic_field_edit(
         callback,
         db_user,

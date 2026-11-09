@@ -218,7 +218,7 @@ async def _wheel_spins_for_menu(db: AsyncSession, user) -> int | None:
         config = await get_wheel_config(db)
         if config is None or not config.is_enabled:
             return None
-        if not getattr(config, 'topup_spins_enabled', False):
+        if not config.topup_spins_enabled:
             return 0
         state = await wheel_service.get_free_spin_state(db, user_id, config)
         return max(0, int(state.available))

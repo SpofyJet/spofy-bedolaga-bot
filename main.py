@@ -1132,7 +1132,7 @@ async def _send_crash_notification_on_error(error: Exception) -> None:
 
     from app.config import settings
 
-    if not getattr(settings, 'BOT_TOKEN', None):
+    if not settings.BOT_TOKEN:
         return
 
     try:

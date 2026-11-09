@@ -99,7 +99,7 @@ class BypassDowngradeService:
             repeat=already,
         )
         if notify and not already:
-            key = 'BYPASS_SUSPENDED_TRIAL' if getattr(subscription, 'is_trial', False) else 'BYPASS_SUSPENDED'
+            key = 'BYPASS_SUSPENDED_TRIAL' if subscription.is_trial else 'BYPASS_SUSPENDED'
             await self.notify(user, key, subscription)
         return pushed
 

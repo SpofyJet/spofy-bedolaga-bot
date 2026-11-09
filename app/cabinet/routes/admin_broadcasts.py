@@ -131,7 +131,7 @@ EMAIL_FILTER_GROUPS = {
 
 def _stored_audience(broadcast: BroadcastHistory) -> BroadcastAudience | None:
     """Условия из истории; устаревшая под новую схему запись не роняет список рассылок."""
-    raw = getattr(broadcast, 'audience', None)
+    raw = broadcast.audience
     if not raw:
         return None
     try:
@@ -166,10 +166,10 @@ def _serialize_broadcast(broadcast: BroadcastHistory) -> BroadcastResponse:
         created_at=broadcast.created_at,
         completed_at=broadcast.completed_at,
         progress_percent=progress,
-        category=getattr(broadcast, 'category', 'system') or 'system',
-        channel=getattr(broadcast, 'channel', 'telegram') or 'telegram',
-        email_subject=getattr(broadcast, 'email_subject', None),
-        email_html_content=getattr(broadcast, 'email_html_content', None),
+        category=broadcast.category or 'system',
+        channel=broadcast.channel or 'telegram',
+        email_subject=broadcast.email_subject,
+        email_html_content=broadcast.email_html_content,
         audience=_stored_audience(broadcast),
     )
 
@@ -970,7 +970,7 @@ async def stop_broadcast(
         )
 
     # Try to stop both telegram and email broadcasts (one or both may be running)
-    channel = getattr(broadcast, 'channel', 'telegram') or 'telegram'
+    channel = broadcast.channel or 'telegram'
 
     is_running = False
     if channel in ('telegram', 'both'):

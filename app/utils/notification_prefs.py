@@ -29,7 +29,7 @@ def get_user_notification_pref(user: User, key: str) -> Any:
 
     Falls back to default if not set.
     """
-    settings_data = getattr(user, 'notification_settings', None) or {}
+    settings_data = user.notification_settings or {}
     return settings_data.get(key, _DEFAULTS.get(key))
 
 

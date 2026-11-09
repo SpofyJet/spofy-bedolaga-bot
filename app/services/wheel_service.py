@@ -141,10 +141,10 @@ class FortuneWheelService:
         пополнил на 2 762 ₽ — спинов 0, до следующего 238 ₽; пополнил сегодня на 300 ₽ — 1 спин.
         Плюс выигранные «Ещё спин» и выданные админом, минус уже прокрученные бесплатные.
         """
-        threshold = int(getattr(config, 'topup_spin_threshold_kopeks', 0) or 0)
-        if not getattr(config, 'topup_spins_enabled', False) or threshold <= 0:
+        threshold = int(config.topup_spin_threshold_kopeks or 0)
+        if not config.topup_spins_enabled or threshold <= 0:
             return FreeSpinState()
-        before, after = await get_topup_deposits_split(db, user_id, getattr(config, 'topup_spins_since', None))
+        before, after = await get_topup_deposits_split(db, user_id, config.topup_spins_since)
         total = before + after
         earned = total // threshold - before // threshold
         won, used = await get_free_spin_counters(db, user_id)
@@ -337,7 +337,7 @@ class FortuneWheelService:
         if reasons:
             logger.warning(
                 'Wheel RTP target unreachable for prize configuration',
-                config_id=getattr(config, 'id', None),
+                config_id=config.id,
                 reasons=reasons,
                 target_payout_kopeks=target_payout,
                 expected_payout_kopeks=actual_payout,
@@ -720,8 +720,8 @@ class FortuneWheelService:
         percent = max(1, min(100, int(prize.prize_value or 0)))
         now = datetime.now(UTC)
         until = now + timedelta(days=max(1, int(config.promo_validity_days or 7)))
-        current = int(getattr(user, 'promo_offer_discount_percent', 0) or 0)
-        current_until = getattr(user, 'promo_offer_discount_expires_at', None)
+        current = int(user.promo_offer_discount_percent or 0)
+        current_until = user.promo_offer_discount_expires_at
         if current_until is not None and current_until.tzinfo is None:
             current_until = current_until.replace(tzinfo=UTC)
         current_active = current > 0 and (current_until is None or current_until > now)
@@ -752,7 +752,7 @@ class FortuneWheelService:
         limit = subscription.device_limit or 0
         if limit <= 0:
             return False  # безлимит устройств — добавлять нечего
-        if getattr(subscription, 'days_left', 0) < WHEEL_DEVICE_BONUS_MIN_DAYS:
+        if subscription.days_left < WHEEL_DEVICE_BONUS_MIN_DAYS:
             return False
         current_bonus = active_wheel_bonus_devices(subscription)
         tariff_max = subscription.tariff.max_device_limit if subscription.tariff else None

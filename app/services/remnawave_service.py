@@ -161,11 +161,11 @@ class _PanelIdMapMutation:
         # SAVEPOINT rollback). getattr не спасает — SQLAlchemy бросает
         # MissingGreenlet, а не AttributeError. Ловим и помечаем sentinel'ом.
         try:
-            panel_id_val = getattr(user, 'remnawave_id', None)
+            panel_id_val = user.remnawave_id
         except Exception:
             panel_id_val = _ATTR_NOT_CAPTURED
         try:
-            updated_val = getattr(user, 'updated_at', None)
+            updated_val = user.updated_at
         except Exception:
             updated_val = _ATTR_NOT_CAPTURED
         self._user_original[user] = (panel_id_val, updated_val)
@@ -282,7 +282,7 @@ class RemnaWaveService:
         if panel_id is None:
             return False, None
 
-        current_id = _normalize_panel_user_id(getattr(user, 'remnawave_id', None))
+        current_id = _normalize_panel_user_id(user.remnawave_id)
         if current_id == panel_id:
             return False, None
 
@@ -294,7 +294,7 @@ class RemnaWaveService:
                 '♻️ Обнаружен конфликт панельного id между пользователями и . Сбрасываем у старой записи.',
                 panel_user_id=panel_id,
                 getattr=getattr(conflicting_user, 'telegram_id', '?'),
-                getattr_2=getattr(user, 'telegram_id', '?'),
+                getattr_2=user.telegram_id,
             )
             mutation.set_user_panel_id(conflicting_user, None)
             mutation.set_user_updated_at(conflicting_user, datetime.now(UTC))
@@ -309,7 +309,7 @@ class RemnaWaveService:
 
         logger.info(
             '🔁 Обновлён RemnaWave id пользователя',
-            getattr=getattr(user, 'telegram_id', '?'),
+            getattr=user.telegram_id,
             current_panel_user_id=current_id,
             panel_user_id=panel_id,
         )
@@ -2859,7 +2859,7 @@ class RemnaWaveService:
         """
         try:
             # Предупреждение для платных пользователей
-            user_subscriptions = getattr(user, 'subscriptions', None) or []
+            user_subscriptions = user.subscriptions or []
             was_paid = (
                 user.has_had_paid_subscription
                 or any(not sub.is_trial for sub in user_subscriptions)
@@ -2880,7 +2880,7 @@ class RemnaWaveService:
             # Reset devices for all subscription panel ids in multi-tariff, or user panel id in single-tariff
             _panel_ids_to_reset = set()
             if settings.is_multi_tariff_enabled():
-                user_subs = getattr(user, 'subscriptions', []) or []
+                user_subs = user.subscriptions or []
                 for sub in user_subs:
                     _sub_panel_id = _normalize_panel_user_id(getattr(sub, 'remnawave_id', None))
                     if _sub_panel_id is not None:

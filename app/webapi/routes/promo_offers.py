@@ -52,7 +52,7 @@ def _serialize_user(user: User | None) -> PromoOfferUserInfo | None:
         username=user.username,
         first_name=user.first_name,
         last_name=user.last_name,
-        full_name=getattr(user, 'full_name', None),
+        full_name=user.full_name,
     )
 
 
@@ -85,8 +85,8 @@ def _serialize_offer(offer: DiscountOffer) -> PromoOfferResponse:
         extra_data=offer.extra_data or {},
         created_at=offer.created_at,
         updated_at=offer.updated_at,
-        user=_serialize_user(getattr(offer, 'user', None)),
-        subscription=_serialize_subscription(getattr(offer, 'subscription', None)),
+        user=_serialize_user(offer.user),
+        subscription=_serialize_subscription(offer.subscription),
     )
 
 
@@ -111,9 +111,9 @@ def _serialize_template(template: PromoOfferTemplate) -> PromoOfferTemplateRespo
 
 
 def _build_log_response(entry: PromoOfferLog) -> PromoOfferLogResponse:
-    user_info = _serialize_user(getattr(entry, 'user', None))
+    user_info = _serialize_user(entry.user)
 
-    offer = getattr(entry, 'offer', None)
+    offer = entry.offer
     offer_info: PromoOfferLogOfferInfo | None = None
     if offer:
         offer_info = PromoOfferLogOfferInfo(

@@ -123,7 +123,7 @@ async def resolve_owner(db: AsyncSession, short_uuid: str) -> tuple[User, Subscr
     user = await get_user_by_id(db, subscription.user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
-    if getattr(user, 'status', None) in {UserStatus.BLOCKED.value, UserStatus.DELETED.value}:
+    if user.status in {UserStatus.BLOCKED.value, UserStatus.DELETED.value}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Account unavailable')
     return user, subscription
 
@@ -132,7 +132,7 @@ def snapshot(subscription: Subscription) -> dict[str, Any]:
     """What the page compares before/after payment to show «готово»."""
     end_date = subscription.end_date
     return {
-        'status': getattr(subscription, 'actual_status', subscription.status),
+        'status': subscription.actual_status,
         'is_trial': bool(subscription.is_trial),
         'tariff_id': subscription.tariff_id,
         'tariff_name': subscription.tariff.name if subscription.tariff_id and subscription.tariff else None,
@@ -166,9 +166,9 @@ def _bridge_failure(error: Exception, where: str) -> HTTPException:
 
 
 def _restricted(user: User) -> str | None:
-    if getattr(user, 'restriction_subscription', False):
+    if user.restriction_subscription:
         return 'subscription_restricted'
-    if getattr(user, 'restriction_topup', False):
+    if user.restriction_topup:
         return 'topup_restricted'
     return None
 
@@ -197,7 +197,7 @@ async def tariff_offers(db: AsyncSession, user: User, subscription: Subscription
                 {
                     'period_days': period_days,
                     # Готовая подпись: «1 месяц», «Навсегда» (2222 дня).
-                    'label': format_period_description(period_days, getattr(user, 'language', None) or 'ru'),
+                    'label': format_period_description(period_days, user.language or 'ru'),
                     'is_lifetime': is_lifetime_period(period_days),
                     'price_kopeks': price.final_total,
                     'original_price_kopeks': price.original_total if price.original_total > price.final_total else None,
@@ -224,7 +224,7 @@ async def save_renewal_cart(db: AsyncSession, user: User, subscription: Subscrip
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Trial subscriptions are converted by buying a tariff')
     if settings.is_tariffs_mode() and not subscription.tariff_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Classic subscriptions cannot be renewed')
-    actual_status = getattr(subscription, 'actual_status', subscription.status)
+    actual_status = subscription.actual_status
     if actual_status in {SubscriptionStatus.DISABLED.value, SubscriptionStatus.PENDING.value}:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f'Cannot renew subscription with status: {actual_status}')
     if is_lifetime_end(subscription.end_date):

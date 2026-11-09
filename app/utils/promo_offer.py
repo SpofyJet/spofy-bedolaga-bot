@@ -60,7 +60,7 @@ def get_user_active_promo_discount_percent(user: User | None, tariff_id: int | N
         return 0
 
     try:
-        percent = int(getattr(user, 'promo_offer_discount_percent', 0) or 0)
+        percent = int(user.promo_offer_discount_percent or 0)
     except (TypeError, ValueError):
         return 0
 
@@ -148,7 +148,7 @@ async def build_promo_offer_timer_line(
     user: User,
     texts,
 ) -> str | None:
-    expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
+    expires_at = user.promo_offer_discount_expires_at
     if not expires_at:
         return None
 
@@ -161,7 +161,7 @@ async def build_promo_offer_timer_line(
         return None
 
     total_seconds: int | None = None
-    source = getattr(user, 'promo_offer_discount_source', None)
+    source = user.promo_offer_discount_source
 
     try:
         offer = await get_latest_claimed_offer_for_user(db, user.id, source)
@@ -227,7 +227,7 @@ async def build_test_access_hint(
     user: User,
     texts,
 ) -> str | None:
-    subscription = getattr(user, 'subscription', None)
+    subscription = user.subscription
     if not subscription:
         return None
 

@@ -399,7 +399,7 @@ async def get_enabled_methods_for_user(
         if user and config.user_type_filter != 'all':
             if config.user_type_filter == 'telegram' and not user.telegram_id:
                 continue
-            if config.user_type_filter == 'email' and not getattr(user, 'email', None):
+            if config.user_type_filter == 'email' and not user.email:
                 continue
 
         # Apply first_topup_filter
@@ -422,7 +422,7 @@ async def get_enabled_methods_for_user(
                     select(UserPromoGroup.promo_group_id).where(UserPromoGroup.user_id == user.id)
                 )
                 user_group_ids = set(user_groups_result.scalars().all())
-                legacy_group_id = getattr(user, 'promo_group_id', None)
+                legacy_group_id = user.promo_group_id
                 if legacy_group_id is not None:
                     user_group_ids.add(legacy_group_id)
 

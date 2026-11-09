@@ -216,9 +216,7 @@ class StartupNotificationService:
         self.bot = bot
         self.chat_id = settings.ADMIN_NOTIFICATIONS_CHAT_ID
         # Стартовые/краш-уведомления → топик инфраструктуры, fallback на общий
-        self.topic_id = settings.ADMIN_NOTIFICATIONS_INFRASTRUCTURE_TOPIC_ID or getattr(
-            settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None
-        )
+        self.topic_id = settings.ADMIN_NOTIFICATIONS_INFRASTRUCTURE_TOPIC_ID or settings.ADMIN_NOTIFICATIONS_TOPIC_ID
         self.enabled = settings.ADMIN_NOTIFICATIONS_ENABLED
 
     def _get_version(self) -> str:
@@ -714,7 +712,7 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
     """
     chat_id = settings.ADMIN_NOTIFICATIONS_CHAT_ID
     # Краш → топик ошибок, fallback на общий
-    topic_id = settings.ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID or getattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None)
+    topic_id = settings.ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID or settings.ADMIN_NOTIFICATIONS_TOPIC_ID
     enabled = settings.ADMIN_NOTIFICATIONS_ENABLED
 
     if not enabled or not chat_id:

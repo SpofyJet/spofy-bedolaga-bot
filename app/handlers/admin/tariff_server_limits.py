@@ -38,7 +38,7 @@ def format_server_limits_summary(tariff: Tariff) -> str:
 
 
 def _visible_squads(tariff: Tariff, squads: list) -> list:
-    allowed = set(getattr(tariff, 'allowed_squads', None) or [])
+    allowed = set(tariff.allowed_squads or [])
     return [s for s in squads if not allowed or s.squad_uuid in allowed]
 
 

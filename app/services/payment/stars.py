@@ -448,7 +448,7 @@ class TelegramStarsMixin:
             )
 
         period_display = period_days
-        if not period_display and getattr(subscription, 'start_date', None) and getattr(subscription, 'end_date', None):
+        if not period_display and subscription.start_date and subscription.end_date:
             period_display = max(1, (subscription.end_date - subscription.start_date).days or 0)
         if not period_display:
             period_display = settings.SIMPLE_SUBSCRIPTION_PERIOD_DAYS
@@ -461,11 +461,11 @@ class TelegramStarsMixin:
                 from app.localization.texts import get_texts
 
                 get_texts(user.language)
-                traffic_limit = getattr(subscription, 'traffic_limit_gb', 0) or 0
+                traffic_limit = subscription.traffic_limit_gb or 0
                 traffic_label = 'Безлимит' if traffic_limit == 0 else f'{int(traffic_limit)} ГБ'
 
                 tariff_line = ''
-                if settings.is_multi_tariff_enabled() and getattr(subscription, 'tariff_id', None):
+                if settings.is_multi_tariff_enabled() and subscription.tariff_id:
                     try:
                         from app.database.crud.tariff import get_tariff_by_id
 
@@ -477,7 +477,7 @@ class TelegramStarsMixin:
                 success_message = (
                     '✅ <b>Подписка успешно активирована!</b>\n\n'
                     f'📅 Период: {period_display} дней\n'
-                    f'📱 Устройства: {getattr(subscription, "device_limit", 1)}\n'
+                    f'📱 Устройства: {subscription.device_limit}\n'
                     f'📊 Трафик: {traffic_label}\n'
                     f'⭐ Оплата: {stars_amount} ⭐ ({settings.format_price(amount_kopeks)})'
                     f'{tariff_line}\n\n'

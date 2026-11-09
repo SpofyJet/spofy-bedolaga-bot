@@ -1102,7 +1102,7 @@ def build_ticket_card_keyboard(ticket: Ticket, user: User | None, *, role: str):
         telegram_id=user.telegram_id if user else None,
         username=user.username if user else None,
         is_closed=ticket.is_closed,
-        is_user_blocked=getattr(ticket, 'is_user_reply_blocked', False),
+        is_user_blocked=ticket.is_user_reply_blocked,
         is_admin=(role == 'admin'),
         fsm_enabled=(role != 'group'),
         cabinet_button=cabinet_button,
@@ -1151,7 +1151,7 @@ async def _ticket_card_subscription_line(db: AsyncSession, user: User | None) ->
         trial = ' (пробная)' if sub.is_trial and 'Проб' not in name else ''
         devices = f' · {sub.device_limit} устр.' if sub.device_limit else ''
         line = f'💳 {name}{trial} {until}{devices}{state}'.replace('  ', ' ')
-    balance = (getattr(user, 'balance_kopeks', 0) or 0) // 100
+    balance = (user.balance_kopeks or 0) // 100
     if balance > 0:
         line += f'\n💰 Баланс {balance} ₽'
     return line

@@ -28,10 +28,10 @@ def snapshot_subscription_state(subscription: Subscription) -> dict[str, Any]:
         # панельному юзеру, которого сочли непригодным.
         'remnawave_id': subscription.remnawave_id,
         'tariff_id': subscription.tariff_id,
-        'autopay_enabled': getattr(subscription, 'autopay_enabled', False),
-        'autopay_days_before': getattr(subscription, 'autopay_days_before', None),
-        'is_daily_paused': getattr(subscription, 'is_daily_paused', False),
-        'last_daily_charge_at': getattr(subscription, 'last_daily_charge_at', None),
+        'autopay_enabled': subscription.autopay_enabled,
+        'autopay_days_before': subscription.autopay_days_before,
+        'is_daily_paused': subscription.is_daily_paused,
+        'last_daily_charge_at': subscription.last_daily_charge_at,
         'updated_at': subscription.updated_at,
     }
 

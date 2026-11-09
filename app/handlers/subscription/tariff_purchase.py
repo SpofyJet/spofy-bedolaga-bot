@@ -796,7 +796,7 @@ def format_tariff_info_for_user(
         )
 
     # Для суточных тарифов не показываем выбор периода
-    is_daily = getattr(tariff, 'is_daily', False)
+    is_daily = tariff.is_daily
     if not is_daily:
         text += texts.t('TARIFF_PURCHASE_CHOOSE_PERIOD', '\nВыберите период подписки:')
 
@@ -1162,7 +1162,7 @@ async def show_tariffs_list(
     await state.clear()
 
     # Получаем доступные тарифы
-    promo_group_id = getattr(db_user, 'promo_group_id', None)
+    promo_group_id = db_user.promo_group_id
     tariffs = await get_tariffs_for_user(db, promo_group_id)
 
     if not tariffs:
@@ -1205,7 +1205,7 @@ async def show_tariffs_list(
     # Проверяем есть ли у пользователя скидки по периодам
     promo_group = db_user.get_primary_promo_group() if hasattr(db_user, 'get_primary_promo_group') else None
     if promo_group is None:
-        promo_group = getattr(db_user, 'promo_group', None)
+        promo_group = db_user.promo_group
     has_period_discounts = False
     if promo_group:
         period_discounts = getattr(promo_group, 'period_discounts', None)
@@ -1297,7 +1297,7 @@ async def _proceed_with_selected_tariff(
             return
 
     # Проверяем, суточный ли это тариф
-    is_daily = getattr(tariff, 'is_daily', False)
+    is_daily = tariff.is_daily
 
     if is_daily:
         # Для суточного тарифа показываем подтверждение без выбора периода
@@ -2218,12 +2218,12 @@ async def confirm_daily_tariff_purchase(
         await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
         return
 
-    is_daily = getattr(tariff, 'is_daily', False)
+    is_daily = tariff.is_daily
     if not is_daily:
         await callback.answer(texts.t('TARIFF_PURCHASE_NOT_DAILY', 'Это не суточный тариф'), show_alert=True)
         return
 
-    daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+    daily_price = tariff.daily_price_kopeks
     if daily_price <= 0:
         await callback.answer(texts.t('TARIFF_PURCHASE_INVALID_PRICE', 'Некорректная цена тарифа'), show_alert=True)
         return
@@ -2537,11 +2537,11 @@ def _calc_extra_devices_cost(tariff: Tariff, subscription_device_limit: int, per
     additional = max(0, subscription_device_limit - (tariff.device_limit or 1))
     if additional <= 0:
         return 0
-    configured_device_price = getattr(tariff, 'device_price_kopeks', None)
+    configured_device_price = tariff.device_price_kopeks
     device_price = settings.PRICE_PER_DEVICE if configured_device_price is None else configured_device_price
     if device_price <= 0:
         return 0
-    if getattr(tariff, 'device_price_flat', False):
+    if tariff.device_price_flat:
         # Фикс. цена за устройство — разово за период, без × месяцев
         return additional * device_price
     if getattr(tariff, 'is_daily', False) and period_days <= 1:
@@ -2793,7 +2793,7 @@ async def show_tariff_extend(
 
     if not subscription.tariff_id:
         # Legacy user without tariff — show tariff selection for upgrade
-        promo_group_id = getattr(db_user, 'promo_group_id', None)
+        promo_group_id = db_user.promo_group_id
         tariffs = await get_tariffs_for_user(db, promo_group_id)
         if not tariffs:
             await callback.answer(texts.t('TARIFF_PURCHASE_NO_TARIFFS_ALERT', 'Нет доступных тарифов'), show_alert=True)
@@ -2832,7 +2832,7 @@ async def show_tariff_extend(
     # Скрытый/неактивный тариф (например, триальный после промокода) —
     # показываем список доступных тарифов вместо продления скрытого
     if not tariff.is_active:
-        promo_group_id = getattr(db_user, 'promo_group_id', None)
+        promo_group_id = db_user.promo_group_id
         tariffs = await get_tariffs_for_user(db, promo_group_id)
         active_tariffs = [t for t in tariffs if not t.is_daily]
         if not active_tariffs:
@@ -2864,7 +2864,7 @@ async def show_tariff_extend(
     # Проверяем есть ли у пользователя скидки по периодам
     promo_group = db_user.get_primary_promo_group() if hasattr(db_user, 'get_primary_promo_group') else None
     if promo_group is None:
-        promo_group = getattr(db_user, 'promo_group', None)
+        promo_group = db_user.promo_group
     has_period_discounts = False
     if promo_group:
         period_discounts = getattr(promo_group, 'period_discounts', None)
@@ -3604,7 +3604,7 @@ async def show_tariff_switch_list(
         return
 
     # Получаем доступные тарифы
-    promo_group_id = getattr(db_user, 'promo_group_id', None)
+    promo_group_id = db_user.promo_group_id
     tariffs = await get_tariffs_for_user(db, promo_group_id)
 
     # Filter out ALL tariffs user already has active subscriptions for
@@ -3647,7 +3647,7 @@ async def show_tariff_switch_list(
     # Проверяем есть ли у пользователя скидки по периодам
     promo_group = db_user.get_primary_promo_group() if hasattr(db_user, 'get_primary_promo_group') else None
     if promo_group is None:
-        promo_group = getattr(db_user, 'promo_group', None)
+        promo_group = db_user.promo_group
     has_period_discounts = False
     if promo_group:
         period_discounts = getattr(promo_group, 'period_discounts', None)
@@ -3713,11 +3713,11 @@ async def select_tariff_switch(
     traffic = tariff_traffic_text(tariff, texts)
 
     # Проверяем, суточный ли это тариф
-    is_daily = getattr(tariff, 'is_daily', False)
+    is_daily = tariff.is_daily
 
     if is_daily:
         # Для суточного тарифа показываем подтверждение без выбора периода
-        raw_daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+        raw_daily_price = tariff.daily_price_kopeks
         group_pct, offer_pct, daily_discount = _get_user_period_discount(db_user, 1, tariff.id)
         daily_price = (
             _apply_promo_discount(raw_daily_price, group_pct, offer_pct) if daily_discount > 0 else raw_daily_price
@@ -4327,12 +4327,12 @@ async def confirm_daily_tariff_switch(
         await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
         return
 
-    is_daily = getattr(tariff, 'is_daily', False)
+    is_daily = tariff.is_daily
     if not is_daily:
         await callback.answer(texts.t('TARIFF_PURCHASE_NOT_DAILY', 'Это не суточный тариф'), show_alert=True)
         return
 
-    daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+    daily_price = tariff.daily_price_kopeks
     if daily_price <= 0:
         await callback.answer(texts.t('TARIFF_PURCHASE_INVALID_PRICE', 'Некорректная цена тарифа'), show_alert=True)
         return
@@ -4448,7 +4448,7 @@ async def confirm_daily_tariff_switch(
             current_device_limit=subscription.device_limit,
             old_tariff_device_limit=old_tariff.device_limit if old_tariff else None,
             new_tariff_device_limit=tariff.device_limit,
-            max_device_limit=getattr(tariff, 'max_device_limit', None),
+            max_device_limit=tariff.max_device_limit,
             old_tariff=old_tariff,
             new_tariff=tariff,
         )
@@ -4921,7 +4921,7 @@ async def show_instant_switch_list(
         return
 
     # Получаем доступные тарифы
-    promo_group_id = getattr(db_user, 'promo_group_id', None)
+    promo_group_id = db_user.promo_group_id
     tariffs = await get_tariffs_for_user(db, promo_group_id)
 
     # Filter out ALL tariffs user already has active subscriptions for
@@ -5041,7 +5041,7 @@ async def preview_instant_switch(
         current_device_limit=subscription.device_limit if subscription else None,
         old_tariff_device_limit=current_tariff.device_limit if current_tariff else None,
         new_tariff_device_limit=new_tariff.device_limit,
-        max_device_limit=getattr(new_tariff, 'max_device_limit', None),
+        max_device_limit=new_tariff.max_device_limit,
         old_tariff=current_tariff,
         new_tariff=new_tariff,
     )
@@ -5083,7 +5083,7 @@ async def preview_instant_switch(
             )
 
     # Проверяем, суточный ли новый тариф
-    is_new_daily = getattr(new_tariff, 'is_daily', False)
+    is_new_daily = new_tariff.is_daily
     daily_warning = ''
     if is_new_daily and remaining_days > 1:
         daily_warning = '\n\n' + texts.t(
@@ -5093,7 +5093,7 @@ async def preview_instant_switch(
 
     # Для суточного тарифа особая логика показа
     if is_new_daily:
-        raw_daily_price = getattr(new_tariff, 'daily_price_kopeks', 0)
+        raw_daily_price = new_tariff.daily_price_kopeks
         # Применяем групповую скидку + promo-offer для отображения
         daily_group_pct, daily_offer_pct, daily_discount = _get_user_period_discount(db_user, 1, new_tariff.id)
         daily_price = (
@@ -5174,7 +5174,7 @@ async def preview_instant_switch(
 
     # «Вечный» тариф: переход по полной цене периода — показываем начисляемые дни
     full_price_note = ''
-    if getattr(new_tariff, 'switch_full_price', False):
+    if new_tariff.switch_full_price:
         _fp_periods = new_tariff.get_available_periods() or []
         if _fp_periods and is_lifetime_period(_fp_periods[0]):
             full_price_note = '\n\n' + texts.t(
@@ -5405,7 +5405,7 @@ async def confirm_instant_switch(
                 return
 
         # Проверяем, суточный ли новый тариф
-        is_new_daily = getattr(new_tariff, 'is_daily', False)
+        is_new_daily = new_tariff.is_daily
 
         # Обновляем подписку с новыми параметрами тарифа
         # Лимит устройств = база нового тарифа + докупленные устройства (переносятся)
@@ -5418,7 +5418,7 @@ async def confirm_instant_switch(
             current_device_limit=subscription.device_limit,
             old_tariff_device_limit=old_tariff.device_limit if old_tariff else None,
             new_tariff_device_limit=new_tariff.device_limit,
-            max_device_limit=getattr(new_tariff, 'max_device_limit', None),
+            max_device_limit=new_tariff.max_device_limit,
             old_tariff=old_tariff,
             new_tariff=new_tariff,
         )
@@ -5426,7 +5426,7 @@ async def confirm_instant_switch(
 
         # «Вечный» тариф (switch_full_price): переход оплачен по полной цене
         # минимального периода — начисляем его поверх оставшихся дней.
-        if getattr(new_tariff, 'switch_full_price', False) and switch_result.new_period_days:
+        if new_tariff.switch_full_price and switch_result.new_period_days:
             _now_sw = datetime.now(UTC)
             _base_sw = subscription.end_date if subscription.end_date and subscription.end_date > _now_sw else _now_sw
             subscription.end_date = _base_sw + timedelta(days=switch_result.new_period_days)

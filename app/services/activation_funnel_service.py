@@ -150,8 +150,8 @@ def _lock_discount_line(texts, user: User, now: datetime, lock_minutes: int) -> 
 
     Возвращает строку для сообщения или пустую, если скидки нет. Коммит делает вызывающий.
     """
-    percent = getattr(user, 'promo_offer_discount_percent', 0) or 0
-    expires = getattr(user, 'promo_offer_discount_expires_at', None)
+    percent = user.promo_offer_discount_percent or 0
+    expires = user.promo_offer_discount_expires_at
     if percent <= 0 or expires is None:
         return ''
     if expires.tzinfo is None:
@@ -183,7 +183,7 @@ async def _added_app_name(subscription: Subscription, user: User) -> str | None:
     Смотрим HWID-устройства панели: INCY и Happ регистрируют устройство при первом получении подписки,
     ещё до включения VPN. Ошибка панели — None: тогда уйдёт обычное напоминание.
     """
-    panel_user_id = getattr(subscription, 'remnawave_id', None) or getattr(user, 'remnawave_id', None)
+    panel_user_id = subscription.remnawave_id or user.remnawave_id
     if not panel_user_id:
         return None
     try:

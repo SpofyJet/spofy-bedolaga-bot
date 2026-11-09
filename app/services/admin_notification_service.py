@@ -213,40 +213,40 @@ class AdminNotificationService:
             return None
 
     def _get_user_display(self, user: User) -> str:
-        first_name = getattr(user, 'first_name', '') or ''
+        first_name = user.first_name or ''
         if first_name:
             return html.escape(first_name)
 
-        username = getattr(user, 'username', '') or ''
+        username = user.username or ''
         if username:
             return html.escape(username)
 
-        telegram_id = getattr(user, 'telegram_id', None)
+        telegram_id = user.telegram_id
         if telegram_id is None:
-            email = getattr(user, 'email', None)
+            email = user.email
             if email:
                 return html.escape(email)
-            return f'User#{getattr(user, "id", "Unknown")}'
+            return f'User#{user.id}'
         return f'ID{telegram_id}'
 
     def _get_user_identifier_display(self, user: User) -> str:
         """Get user identifier for display in notifications (telegram_id or email)."""
-        telegram_id = getattr(user, 'telegram_id', None)
+        telegram_id = user.telegram_id
         if telegram_id:
             return f'<code>{telegram_id}</code>'
 
-        email = getattr(user, 'email', None)
+        email = user.email
         if email:
             return f'📧 {html.escape(email)}'
 
-        return f'User#{getattr(user, "id", "Unknown")}'
+        return f'User#{user.id}'
 
     def _get_user_identifier_label(self, user: User) -> str:
         """Get label for user identifier (Telegram ID or Email)."""
-        telegram_id = getattr(user, 'telegram_id', None)
+        telegram_id = user.telegram_id
         if telegram_id:
             return 'Telegram ID'
-        email = getattr(user, 'email', None)
+        email = user.email
         if email:
             return 'Email'
         return 'ID'
@@ -504,7 +504,7 @@ class AdminNotificationService:
                 '',
                 f'👤 <b>Пользователь:</b> {user_display}',
                 f'🆔 <b>{user_id_label}:</b> {user_id_display}',
-                f'📱 <b>Username:</b> {format_username_link(getattr(user, "username", None), "отсутствует")}',
+                f'📱 <b>Username:</b> {format_username_link(user.username, "отсутствует")}',
                 f'👥 <b>Статус:</b> {user_status}',
                 '',
             ]
@@ -711,7 +711,7 @@ class AdminNotificationService:
             ]
 
             # Добавляем username только если есть
-            username = getattr(user, 'username', None)
+            username = user.username
             if username:
                 message_lines.append(f'📱 {format_username_link(username)}')
 
@@ -853,7 +853,7 @@ class AdminNotificationService:
             f'👤 {user_display} ({user_id_display})',
         ]
 
-        username = getattr(user, 'username', None)
+        username = user.username
         if username:
             message_lines.append(f'📱 {format_username_link(username)}')
 
@@ -931,7 +931,7 @@ class AdminNotificationService:
         if not refreshed_transaction:
             raise ValueError(f'Не удалось повторно загрузить транзакцию {transaction.id} для уведомления о пополнении')
 
-        subscription = getattr(refreshed_user, 'subscription', None)
+        subscription = refreshed_user.subscription
         promo_group = await self._get_user_promo_group(db, refreshed_user)
 
         return refreshed_user, refreshed_transaction, subscription, promo_group
@@ -962,7 +962,7 @@ class AdminNotificationService:
                     old_balance,
                     topup_status=topup_status,
                     referrer_info=referrer_info,
-                    subscription=getattr(user, 'subscription', None),
+                    subscription=user.subscription,
                     promo_group=await self._get_user_promo_group(fresh_db, user),
                 )
         except Exception as error:
@@ -985,7 +985,7 @@ class AdminNotificationService:
             user_has_pending_subpage_purchase,
         )
 
-        user_id = getattr(user, 'id', None)
+        user_id = user.id
         is_subpage = bool(user_id) and await user_has_pending_subpage_purchase(user_id)
         with subpage_purchase_context(is_subpage):
             return await self._send_balance_topup_notification(user, *args, **kwargs)
@@ -1215,7 +1215,7 @@ class AdminNotificationService:
 
 👤 <b>Пользователь:</b> {user_display}
 🆔 <b>{user_id_label}:</b> {user_id_display}
-📱 <b>Username:</b> {format_username_link(getattr(user, 'username', None), 'отсутствует')}
+📱 <b>Username:</b> {format_username_link(user.username, 'отсутствует')}
 
 {promo_block}
 
@@ -1316,7 +1316,7 @@ class AdminNotificationService:
                 '',
                 f'👤 <b>Пользователь:</b> {user_display}',
                 f'🆔 <b>{user_id_label}:</b> {user_id_display}',
-                f'📱 <b>Username:</b> {format_username_link(getattr(user, "username", None), "отсутствует")}',
+                f'📱 <b>Username:</b> {format_username_link(user.username, "отсутствует")}',
                 '',
                 promo_block,
                 '',
@@ -1648,7 +1648,7 @@ class AdminNotificationService:
                 '',
                 f'👤 <b>Пользователь:</b> {user_display}',
                 f'🆔 <b>{user_id_label}:</b> {user_id_display}',
-                f'📱 <b>Username:</b> {format_username_link(getattr(user, "username", None), "отсутствует")}',
+                f'📱 <b>Username:</b> {format_username_link(user.username, "отсутствует")}',
                 '',
                 self._format_promo_group_block(new_group, title='Новая промогруппа', icon='🏆'),
             ]
@@ -1963,7 +1963,7 @@ class AdminNotificationService:
 
             if is_cabinet:
                 # Cabinet gift: show buyer with link to user profile
-                buyer = getattr(purchase, 'buyer', None)
+                buyer = purchase.buyer
                 if buyer:
                     if buyer.username:
                         buyer_display = format_username_link(buyer.username)
@@ -2048,7 +2048,7 @@ class AdminNotificationService:
             user_display = self._get_user_display(user)
             user_id_label = self._get_user_identifier_label(user)
             user_id_display = self._get_user_identifier_display(user)
-            username = format_username_link(getattr(user, 'username', None), 'отсутствует')
+            username = format_username_link(user.username, 'отсутствует')
             subscription_line = f'#{subscription.id}'
             if tariff_name:
                 subscription_line += f' «{html.escape(tariff_name)}»'
@@ -2271,7 +2271,7 @@ class AdminNotificationService:
             ]
 
             # Добавляем username только если есть
-            username = getattr(user, 'username', None)
+            username = user.username
             if username:
                 message_lines.append(f'📱 {format_username_link(username)}')
 
@@ -2377,7 +2377,7 @@ class AdminNotificationService:
                 f'👤 {user_display} ({user_id_display})',
             ]
 
-            username = getattr(user, 'username', None)
+            username = user.username
             if username:
                 message_lines.append(f'📱 {format_username_link(username)}')
 
@@ -2438,7 +2438,7 @@ class AdminNotificationService:
                 f'👤 {user_display} ({user_id_display})',
             ]
 
-            username = getattr(user, 'username', None)
+            username = user.username
             if username:
                 message_lines.append(f'📱 {format_username_link(username)}')
 
@@ -2470,7 +2470,7 @@ class AdminNotificationService:
                 reply_markup = get_withdrawal_request_keyboard(
                     request_id,
                     WithdrawalRequestStatus.PENDING.value,
-                    user_db_id=getattr(user, 'id', None),
+                    user_db_id=user.id,
                     role=self.resolve_recipient_role(),
                 )
 
@@ -2497,7 +2497,7 @@ class AdminNotificationService:
         try:
             from app.keyboards.withdrawal import get_withdrawal_request_keyboard
 
-            user = getattr(request, 'user', None)
+            user = request.user
             user_display = self._get_user_display(user) if user else 'Unknown'
             user_id_display = self._get_user_identifier_display(user) if user else '—'
             username = getattr(user, 'username', None) if user else None
@@ -2524,7 +2524,7 @@ class AdminNotificationService:
             keyboard = get_withdrawal_request_keyboard(
                 request.id,
                 WithdrawalRequestStatus.PENDING.value,
-                user_db_id=getattr(request, 'user_id', None) or getattr(user, 'id', None),
+                user_db_id=request.user_id or getattr(user, 'id', None),
                 role=self.resolve_recipient_role(),
             )
 
@@ -2538,7 +2538,7 @@ class AdminNotificationService:
         except Exception as e:
             logger.error(
                 'Ошибка отправки напоминания о заявке на вывод',
-                request_id=getattr(request, 'id', None),
+                request_id=request.id,
                 error=e,
             )
             return False

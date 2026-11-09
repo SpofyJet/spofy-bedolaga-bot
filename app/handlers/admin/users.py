@@ -119,7 +119,7 @@ def _get_user_status_emoji(user: User) -> str:
 
 def _get_subscription_emoji(user: User) -> str:
     """Возвращает эмодзи подписки пользователя."""
-    subscriptions = getattr(user, 'subscriptions', None) or []
+    subscriptions = user.subscriptions or []
     if not subscriptions:
         return '❌'
     # Check if any subscription is active
@@ -152,7 +152,7 @@ def _build_user_button_text(
         if user.balance_kopeks > 0:
             button_text += f' | 💰 {settings.format_price(user.balance_kopeks)}'
         # Use first active subscription from subscriptions list
-        first_sub = next((s for s in (getattr(user, 'subscriptions', None) or []) if s.is_active), None)
+        first_sub = next((s for s in (user.subscriptions or []) if s.is_active), None)
         if first_sub and first_sub.end_date:
             days_left = local_days_until(first_sub.end_date)
             button_text += f' | 📅 {days_left}д'
@@ -395,11 +395,7 @@ async def show_users_ready_to_renew(
     await state.set_state(AdminStates.viewing_user_from_ready_to_renew_list)
 
     texts = get_texts(db_user.language)
-    threshold = getattr(
-        settings,
-        'SUBSCRIPTION_RENEWAL_BALANCE_THRESHOLD_KOPEKS',
-        20000,
-    )
+    threshold = settings.SUBSCRIPTION_RENEWAL_BALANCE_THRESHOLD_KOPEKS
 
     user_service = UserService()
     users_data = await user_service.get_users_ready_to_renew(
@@ -2520,9 +2516,9 @@ async def show_user_restrictions(callback: types.CallbackQuery, db_user: User, d
     get_texts(db_user.language)
 
     # Формируем текст с информацией об ограничениях
-    restriction_topup = getattr(user, 'restriction_topup', False)
-    restriction_subscription = getattr(user, 'restriction_subscription', False)
-    restriction_reason = getattr(user, 'restriction_reason', None)
+    restriction_topup = user.restriction_topup
+    restriction_subscription = user.restriction_subscription
+    restriction_reason = user.restriction_reason
 
     text_lines = [
         '⚠️ <b>Ограничения пользователя</b>',
@@ -2561,7 +2557,7 @@ async def toggle_user_restriction_topup(callback: types.CallbackQuery, db_user: 
         return
 
     # Переключаем ограничение
-    current_value = getattr(user, 'restriction_topup', False)
+    current_value = user.restriction_topup
     user.restriction_topup = not current_value
     await db.commit()
 
@@ -2584,7 +2580,7 @@ async def toggle_user_restriction_subscription(callback: types.CallbackQuery, db
         return
 
     # Переключаем ограничение
-    current_value = getattr(user, 'restriction_subscription', False)
+    current_value = user.restriction_subscription
     user.restriction_subscription = not current_value
     await db.commit()
 
@@ -2606,7 +2602,7 @@ async def ask_restriction_reason(callback: types.CallbackQuery, db_user: User, d
         await callback.answer('Пользователь не найден', show_alert=True)
         return
 
-    current_reason = getattr(user, 'restriction_reason', None) or ''
+    current_reason = user.restriction_reason or ''
 
     await state.set_state(AdminStates.editing_user_restriction_reason)
     await state.update_data(restriction_user_id=user_id)
@@ -2656,8 +2652,8 @@ async def save_restriction_reason(message: types.Message, db_user: User, db: Asy
     await state.clear()
 
     # Формируем текст с обновлённой информацией
-    restriction_topup = getattr(user, 'restriction_topup', False)
-    restriction_subscription = getattr(user, 'restriction_subscription', False)
+    restriction_topup = user.restriction_topup
+    restriction_subscription = user.restriction_subscription
 
     text_lines = [
         '✅ <b>Причина ограничения сохранена</b>',
@@ -3481,7 +3477,7 @@ async def confirm_subscription_deletion(callback: types.CallbackQuery, db_user: 
         return
 
     # Disable on Remnawave side first
-    panel_user_id = getattr(subscription, 'remnawave_id', None)
+    panel_user_id = subscription.remnawave_id
     if panel_user_id:
         subscription_service = SubscriptionService()
         await subscription_service.disable_remnawave_user(panel_user_id, db=db)
@@ -4534,7 +4530,7 @@ async def _add_subscription_traffic(
 
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
         if subscription.status == 'active':
-            panel_user_id = getattr(subscription, 'remnawave_id', None) if settings.is_multi_tariff_enabled() else None
+            panel_user_id = subscription.remnawave_id if settings.is_multi_tariff_enabled() else None
             if not panel_user_id:
                 from app.database.crud.user import get_user_by_id
 
@@ -4569,7 +4565,7 @@ async def _deactivate_user_subscription(
         await deactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
-        panel_user_id = getattr(subscription, 'remnawave_id', None) if settings.is_multi_tariff_enabled() else None
+        panel_user_id = subscription.remnawave_id if settings.is_multi_tariff_enabled() else None
         if not panel_user_id:
             user = await get_user_by_id(db, user_id)
             panel_user_id = getattr(user, 'remnawave_id', None)
@@ -6129,7 +6125,7 @@ def _admin_autopay_back_cb(user_id: int, subscription_id: int | None) -> str:
 
 
 def _admin_autopay_available_periods(subscription: Subscription) -> list[int]:
-    tariff = getattr(subscription, 'tariff', None)
+    tariff = subscription.tariff
     if tariff:
         periods = tariff.get_available_periods() or []
         if periods:
@@ -6154,7 +6150,7 @@ async def show_admin_user_autopay(callback: types.CallbackQuery, db_user: User, 
 
     _sid = f'_s{subscription.id}' if subscription_id and settings.is_multi_tariff_enabled() else ''
     status_text = '✅ Включён' if subscription.autopay_enabled else '❌ Выключен'
-    period_value = getattr(subscription, 'autopay_period_days', None)
+    period_value = subscription.autopay_period_days
     period_text = f'{period_value} дн.' if period_value else 'по умолчанию (самый дешёвый период тарифа)'
 
     text = (
@@ -6282,7 +6278,7 @@ async def show_admin_user_autopay_period(callback: types.CallbackQuery, db_user:
         logger.debug('Ignored error in show_admin_user_autopay_period', exc_info=True)
 
     _sid = f'_s{subscription_id}' if subscription_id and settings.is_multi_tariff_enabled() else ''
-    current = getattr(subscription, 'autopay_period_days', None)
+    current = subscription.autopay_period_days
     periods = _admin_autopay_available_periods(subscription)
 
     default_label = '⚙️ По умолчанию (самый дешёвый)'

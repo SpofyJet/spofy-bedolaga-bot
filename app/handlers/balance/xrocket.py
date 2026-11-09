@@ -25,8 +25,8 @@ async def start_xrocket_payment(callback: types.CallbackQuery, db_user: User, st
     texts = get_texts(db_user.language)
 
     # Проверка ограничения на пополнение
-    if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+    if db_user.restriction_topup:
+        reason = html.escape(db_user.restriction_reason or 'Действие ограничено администратором')
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
@@ -77,8 +77,8 @@ async def process_xrocket_payment_amount(
     texts = get_texts(db_user.language)
 
     # Проверка ограничения на пополнение
-    if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+    if db_user.restriction_topup:
+        reason = html.escape(db_user.restriction_reason or 'Действие ограничено администратором')
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:

@@ -268,7 +268,7 @@ def _user_to_response(user: User) -> UserResponse:
         referral_code=user.referral_code,
         language=user.language,
         created_at=user.created_at,
-        auth_type=getattr(user, 'auth_type', 'telegram'),  # Поддержка старых записей
+        auth_type=user.auth_type,  # Поддержка старых записей
     )
 
 

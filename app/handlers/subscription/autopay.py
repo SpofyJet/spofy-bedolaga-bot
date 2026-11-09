@@ -712,7 +712,7 @@ async def handle_sbp_recurring_enable_for(
     except Exception:
         logger.warning('Ignored error in handle_sbp_recurring_enable_for', exc_info=True)
 
-    tariff = getattr(subscription, 'tariff', None)
+    tariff = subscription.tariff
     if tariff is None:
         await callback.answer(
             texts.t(

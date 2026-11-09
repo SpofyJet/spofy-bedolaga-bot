@@ -54,7 +54,7 @@ def _serialize_promocode(promocode: PromoCode) -> PromoCodeResponse:
         balance_bonus_kopeks=promocode.balance_bonus_kopeks,
         balance_bonus_rubles=round(promocode.balance_bonus_kopeks / 100, 2),
         subscription_days=promocode.subscription_days,
-        traffic_gb=getattr(promocode, 'traffic_gb', 0) or 0,
+        traffic_gb=promocode.traffic_gb or 0,
         max_uses=promocode.max_uses,
         current_uses=promocode.current_uses,
         uses_left=promocode.uses_left,
@@ -127,7 +127,7 @@ def _validate_update_payload(payload: PromoCodeUpdateRequest, promocode: PromoCo
     subscription_days = (
         payload.subscription_days if payload.subscription_days is not None else promocode.subscription_days
     )
-    traffic_gb = payload.traffic_gb if payload.traffic_gb is not None else (getattr(promocode, 'traffic_gb', 0) or 0)
+    traffic_gb = payload.traffic_gb if payload.traffic_gb is not None else (promocode.traffic_gb or 0)
 
     if new_type == PromoCodeType.BALANCE and balance_bonus <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Balance bonus must be positive for balance promo codes')

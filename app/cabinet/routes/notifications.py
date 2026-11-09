@@ -53,7 +53,7 @@ class NotificationSettingsUpdate(BaseModel):
 def _get_notification_settings(user: User) -> dict[str, Any]:
     """Get notification settings from user object."""
     # Try to get from user's settings field or use defaults
-    settings_data = getattr(user, 'notification_settings', None) or {}
+    settings_data = user.notification_settings or {}
 
     return {
         'subscription_expiry_enabled': settings_data.get('subscription_expiry_enabled', True),

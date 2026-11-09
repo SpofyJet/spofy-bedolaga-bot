@@ -563,16 +563,16 @@ class ReportingService:
         }
 
     def _user_label(self, user: User) -> str:
-        if getattr(user, 'username', None):
+        if user.username:
             return f'@{user.username}'
         parts = []
-        if getattr(user, 'first_name', None):
+        if user.first_name:
             parts.append(user.first_name)
-        if getattr(user, 'last_name', None):
+        if user.last_name:
             parts.append(user.last_name)
         if parts:
             return ' '.join(parts)
-        return f'User #{getattr(user, "id", "?")}'
+        return f'User #{user.id}'
 
     def _format_period_label(self, start: datetime, end: datetime) -> str:
         start_date = start.astimezone(self._moscow_tz).date()

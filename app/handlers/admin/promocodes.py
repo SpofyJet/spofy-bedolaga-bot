@@ -188,7 +188,7 @@ async def show_promocode_management(callback: types.CallbackQuery, db_user: User
             text += f'💰 <b>Бонус:</b> {settings.format_price(promo.balance_bonus_kopeks)}\n'
         if promo.subscription_days:
             text += f'📅 <b>Дней:</b> {promo.subscription_days}\n'
-        if getattr(promo, 'traffic_gb', 0):
+        if promo.traffic_gb:
             text += f'📦 <b>Трафик:</b> {promo.traffic_gb} ГБ\n'
     elif promo.type == PromoCodeType.PROMO_GROUP.value:
         if promo.promo_group:
@@ -210,7 +210,7 @@ async def show_promocode_management(callback: types.CallbackQuery, db_user: User
     if promo.valid_until:
         text += f'⏰ <b>Действует до:</b> {format_datetime(promo.valid_until)}\n'
 
-    first_purchase_only = getattr(promo, 'first_purchase_only', False)
+    first_purchase_only = promo.first_purchase_only
     first_purchase_emoji = '✅' if first_purchase_only else '❌'
     text += f'🆕 <b>Только первая покупка:</b> {first_purchase_emoji}\n'
 
@@ -264,7 +264,7 @@ async def show_promocode_edit_menu(callback: types.CallbackQuery, db_user: User,
             text += f'• Бонус: {settings.format_price(promo.balance_bonus_kopeks)}\n'
         if promo.subscription_days:
             text += f'• Дней: {promo.subscription_days}\n'
-        if getattr(promo, 'traffic_gb', 0):
+        if promo.traffic_gb:
             text += f'• Трафик: {promo.traffic_gb} ГБ\n'
 
     text += f'• Использований: {promo.current_uses}/{promo.max_uses}\n'
@@ -1025,7 +1025,7 @@ async def toggle_promocode_first_purchase(callback: types.CallbackQuery, db_user
         await callback.answer('❌ Промокод не найден', show_alert=True)
         return
 
-    new_status = not getattr(promo, 'first_purchase_only', False)
+    new_status = not promo.first_purchase_only
     await update_promocode(db, promo, first_purchase_only=new_status)
 
     status_text = 'включён' if new_status else 'выключен'

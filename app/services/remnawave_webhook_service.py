@@ -208,11 +208,7 @@ class RemnaWaveWebhookService:
 
         # Перечитываем coalescing-knob'ы из настроек (env-tunable, без
         # перезапуска кода). Class-level defaults остаются как safety net.
-        self._NODE_EVENT_COALESCE_WINDOW_SECONDS = float(
-            getattr(
-                settings, 'REMNAWAVE_WEBHOOK_NODE_COALESCE_WINDOW_SECONDS', self._NODE_EVENT_COALESCE_WINDOW_SECONDS
-            )
-        )
+        self._NODE_EVENT_COALESCE_WINDOW_SECONDS = float(settings.REMNAWAVE_WEBHOOK_NODE_COALESCE_WINDOW_SECONDS)
         self._NODE_EVENT_BUFFER_MAX = int(settings.REMNAWAVE_WEBHOOK_NODE_BUFFER_MAX)
 
         # Per-instance coalescing state for node.connection_* events.
@@ -1212,11 +1208,7 @@ class RemnaWaveWebhookService:
         # Remnawave может прислать user.expired если sync не дошёл (старый end_date),
         # но локально подписка ещё жива — не экспайрим её.
         tariff = sa_inspect(subscription).dict.get('tariff')
-        is_active_daily = (
-            tariff is not None
-            and getattr(tariff, 'is_daily', False)
-            and not getattr(subscription, 'is_daily_paused', False)
-        )
+        is_active_daily = tariff is not None and getattr(tariff, 'is_daily', False) and not subscription.is_daily_paused
         if is_active_daily:
             logger.info(
                 'Webhook: пропуск expire для суточной подписки (управляет DailySubscriptionService)',
@@ -1265,11 +1257,7 @@ class RemnaWaveWebhookService:
 
         # Суточные подписки управляются DailySubscriptionService — не деактивируем
         tariff = sa_inspect(subscription).dict.get('tariff')
-        is_active_daily = (
-            tariff is not None
-            and getattr(tariff, 'is_daily', False)
-            and not getattr(subscription, 'is_daily_paused', False)
-        )
+        is_active_daily = tariff is not None and getattr(tariff, 'is_daily', False) and not subscription.is_daily_paused
         if is_active_daily:
             logger.info(
                 'Webhook: пропуск disabled для суточной подписки',
@@ -1869,11 +1857,7 @@ class RemnaWaveWebhookService:
     ) -> None:
         logger.info('Webhook: user first VPN connection', user_id=user.id)
 
-        is_trial_user = (
-            subscription is not None
-            and getattr(subscription, 'is_trial', False)
-            and not getattr(user, 'has_had_paid_subscription', False)
-        )
+        is_trial_user = subscription is not None and subscription.is_trial and not user.has_had_paid_subscription
 
         if is_trial_user:
             try:
@@ -2046,7 +2030,7 @@ class RemnaWaveWebhookService:
         )
         # Текст — «подписка оплачена, но VPN не подключён». Пробному периоду он не подходит,
         # а напомнить подключиться им и так пишет воронка (FUNNEL_TRIAL_IDLE / TRIAL_INACTIVE_24H).
-        if subscription is not None and getattr(subscription, 'is_trial', False):
+        if subscription is not None and subscription.is_trial:
             return
         format_kwargs: dict[str, Any] = {}
         if hours is not None:

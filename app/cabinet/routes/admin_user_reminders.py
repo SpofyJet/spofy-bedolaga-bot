@@ -203,7 +203,7 @@ async def send_test(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     reminder = await _require(db, reminder_id)
-    if not getattr(admin, 'telegram_id', None):
+    if not admin.telegram_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Admin has no Telegram account')
     try:
         validate_texts(reminder.texts)
@@ -212,7 +212,7 @@ async def send_test(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail='Reminder texts are invalid — fix them before testing',
         ) from error
-    text, markup = render_bot_message(reminder, getattr(admin, 'language', None))
+    text, markup = render_bot_message(reminder, admin.language)
     bot = create_bot()
     try:
         await bot.send_message(chat_id=admin.telegram_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML)

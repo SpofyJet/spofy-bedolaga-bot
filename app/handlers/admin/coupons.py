@@ -69,7 +69,7 @@ def _format_batch_card(batch: CouponBatch, counts: dict[str, int]) -> str:
 
     text += f'\n📊 <b>Статусы:</b>\n✅ Активных: {active}\n🎫 Погашено: {redeemed}\n⛔ Отозвано: {revoked}\n\n'
 
-    max_per_user = getattr(batch, 'max_per_user', 0) or 0
+    max_per_user = batch.max_per_user or 0
     if max_per_user > 0:
         text += f'👤 На пользователя: не более {max_per_user} шт.\n'
 

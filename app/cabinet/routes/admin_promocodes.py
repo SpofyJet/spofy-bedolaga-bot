@@ -211,7 +211,7 @@ async def _serialize_promocode(db: AsyncSession, promocode: PromoCode) -> PromoC
         balance_bonus_kopeks=promocode.balance_bonus_kopeks,
         balance_bonus_rubles=round(promocode.balance_bonus_kopeks / 100, 2),
         subscription_days=promocode.subscription_days,
-        traffic_gb=getattr(promocode, 'traffic_gb', 0) or 0,
+        traffic_gb=promocode.traffic_gb or 0,
         max_uses=promocode.max_uses,
         current_uses=promocode.current_uses,
         uses_left=promocode.uses_left,
@@ -264,8 +264,8 @@ def _serialize_promo_group(group: PromoGroup, members_count: int = 0) -> PromoGr
         apply_discounts_to_addons=group.apply_discounts_to_addons,
         is_default=group.is_default,
         members_count=members_count,
-        created_at=getattr(group, 'created_at', None),
-        updated_at=getattr(group, 'updated_at', None),
+        created_at=group.created_at,
+        updated_at=group.updated_at,
     )
 
 
@@ -328,7 +328,7 @@ def _validate_update_payload(payload: PromoCodeUpdateRequest, promocode: PromoCo
     subscription_days = (
         payload.subscription_days if payload.subscription_days is not None else promocode.subscription_days
     )
-    traffic_gb = payload.traffic_gb if payload.traffic_gb is not None else (getattr(promocode, 'traffic_gb', 0) or 0)
+    traffic_gb = payload.traffic_gb if payload.traffic_gb is not None else (promocode.traffic_gb or 0)
 
     if new_type == PromoCodeType.BALANCE and balance_bonus <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Balance bonus must be positive for balance promo codes')
@@ -573,8 +573,8 @@ async def admin_deactivate_discount_promocode(
     if not target_user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
 
-    current_discount = getattr(target_user, 'promo_offer_discount_percent', 0) or 0
-    source = getattr(target_user, 'promo_offer_discount_source', None)
+    current_discount = target_user.promo_offer_discount_percent or 0
+    source = target_user.promo_offer_discount_source
 
     if current_discount <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'User has no active discount')

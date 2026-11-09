@@ -53,11 +53,11 @@ def should_offer_checkout_resume(
 
     if subscription is None:
         try:
-            subscription = getattr(user, 'subscription', None)
+            subscription = user.subscription
         except MissingGreenlet as error:
             logger.warning(
                 'Не удалось лениво загрузить подписку пользователя при проверке возврата к checkout',
-                getattr=getattr(user, 'id', None),
+                getattr=user.id,
                 error=error,
             )
             subscription = None

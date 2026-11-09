@@ -285,17 +285,17 @@ def _build_server_option(
     discount_percent: int,
     texts,
 ) -> PurchaseServerOption:
-    base_per_month = int(getattr(server, 'price_kopeks', 0) or 0)
+    base_per_month = int(server.price_kopeks or 0)
     discounted_per_month, _ = apply_percentage_discount(base_per_month, discount_percent)
     return PurchaseServerOption(
         uuid=server.squad_uuid,
-        name=getattr(server, 'display_name', server.squad_uuid) or server.squad_uuid,
+        name=server.display_name or server.squad_uuid,
         price_per_month=discounted_per_month,
         price_label=texts.format_price(discounted_per_month),
         original_price_per_month=base_per_month,
         original_price_label=texts.format_price(base_per_month) if base_per_month != discounted_per_month else None,
         discount_percent=max(0, discount_percent),
-        is_available=bool(getattr(server, 'is_available', True) and not getattr(server, 'is_full', False)),
+        is_available=bool(server.is_available and not server.is_full),
     )
 
 
@@ -324,13 +324,13 @@ class MiniAppSubscriptionPurchaseService:
                     subscription = None
         else:
             subscription = await get_subscription_by_user_id(db, user.id)
-        balance_kopeks = int(getattr(user, 'balance_kopeks', 0) or 0)
+        balance_kopeks = int(user.balance_kopeks or 0)
         currency = (getattr(user, 'balance_currency', None) or 'RUB').upper()
-        texts = get_texts(getattr(user, 'language', None))
+        texts = get_texts(user.language)
 
         available_servers = await get_available_server_squads(
             db,
-            promo_group_id=getattr(user, 'promo_group_id', None),
+            promo_group_id=user.promo_group_id,
         )
         server_catalog: dict[str, ServerSquad] = {server.squad_uuid: server for server in available_servers}
 
@@ -390,7 +390,7 @@ class MiniAppSubscriptionPurchaseService:
         for period_days in available_periods:
             months = calculate_months_from_days(period_days)
             period_id = f'days:{period_days}'
-            label = format_period_description(period_days, getattr(user, 'language', 'ru'))
+            label = format_period_description(period_days, user.language)
 
             base_price_original = PERIOD_PRICES.get(period_days, 0)
             period_discount_percent = user.get_promo_discount('period', period_days)
@@ -1007,7 +1007,7 @@ class MiniAppSubscriptionPurchaseService:
         try:
             user = await lock_user_for_pricing(db, context.user.id)
             context.user = user
-            texts = get_texts(getattr(user, 'language', None))
+            texts = get_texts(user.language)
 
             # Block only if pricing is genuinely invalid (no base price configured).
             # final_total == 0 with base_original_total > 0 means a valid 100% discount.
@@ -1243,7 +1243,7 @@ class MiniAppSubscriptionPurchaseService:
         for trial_id, trial_panel_id in killed_trial_refs:
             try:
                 if trial_panel_id is None and not settings.is_multi_tariff_enabled():
-                    trial_panel_id = getattr(user, 'remnawave_id', None)
+                    trial_panel_id = user.remnawave_id
                 if trial_panel_id is not None:
                     await subscription_service.disable_remnawave_user(trial_panel_id)
             except Exception as trial_err:
@@ -1257,7 +1257,7 @@ class MiniAppSubscriptionPurchaseService:
             if settings.is_multi_tariff_enabled():
                 _should_create = subscription.remnawave_id is None
             else:
-                _should_create = getattr(user, 'remnawave_id', None) is None
+                _should_create = user.remnawave_id is None
             panel_action = 'create' if _should_create else 'update'
 
             if _should_create:

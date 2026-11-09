@@ -245,7 +245,7 @@ class ReferralContestService:
             lines.append(f'Приз: {html.escape(contest.prize_text)}')
 
         # Respect per-category enable/disable
-        if not settings.ADMIN_NOTIFICATIONS_ENABLED or not getattr(settings, 'ADMIN_NOTIFICATIONS_PROMO_ENABLED', True):
+        if not settings.ADMIN_NOTIFICATIONS_ENABLED or not settings.ADMIN_NOTIFICATIONS_PROMO_ENABLED:
             return
 
         try:

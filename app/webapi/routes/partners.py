@@ -84,7 +84,7 @@ def _serialize_referrer(user: User, stats: dict) -> PartnerReferrerItem:
         first_name=user.first_name,
         last_name=user.last_name,
         referral_code=user.referral_code,
-        referral_commission_percent=getattr(user, 'referral_commission_percent', None),
+        referral_commission_percent=user.referral_commission_percent,
         effective_referral_commission_percent=get_effective_referral_commission_percent(user),
         invited_count=int(stats.get('invited_count') or 0),
         active_referrals=int(stats.get('active_referrals') or 0),

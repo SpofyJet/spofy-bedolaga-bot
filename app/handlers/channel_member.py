@@ -67,7 +67,7 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             if db_user.status == UserStatus.BLOCKED.value:
                 return
 
-            subs = getattr(db_user, 'subscriptions', None) or []
+            subs = db_user.subscriptions or []
             disabled_subs = [
                 s
                 for s in subs
@@ -96,7 +96,7 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
                     logger.warning(
                         'Панельный id не найден ни у подписки, ни у пользователя — панель не тронута',
                         subscription_id=getattr(subscription, 'id', None),
-                        user_id=getattr(db_user, 'id', None),
+                        user_id=db_user.id,
                     )
                 elif not subscription.remnawave_id and settings.is_multi_tariff_enabled():
                     # В мультитарифе у каждой подписки свой аккаунт, поэтому
@@ -163,7 +163,7 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             if not db_user:
                 return
 
-            subs = getattr(db_user, 'subscriptions', None) or []
+            subs = db_user.subscriptions or []
             active_subs = [
                 s
                 for s in subs
@@ -190,7 +190,7 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
                     logger.warning(
                         'Панельный id не найден ни у подписки, ни у пользователя — панель не тронута',
                         subscription_id=getattr(subscription, 'id', None),
-                        user_id=getattr(db_user, 'id', None),
+                        user_id=db_user.id,
                     )
                 elif not subscription.remnawave_id and settings.is_multi_tariff_enabled():
                     # В мультитарифе у каждой подписки свой аккаунт, поэтому

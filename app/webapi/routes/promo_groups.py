@@ -53,8 +53,8 @@ def _serialize(group: PromoGroup, members_count: int = 0) -> PromoGroupResponse:
         apply_discounts_to_addons=group.apply_discounts_to_addons,
         is_default=group.is_default,
         members_count=members_count,
-        created_at=getattr(group, 'created_at', None),
-        updated_at=getattr(group, 'updated_at', None),
+        created_at=group.created_at,
+        updated_at=group.updated_at,
     )
 
 

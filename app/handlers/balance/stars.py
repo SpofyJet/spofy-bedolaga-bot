@@ -28,8 +28,8 @@ async def start_stars_payment(callback: types.CallbackQuery, db_user: User, stat
         return
 
     # Проверка ограничения на пополнение
-    if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+    if db_user.restriction_topup:
+        reason = html.escape(db_user.restriction_reason or 'Действие ограничено администратором')
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
@@ -65,8 +65,8 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
     texts = get_texts(db_user.language)
 
     # Проверка ограничения на пополнение
-    if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+    if db_user.restriction_topup:
+        reason = html.escape(db_user.restriction_reason or 'Действие ограничено администратором')
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:

@@ -621,7 +621,7 @@ async def _activate_pending_trial(
 
         if settings.TRIAL_DURATION_DAYS <= 0 or settings.TRIAL_DISABLED_FOR == 'all':
             return
-        if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', None)):
+        if settings.is_trial_disabled_for_user(user.auth_type):
             return
         if settings.is_trial_paid_activation_enabled():
             return
@@ -701,7 +701,7 @@ async def _activate_pending_trial(
                     user_id=user.id,
                 )
     except Exception:
-        logger.exception('Не удалось активировать триал по диплинку', user_id=getattr(user, 'id', None))
+        logger.exception('Не удалось активировать триал по диплинку', user_id=user.id)
         return
 
     try:
@@ -757,8 +757,8 @@ async def _merge_phantom_into_active_user(
     await db.refresh(phantom, ['subscriptions'])
     await db.refresh(active_user, ['subscriptions'])
 
-    phantom_subs = getattr(phantom, 'subscriptions', None) or []
-    active_user_subs = getattr(active_user, 'subscriptions', None) or []
+    phantom_subs = phantom.subscriptions or []
+    active_user_subs = active_user.subscriptions or []
 
     if phantom_subs and not active_user_subs:
         # Transfer ALL subscriptions from phantom to active user
@@ -768,7 +768,7 @@ async def _merge_phantom_into_active_user(
         if settings.is_multi_tariff_enabled():
             # In multi-tariff, transfer user-level panel id only if no subscription-level ids exist
             if phantom.remnawave_id and not active_user.remnawave_id:
-                phantom_subs = getattr(phantom, 'subscriptions', []) or []
+                phantom_subs = phantom.subscriptions or []
                 has_sub_ids = any(getattr(s, 'remnawave_id', None) for s in phantom_subs)
                 if not has_sub_ids:
                     panel_id_to_transfer = phantom.remnawave_id
@@ -961,7 +961,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
         return False
 
     data = await state.get_data() or {}
-    language = data.get('language') or (getattr(user, 'language', None) if user else None) or DEFAULT_LANGUAGE
+    language = data.get('language') or (user.language if user else None) or DEFAULT_LANGUAGE
     texts = get_texts(language)
 
     if not message.text:
@@ -2281,7 +2281,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
 
         await db.refresh(existing_user, ['subscriptions'])
 
-        existing_user_subs = getattr(existing_user, 'subscriptions', None) or []
+        existing_user_subs = existing_user.subscriptions or []
         first_existing_sub = next(
             (s for s in existing_user_subs if s.is_active), existing_user_subs[0] if existing_user_subs else None
         )
@@ -2639,7 +2639,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
 
         await db.refresh(existing_user, ['subscriptions'])
 
-        existing_user_subs = getattr(existing_user, 'subscriptions', None) or []
+        existing_user_subs = existing_user.subscriptions or []
         first_existing_sub = next(
             (s for s in existing_user_subs if s.is_active), existing_user_subs[0] if existing_user_subs else None
         )

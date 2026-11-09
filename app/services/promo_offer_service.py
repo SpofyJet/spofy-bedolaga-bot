@@ -34,12 +34,12 @@ class PromoOfferService:
     ) -> tuple[bool, list[str] | None, datetime | None, str]:
         # Collect target subscriptions: all active in multi-tariff, single otherwise
         if settings.is_multi_tariff_enabled():
-            subs = getattr(user, 'subscriptions', None) or []
+            subs = user.subscriptions or []
             target_subs = [s for s in subs if s.is_active and not getattr(s, 'is_daily_tariff', False)]
             if not target_subs:
                 target_subs = [s for s in subs if s.is_active]
         else:
-            single = getattr(user, 'subscription', None)
+            single = user.subscription
             target_subs = [single] if single else []
 
         if not target_subs:

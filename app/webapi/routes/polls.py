@@ -74,9 +74,9 @@ def _serialize_poll_summary(
     poll: Poll,
     responses_count: int | None = None,
 ) -> PollSummaryResponse:
-    questions = getattr(poll, 'questions', [])
+    questions = poll.questions
     if responses_count is None:
-        responses = getattr(poll, 'responses', [])
+        responses = poll.responses
         responses_count = len(responses)
     return PollSummaryResponse(
         id=poll.id,
@@ -108,8 +108,8 @@ def _serialize_poll_detail(poll: Poll) -> PollDetailResponse:
 
 
 def _serialize_answer(answer: PollAnswer) -> PollAnswerResponse:
-    question = getattr(answer, 'question', None)
-    option = getattr(answer, 'option', None)
+    question = answer.question
+    option = answer.option
     return PollAnswerResponse(
         question_id=question.id if question else answer.question_id,
         question_text=question.text if question else None,
@@ -120,7 +120,7 @@ def _serialize_answer(answer: PollAnswer) -> PollAnswerResponse:
 
 
 def _serialize_user_response(response: PollResponse) -> PollUserResponse:
-    user = getattr(response, 'user', None)
+    user = response.user
     answers = [_serialize_answer(answer) for answer in sorted(response.answers, key=lambda item: item.created_at)]
     return PollUserResponse(
         id=response.id,

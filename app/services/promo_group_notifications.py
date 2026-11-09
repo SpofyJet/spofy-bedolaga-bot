@@ -98,8 +98,8 @@ async def notify_user_about_auto_assignment(user: User, group: PromoGroup, total
     except Exception:
         logger.exception(
             'Не удалось уведомить пользователя об автоназначении промогруппы',
-            user_id=getattr(user, 'id', None),
-            promo_group_id=getattr(group, 'id', None),
+            user_id=user.id,
+            promo_group_id=group.id,
         )
 
 

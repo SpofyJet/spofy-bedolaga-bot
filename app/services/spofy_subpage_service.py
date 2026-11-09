@@ -208,11 +208,11 @@ async def _notify_orphan_topup(
         return
     if bot is None:
         return
-    telegram_id = getattr(user, 'telegram_id', None)
+    telegram_id = user.telegram_id
     if not telegram_id:
         return
 
-    texts = get_texts(getattr(user, 'language', None) or 'ru')
+    texts = get_texts(user.language or 'ru')
     amount = f' {settings.format_price(credited_kopeks)}' if isinstance(credited_kopeks, int) else ''
     message = (
         '💳 <b>Оплата получена, покупка не оформлена</b>\n\n'
@@ -261,7 +261,7 @@ async def complete_subpage_carts_after_topup(
     if settings.is_auto_purchase_after_topup_enabled():
         # The standard auto-purchase already handled every cart, ours included.
         return False
-    if not user or not getattr(user, 'id', None):
+    if not user or not user.id:
         return False
 
     carts: list[dict[str, Any]] = []

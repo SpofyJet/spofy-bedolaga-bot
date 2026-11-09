@@ -306,8 +306,8 @@ class PricingEngine:
 
         Для всех типов переключений скидки (group + offer) применяются stacked.
         """
-        current_is_daily = getattr(current_tariff, 'is_daily', False) if current_tariff else False
-        new_is_daily = getattr(new_tariff, 'is_daily', False)
+        current_is_daily = current_tariff.is_daily if current_tariff else False
+        new_is_daily = new_tariff.is_daily
 
         # Validate both sides before any free/expired or daily transition shortcut.
         if not current_is_daily:
@@ -340,8 +340,8 @@ class PricingEngine:
         # Возврат С такого тарифа на тариф ниже уровнем (tier_level) — бесплатно,
         # даже если дневная ставка нового тарифа выше текущей.
         if getattr(current_tariff, 'switch_full_price', False):
-            cur_tier = getattr(current_tariff, 'tier_level', 1) or 1
-            new_tier = getattr(new_tariff, 'tier_level', 1) or 1
+            cur_tier = current_tariff.tier_level or 1
+            new_tier = new_tariff.tier_level or 1
             if new_tier < cur_tier:
                 return TariffSwitchResult(
                     upgrade_cost=0,
@@ -423,7 +423,7 @@ class PricingEngine:
         user: User | None = None,
     ) -> TariffSwitchResult:
         """Periodic → Daily: оплата первого дня с group + offer discount."""
-        daily_price = getattr(new_tariff, 'daily_price_kopeks', 0) or 0
+        daily_price = new_tariff.daily_price_kopeks or 0
         if daily_price <= 0:
             return TariffSwitchResult(
                 upgrade_cost=0,
@@ -441,7 +441,7 @@ class PricingEngine:
             if promo_group:
                 period_hint = remaining_days if remaining_days > 0 else 30
                 group_pct = promo_group.get_discount_percent('period', period_hint)
-            offer_pct = get_user_active_promo_discount_percent(user, getattr(new_tariff, 'id', None))
+            offer_pct = get_user_active_promo_discount_percent(user, new_tariff.id)
 
         if group_pct > 0 or offer_pct > 0:
             upgrade_cost, _, _ = self.apply_stacked_discounts(daily_price, group_pct, offer_pct)
@@ -483,7 +483,7 @@ class PricingEngine:
             promo_group = self.resolve_promo_group(user)
             if promo_group:
                 group_pct = promo_group.get_discount_percent('period', min_period_days)
-            offer_pct = get_user_active_promo_discount_percent(user, getattr(new_tariff, 'id', None))
+            offer_pct = get_user_active_promo_discount_percent(user, new_tariff.id)
 
         if group_pct > 0 or offer_pct > 0:
             upgrade_cost, _, _ = self.apply_stacked_discounts(min_period_price, group_pct, offer_pct)
@@ -612,7 +612,7 @@ class PricingEngine:
             if subscription.tariff is None:
                 logger.error(
                     'tariff_id set but tariff relationship not loaded, falling back to classic mode',
-                    subscription_id=getattr(subscription, 'id', None),
+                    subscription_id=subscription.id,
                     tariff_id=subscription.tariff_id,
                 )
             else:
@@ -661,9 +661,9 @@ class PricingEngine:
         months = calculate_months_from_days(period_days)
 
         # --- Base price ---
-        is_daily = getattr(tariff, 'is_daily', False)
+        is_daily = tariff.is_daily
         if is_daily and period_days <= 1:
-            base_price = int(getattr(tariff, 'daily_price_kopeks', 0) or 0)
+            base_price = int(tariff.daily_price_kopeks or 0)
         else:
             period_prices: dict = tariff.period_prices or {}
             base_price = int(period_prices.get(str(period_days), 0) or 0)
@@ -679,7 +679,7 @@ class PricingEngine:
         )
         tariff_device_limit = tariff.device_limit or 0
         extra_devices = 0 if tariff.device_limit == 0 else max(0, (device_limit or 0) - tariff_device_limit)
-        if getattr(tariff, 'device_price_flat', False):
+        if tariff.device_price_flat:
             # Фикс. цена за устройство — разово, без умножения на месяцы периода
             devices_price = extra_devices * device_price_per_unit
         elif is_daily and period_days <= 1:
@@ -705,7 +705,7 @@ class PricingEngine:
             period_pct = promo_group.get_discount_percent('period', period_days)
             devices_pct = promo_group.get_discount_percent('devices', period_days)
 
-        offer_pct = get_user_active_promo_discount_percent(user, getattr(tariff, 'id', None)) if user else 0
+        offer_pct = get_user_active_promo_discount_percent(user, tariff.id) if user else 0
 
         discounted_base = self.apply_discount(base_price, period_pct)
         discounted_devices = self.apply_discount(devices_price, devices_pct)
@@ -837,7 +837,7 @@ class PricingEngine:
         base_price = self.apply_discount(base_price_original, period_pct)
 
         # --- Servers (monthly × months, with servers discount) ---
-        promo_group_id = getattr(user, 'promo_group_id', None) if user else None
+        promo_group_id = user.promo_group_id if user else None
         servers_price_per_month, server_details = await self._calculate_servers_price(
             connected_squads,
             db,

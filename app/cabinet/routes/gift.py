@@ -141,7 +141,7 @@ async def get_gift_config(
     # Get user's promo group for discount calculation
     promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
     if promo_group is None:
-        promo_group = getattr(user, 'promo_group', None)
+        promo_group = user.promo_group
     promo_group_name = promo_group.name if promo_group else None
 
     # Get active promo offer discount
@@ -173,9 +173,7 @@ async def get_gift_config(
         currency_symbol=getattr(settings, 'CURRENCY_SYMBOL', '\u20bd'),
         promo_group_name=promo_group_name,
         active_discount_percent=promo_offer_discount_percent if promo_offer_discount_percent > 0 else None,
-        active_discount_expires_at=(
-            getattr(user, 'promo_offer_discount_expires_at', None) if promo_offer_discount_percent > 0 else None
-        ),
+        active_discount_expires_at=(user.promo_offer_discount_expires_at if promo_offer_discount_percent > 0 else None),
     )
 
 
@@ -198,7 +196,7 @@ async def create_gift_purchase(
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
 
     # Check if user has purchase restrictions
-    if getattr(user, 'restriction_subscription', False):
+    if user.restriction_subscription:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Purchases are restricted for this account',
@@ -380,7 +378,7 @@ async def create_gift_purchase(
         return_url = f'{cabinet_base}/gift/result?token={purchase.token[:12]}'
 
         # Consume promo offer discount under lock before creating external payment
-        if quote.consumes_promo_offer and getattr(locked_user, 'promo_offer_discount_percent', 0):
+        if quote.consumes_promo_offer and locked_user.promo_offer_discount_percent:
             locked_user.promo_offer_discount_percent = 0
             locked_user.promo_offer_discount_source = None
             locked_user.promo_offer_discount_expires_at = None

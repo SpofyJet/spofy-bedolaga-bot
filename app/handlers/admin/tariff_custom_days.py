@@ -40,22 +40,22 @@ def format_custom_days_settings(tariff: Tariff) -> str:
 
 def render_custom_days_settings(tariff: Tariff) -> str:
     """Отдельный экран настроек."""
-    enabled = getattr(tariff, 'custom_days_enabled', False)
+    enabled = tariff.custom_days_enabled
     status = '✅ Включён' if enabled else '❌ Выключен'
     return (
         f'📅 <b>Произвольное количество дней</b>\n\n'
         f'Тариф: <b>{html.escape(tariff.name)}</b>\n\n'
         f'Статус: {status}\n'
-        f'Цена за 1 день: <b>{_price(getattr(tariff, "price_per_day_kopeks", None))}</b>\n'
-        f'Минимум: <b>{_days(getattr(tariff, "min_days", None))}</b>\n'
-        f'Максимум: <b>{_days(getattr(tariff, "max_days", None))}</b>\n\n'
+        f'Цена за 1 день: <b>{_price(tariff.price_per_day_kopeks)}</b>\n'
+        f'Минимум: <b>{_days(tariff.min_days)}</b>\n'
+        f'Максимум: <b>{_days(tariff.max_days)}</b>\n\n'
         'Пользователь сможет выбрать срок в указанных границах; цена — дни × цена за день.'
     )
 
 
 def get_custom_days_keyboard(tariff: Tariff, language: str) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    enabled = getattr(tariff, 'custom_days_enabled', False)
+    enabled = tariff.custom_days_enabled
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -173,7 +173,7 @@ async def start_edit_custom_days_price(
         tariff,
         state_value=AdminStates.editing_tariff_custom_days_price,
         title='💰 <b>Цена за 1 день</b>',
-        current_value=_price(getattr(tariff, 'price_per_day_kopeks', None)),
+        current_value=_price(tariff.price_per_day_kopeks),
         prompt='Введите цену за 1 день в рублях.\nПример: <code>15</code> или <code>12.50</code>',
     )
 
@@ -192,7 +192,7 @@ async def start_edit_custom_days_min(callback: types.CallbackQuery, db_user: Use
         tariff,
         state_value=AdminStates.editing_tariff_custom_days_min,
         title='📉 <b>Минимум дней</b>',
-        current_value=_days(getattr(tariff, 'min_days', None)),
+        current_value=_days(tariff.min_days),
         prompt='Введите минимальный срок целым числом дней.\nПример: <code>3</code>',
     )
 
@@ -211,7 +211,7 @@ async def start_edit_custom_days_max(callback: types.CallbackQuery, db_user: Use
         tariff,
         state_value=AdminStates.editing_tariff_custom_days_max,
         title='📈 <b>Максимум дней</b>',
-        current_value=_days(getattr(tariff, 'max_days', None)),
+        current_value=_days(tariff.max_days),
         prompt='Введите максимальный срок целым числом дней.\nПример: <code>90</code>',
     )
 

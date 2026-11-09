@@ -103,8 +103,8 @@ def is_user_admin_by_env(user: User) -> AdminEnvCheck:
         telegram_id_int = None
     is_telegram_admin = telegram_id_int is not None and telegram_id_int > 0 and telegram_id_int in admin_ids
 
-    user_email = getattr(user, 'email', None)
-    email_verified = bool(getattr(user, 'email_verified', False))
+    user_email = user.email
+    email_verified = bool(user.email_verified)
     # Trust guard: для admin escalation нужен НЕ просто verified email, но и
     # верификация через trusted источник. VK/Yandex выставляют email_verified=True
     # для UX (recovery, linking), но их source='oauth_vk'/'oauth_yandex' НЕ в
@@ -501,7 +501,7 @@ async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
     if not env_check.is_admin:
         return False
     is_telegram_admin = env_check.is_telegram_admin
-    user_email = getattr(user, 'email', None)
+    user_email = user.email
 
     # Lookup Superadmin role: предпочитаем поиск по (is_system=True, level=SUPERADMIN_LEVEL)
     # как в _ensure_preset_roles — это работает даже если кто-то переименовал «Superadmin»

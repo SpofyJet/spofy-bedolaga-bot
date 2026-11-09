@@ -145,8 +145,8 @@ async def merge_phantom_into_user(
     # Determine which subscription to keep: phantom's if active user has none, otherwise active's
     await db.refresh(phantom, ['subscriptions'])
     await db.refresh(active_user, ['subscriptions'])
-    phantom_subs = getattr(phantom, 'subscriptions', None) or []
-    active_subs = getattr(active_user, 'subscriptions', None) or []
+    phantom_subs = phantom.subscriptions or []
+    active_subs = active_user.subscriptions or []
     keep_from: Literal['primary', 'secondary'] = 'secondary' if phantom_subs and not active_subs else 'primary'
 
     logger.warning(
@@ -200,7 +200,7 @@ async def sync_remnawave_after_phantom_merge(db: AsyncSession, user: User) -> No
     Must be called AFTER db.commit() to avoid holding FOR UPDATE locks during HTTP calls.
     """
     await db.refresh(user, ['subscriptions'])
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     if not subs:
         return
     try:

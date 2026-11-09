@@ -60,7 +60,7 @@ def preview_trial_activation_charge(user: User) -> int:
     if price_kopeks <= 0:
         return 0
 
-    balance = int(getattr(user, 'balance_kopeks', 0) or 0)
+    balance = int(user.balance_kopeks or 0)
     if balance < price_kopeks:
         raise TrialPaymentInsufficientFunds(price_kopeks, balance)
 
@@ -134,7 +134,7 @@ async def refund_trial_activation_charge(
         logger.error(
             'Failed to refund kopeks for user during trial activation rollback',
             amount_kopeks=amount_kopeks,
-            getattr=getattr(user, 'id', '<unknown>'),
+            getattr=user.id,
         )
 
     return success
@@ -167,7 +167,7 @@ async def rollback_trial_subscription_activation(
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
             'Failed to remove trial subscription after charge failure',
-            getattr=getattr(subscription, 'id', '<unknown>'),
+            getattr=subscription.id,
             error=error,
         )
         await db.rollback()
@@ -199,7 +199,7 @@ async def revert_trial_activation(
     except Exception as error:  # pragma: no cover - defensive logging
         logger.warning(
             'Failed to refresh user after reverting trial activation',
-            getattr=getattr(user, 'id', '<unknown>'),
+            getattr=user.id,
             error=error,
         )
 

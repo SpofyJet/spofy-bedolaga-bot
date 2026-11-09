@@ -389,7 +389,7 @@ async def _role_context(db: AsyncSession, user: User, payload: dict[str, Any]) -
 
 
 def _user_status_value(user: User) -> str | None:
-    status = getattr(user, 'status', None)
+    status = user.status
     return getattr(status, 'value', status)
 
 
@@ -648,7 +648,7 @@ def _user_snapshot(user: User | None) -> dict[str, Any] | None:
 
 def _media_items_from_message(message: TicketMessage) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    raw_items = getattr(message, 'media_items', None) or []
+    raw_items = message.media_items or []
     if isinstance(raw_items, list):
         for item in raw_items:
             if not isinstance(item, dict) or not item.get('file_id'):
@@ -704,7 +704,7 @@ def _ticket_snapshot(ticket: Ticket, *, include_messages: bool = False) -> dict[
         'lastMessage': _message_snapshot(messages[-1]) if messages else None,
         'snapshotVersion': _snapshot_version(ticket),
         'assignedTo': None,
-        'user': _user_snapshot(getattr(ticket, 'user', None)),
+        'user': _user_snapshot(ticket.user),
     }
     if include_messages:
         snapshot['isReplyBlocked'] = _is_ticket_reply_blocked(ticket)

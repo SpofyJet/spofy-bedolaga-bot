@@ -291,7 +291,7 @@ async def _notify_admins(
             old_balance,
             topup_status='🧾 Ручное пополнение',
             referrer_info=format_referrer_info(user),
-            subscription=getattr(user, 'subscription', None),
+            subscription=user.subscription,
             promo_group=user.get_primary_promo_group(),
             db=db,
         )

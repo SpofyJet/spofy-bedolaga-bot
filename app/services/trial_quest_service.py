@@ -91,7 +91,7 @@ async def _send(bot, user: User, text: str, keyboard: InlineKeyboardMarkup) -> N
 
 async def _eligible_inviter(db: AsyncSession, friend: User, now: datetime) -> User | None:
     """Пригласивший, если друг — новый человек и у пригласившего ещё есть место в лимите наград."""
-    inviter_id = getattr(friend, 'referred_by_id', None)
+    inviter_id = friend.referred_by_id
     if not inviter_id or inviter_id == friend.id:
         return None
     created = friend.created_at
@@ -116,7 +116,7 @@ async def _reward_is_suspicious(user: User, subscription: Subscription) -> bool:
         return False
     from app.services.trial_abuse_service import trial_abuse_service
 
-    raw = getattr(subscription, 'remnawave_id', None) or getattr(user, 'remnawave_id', None)
+    raw = subscription.remnawave_id or user.remnawave_id
     try:
         panel_id = int(raw)
     except (TypeError, ValueError):

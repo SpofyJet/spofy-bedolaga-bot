@@ -20,7 +20,7 @@ logger = structlog.get_logger(__name__)
 def format_referrer_info(user: User) -> str:
     """Return formatted referrer info for admin notifications."""
 
-    referred_by_id = getattr(user, 'referred_by_id', None)
+    referred_by_id = user.referred_by_id
 
     if not referred_by_id:
         return 'Нет'
@@ -76,15 +76,13 @@ def get_effective_referral_commission_percent(user: User) -> int:
         percent = settings.REFERRAL_COMMISSION_PERCENT
 
     if percent < 0 or percent > 100:
-        user_id_display = (
-            getattr(user, 'telegram_id', None) or getattr(user, 'email', None) or f'#{getattr(user, "id", "unknown")}'
-        )
+        user_id_display = user.telegram_id or user.email or f'#{user.id}'
         logger.error('❌ Некорректный процент комиссии', user_id_display=user_id_display, percent=percent)
         return max(0, min(100, settings.REFERRAL_COMMISSION_PERCENT))
 
     logger.debug(
         'Определён процент комиссии',
-        user_id=getattr(user, 'id', None),
+        user_id=user.id,
         commission_percent=percent,
         source=source,
     )

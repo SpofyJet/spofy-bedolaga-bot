@@ -630,7 +630,7 @@ class SubscriptionService:
             # редактировали после покупки, снапшот протух и панель режет по
             # старому лимиту. Лечим из живого тарифа ДО пуша trafficLimitBytes.
             try:
-                if getattr(subscription, 'tariff', None) is not None:
+                if subscription.tariff is not None:
                     from app.database.crud.subscription import reconcile_subscription_traffic_limit
 
                     await reconcile_subscription_traffic_limit(db, subscription, subscription.tariff)
@@ -1531,9 +1531,9 @@ async def reset_subscription_with_panel(db, user: User, subscription: Subscripti
     # на user.remnawave_id (это легаси single-tariff id, иначе можно отключить
     # не того панельного пользователя). В single-tariff fallback на user корректен.
     if settings.is_multi_tariff_enabled():
-        panel_user_id = getattr(subscription, 'remnawave_id', None)
+        panel_user_id = subscription.remnawave_id
     else:
-        panel_user_id = getattr(subscription, 'remnawave_id', None) or getattr(user, 'remnawave_id', None)
+        panel_user_id = subscription.remnawave_id or user.remnawave_id
 
     panel_disabled = False
     if panel_user_id:
@@ -1544,7 +1544,7 @@ async def reset_subscription_with_panel(db, user: User, subscription: Subscripti
     else:
         logger.warning(
             'Обнуление подписки: панельный id не найден, отключение в панели пропущено',
-            subscription_id=getattr(subscription, 'id', None),
+            subscription_id=subscription.id,
         )
 
     await reset_subscription(db, subscription)

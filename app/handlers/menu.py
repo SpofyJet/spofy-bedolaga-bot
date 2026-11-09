@@ -93,7 +93,7 @@ def _resolve_info_page_title(page: InfoPage, language: str) -> str:
 
 def _collect_period_discounts(group: PromoGroup) -> dict[int, int]:
     discounts: dict[int, int] = {}
-    raw_discounts = getattr(group, 'period_discounts', None)
+    raw_discounts = group.period_discounts
 
     if isinstance(raw_discounts, dict):
         for key, value in raw_discounts.items():
@@ -133,21 +133,21 @@ def _collect_period_discounts(group: PromoGroup) -> dict[int, int]:
 def _build_group_discount_lines(group: PromoGroup, texts, language: str) -> list[str]:
     lines: list[str] = []
 
-    if getattr(group, 'server_discount_percent', 0) > 0:
+    if group.server_discount_percent > 0:
         lines.append(
             texts.t('PROMO_GROUP_DISCOUNT_SERVERS', '🌍 Серверы: {percent}%').format(
                 percent=group.server_discount_percent
             )
         )
 
-    if getattr(group, 'traffic_discount_percent', 0) > 0:
+    if group.traffic_discount_percent > 0:
         lines.append(
             texts.t('PROMO_GROUP_DISCOUNT_TRAFFIC', '📊 Трафик: {percent}%').format(
                 percent=group.traffic_discount_percent
             )
         )
 
-    if getattr(group, 'device_discount_percent', 0) > 0:
+    if group.device_discount_percent > 0:
         lines.append(
             texts.t('PROMO_GROUP_DISCOUNT_DEVICES', '📱 Доп. устройства: {percent}%').format(
                 percent=group.device_discount_percent
@@ -182,7 +182,7 @@ async def build_main_menu_keyboard(db_user: User, db: AsyncSession):
     """Клавиатура главного меню: show_main_menu, handle_back_to_menu и живое меню (live_menu_service)."""
     # Multi-tariff aware: check if user has ANY active subscription
     # 'limited' (traffic exhausted) subscriptions are still active for UI purposes
-    _subs = getattr(db_user, 'subscriptions', None) or []
+    _subs = db_user.subscriptions or []
     has_active_subscription = any(sub.is_active or getattr(sub, 'actual_status', None) == 'limited' for sub in _subs)
     subscription_is_active = has_active_subscription
 
@@ -1335,7 +1335,7 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
 
 
 def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -> str:
-    subscription = getattr(user, 'subscription', None)
+    subscription = user.subscription
     if not subscription:
         return texts.t('SUB_STATUS_NONE', '❌ Отсутствует')
 

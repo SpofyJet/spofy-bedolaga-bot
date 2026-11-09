@@ -116,7 +116,7 @@ async def _resend_to_admin_chat(event: SystemErrorEvent) -> None:
     if not chat_id:
         raise RuntimeError('ADMIN_NOTIFICATIONS_CHAT_ID не настроен')
 
-    topic_id = settings.ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID or getattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None)
+    topic_id = settings.ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID or settings.ADMIN_NOTIFICATIONS_TOPIC_ID
     kwargs: dict[str, Any] = {'chat_id': chat_id, 'parse_mode': 'HTML'}
     if topic_id:
         kwargs['message_thread_id'] = topic_id

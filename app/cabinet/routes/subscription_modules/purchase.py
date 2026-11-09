@@ -170,7 +170,7 @@ async def _build_tariff_response(
     promo_group = user.get_primary_promo_group() if user and hasattr(user, 'get_primary_promo_group') else None
     if promo_group is None and user:
         # Fallback to legacy promo_group attribute
-        promo_group = getattr(user, 'promo_group', None)
+        promo_group = user.promo_group
     promo_group_name = promo_group.name if promo_group else None
 
     # Вычисляем доп. устройства для текущего тарифа (при продлении)
@@ -196,7 +196,7 @@ async def _build_tariff_response(
             base_tariff_price = int(price_kopeks)
 
             # Стоимость доп. устройств за этот период
-            if getattr(tariff, 'device_price_flat', False):
+            if tariff.device_price_flat:
                 # Фикс. цена за устройство — разово за период
                 extra_devices_cost = extra_devices_count * extra_device_price_per_month
             else:
@@ -281,7 +281,7 @@ async def _build_tariff_response(
 
     # Суточная цена — как и периоды, только со скидкой группы: промокод накладывает
     # кабинет для показа и сервер при списании (PricingEngine.daily_group_price).
-    original_daily_price = getattr(tariff, 'daily_price_kopeks', 0) or 0
+    original_daily_price = tariff.daily_price_kopeks or 0
     daily_price, daily_discount_percent = PricingEngine.daily_group_price(original_daily_price, user)
     if tariff.is_daily and extra_devices_count:
         daily_devices_cost = extra_devices_count * extra_device_price_per_month
@@ -348,7 +348,7 @@ async def _build_tariff_response(
         else {},
         'max_topup_traffic_gb': tariff.max_topup_traffic_gb,
         # Дневной тариф
-        'is_daily': getattr(tariff, 'is_daily', False),
+        'is_daily': tariff.is_daily,
         'daily_price_kopeks': daily_price,
         # Сброс трафика
         'traffic_reset_mode': tariff.traffic_reset_mode or settings.DEFAULT_TRAFFIC_RESET_STRATEGY,
@@ -416,7 +416,7 @@ async def get_purchase_options(
             promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
             if promo_group is None:
                 # Fallback to legacy promo_group attribute
-                promo_group = getattr(user, 'promo_group', None)
+                promo_group = user.promo_group
             promo_group_id = promo_group.id if promo_group else None
             tariffs = await get_tariffs_for_user(db, promo_group_id)
 
@@ -440,7 +440,7 @@ async def get_purchase_options(
                 purchased_tariff_ids = set()
                 subscription = await get_subscription_by_user_id(db, user.id)
             current_tariff_id = subscription.tariff_id if subscription else None
-            language = getattr(user, 'language', 'ru') or 'ru'
+            language = user.language or 'ru'
 
             # Determine subscription status for frontend to decide purchase vs switch flow
             subscription_status = None
@@ -788,7 +788,7 @@ async def purchase_tariff(
             )
 
         # Handle daily tariffs specially
-        is_daily_tariff = getattr(tariff, 'is_daily', False)
+        is_daily_tariff = tariff.is_daily
         if is_daily_tariff:
             period_days = 1
         else:
@@ -1536,7 +1536,7 @@ async def get_trial_info(
     await db.refresh(user, ['subscriptions'])
 
     # Проверяем, отключён ли триал для этого типа пользователя
-    if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', 'telegram')):
+    if settings.is_trial_disabled_for_user(user.auth_type):
         return TrialInfoResponse(
             is_available=False,
             duration_days=settings.TRIAL_DURATION_DAYS,
@@ -1579,7 +1579,7 @@ async def get_trial_info(
         logger.error('Error getting trial tariff for info', error=e)
 
     # Check if user already has an active subscription
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     has_active = any(s.status == 'active' and s.end_date and s.end_date > datetime.now(UTC) for s in subs)
     has_used_trial = user.is_trial_already_used()
 
@@ -1628,14 +1628,14 @@ async def activate_trial(
     await db.refresh(user, ['subscriptions'])
 
     # Проверяем, отключён ли триал для этого типа пользователя
-    if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', 'telegram')):
+    if settings.is_trial_disabled_for_user(user.auth_type):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Trial is not available for your account type',
         )
 
     # Check if user already has an active subscription
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = user.subscriptions or []
     has_active = any(s.status == 'active' and s.end_date and s.end_date > datetime.now(UTC) for s in subs)
     if has_active:
         raise HTTPException(

@@ -106,7 +106,7 @@ async def lift_panel_traffic_limit(
     аккаунт включит ближайший проход мониторинга.
     """
     if settings.is_multi_tariff_enabled():
-        panel_user_id = getattr(subscription, 'remnawave_id', None)
+        panel_user_id = subscription.remnawave_id
     else:
         panel_user_id = getattr(await get_user_by_id(db, subscription.user_id), 'remnawave_id', None)
     if not panel_user_id:

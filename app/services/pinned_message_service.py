@@ -104,7 +104,7 @@ async def deliver_pinned_message_to_user(
         return False
 
     if not pinned_message.send_on_every_start:
-        last_pinned_id = getattr(user, 'last_pinned_message_id', None)
+        last_pinned_id = user.last_pinned_message_id
         if last_pinned_id == pinned_message.id:
             return False
 
@@ -114,7 +114,7 @@ async def deliver_pinned_message_to_user(
 
     success = await _send_and_pin_message(bot, user.telegram_id, pinned_message)
     if success:
-        await _mark_pinned_delivery(user_id=getattr(user, 'id', None), pinned_message_id=pinned_message.id)
+        await _mark_pinned_delivery(user_id=user.id, pinned_message_id=pinned_message.id)
     return success
 
 

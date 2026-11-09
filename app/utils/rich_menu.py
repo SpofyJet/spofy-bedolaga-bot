@@ -416,7 +416,7 @@ def _trial_offer_link(user: User, texts) -> str:
     """
     if settings.TRIAL_DURATION_DAYS <= 0 or settings.TRIAL_DISABLED_FOR == 'all':
         return ''
-    if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', None)):
+    if settings.is_trial_disabled_for_user(user.auth_type):
         return ''
     try:
         if user.is_trial_already_used():
@@ -499,7 +499,7 @@ async def _build_single_subscription_block(user: User, texts, db: AsyncSession) 
     # единый источник правды для формулировок (см. tests/test_start_menu_text_consistency.py).
     from app.handlers.menu import _get_subscription_status
 
-    subscription = getattr(user, 'subscription', None)
+    subscription = user.subscription
     if not subscription:
         return f'<p>{_rich_text(texts.t("SUB_STATUS_NONE", "❌ Отсутствует"))}</p>'
 
@@ -765,7 +765,7 @@ async def try_send_rich_main_menu(
     try:
         rich_html = await build_main_menu_rich_html(db_user, texts, db)
     except Exception as error:
-        logger.error('Ошибка сборки rich-меню', error=error, user_id=getattr(db_user, 'id', None))
+        logger.error('Ошибка сборки rich-меню', error=error, user_id=db_user.id)
         return False
 
     try:
@@ -832,7 +832,7 @@ async def try_edit_rich_main_menu(
     try:
         rich_html = await build_main_menu_rich_html(db_user, texts, db)
     except Exception as error:
-        logger.error('Ошибка сборки rich-меню', error=error, user_id=getattr(db_user, 'id', None))
+        logger.error('Ошибка сборки rich-меню', error=error, user_id=db_user.id)
         return False
 
     chat_id = message.chat.id
