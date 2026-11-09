@@ -702,6 +702,11 @@ async def handle_no_traffic_packages(callback: types.CallbackQuery, db_user: Use
     )
 
 
+def _traffic_switch_blocked(subscription) -> bool:
+    """Смена общего пакета трафика — только платной подписке без тарифа."""
+    return bool(subscription.is_trial or subscription.tariff_id is not None)
+
+
 async def handle_switch_traffic(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
 ):
@@ -720,14 +725,11 @@ async def handle_switch_traffic(
         await callback.answer('⚠️ Эта функция доступна только для платных подписок', show_alert=True)
         return
 
-    # Проверяем настройку тарифа
-    if subscription.tariff_id:
-        from app.database.crud.tariff import get_tariff_by_id
-
-        tariff = await get_tariff_by_id(db, subscription.tariff_id)
-        if tariff and not tariff.allow_traffic_topup:
-            await callback.answer('⚠️ Для вашего тарифа переключение трафика недоступно', show_alert=True)
-            return
+    # На тарифе лимит задаёт тариф: смена общего пакета отдавала безлимит за
+    # разницу старых пакетов. Докупка трафика идёт своим путём по ценам тарифа.
+    if _traffic_switch_blocked(subscription):
+        await callback.answer('⚠️ Для вашего тарифа переключение трафика недоступно', show_alert=True)
+        return
 
     current_traffic = subscription.traffic_limit_gb
     # Вычисляем базовый трафик (без докупленного) для корректного расчёта цен
@@ -774,6 +776,9 @@ async def confirm_switch_traffic(
     texts = get_texts(db_user.language)
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
+        return
+    if _traffic_switch_blocked(subscription):
+        await callback.answer('⚠️ Для вашего тарифа переключение трафика недоступно', show_alert=True)
         return
 
     current_traffic = subscription.traffic_limit_gb
@@ -887,6 +892,9 @@ async def execute_switch_traffic(
     # Re-resolve after lock since db_user was refreshed
     subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
+        return
+    if _traffic_switch_blocked(subscription):
+        await callback.answer('⚠️ Для вашего тарифа переключение трафика недоступно', show_alert=True)
         return
     current_traffic = subscription.traffic_limit_gb
 

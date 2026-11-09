@@ -593,6 +593,15 @@ async def switch_traffic_package(
             detail='Traffic management is only available for paid subscriptions',
         )
 
+    if subscription.tariff_id is not None:
+        # Лимит трафика на тарифе задаёт тариф, докупка идёт через POST /traffic
+        # по ценам тарифа. Смена общего пакета отдавала безлимит за разницу
+        # старых пакетов (100 ГБ → 0 за 50 ₽ в месяц).
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={'code': 'tariff_traffic_fixed', 'message': 'Traffic package switch is unavailable on tariffs'},
+        )
+
     current_traffic = subscription.traffic_limit_gb or 0
     new_traffic = request.gb
 

@@ -730,7 +730,10 @@ class TestGiftSubscriptionActivationSingleTariff:
 
             # Subscription extended and upgraded to Tariff 2 limits
             await db.refresh(sub)
-            assert sub.end_date > initial_end + timedelta(days=29)
+            # Остаток дешёвого тарифа (10 дней по 300 ₽/30) переносится на вдвое более
+            # дорогой по стоимости: 5 дней + 30 подаренных.
+            end_date = sub.end_date if sub.end_date.tzinfo else sub.end_date.replace(tzinfo=UTC)
+            assert now + timedelta(days=34) < end_date < now + timedelta(days=36)
             assert sub.tariff_id == t2.id
             assert sub.traffic_limit_gb == t2.traffic_limit_gb
             assert sub.device_limit == t2.device_limit

@@ -1345,6 +1345,54 @@ async def _is_free_source_tariff(db: AsyncSession, tariff_id: int) -> bool:
         return False
 
 
+def carried_seconds_by_value(
+    remaining_seconds: float, source_rate: tuple[int, int], target_rate: tuple[int, int]
+) -> float:
+    """Остаток срока при переходе на тариф дороже — по стоимости, а не день в день.
+
+    ``*_rate`` — пары (цена в копейках, период в днях). Остаток «Стандартного»,
+    перенесённый день в день на «С Обходами», дарил разницу дневных ставок за
+    весь остаток: год дешёвого тарифа плюс 30 дней дорогого давали 395 дней
+    дорогого. Переносим столько секунд, сколько остаток стоит по ставке нового
+    тарифа. На тариф дешевле или равный — день в день, как раньше.
+    """
+    source_price, source_period = source_rate
+    target_price, target_period = target_rate
+    if remaining_seconds <= 0 or min(source_price, source_period, target_price, target_period) <= 0:
+        return max(0.0, remaining_seconds)
+    # source_price/source_period < target_price/target_period, целыми
+    if source_price * target_period >= target_price * source_period:
+        return remaining_seconds
+    return remaining_seconds * (source_price * target_period) / (target_price * source_period)
+
+
+async def _carried_seconds_on_tariff_change(
+    db: AsyncSession, source_tariff_id: int | None, target_tariff_id: int, remaining_seconds: float
+) -> float:
+    """Пересчёт остатка при покупке другого тарифа. Любая ошибка — день в день."""
+    if not source_tariff_id or remaining_seconds <= 0:
+        return remaining_seconds
+    try:
+        from app.database.crud.tariff import get_tariff_by_id
+        from app.services.pricing_engine import PricingEngine
+
+        source = await get_tariff_by_id(db, source_tariff_id)
+        target = await get_tariff_by_id(db, target_tariff_id)
+        if source is None or target is None or source.is_daily or target.is_daily:
+            return remaining_seconds
+        remaining_days = max(1, math.ceil(remaining_seconds / 86400))
+        source_rate, target_rate = PricingEngine.get_comparable_daily_rates(source, target, remaining_days)
+        return carried_seconds_by_value(remaining_seconds, source_rate, target_rate)
+    except Exception as e:
+        logger.warning(
+            'Не удалось пересчитать остаток по стоимости, переносим день в день',
+            source_tariff_id=source_tariff_id,
+            target_tariff_id=target_tariff_id,
+            error=e,
+        )
+        return remaining_seconds
+
+
 async def extend_subscription(
     db: AsyncSession,
     subscription: Subscription,
@@ -1446,6 +1494,12 @@ async def extend_subscription(
             if _should_carry_remaining_days(is_trial=subscription.is_trial, source_is_free=source_is_free):
                 remaining = subscription.end_date - current_time
                 remaining_seconds = max(0, remaining.total_seconds())
+                if days > 0 and not subscription.is_trial:
+                    # Покупка периода ДРУГОГО тарифа поверх оплаченного остатка:
+                    # остаток переносится по стоимости (см. carried_seconds_by_value).
+                    remaining_seconds = await _carried_seconds_on_tariff_change(
+                        db, subscription.tariff_id, tariff_id, remaining_seconds
+                    )
                 logger.info(
                     '🎁 Обнаружен остаток подписки, будет добавлен к новому сроку',
                     remaining_seconds=int(remaining_seconds),
