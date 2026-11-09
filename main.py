@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import structlog
+import uvloop
 
 
 sys.path.append(str(Path(__file__).parent))
@@ -1151,7 +1152,7 @@ async def _send_crash_notification_on_error(error: Exception) -> None:
 
 if __name__ == '__main__':
     try:
-        asyncio.run(main())
+        asyncio.run(main(), loop_factory=uvloop.new_event_loop)
     except KeyboardInterrupt:
         print('\n🛑 Бот остановлен пользователем')
     except Exception as e:
