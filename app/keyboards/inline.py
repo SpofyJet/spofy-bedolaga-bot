@@ -13,7 +13,6 @@ from app.localization.texts import get_texts
 from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 from app.utils.lifetime import is_lifetime_end
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
-from app.utils.payment_utils import pay2328_button_label, xrocket_button_label
 from app.utils.price_display import PriceInfo, format_price_button
 from app.utils.pricing_utils import (
     apply_percentage_discount,
@@ -1817,7 +1816,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=xrocket_button_label(texts),
+                    text=texts.t('PAYMENT_XROCKET', 'Криптовалюта (xRocket)'),
                     callback_data=_build_callback('xrocket'),
                 )
             ]
@@ -1828,7 +1827,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=pay2328_button_label(texts),
+                    text=texts.t('PAYMENT_PAY2328', 'Криптовалюта (2328.io)'),
                     callback_data=_build_callback('pay2328'),
                 )
             ]

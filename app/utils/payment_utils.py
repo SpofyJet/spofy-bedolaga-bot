@@ -185,18 +185,3 @@ def is_payment_method_available(method_id: str) -> bool:
     if method_id == 'support':
         return settings.is_support_topup_enabled()
     return False
-
-
-def xrocket_button_label(texts) -> str:
-    """Подпись кнопки xRocket: чем платят, а не через кого.
-
-    Список берётся из настроенных активов, чтобы кнопка не обещала монету,
-    которую счёт не примет. У xRocket тонкоин называется TONCOIN — людям пишем TON.
-    """
-    assets = ', '.join('TON' if asset == 'TONCOIN' else asset for asset in settings.get_xrocket_assets())
-    return texts.t('PAYMENT_XROCKET', 'Криптовалюта · {assets}').format(assets=assets)
-
-
-def pay2328_button_label(texts) -> str:
-    """Подпись кнопки 2328.io: монету и сеть человек выбирает на странице счёта."""
-    return texts.t('PAYMENT_PAY2328', 'Криптовалюта · перевод на адрес')
