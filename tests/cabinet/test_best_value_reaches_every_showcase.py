@@ -13,12 +13,11 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
-from types import SimpleNamespace
 
 import pytest
 from pydantic import BaseModel
 
-from app.cabinet.routes import gift as gift_routes, landing as landing_routes
+from app.cabinet.routes import gift as gift_routes
 from app.database.models import (
     DiscountOffer,
     GuestPurchase,
@@ -122,39 +121,6 @@ async def test_gift_config_marks_nothing_without_a_highlight(monkeypatch):
 # ── Лендинг ─────────────────────────────────────────────────────────────────
 
 
-def _landing(**overrides) -> SimpleNamespace:
-    """Минимальный дубль страницы лендинга: загрузчику тарифов нужны два поля."""
-    fields = {'allowed_tariff_ids': [1], 'allowed_periods': None}
-    fields.update(overrides)
-    return SimpleNamespace(**fields)
-
-
-@pytest.mark.asyncio
-async def test_landing_marks_the_highlighted_period_and_tariff(monkeypatch):
-    async with memory_session(monkeypatch, _TABLES) as db:
-        db.add(_tariff())
-        await db.commit()
-
-        tariffs = await landing_routes._load_landing_tariffs(db, _landing())
-
-        assert [p.days for p in tariffs[0].periods if p.is_highlighted] == [360]
-        assert tariffs[0].is_highlighted is True
-
-
-@pytest.mark.asyncio
-async def test_landing_marks_nothing_when_the_highlighted_period_is_not_offered(monkeypatch):
-    """Лендинг вправе сузить набор периодов: отметка на выброшенном периоде
-    не должна перескакивать на соседний."""
-    async with memory_session(monkeypatch, _TABLES) as db:
-        db.add(_tariff())
-        await db.commit()
-
-        tariffs = await landing_routes._load_landing_tariffs(db, _landing(allowed_periods={'1': [30, 180]}))
-
-        assert [p.days for p in tariffs[0].periods] == [30, 180]
-        assert not any(p.is_highlighted for p in tariffs[0].periods)
-
-
 # ── Сторож ──────────────────────────────────────────────────────────────────
 
 
@@ -212,7 +178,6 @@ def test_the_guard_actually_sees_the_showcases():
     client_models = set(_period_models()) - _ADMIN_ONLY_PERIOD_MODELS
 
     assert client_models >= {
-        'app.cabinet.routes.landing.LandingTariffPeriod',
         'app.cabinet.schemas.gift.GiftConfigTariffPeriod',
         'app.cabinet.schemas.subscription.RenewalOptionResponse',
     }, sorted(client_models)

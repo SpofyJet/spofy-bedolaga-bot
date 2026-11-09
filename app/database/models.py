@@ -3231,60 +3231,6 @@ class AdminAuditLog(Base):
         return f'<AdminAuditLog id={self.id} action={self.action!r} status={self.status!r}>'
 
 
-class LandingPage(Base):
-    """Public quick-purchase landing page configuration."""
-
-    __tablename__ = 'landing_pages'
-    __table_args__ = (
-        CheckConstraint(
-            'discount_percent IS NULL OR (discount_percent >= 1 AND discount_percent <= 99)',
-            name='chk_landing_discount_percent_range',
-        ),
-        CheckConstraint(
-            'discount_starts_at IS NULL OR discount_ends_at IS NULL OR discount_starts_at < discount_ends_at',
-            name='chk_landing_discount_dates_order',
-        ),
-    )
-
-    id = Column(Integer, primary_key=True, index=True)
-    slug = Column(String(100), unique=True, nullable=False, index=True)
-    is_active = Column(Boolean, nullable=False, default=True)
-    title = Column(JSON, nullable=False, default=dict)
-    subtitle = Column(JSON, nullable=True)
-    features = Column(JSON, nullable=False, default=list)
-    footer_text = Column(JSON, nullable=True)
-    allowed_tariff_ids = Column(JSON, nullable=False, default=list)
-    allowed_periods = Column(JSON, nullable=False, default=dict)
-    payment_methods = Column(JSON, nullable=False, default=list)
-    gift_enabled = Column(Boolean, nullable=False, default=True)
-    custom_css = Column(Text, nullable=True)
-    meta_title = Column(JSON, nullable=True)
-    meta_description = Column(JSON, nullable=True)
-    display_order = Column(Integer, nullable=False, default=0)
-    discount_percent = Column(Integer, nullable=True)  # 1-99, global discount for all tariffs
-    discount_overrides = Column(JSON, nullable=True)  # {"tariff_id": percent} per-tariff override
-    discount_starts_at = Column(AwareDateTime(), nullable=True)
-    discount_ends_at = Column(AwareDateTime(), nullable=True)
-    discount_badge_text = Column(JSON, nullable=True)  # LocaleDict {"ru": "...", "en": "..."}
-    background_config = Column(
-        JSON, nullable=True
-    )  # AnimationConfig: {enabled, type, settings, opacity, blur, reducedOnMobile}
-    # Sticky pay button on mobile (full-width fixed bottom)
-    sticky_pay_button = Column(Boolean, nullable=False, default=False, server_default=text('false'))
-    # Yandex Metrika landing-level conversion goals
-    analytics_view_enabled = Column(Boolean, nullable=False, default=False, server_default=text('false'))
-    analytics_view_goal = Column(String(64), nullable=True)
-    analytics_click_enabled = Column(Boolean, nullable=False, default=False, server_default=text('false'))
-    analytics_click_goal = Column(String(64), nullable=True)
-    created_at = Column(AwareDateTime(), server_default=func.now())
-    updated_at = Column(AwareDateTime(), server_default=func.now(), onupdate=func.now())
-
-    guest_purchases = relationship('GuestPurchase', back_populates='landing', lazy='noload')
-
-    def __repr__(self) -> str:
-        return f"<LandingPage slug='{self.slug}' active={self.is_active}>"
-
-
 class GuestPurchaseStatus(StrEnum):
     PENDING = 'pending'
     PAID = 'paid'
@@ -3301,7 +3247,6 @@ class GuestPurchase(Base):
     __table_args__ = (
         Index('ix_guest_purchases_status', 'status'),
         Index('ix_guest_purchases_contact', 'contact_type', 'contact_value'),
-        Index('ix_guest_purchases_landing_status_paid', 'landing_id', 'status', 'paid_at'),
         Index('ix_guest_purchases_source', 'source'),
         Index('ix_guest_purchases_user_gift_status', 'user_id', 'is_gift', 'status'),
         Index('ix_guest_purchases_status_paid_at', 'status', 'paid_at'),
@@ -3311,7 +3256,6 @@ class GuestPurchase(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     token = Column(String(64), unique=True, nullable=False, index=True)
-    landing_id = Column(Integer, ForeignKey('landing_pages.id', ondelete='SET NULL'), nullable=True)
     contact_type = Column(String(20), nullable=False)  # 'email' or 'telegram'
     contact_value = Column(String(255), nullable=False)
     is_gift = Column(Boolean, nullable=False, default=False)
@@ -3351,7 +3295,6 @@ class GuestPurchase(Base):
     # индекс ux_guest_purchases_idempotency_key предотвращает повторные списания.
     idempotency_key = Column(String(64), nullable=True)
 
-    landing = relationship('LandingPage', back_populates='guest_purchases', lazy='selectin')
     tariff = relationship('Tariff', lazy='selectin')
     user = relationship('User', foreign_keys=[user_id], lazy='selectin')
     buyer = relationship('User', foreign_keys=[buyer_user_id], lazy='selectin')

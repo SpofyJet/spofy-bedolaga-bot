@@ -38,8 +38,6 @@ class NotificationType(Enum):
     TRAFFIC_RESET = 'traffic_reset'
 
     # Account notifications
-    BAN_NOTIFICATION = 'ban_notification'
-    UNBAN_NOTIFICATION = 'unban_notification'
     WARNING_NOTIFICATION = 'warning_notification'
 
     # Referral notifications

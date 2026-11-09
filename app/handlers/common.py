@@ -13,18 +13,6 @@ from app.localization.texts import get_rules, get_texts
 logger = structlog.get_logger(__name__)
 
 
-async def handle_delete_ban_notification(
-    callback: types.CallbackQuery,
-):
-    """Удаляет уведомление о бане при нажатии на кнопку"""
-    try:
-        await callback.message.delete()
-        await callback.answer('Уведомление удалено')
-    except Exception as e:
-        logger.warning('Не удалось удалить уведомление', error=e)
-        await callback.answer('Не удалось удалить', show_alert=False)
-
-
 async def handle_webhook_notification_close(
     callback: types.CallbackQuery,
 ):
@@ -236,7 +224,6 @@ async def show_rules(callback: types.CallbackQuery, db_user: User, db: AsyncSess
 
 def register_handlers(dp: Dispatcher):
     # Удаление уведомлений
-    dp.callback_query.register(handle_delete_ban_notification, F.data == 'ban_notify:delete')
     dp.callback_query.register(handle_webhook_notification_close, F.data == 'webhook:close')
 
     dp.callback_query.register(show_rules, F.data == 'menu_rules')

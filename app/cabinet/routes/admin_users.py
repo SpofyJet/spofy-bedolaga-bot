@@ -4099,7 +4099,6 @@ async def get_user_gifts(
             selectinload(GuestPurchase.tariff),
             selectinload(GuestPurchase.user),
             noload(GuestPurchase.buyer),
-            noload(GuestPurchase.landing),
         )
         .where(
             GuestPurchase.buyer_user_id == user_id,
@@ -4117,7 +4116,6 @@ async def get_user_gifts(
             selectinload(GuestPurchase.tariff),
             selectinload(GuestPurchase.buyer),
             noload(GuestPurchase.user),
-            noload(GuestPurchase.landing),
         )
         .where(
             GuestPurchase.user_id == user_id,

@@ -71,8 +71,6 @@ class EmailNotificationTemplates:
             NotificationType.AUTOPAY_INSUFFICIENT_FUNDS: self._autopay_insufficient_funds_template,
             NotificationType.DAILY_DEBIT: self._daily_debit_template,
             NotificationType.DAILY_INSUFFICIENT_FUNDS: self._daily_insufficient_funds_template,
-            NotificationType.BAN_NOTIFICATION: self._ban_template,
-            NotificationType.UNBAN_NOTIFICATION: self._unban_template,
             NotificationType.WARNING_NOTIFICATION: self._warning_template,
             NotificationType.REFERRAL_BONUS: self._referral_bonus_template,
             NotificationType.REFERRAL_REGISTERED: self._referral_registered_template,
@@ -1195,70 +1193,6 @@ class EmailNotificationTemplates:
     # ============================================================================
     # Account Status Templates
     # ============================================================================
-
-    def _ban_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for ban notification."""
-        reason = html.escape(context.get('reason', ''))
-
-        subjects = {
-            'ru': 'Аккаунт заблокирован',
-            'en': 'Account Suspended',
-        }
-
-        bodies = {
-            'ru': f"""
-                <h2>Аккаунт заблокирован</h2>
-                <div class="highlight danger">
-                    <p>Ваш аккаунт был заблокирован.</p>
-                    {f'<p>Причина: {reason}</p>' if reason else ''}
-                </div>
-                <p>Если вы считаете, что это ошибка, обратитесь в поддержку.</p>
-            """,
-            'en': f"""
-                <h2>Account Suspended</h2>
-                <div class="highlight danger">
-                    <p>Your account has been suspended.</p>
-                    {f'<p>Reason: {reason}</p>' if reason else ''}
-                </div>
-                <p>If you believe this is an error, please contact support.</p>
-            """,
-        }
-
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
-        }
-
-    def _unban_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for unban notification."""
-        subjects = {
-            'ru': 'Аккаунт разблокирован',
-            'en': 'Account Reactivated',
-        }
-
-        bodies = {
-            'ru': f"""
-                <h2>Аккаунт разблокирован</h2>
-                <div class="highlight success">
-                    <p>Ваш аккаунт был разблокирован.</p>
-                    <p>Вы снова можете пользоваться сервисом.</p>
-                </div>
-                {self._get_cabinet_button(language)}
-            """,
-            'en': f"""
-                <h2>Account Reactivated</h2>
-                <div class="highlight success">
-                    <p>Your account has been reactivated.</p>
-                    <p>You can use the service again.</p>
-                </div>
-                {self._get_cabinet_button(language)}
-            """,
-        }
-
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
-        }
 
     def _warning_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for warning notification."""

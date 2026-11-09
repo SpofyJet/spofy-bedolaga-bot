@@ -196,7 +196,6 @@ class BotConfigurationService:
         'LOG': '📝 Логирование',
         'DEBUG': '🧪 Режим разработки',
         'MODERATION': '🛡️ Модерация и фильтры',
-        'BAN_NOTIFICATIONS': '🚫 Тексты уведомлений о блокировках',
         'INFO_PAGES': '📄 Инфо-страницы',
         'GRACE_ACCESS': '🛟 Grace-доступ',
         'BYPASS_DOWNGRADE': '🏴‍☠️ Обходы при исчерпании трафика',
@@ -257,7 +256,6 @@ class BotConfigurationService:
         'LOG': 'Уровни логирования и ротация.',
         'DEBUG': 'Отладочные функции и безопасный режим.',
         'MODERATION': 'Настройки фильтров отображаемых имен и защиты от фишинга.',
-        'BAN_NOTIFICATIONS': 'Тексты уведомлений о блокировках, которые отправляются пользователям.',
         'INFO_PAGES': 'Видимость встроенных страниц (правила, политика, оферта, FAQ) в боте и веб-кабинете.',
         'BYPASS_DOWNGRADE': (
             'Тариф с обходами: когда лимит трафика исчерпан, подписка переходит в сквад Bypass-Off — '
@@ -493,7 +491,6 @@ class BotConfigurationService:
         'WEB_API_': 'WEB_API',
         'DEBUG': 'DEBUG',
         'DISPLAY_NAME_': 'MODERATION',
-        'BAN_MSG_': 'BAN_NOTIFICATIONS',
         'GRACE_ACCESS_': 'GRACE_ACCESS',
         'BYPASS_': 'BYPASS_DOWNGRADE',
         'BSCHEK_': 'BSCHEK',

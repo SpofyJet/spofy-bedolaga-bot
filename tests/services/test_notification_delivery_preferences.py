@@ -97,19 +97,6 @@ async def test_referral_switch_is_enforced_by_unified_delivery(monkeypatch):
     service._send_telegram_notification.assert_not_awaited()
 
 
-async def test_blocked_user_can_receive_the_ban_notification(monkeypatch):
-    service = NotificationDeliveryService()
-    service._send_telegram_notification = AsyncMock(return_value=True)
-    monkeypatch.setattr(settings, 'ENABLE_NOTIFICATIONS', True)
-    user = _user()
-    user.status = UserStatus.BLOCKED.value
-
-    result = await _send(service, user, NotificationType.BAN_NOTIFICATION)
-
-    assert result is True
-    service._send_telegram_notification.assert_awaited_once()
-
-
 async def test_blocked_user_does_not_receive_unrelated_notifications(monkeypatch):
     service = NotificationDeliveryService()
     service._send_telegram_notification = AsyncMock(return_value=True)

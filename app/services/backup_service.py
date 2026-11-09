@@ -42,7 +42,6 @@ from app.database.models import (
     FaqSetting,
     GuestPurchase,
     InfoPage,
-    LandingPage,
     MainMenuButton,
     MenuLayoutHistory,
     MonitoringLog,
@@ -233,7 +232,6 @@ class BackupService:
             NewsTag,
             NewsArticle,
             # --- Landing / Guest purchases (FK: users, tariffs, landings) ---
-            LandingPage,
             GuestPurchase,
             # --- Yandex analytics (FK: users) ---
             YandexClientIdMap,

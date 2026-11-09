@@ -7,7 +7,6 @@ from .account_linking import merge_router as merge_router, router as account_lin
 from .activity import router as activity_router
 from .admin_apps import router as admin_apps_router
 from .admin_audit_log import router as admin_audit_log_router
-from .admin_ban_system import router as admin_ban_system_router
 from .admin_broadcasts import router as admin_broadcasts_router
 from .admin_bulk_actions import router as admin_bulk_actions_router
 from .admin_button_styles import router as admin_button_styles_router
@@ -19,7 +18,6 @@ from .admin_email_queue import router as admin_email_queue_router
 from .admin_email_templates import router as admin_email_templates_router
 from .admin_grace_access import router as admin_grace_access_router
 from .admin_info_pages import router as admin_info_pages_router
-from .admin_landings import router as admin_landings_router
 from .admin_legal_pages import router as admin_legal_pages_router
 from .admin_menu_layout import router as admin_menu_layout_router
 from .admin_news import router as admin_news_router
@@ -138,7 +136,6 @@ router.include_router(admin_servers_router)
 router.include_router(admin_stats_router)
 router.include_router(admin_referral_network_router)
 router.include_router(admin_sales_stats_router)
-router.include_router(admin_ban_system_router)
 router.include_router(admin_reachability_router)
 router.include_router(admin_dpichecker_router)
 router.include_router(dpichecker_download_router)
@@ -152,7 +149,6 @@ router.include_router(admin_withdrawals_router)
 router.include_router(admin_users_router)
 router.include_router(admin_bulk_actions_router)
 router.include_router(admin_payment_methods_router)
-router.include_router(admin_landings_router)
 router.include_router(admin_payments_router)
 router.include_router(admin_promo_offers_router)
 router.include_router(admin_remnawave_router)

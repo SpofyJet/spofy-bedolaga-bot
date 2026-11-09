@@ -70,18 +70,3 @@ async def test_partner_and_menu_stats_group_by_local_day(postgres_database, monk
         await PartnerStatsService.get_campaign_detailed_stats(db, 1, 1)
         await PartnerStatsService.get_admin_campaign_chart_data(db, 1)
         await MenuLayoutStatsService.get_button_clicks_by_day(db, 'main_menu', 30)
-
-
-@pytest.mark.asyncio
-async def test_landing_stats_group_by_local_day(postgres_database, monkeypatch, reset_local_timezone_cache):
-    from app.cabinet.routes.admin_landings import get_landing_stats
-    from app.database.models import LandingPage
-
-    use_timezone(monkeypatch, 'Europe/Moscow')
-
-    async with postgres_session(postgres_database, [LandingPage.__table__]) as db:
-        landing = LandingPage(slug='smoke')
-        db.add(landing)
-        await db.commit()
-
-        await get_landing_stats(landing_id=landing.id, admin=ADMIN, db=db)

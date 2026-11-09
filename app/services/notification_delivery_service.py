@@ -156,11 +156,7 @@ class NotificationDeliveryService:
         Returns:
             True if notification was sent successfully through at least one channel
         """
-        is_deleted = user.status == UserStatus.DELETED.value
-        is_blocked_without_ban_notice = (
-            user.status == UserStatus.BLOCKED.value and notification_type is not NotificationType.BAN_NOTIFICATION
-        )
-        if is_deleted or is_blocked_without_ban_notice:
+        if user.status in (UserStatus.DELETED.value, UserStatus.BLOCKED.value):
             logger.debug('Пропускаем уведомление для неактивного пользователя', user_id=user.id, status=user.status)
             return False
 
@@ -563,45 +559,6 @@ class NotificationDeliveryService:
             user=user,
             notification_type=NotificationType.AUTOPAY_FAILED,
             context=context,
-            bot=bot,
-            telegram_message=telegram_message,
-            telegram_markup=telegram_markup,
-        )
-
-    async def notify_ban(
-        self,
-        user: User,
-        reason: str | None = None,
-        bot: Bot | None = None,
-        telegram_message: str | None = None,
-        telegram_markup: Any | None = None,
-    ) -> bool:
-        """Notify user about account ban."""
-        context = {
-            'reason': reason or 'Нарушение правил использования',
-        }
-
-        return await self.send_notification(
-            user=user,
-            notification_type=NotificationType.BAN_NOTIFICATION,
-            context=context,
-            bot=bot,
-            telegram_message=telegram_message,
-            telegram_markup=telegram_markup,
-        )
-
-    async def notify_unban(
-        self,
-        user: User,
-        bot: Bot | None = None,
-        telegram_message: str | None = None,
-        telegram_markup: Any | None = None,
-    ) -> bool:
-        """Notify user about account unban."""
-        return await self.send_notification(
-            user=user,
-            notification_type=NotificationType.UNBAN_NOTIFICATION,
-            context={},
             bot=bot,
             telegram_message=telegram_message,
             telegram_markup=telegram_markup,

@@ -353,7 +353,6 @@ async def create_gift_purchase(
         try:
             purchase = await create_purchase(
                 db,
-                landing=None,
                 tariff=tariff,
                 period_days=body.period_days,
                 amount_kopeks=quote.final_price_kopeks,

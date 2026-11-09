@@ -1974,18 +1974,7 @@ class AdminNotificationService:
                 else:
                     message_lines.append(f'{contact_icon} Покупатель: <code>{contact_display}</code>')
             else:
-                # Landing: show page slug and buyer contact
-                landing_slug = '—'
-                try:
-                    landing = purchase.landing
-                    if landing:
-                        landing_slug = landing.slug
-                    elif purchase.landing_id:
-                        landing_slug = f'ID:{purchase.landing_id}'
-                except Exception:
-                    if purchase.landing_id:
-                        landing_slug = f'ID:{purchase.landing_id}'
-                message_lines.append(f'🌐 Страница: <b>/buy/{html.escape(landing_slug)}</b>')
+                # Guest purchase: buyer contact
                 message_lines.append(f'{contact_icon} Покупатель: <code>{contact_display}</code>')
 
             if purchase.is_gift:

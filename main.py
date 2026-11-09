@@ -20,7 +20,6 @@ from app.database.models import PaymentMethod
 from app.localization.loader import ensure_locale_templates
 from app.logging_config import _resolve_log_level, setup_logging
 from app.services.backup_service import backup_service
-from app.services.ban_notification_service import ban_notification_service
 from app.services.broadcast_service import broadcast_service
 from app.services.bypass_downgrade_service import bypass_downgrade_service
 from app.services.daily_subscription_service import daily_subscription_service
@@ -377,7 +376,6 @@ async def main():
         # Отправки, которые оборвал перезапуск, продолжаются с сохранённой позиции (в фоне, старт не ждёт)
         asyncio.create_task(mass_send_service.resume_unfinished(), name='mass-send-resume')
         asyncio.create_task(broadcast_service.resume_interrupted(), name='broadcast-resume')
-        ban_notification_service.set_bot(bot)
         traffic_monitoring_scheduler.set_bot(bot)
         trial_abuse_service.set_bot(bot)
         trial_abuse_service.start_task()

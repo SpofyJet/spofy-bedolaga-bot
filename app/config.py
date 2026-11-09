@@ -925,143 +925,15 @@ class Settings(BaseSettings):
 
     # Сообщение о блокировке за превышение лимита устройств
     # Переменные: {ip_count}, {limit}, {ban_minutes}, {node_info}
-    BAN_MSG_PUNISHMENT: str = (
-        '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        '❌ <b>Причина:</b> Превышен лимит устройств\n'
-        '{node_info}\n'
-        '📊 <b>Детали нарушения:</b>\n'
-        '├ 📱 Устройств подключено: <b>{ip_count}</b>\n'
-        '├ 📋 Разрешено по тарифу: <b>{limit}</b>\n'
-        '└ ⏱ Время блокировки: <b>{ban_minutes} мин</b>\n\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n'
-        '💡 <b>Что делать:</b>\n'
-        '1. Отключите лишние устройства от VPN\n'
-        '2. Дождитесь окончания блокировки\n'
-        '3. Подключитесь заново\n\n'
-        '🔄 Доступ восстановится автоматически'
-    )
-
-    BAN_MSG_REVOKE: str = (
-        '🔑 <b>КЛЮЧИ ДОСТУПА ОБНОВЛЕНЫ</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        '❌ <b>Причина:</b> Превышен лимит устройств\n'
-        '{node_info}\n'
-        '📊 <b>Детали нарушения:</b>\n'
-        '├ 📱 Устройств подключено: <b>{ip_count}</b>\n'
-        '└ 📋 Разрешено по тарифу: <b>{limit}</b>\n\n'
-        'Отключите лишние устройства и заново получите актуальный ключ подключения в боте.'
-    )
-
     # Сообщение о разблокировке
-    BAN_MSG_ENABLED: str = (
-        '✅ <b>АККАУНТ РАЗБЛОКИРОВАН</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        '🎉 Ваш аккаунт успешно разблокирован!\n\n'
-        'Теперь вы можете снова пользоваться VPN.\n\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n'
-        '⚠️ <b>Рекомендации:</b>\n'
-        '• Следите за количеством устройств\n'
-        '• Отключайте VPN когда не используете\n'
-        '• Не превышайте лимит по тарифу'
-    )
-
     # Сообщение о блокировке за WiFi
     # Переменные: {ban_minutes}, {network_info}, {node_info}
-    BAN_MSG_WIFI: str = (
-        '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        '❌ <b>Причина:</b> Использование WiFi сети\n'
-        '{node_info}\n'
-        '📊 <b>Детали:</b>\n'
-        '├ 📶 Тип подключения: <b>WiFi</b>\n'
-        '{network_info}'
-        '└ ⏱ Время блокировки: <b>{ban_minutes} мин</b>\n\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n'
-        '💡 <b>Что делать:</b>\n'
-        '1. Отключитесь от WiFi\n'
-        '2. Используйте мобильный интернет\n'
-        '3. Дождитесь окончания блокировки\n\n'
-        '🔄 Доступ восстановится автоматически'
-    )
-
     # Сообщение о блокировке за мобильную сеть
     # Переменные: {ban_minutes}, {network_info}, {node_info}
-    BAN_MSG_MOBILE: str = (
-        '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        '❌ <b>Причина:</b> Использование мобильной сети\n'
-        '{node_info}\n'
-        '📊 <b>Детали:</b>\n'
-        '├ 📱 Тип подключения: <b>Мобильная сеть</b>\n'
-        '{network_info}'
-        '└ ⏱ Время блокировки: <b>{ban_minutes} мин</b>\n\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n'
-        '💡 <b>Что делать:</b>\n'
-        '1. Подключитесь к WiFi\n'
-        '2. Дождитесь окончания блокировки\n'
-        '3. Используйте VPN только через WiFi\n\n'
-        '🔄 Доступ восстановится автоматически'
-    )
-
     # Сообщения о типизированных ручных банах BanHammer.
     # Переменные: {ban_minutes}, {reason}, {node_info}
-    BAN_MSG_TORRENT: str = (
-        '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        '❌ <b>Причина:</b> Обнаружена torrent-активность\n'
-        '{node_info}\n'
-        '📝 <b>Детали:</b> {reason}\n'
-        '⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n'
-        '🔄 Доступ восстановится автоматически после окончания блокировки.'
-    )
-    BAN_MSG_HWID_LIMIT: str = (
-        '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        '❌ <b>Причина:</b> Превышен лимит устройств\n'
-        '{node_info}\n'
-        '📝 <b>Детали:</b> {reason}\n'
-        '⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n'
-        '🔄 Доступ восстановится автоматически после окончания блокировки.'
-    )
-    BAN_MSG_SUSPICIOUS_DESTINATION: str = (
-        '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        '❌ <b>Причина:</b> Подключение к запрещённому ресурсу\n'
-        '{node_info}\n'
-        '📝 <b>Детали:</b> {reason}\n'
-        '⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n'
-        '🔄 Доступ восстановится автоматически после окончания блокировки.'
-    )
-    BAN_MSG_TRAFFIC_LIMIT: str = (
-        '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        '❌ <b>Причина:</b> Превышен допустимый объём трафика\n'
-        '{node_info}\n'
-        '📝 <b>Детали:</b> {reason}\n'
-        '⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n'
-        '🔄 Доступ восстановится автоматически после окончания блокировки.'
-    )
-    BAN_MSG_MANUAL: str = (
-        '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        '❌ <b>Причина:</b> Нарушение правил сервиса\n'
-        '{node_info}\n'
-        '📝 <b>Детали:</b> {reason}\n'
-        '⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n'
-        '🔄 Доступ восстановится автоматически после окончания блокировки.'
-    )
-
     # Сообщение-предупреждение
     # Переменные: {warning_message}
-    BAN_MSG_WARNING: str = (
-        '⚠️ <b>ПРЕДУПРЕЖДЕНИЕ</b>\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n\n'
-        '{warning_message}\n\n'
-        '━━━━━━━━━━━━━━━━━━━━━\n'
-        '❗ При повторном нарушении аккаунт будет заблокирован'
-    )
-
     DEBUG: bool = False
     WEBHOOK_URL: str | None = None
     WEBHOOK_PATH: str = '/webhook'
@@ -1213,10 +1085,6 @@ class Settings(BaseSettings):
     EMAIL_UNSUBSCRIBE_MAILTO: str = ''
 
     # Ban System Integration (BedolagaBan monitoring)
-    BAN_SYSTEM_ENABLED: bool = False
-    BAN_SYSTEM_API_URL: str | None = None  # e.g., http://ban-server:8000
-    BAN_SYSTEM_API_TOKEN: str | None = None
-    BAN_SYSTEM_REQUEST_TIMEOUT: int = 30
 
     # bschekbot — BSCHEKER: проверка хостов глазами мобильных операторов
     BSCHEK_ENABLED: bool = False
@@ -3276,24 +3144,6 @@ class Settings(BaseSettings):
     def get_enabled_oauth_provider_names(self) -> list[str]:
         """Return list of enabled OAuth provider names."""
         return [name for name, cfg in self.get_oauth_providers_config().items() if cfg['enabled']]
-
-    # Ban System helpers
-    def is_ban_system_enabled(self) -> bool:
-        return bool(self.BAN_SYSTEM_ENABLED)
-
-    def is_ban_system_configured(self) -> bool:
-        return bool(self.BAN_SYSTEM_API_URL and self.BAN_SYSTEM_API_TOKEN)
-
-    def get_ban_system_api_url(self) -> str | None:
-        if self.BAN_SYSTEM_API_URL:
-            return self.BAN_SYSTEM_API_URL.rstrip('/')
-        return None
-
-    def get_ban_system_api_token(self) -> str | None:
-        return self.BAN_SYSTEM_API_TOKEN
-
-    def get_ban_system_request_timeout(self) -> int:
-        return max(1, self.BAN_SYSTEM_REQUEST_TIMEOUT)
 
     # bschekbot helpers
     def is_bschek_enabled(self) -> bool:

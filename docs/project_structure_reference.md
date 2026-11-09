@@ -92,7 +92,7 @@
   Функции: `create_bot` — Create a Bot instance with SOCKS5 proxy and/or custom Telegram API server.
 - `app/cabinet/`
 - `app/config.py` — Python-модуль
-  Классы: `Settings` (230 методов)
+  Классы: `Settings` (225 методов)
   Функции: `transliterate_cyrillic` — Заменяет кириллические буквы латинскими, сохраняя регистр («Шмель» → «Shmel»)., `set_period_prices_from_db` — Устанавливает периоды/цены из БД., `get_db_period_prices` — Возвращает периоды/цены из БД если они загружены., `clear_db_period_prices` — Очищает кеш цен из тарифов (при переключении в classic mode)., `refresh_period_prices` — Rebuild cached period price mapping., `refresh_classic_period_prices` — Rebuild CLASSIC_PERIOD_PRICES from current settings., `get_traffic_prices`, `refresh_traffic_prices`
 - `app/database/`
 - `app/external/`
@@ -195,9 +195,6 @@
 - `app/cabinet/routes/admin_audit_log.py` — Python-модуль
   Классы: `AuditLogEntry`, `AuditLogListResponse`
   Функции: `list_audit_logs` — List audit log entries with optional filters and pagination., `export_audit_logs` — Export audit logs as CSV file.
-- `app/cabinet/routes/admin_ban_system.py` — Python-модуль
-  Классы: нет
-  Функции: `get_ban_system_status` — Get Ban System integration status., `get_stats_raw` — Get raw stats from Ban System API for debugging., `get_stats` — Get overall Ban System statistics., `get_users` — Get list of users from Ban System., `get_users_over_limit` — Get users who exceeded their device limit., `search_users` — Search for users., `get_user_detail` — Get detailed user information., `get_punishments` — Get list of active punishments (bans)., `unban_user` — Unban (enable) a user., `ban_user` — Manually ban a user., `get_punishment_history` — Get punishment history for a user., `get_nodes` — Get list of connected nodes., `get_agents` — Get list of monitoring agents., `get_agents_summary` — Get agents summary statistics., `get_traffic_violations` — Get list of traffic limit violations., `get_traffic` — Get full traffic statistics including top users., `get_traffic_top` — Get top users by traffic., `get_settings` — Get all Ban System settings., `get_setting` — Get a specific setting., `set_setting` — Set a setting value., `toggle_setting` — Toggle a boolean setting., `whitelist_add` — Add user to whitelist., `whitelist_remove` — Remove user from whitelist., `get_report` — Get period report., `get_health` — Get Ban System health status., `get_health_detailed` — Get detailed health information., `get_agent_history` — Get agent statistics history., `get_user_punishment_history` — Get punishment history for a specific user.
 - `app/cabinet/routes/admin_broadcasts.py` — Python-модуль
   Классы: нет
   Функции: `get_filters` — Get all available filters with user counts., `get_tariffs` — Get tariffs for broadcast filtering., `get_buttons` — Get available buttons for broadcasts., `preview_broadcast` — Preview broadcast recipients count., `preview_audience` — Count and page through the recipients selected at this moment., `search_audience_users` — Find a person by any part of Telegram ID, username, or email., `create_broadcast` — Create and start a broadcast., `list_broadcasts` — Get list of broadcasts with pagination., `get_email_filters` — Get all available email filters with user counts., `preview_email_broadcast` — Preview email broadcast recipients count., `render_email_broadcast` — Письмо рассылки так, как его получит адресат., `create_combined_broadcast` — Create and start a combined broadcast (telegram/email/both)., `get_broadcast` — Get broadcast details., `stop_broadcast` — Stop a running broadcast (telegram or email).
@@ -231,9 +228,6 @@
 - `app/cabinet/routes/admin_info_pages.py` — Python-модуль
   Классы: нет
   Функции: `list_all_info_pages` — Get all info pages (admin view, includes inactive)., `list_legacy_faq` — Include existing bot FAQ in the cabinet editor without copying its data., `update_legacy_faq`, `get_info_page_detail` — Get a single info page by ID (admin view)., `create_page` — Create a new info page., `update_page` — Update an existing info page., `remove_page` — Delete an info page., `reorder_pages` — Bulk update sort_order for info pages., `toggle_active` — Toggle the active status of an info page.
-- `app/cabinet/routes/admin_landings.py` — Python-модуль
-  Классы: `LandingFeatureInput` (3 методов), `LandingPaymentMethodInput` (6 методов), `LandingCreateRequest` (12 методов), `LandingUpdateRequest` (11 методов), `PurchaseStats`, `LandingListItem` (1 методов), `LandingDetailResponse` (1 методов), `OrderRequest`, `LandingDailyStat`, `LandingTariffStat`, `LandingPaymentMethodStat`, `LandingSourceStat`, `LandingStatsResponse`, `LandingPurchaseItem`, `LandingPurchaseListResponse`
-  Функции: `list_landings` — List all landing pages with purchase stats., `create_landing_page` — Create a new landing page., `update_landings_order` — Batch update display order for landing pages., `get_landing_detail` — Get a single landing page with full details., `update_landing_page` — Update a landing page., `delete_landing_page` — Delete a landing page., `toggle_landing_active` — Toggle active/inactive state of a landing page., `get_landing_stats` — Get daily statistics and tariff breakdown for a landing page., `get_landing_purchases` — Get paginated list of purchases for a landing page.
 - `app/cabinet/routes/admin_legal_pages.py` — Python-модуль
   Классы: `LegalDocumentItem`, `LegalDocumentResponse`, `LegalDocumentItemUpdate`, `LegalDocumentUpdateRequest`, `RulesItem`, `RulesResponse`, `RulesItemUpdate`, `RulesUpdateRequest`, `FaqSettingItem`, `FaqPageItem`, `FaqResponse`, `FaqUpdateRequest`, `FaqPageCreateRequest`, `FaqPageUpdateRequest`
   Функции: `get_privacy_policy_admin`, `update_privacy_policy_admin`, `get_public_offer_admin`, `update_public_offer_admin`, `get_recurrent_payments_admin`, `update_recurrent_payments_admin`, `get_rules_admin`, `update_rules_admin`, `get_faq_admin`, `update_faq_admin`, `create_faq_page_admin`, `update_faq_page_admin`, `delete_faq_page_admin`
@@ -346,8 +340,8 @@
   Классы: нет
   Функции: `list_active_info_pages` — Get all active info pages (public, no auth required)., `get_info_page_tab_replacements` — Get tab replacement mapping (public, no auth required)., `get_info_page_by_slug_public` — Get a single info page by slug (public, no auth required).
 - `app/cabinet/routes/landing.py` — Python-модуль
-  Классы: `LandingFeature`, `LandingTariffPeriod`, `LandingTariff`, `LandingPaymentMethodSubOption`, `LandingPaymentMethod`, `LandingDiscountInfo`, `LandingConfigResponse`, `PurchaseRequest` (1 методов), `PurchaseResponse`, `PurchaseStatusResponse`, `GiftClaimRequest` (1 методов), `GiftClaimResponse`
-  Функции: `get_purchase_status` — Get the status of a guest purchase by token., `activate_purchase` — Activate a pending guest purchase, replacing the user's current subscription., `get_gift_claim` — Public gift claim page data (tariff, period, message, claim links)., `claim_gift` — Web (email) arm of the channel-agnostic gift claim., `get_landing_config` — Get public landing page configuration with tariffs and payment methods., `create_landing_purchase` — Create a guest purchase on a landing page.
+  Классы: `PurchaseStatusResponse`, `GiftClaimRequest` (1 методов), `GiftClaimResponse`
+  Функции: `get_purchase_status` — Get the status of a guest purchase by token., `activate_purchase` — Activate a pending guest purchase, replacing the user's current subscription., `get_gift_claim` — Public gift claim page data (tariff, period, message, claim links)., `claim_gift` — Web (email) arm of the channel-agnostic gift claim.
 - `app/cabinet/routes/media.py` — Python-модуль
   Классы: `MediaUploadResponse`
   Функции: `make_media_token` — Signed, expiring token authorizing download of `file_id` (any opaque subject string)., `upload_media` — Upload media file for use in ticket messages., `download_media` — Download media file by file_id.
@@ -463,9 +457,6 @@
 - `app/cabinet/schemas/balance.py` — Python-модуль
   Классы: `BalanceResponse`, `TransactionResponse`, `TransactionListResponse`, `PaymentMethodResponse`, `TopUpRequest`, `TopUpResponse`, `StarsInvoiceRequest`, `StarsInvoiceResponse`, `PendingPaymentResponse`, `PendingPaymentListResponse`, `ManualCheckResponse`
   Функции: нет
-- `app/cabinet/schemas/ban_system.py` — Python-модуль
-  Классы: `BanSystemStatusResponse`, `BanSystemStatsResponse`, `BanUserIPInfo`, `BanUserRequestLog`, `BanUserListItem`, `BanUsersListResponse`, `BanUserDetailResponse`, `BanPunishmentItem`, `BanPunishmentsListResponse`, `BanHistoryResponse`, `BanUserRequest`, `UnbanResponse`, `BanNodeItem`, `BanNodesListResponse`, `BanAgentItem`, `BanAgentsSummary`, `BanAgentsListResponse`, `BanTrafficViolationItem`, `BanTrafficViolationsResponse`, `BanTrafficTopItem`, `BanTrafficResponse`, `BanSettingDefinition`, `BanSettingsResponse`, `BanWhitelistRequest`, `BanReportTopViolator`, `BanReportResponse`, `BanHealthComponent`, `BanHealthResponse`, `BanHealthDetailedResponse`, `BanAgentHistoryItem`, `BanAgentHistoryResponse`
-  Функции: нет
 - `app/cabinet/schemas/broadcasts.py` — Python-модуль
   Классы: `BroadcastFilter`, `TariffFilter`, `BroadcastFiltersResponse`, `BroadcastAudienceCondition`, `BroadcastAudience` (1 методов), `TariffForBroadcast`, `BroadcastTariffsResponse`, `BroadcastButton`, `BroadcastButtonsResponse`, `CustomBroadcastButton` (1 методов), `BroadcastMediaRequest`, `BroadcastCreateRequest`, `BroadcastResponse`, `BroadcastListResponse`, `BroadcastPreviewRequest`, `BroadcastPreviewResponse`, `BroadcastAudiencePreviewRequest`, `BroadcastAudiencePreviewUser`, `BroadcastAudiencePreviewResponse`, `BroadcastAudienceUserSearchResponse`, `EmailFilterItem`, `EmailFiltersResponse`, `CombinedBroadcastCreateRequest`, `EmailPreviewRequest`, `EmailPreviewResponse`, `EmailRenderRequest`, `EmailRenderResponse`
   Функции: нет
@@ -563,7 +554,7 @@
   Классы: нет
   Функции: `apply_legacy_aliases` — Возвращает копию контекста со старыми именами плейсхолдеров, если есть новые., `build_common_context` — Values for the type-independent placeholders., `substitute_context_vars` — Replace {var} placeholders in template text with context values., `get_template_override` — Get custom email template from the database., `get_all_overrides` — Get all custom template overrides from the database., `get_overrides_for_type` — Get all language overrides for a specific notification type., `save_template_override` — Save or update a custom email template in the database., `get_rendered_override` — Get a custom template override rendered with the base email template., `delete_template_override` — Delete a custom template override (revert to default).
 - `app/cabinet/services/email_templates.py` — Python-модуль
-  Классы: `EmailNotificationTemplates` (82 методов)
+  Классы: `EmailNotificationTemplates` (80 методов)
   Функции: нет
 - `app/cabinet/services/email_type_switch.py` — Python-модуль
   Классы: нет
@@ -593,9 +584,6 @@
 - `app/cabinet/utils/links.py` — Python-модуль
   Классы: нет
   Функции: `get_campaign_deep_link` — Generate a Telegram deep link for a campaign., `get_campaign_web_link` — Generate a web app link for a campaign.
-- `app/cabinet/utils/locale.py` — Python-модуль
-  Классы: нет
-  Функции: `resolve_locale_text` — Resolve a localized text dict to a single string for the given language., `ensure_locale_dict` — Coerce a value to a locale dict. Plain strings become ``{'ru': value}``., `validate_locale_dict` — Validate that all keys are supported locales and values respect length limits.
 
 ##### app/cabinet/utils/fonts
 
@@ -627,7 +615,7 @@
   Классы: нет
   Функции: `run_alembic_upgrade` — Run ``alembic upgrade head``, handling fresh and legacy databases.
 - `app/database/models.py` — Python-модуль
-  Классы: `AwareDateTime` (2 методов), `UserStatus`, `SubscriptionStatus`, `TransactionType`, `PromoCodeType`, `PaymentMethod`, `MainMenuButtonActionType`, `MainMenuButtonVisibility`, `WheelPrizeType`, `WheelSpinPaymentType`, `CryptoBotPayment` (5 методов), `XRocketPayment` (5 методов), `Pay2328Payment` (5 методов), `WataPayment` (2 методов), `PlategaPayment` (2 методов), `PlategaSubscription` (1 методов), `PromoGroup` (3 методов), `UserPromoGroup` (1 методов), `Tariff` (21 методов), `PartnerStatus`, `User` (12 методов), `Subscription` (17 методов), `GraceAccessSessionModel`, `TrafficPurchase` (1 методов), `Transaction` (1 методов), `PaidTrafficResetIntent`, `SubscriptionConversion` (2 методов), `PromoCode` (2 методов), `PromoCodeUse`, `CouponStatus`, `CouponBatch` (2 методов), `Coupon` (1 методов), `ReferralRewardType`, `ReferralRewardTrigger`, `ReferralRewardMode`, `ReferralRewardLevel` (1 методов), `ReferralEarning` (1 методов), `WithdrawalRequestStatus`, `WithdrawalRequest` (1 методов), `PartnerApplication`, `Squad` (1 методов), `ServiceRule`, `PrivacyPolicy`, `PublicOffer`, `LegalConsent`, `RecurrentPayments`, `FaqSetting`, `FaqPage`, `SystemSetting`, `EmailTemplate`, `MonitoringLog`, `SentNotification`, `SubscriptionEvent`, `DiscountOffer`, `PromoOfferTemplate`, `SubscriptionTemporaryAccess`, `PromoOfferLog`, `BroadcastHistory`, `ServerSquad` (3 методов), `SubscriptionServer`, `SupportAuditLog`, `UserMessage` (1 методов), `WelcomeText`, `PinnedMessage`, `AdvertisingCampaign` (4 методов), `AdvertisingCampaignRegistration` (1 методов), `TicketStatus`, `Ticket` (8 методов), `TicketMessage` (3 методов), `WebApiToken` (1 методов), `MainMenuButton` (3 методов), `MenuLayoutHistory` (1 методов), `ButtonClickLog` (1 методов), `Webhook` (1 методов), `WebhookDelivery` (1 методов), `CabinetRefreshToken` (4 методов), `WheelConfig` (1 методов), `WheelPrize` (1 методов), `WheelSpin` (3 методов), `TicketNotification` (1 методов), `PaymentMethodConfig` (1 методов), `RequiredChannel` (1 методов), `UserChannelSubscription` (1 методов), `AdminRole` (1 методов), `UserRole` (1 методов), `AccessPolicy` (1 методов), `AdminAuditLog` (1 методов), `LandingPage` (1 методов), `GuestPurchaseStatus`, `GuestPurchase` (1 методов), `NewsArticle` (1 методов), `NewsCategory` (1 методов), `NewsTag` (1 методов), `YandexClientIdMap`, `InfoPage`, `UserDeviceAlias`, `SystemErrorEvent`, `EmailQueueItem`, `ReachabilityBatch`, `ReachabilityJob`, `ReachabilityLeg`, `ReachabilityTargetPref`, `DpiCheckerAction`, `UserReminder` (1 методов), `UserReminderState`, `MassSendJob`, `DecisionLog`
+  Классы: `AwareDateTime` (2 методов), `UserStatus`, `SubscriptionStatus`, `TransactionType`, `PromoCodeType`, `PaymentMethod`, `MainMenuButtonActionType`, `MainMenuButtonVisibility`, `WheelPrizeType`, `WheelSpinPaymentType`, `CryptoBotPayment` (5 методов), `XRocketPayment` (5 методов), `Pay2328Payment` (5 методов), `WataPayment` (2 методов), `PlategaPayment` (2 методов), `PlategaSubscription` (1 методов), `PromoGroup` (3 методов), `UserPromoGroup` (1 методов), `Tariff` (21 методов), `PartnerStatus`, `User` (12 методов), `Subscription` (17 методов), `GraceAccessSessionModel`, `TrafficPurchase` (1 методов), `Transaction` (1 методов), `PaidTrafficResetIntent`, `SubscriptionConversion` (2 методов), `PromoCode` (2 методов), `PromoCodeUse`, `CouponStatus`, `CouponBatch` (2 методов), `Coupon` (1 методов), `ReferralRewardType`, `ReferralRewardTrigger`, `ReferralRewardMode`, `ReferralRewardLevel` (1 методов), `ReferralEarning` (1 методов), `WithdrawalRequestStatus`, `WithdrawalRequest` (1 методов), `PartnerApplication`, `Squad` (1 методов), `ServiceRule`, `PrivacyPolicy`, `PublicOffer`, `LegalConsent`, `RecurrentPayments`, `FaqSetting`, `FaqPage`, `SystemSetting`, `EmailTemplate`, `MonitoringLog`, `SentNotification`, `SubscriptionEvent`, `DiscountOffer`, `PromoOfferTemplate`, `SubscriptionTemporaryAccess`, `PromoOfferLog`, `BroadcastHistory`, `ServerSquad` (3 методов), `SubscriptionServer`, `SupportAuditLog`, `UserMessage` (1 методов), `WelcomeText`, `PinnedMessage`, `AdvertisingCampaign` (4 методов), `AdvertisingCampaignRegistration` (1 методов), `TicketStatus`, `Ticket` (8 методов), `TicketMessage` (3 методов), `WebApiToken` (1 методов), `MainMenuButton` (3 методов), `MenuLayoutHistory` (1 методов), `ButtonClickLog` (1 методов), `Webhook` (1 методов), `WebhookDelivery` (1 методов), `CabinetRefreshToken` (4 методов), `WheelConfig` (1 методов), `WheelPrize` (1 методов), `WheelSpin` (3 методов), `TicketNotification` (1 методов), `PaymentMethodConfig` (1 методов), `RequiredChannel` (1 методов), `UserChannelSubscription` (1 методов), `AdminRole` (1 методов), `UserRole` (1 методов), `AccessPolicy` (1 методов), `AdminAuditLog` (1 методов), `GuestPurchaseStatus`, `GuestPurchase` (1 методов), `NewsArticle` (1 методов), `NewsCategory` (1 методов), `NewsTag` (1 методов), `YandexClientIdMap`, `InfoPage`, `UserDeviceAlias`, `SystemErrorEvent`, `EmailQueueItem`, `ReachabilityBatch`, `ReachabilityJob`, `ReachabilityLeg`, `ReachabilityTargetPref`, `DpiCheckerAction`, `UserReminder` (1 методов), `UserReminderState`, `MassSendJob`, `DecisionLog`
   Функции: нет
 
 #### app/database/crud
@@ -655,7 +643,7 @@
   Функции: `create_info_page` — Create a new info page., `get_info_page_by_id` — Get an info page by ID., `get_info_page_by_slug` — Get an info page by slug., `get_all_info_pages` — Get all info pages, ordered by sort_order ascending., `update_info_page` — Update an info page. Only whitelisted fields are applied., `delete_info_page` — Delete an info page., `get_tab_replacements` — Return a mapping of tab name to info page slug for active pages with replaces_tab set., `clear_replaces_tab` — Clear replaces_tab for all pages that currently replace the given tab., `reorder_info_pages` — Bulk update sort_order for info pages.
 - `app/database/crud/landing.py` — Python-модуль
   Классы: нет
-  Функции: `get_landing_by_slug` — Get a landing page by its slug., `get_landing_by_id` — Get a landing page by its ID., `get_active_landing_by_slug` — Get an active landing page by its slug., `get_all_landings` — Get all landing pages ordered by display_order., `create_landing` — Create a new landing page., `update_landing` — Update a landing page by ID. Returns None if not found., `delete_landing` — Delete a landing page by ID. Returns True if deleted., `update_landing_order` — Set display_order for landing pages based on position in list., `generate_purchase_token` — Generate a cryptographically secure purchase token., `create_guest_purchase` — Create a new guest purchase with an auto-generated token., `get_purchase_by_token` — Get a guest purchase by its token., `update_purchase_status` — Update the status of a guest purchase and optional extra fields., `get_all_landing_purchase_stats` — Get purchase counts grouped by landing_id and status in a single query.
+  Функции: `generate_purchase_token` — Generate a cryptographically secure purchase token., `create_guest_purchase` — Create a new guest purchase with an auto-generated token., `get_purchase_by_token` — Get a guest purchase by its token., `update_purchase_status` — Update the status of a guest purchase and optional extra fields.
 - `app/database/crud/main_menu_button.py` — Python-модуль
   Классы: нет
   Функции: `count_main_menu_buttons`, `get_main_menu_buttons`, `get_main_menu_button_by_id`, `get_next_display_order`, `create_main_menu_button`, `update_main_menu_button`, `delete_main_menu_button`
@@ -797,9 +785,6 @@
 
 ### app/external
 
-- `app/external/ban_system_api.py` — Python-модуль
-  Классы: `BanSystemAPIError` (1 методов), `BanSystemAPI` (33 методов)
-  Функции: нет
 - `app/external/bschek_api.py` — Python-модуль
   Классы: `BschekAPIError` (1 методов), `BschekGatewayError`, `BschekAPI` (24 методов)
   Функции: `build_operators_params` — Query для GET /operators. aiohttp сам percent-encode'ит кириллицу.
@@ -840,7 +825,7 @@
   Функции: `on_user_joined_channel` — User subscribed to a channel -- update cache and reactivate VPN if applicable., `on_user_left_channel` — User unsubscribed from a channel -- update cache and deactivate VPN if applicable., `register_handlers` — Register channel member event handlers on the dispatcher/router.
 - `app/handlers/common.py` — Python-модуль
   Классы: нет
-  Функции: `handle_delete_ban_notification` — Удаляет уведомление о бане при нажатии на кнопку, `handle_webhook_notification_close` — Удаляет webhook-уведомление при нажатии кнопки Закрыть., `handle_noop`, `handle_current_page`, `handle_cancel`, `handle_unknown_message` — Человек написал боту текстом или прислал фото вне сценария., `handle_unknown_to_support` — Одним нажатием превращает сообщение в обращение (или дописывает в открытое)., `show_rules`, `register_handlers`
+  Функции: `handle_webhook_notification_close` — Удаляет webhook-уведомление при нажатии кнопки Закрыть., `handle_noop`, `handle_current_page`, `handle_cancel`, `handle_unknown_message` — Человек написал боту текстом или прислал фото вне сценария., `handle_unknown_to_support` — Одним нажатием превращает сообщение в обращение (или дописывает в открытое)., `show_rules`, `register_handlers`
 - `app/handlers/gift_activation.py` — Python-модуль
   Классы: нет
   Функции: `handle_gift_activate` — Handle gift_activate:{purchase_id} callback from Telegram notification., `register_handlers`
@@ -1241,9 +1226,6 @@
 - `app/services/backup_service.py` — Python-модуль
   Классы: `BackupMetadata`, `BackupSettings`, `BackupService` (53 методов)
   Функции: нет
-- `app/services/ban_notification_service.py` — Python-модуль
-  Классы: `BanNotificationService` (9 методов)
-  Функции: `get_delete_keyboard` — Клавиатура с кнопкой удаления уведомления
 - `app/services/blacklist_service.py` — Python-модуль
   Классы: `BlacklistService` (12 методов)
   Функции: нет
@@ -1328,7 +1310,7 @@
   Функции: `build_incident_key` — Build a stable identifier so one incident receives grace only once., `billing_still_matches_session` — Compare canonical fields that identify the incident without panel metadata., `classify_subscription_kind` — Classify once, in priority order, so overlapping flags are unambiguous., `policy_allows_subscription`, `billing_incident_is_eligible` — Check current incident safety without applying new-issuance feature flags., `billing_is_eligible` — Apply incident safety and subscription-kind flags to a new grant., `billing_is_revoked` — Return whether grace must be removed immediately for safety., `panel_status_matches_reason`, `should_reset_used_traffic` — Обнулять ли счётчик расхода при выдаче grace (GRACE_ACCESS_RESET_TRAFFIC_ON_START)., `build_panel_overlay` — Calculate temporary panel values; consumed traffic is reset only on request., `billing_echoes_overlay` — В биллинге стоит дата, которую грейс сам выставил в панели., `plan_grace_echo_repair` — Вернуть подписке то, что грейс-оверлей в ней затёр., `squads_are_only_grace_echo` — Серверы подписки мог дать только грейс: ровно сквады оверлея, нигде не продаются., `billing_has_recovered` — Detect a real renewal or traffic purchase in the canonical billing state., `traffic_reset_ended_limited_incident` — Трафик сбросился, пока шёл грейс по лимиту, — инцидент закончился сам., `panel_matches_overlay` — Match only fields controlled by grace; used traffic is intentionally ignored., `panel_is_safe_pending_source` — Recognize only states that this PENDING activation could have produced.
 - `app/services/guest_purchase_service.py` — Python-модуль
   Классы: `GuestPurchaseError` (1 методов)
-  Функции: `get_claimable_gift` — Resolve one still-activatable gift by full token or deep-link prefix., `validate_and_calculate` — Validate tariff/period against landing config and return (tariff, price_kopeks)., `create_purchase` — Create a guest purchase record., `fulfill_purchase` — Fulfill a paid guest purchase by creating/extending the user account and subscription., `find_guest_purchase_user` — Find a guest-purchase user without mutating the account or session state., `evaluate_guest_purchase_registration` — Evaluate invite-only policy before a landing flow may mutate ``User``., `send_guest_notification` — Send notification for guest purchase delivery or activation requirement., `notify_gift_claim_available` — Best-effort: tell people a paid gift is waiting, with the CLAIM link., `activate_purchase` — Activate a PENDING_ACTIVATION purchase by replacing or creating a subscription., `retry_stuck_paid_purchases` — Retry fulfillment for purchases stuck in PAID status., `retry_stuck_pending_activation` — Retry activation for purchases stuck in PENDING_ACTIVATION status., `recover_stuck_pending_purchases` — Recover purchases stuck in PENDING by checking provider payment status.
+  Функции: `get_claimable_gift` — Resolve one still-activatable gift by full token or deep-link prefix., `create_purchase` — Create a guest purchase record., `fulfill_purchase` — Fulfill a paid guest purchase by creating/extending the user account and subscription., `find_guest_purchase_user` — Find a guest-purchase user without mutating the account or session state., `evaluate_guest_purchase_registration` — Evaluate invite-only policy before a landing flow may mutate ``User``., `send_guest_notification` — Send notification for guest purchase delivery or activation requirement., `notify_gift_claim_available` — Best-effort: tell people a paid gift is waiting, with the CLAIM link., `activate_purchase` — Activate a PENDING_ACTIVATION purchase by replacing or creating a subscription., `retry_stuck_paid_purchases` — Retry fulfillment for purchases stuck in PAID status., `retry_stuck_pending_activation` — Retry activation for purchases stuck in PENDING_ACTIVATION status., `recover_stuck_pending_purchases` — Recover purchases stuck in PENDING by checking provider payment status.
 - `app/services/landing_payment_records.py` — Python-модуль
   Классы: нет
   Функции: `get_landing_payment`, `fetch_landing_payments`, `exclude_landing_duplicates` — Match by purchase token/provider, never by amount, user or numeric row id.
@@ -1364,7 +1346,7 @@
   Классы: `SavedMedia`
   Функции: `ensure_upload_dirs` — Create images/, videos/, thumbnails/ subdirectories under upload_path., `detect_file_type` — Detect media type and extension from magic bytes., `save_image` — Validate, resize, and save an image file. Runs PIL operations in a thread., `save_video` — Validate and save a video file. Runs I/O in a thread., `delete_media_file` — Delete a media file by filename with path traversal protection.
 - `app/services/notification_delivery_service.py` — Python-модуль
-  Классы: `NotificationDeliveryService` (23 методов)
+  Классы: `NotificationDeliveryService` (21 методов)
   Функции: нет
 - `app/services/notification_settings_service.py` — Python-модуль
   Классы: `NotificationSettingsService` (23 методов)
@@ -2111,9 +2093,6 @@
 - `app/webapi/routes/backups.py` — Python-модуль
   Классы: нет
   Функции: `create_backup_endpoint`, `list_backups`, `get_backup_status`, `list_backup_tasks`, `download_backup`, `restore_backup`, `upload_and_restore_backup`, `delete_backup`
-- `app/webapi/routes/ban_notifications.py` — Python-модуль
-  Классы: нет
-  Функции: `send_ban_notification` — Отправить уведомление пользователю от ban системы
 - `app/webapi/routes/broadcasts.py` — Python-модуль
   Классы: нет
   Функции: `create_broadcast`, `list_broadcasts`, `stop_broadcast`
@@ -2209,9 +2188,6 @@
   Функции: нет
 - `app/webapi/schemas/backups.py` — Python-модуль
   Классы: `BackupCreateResponse`, `BackupInfo`, `BackupListResponse`, `BackupStatusResponse`, `BackupTaskInfo`, `BackupTaskListResponse`, `BackupRestoreRequest`, `BackupRestoreResponse`, `BackupDeleteResponse`
-  Функции: нет
-- `app/webapi/schemas/ban_notifications.py` — Python-модуль
-  Классы: `BanNotificationRequest`, `BanNotificationResponse`
   Функции: нет
 - `app/webapi/schemas/broadcasts.py` — Python-модуль
   Классы: `BroadcastMedia`, `BroadcastCreateRequest` (2 методов), `BroadcastResponse`, `BroadcastListResponse`
@@ -2824,6 +2800,9 @@
 - `migrations/alembic/versions/0146_remove_contests_and_polls.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0147_remove_landing_pages.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
 
 ## scripts
 
@@ -3159,7 +3138,7 @@
   Функции: `anyio_backend`, `checkout`, `test_lower_schema_bound_does_not_bypass_provider_minimum`, `test_nonpositive_topup_remains_invalid`, `test_unavailable_method_rejected_before_payment_creation`
 - `tests/cabinet/test_best_value_reaches_every_showcase.py` — Python-модуль
   Классы: нет
-  Функции: `test_gift_config_marks_the_highlighted_period`, `test_gift_config_marks_the_highlighted_tariff`, `test_gift_config_marks_nothing_without_a_highlight` — Без отметки оператора витрина остаётся ровной — как была., `test_landing_marks_the_highlighted_period_and_tariff`, `test_landing_marks_nothing_when_the_highlighted_period_is_not_offered` — Лендинг вправе сузить набор периодов: отметка на выброшенном периоде, `test_every_client_period_model_carries_the_best_value_flag`, `test_admin_only_exceptions_still_exist` — Список исключений не должен гнить: исчезнувшая модель прячет новую слепую., `test_the_guard_actually_sees_the_showcases` — Сторож бесполезен, если ничего не находит: три известные витрины обязаны
+  Функции: `test_gift_config_marks_the_highlighted_period`, `test_gift_config_marks_the_highlighted_tariff`, `test_gift_config_marks_nothing_without_a_highlight` — Без отметки оператора витрина остаётся ровной — как была., `test_every_client_period_model_carries_the_best_value_flag`, `test_admin_only_exceptions_still_exist` — Список исключений не должен гнить: исчезнувшая модель прячет новую слепую., `test_the_guard_actually_sees_the_showcases` — Сторож бесполезен, если ничего не находит: три известные витрины обязаны
 - `tests/cabinet/test_branding_favicon.py` — Python-модуль
   Классы: нет
   Функции: `test_without_logo_returns_png_monogram_of_the_first_letter`, `test_empty_name_falls_back_to_v`, `test_unset_name_uses_build_default`, `test_render_failure_falls_back_to_svg`, `test_monogram_png_is_a_square_raster_with_the_letter_drawn`, `test_corner_ratio_stays_below_the_safari_plate_threshold`, `test_with_logo_serves_a_rounded_tile_with_short_cache`, `test_rounded_tile_is_cached_until_the_logo_file_changes`, `test_svg_logo_is_served_as_is`, `test_unreadable_logo_falls_back_to_the_raw_file`, `test_logo_endpoint_keeps_its_hour_cache`, `test_monogram_escapes_and_uppercases`
@@ -3289,9 +3268,6 @@
 - `tests/cabinet/test_landing_activate_endpoint.py` — Python-модуль
   Классы: нет
   Функции: `open_gate` — Пропускаем рейт-лимит и определение IP — проверяется не они., `test_activation_reaches_the_service`, `test_service_error_becomes_its_own_http_status` — Отказ сервиса должен доезжать до клиента своим кодом, а не пятисоткой.
-- `tests/cabinet/test_landing_purchase_campaign.py` — Python-модуль
-  Классы: нет
-  Функции: `test_body_slug_wins_over_cookie`, `test_cookie_is_used_when_body_has_no_slug`, `test_returns_none_without_any_source`, `test_invalid_cookie_is_ignored`, `test_invalid_body_slug_does_not_fall_back_to_cookie` — Мусор в теле — ошибка вызывающей стороны, а не повод молча подставить, `test_blank_body_slug_still_lets_the_cookie_work` — Пустое поле — «не прислали», а не «прислали мусор»., `test_trailing_newline_in_body_is_rejected` — re-шный «$» пропускает \n в конце, pydantic-паттерн кабинета — нет.
 - `tests/cabinet/test_legacy_faq_admin.py` — Python-модуль
   Классы: нет
   Функции: `test_legacy_faq_list_edit_keeps_public_and_bot_content_in_sync`, `test_legacy_faq_edit_postgres`, `check_legacy_faq`, `test_legacy_faq_requires_server_permission`
@@ -3626,9 +3602,6 @@
 - `tests/database/test_admin_expiry_reset_postgres.py` — Python-модуль
   Классы: `Panel` (4 методов)
   Функции: `test_reset_does_not_regain_paid_days_from_panel`, `test_expired_update_sends_closing_date_in_first_patch`, `test_reset_preserves_local_reset_when_expiry_patch_fails`
-- `tests/database/test_admin_landing_payments_postgres.py` — Python-модуль
-  Классы: нет
-  Функции: `test_internal_and_unpaid_purchases_are_excluded`, `test_cryptobot_payload_does_not_duplicate_landing_purchase`, `test_payment_confirmed_between_admin_queries_is_not_duplicated`, `test_paid_landing_purchase_visible_without_provider_user`, `test_landing_deduplicates_provider_and_transaction_but_preserves_other_payment`, `test_confirmed_gift_replay_and_http_details_keep_source_identity`
 - `tests/database/test_admin_notification_rollback_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_event_failure_logs_original_error_and_rolls_back`, `test_admin_event_does_not_repeat_cryptobot_credit`, `test_topup_reload_failure_does_not_read_expired_orm_in_error_log`, `test_rollback_failure_also_logs_scalar_identity`
@@ -3715,7 +3688,7 @@
   Функции: `test_day_buckets_ignore_session_timezone`, `test_local_date_expr_respects_dst_transitions`, `test_separate_expressions_group_together` — Прод 2026-09-12: имя зоны уходило bind-параметром, каждое вхождение — своим ($1, $4, $5),
 - `tests/database/test_local_day_groupings_postgres.py` — Python-модуль
   Классы: нет
-  Функции: `test_sales_stats_route_groups_by_local_day`, `test_sales_stats_custom_period_groups_by_local_day`, `test_partner_and_menu_stats_group_by_local_day`, `test_landing_stats_group_by_local_day`
+  Функции: `test_sales_stats_route_groups_by_local_day`, `test_sales_stats_custom_period_groups_by_local_day`, `test_partner_and_menu_stats_group_by_local_day`
 - `tests/database/test_merge_deleted_webhook_postgres.py` — Python-модуль
   Классы: нет
   Функции: `panel`, `test_late_deleted_event_after_email_telegram_merge_preserves_paid_subscription`, `test_deleted_event_targets_only_current_identity`, `test_rotated_short_id_keeps_legacy_numeric_identity`, `test_deleted_event_resolved_before_merge_commit_cannot_clear_survivor_identity`, `test_multi_merge_keeps_both_identities_independent`
@@ -4545,9 +4518,6 @@
 - `tests/services/test_balance_history_pages.py` — Python-модуль
   Классы: нет
   Функции: `test_pages_cover_every_operation_once`, `test_same_amount_in_different_minutes_is_not_merged`, `test_handler_shows_pages_and_empty_state_with_buttons`, `test_locales_have_history_and_unknown_method_texts`
-- `tests/services/test_ban_notification_global_switch.py` — Python-модуль
-  Классы: нет
-  Функции: `service`, `test_typed_ban_is_silent_when_notifications_are_off`, `test_typed_ban_is_delivered_when_notifications_are_on` — Обратная сторона: рубильник не должен глушить включённые уведомления., `test_switch_is_checked_before_touching_the_database` — Выход обязан быть до поиска пользователя, как у соседних методов., `test_every_send_method_respects_the_switch` — Ни один способ уведомить пользователя не должен обходить рубильник.
 - `tests/services/test_broadcast_bad_request_logging.py` — Python-модуль
   Классы: нет
   Функции: `test_bad_request_is_logged_once_per_cause_with_telegram_text`, `test_each_distinct_cause_gets_its_own_error_entry`, `test_blocked_users_are_still_counted_quietly` — «chat not found» — это не сбой рассылки, а ушедший пользователь: без error.
@@ -4724,7 +4694,7 @@
   Функции: `test_campaign_is_attributed_after_delivery`, `test_purchase_without_slug_is_skipped`, `test_gift_is_not_attributed_to_recipient` — Гифт активирует получатель, а по рекламе приходил покупатель — записать, `test_attribution_failure_does_not_propagate` — Подписка уже доставлена и оплачена — упасть здесь значит уронить
 - `tests/services/test_guest_purchase_daily_tariff.py` — Python-модуль
   Классы: нет
-  Функции: `test_daily_tariff_one_day_is_priced_from_daily_price` — A 1-day purchase of a daily tariff must cost ``daily_price_kopeks``,, `test_daily_tariff_rejects_non_daily_period` — A daily tariff only sells a 1-day period; asking for 30 days must fail
+  Функции: нет
 - `tests/services/test_guest_purchase_existing_email_takeover.py` — Python-модуль
   Классы: нет
   Функции: `test_existing_passwordless_user_gets_no_credentials`, `test_concurrent_create_race_gives_no_credentials` — Ветка IntegrityError (пользователь создан параллельно) — то же правило.
@@ -4796,7 +4766,7 @@
   Функции: `test_bot_multi_tariff_uses_subscription_panel_id`, `test_bot_multi_tariff_null_sub_does_not_fall_back_to_user` — The bleed: a null sub id must NOT borrow the user's (another tariff's) panel user., `test_bot_single_tariff_falls_back_to_user`, `test_bot_no_subscription_uses_user_panel_id`, `test_bot_never_returns_legacy_uuid` — Пустой remnawave_id не должен подмениться легаси-uuid'ом ни в одном режиме., `test_cabinet_multi_tariff_uses_subscription_panel_id`, `test_cabinet_multi_tariff_null_sub_no_user_fallback`, `test_cabinet_single_tariff_uses_user_panel_id`, `test_cabinet_no_subscription_uses_user_panel_id`, `test_cabinet_never_returns_legacy_uuid`, `test_both_resolvers_agree_and_return_numeric_ids` — В multi-tariff кабинет и бот обязаны резолвить одинаково и отдавать именно число., `test_deterministic_suffix_distinct_per_subscription_when_short_id_empty` — Two tariffs of one user with empty/legacy short_id must still build DISTINCT
 - `tests/services/test_notification_delivery_preferences.py` — Python-модуль
   Классы: нет
-  Функции: `test_global_switch_blocks_regular_notifications`, `test_transactional_messages_bypass_global_switch`, `test_per_user_preferences_block_matching_notifications`, `test_referral_switch_is_enforced_by_unified_delivery`, `test_blocked_user_can_receive_the_ban_notification`, `test_blocked_user_does_not_receive_unrelated_notifications`, `test_promo_opt_out_suppresses_the_message_but_keeps_the_discount` — Отказ от промо-уведомлений глушит СООБЩЕНИЕ, но не отбирает скидку.
+  Функции: `test_global_switch_blocks_regular_notifications`, `test_transactional_messages_bypass_global_switch`, `test_per_user_preferences_block_matching_notifications`, `test_referral_switch_is_enforced_by_unified_delivery`, `test_blocked_user_does_not_receive_unrelated_notifications`, `test_promo_opt_out_suppresses_the_message_but_keeps_the_discount` — Отказ от промо-уведомлений глушит СООБЩЕНИЕ, но не отбирает скидку.
 - `tests/services/test_notification_settings_in_db.py` — Python-модуль
   Классы: нет
   Функции: `isolated_settings` — Настройки — глобальный объект: значения возвращаются после теста; файла по умолчанию нет., `test_keys_are_bot_settings_in_the_user_notifications_category`, `test_getters_read_live_settings_not_the_file`, `test_getters_clamp_bad_values`, `test_setters_persist_to_db_and_apply_live`, `test_setters_clamp_and_reject_garbage`, `test_legacy_file_is_imported_once_and_never_overrides_the_db`, `test_missing_or_broken_legacy_file_is_ignored`, `test_followups_do_not_query_when_all_three_switches_are_off` — Все три выключены — мониторинг не ходит в базу и ничего не шлёт., `test_admin_menu_view_reflects_live_settings` — Меню «Уведомления пользователям» строится из тех же живых значений, что читает мониторинг.
@@ -5524,9 +5494,6 @@
 
 ### tests/webapi
 
-- `tests/webapi/test_ban_notification_schema.py` — Python-модуль
-  Классы: нет
-  Функции: `test_typed_ban_notification_types_are_accepted`, `test_unknown_typed_ban_notification_is_rejected`, `test_invalid_numeric_values_are_rejected`, `test_invalid_typed_ban_template_uses_fallback`, `test_unknown_typed_ban_type_returns_safe_error`, `test_external_values_are_escaped_before_html_send` — Имя ноды и тип сети приходят снаружи и уезжают в сообщение с parse_mode=HTML., `test_typed_ban_reason_is_escaped` — Причина бана тоже приходит снаружи — экранируем., `test_warning_text_is_escaped` — Текст предупреждения приходит по API и не должен ломать разметку., `test_revoke_uses_its_own_template` — revoke — это сброс ключей, а не бан: текст должен отличаться от punishment., `test_unexpected_error_returns_500_not_typeerror` — Неожиданная ошибка обязана превращаться в 500, а не в TypeError.
 - `tests/webapi/test_broadcast_list_nullable_text.py` — Python-модуль
   Классы: нет
   Функции: `test_row_without_text_serializes` — Email-рассылка без текста отдаётся как есть, а не ломает сериализацию., `test_one_empty_row_does_not_break_the_whole_list` — Соседние рассылки обязаны доехать до ответа вместе с пустой., `test_list_endpoint_returns_rows_with_null_text` — Сам маршрут отвечает 200, а не 500, когда в выборку попала пустая строка.

@@ -307,27 +307,6 @@ TEMPLATE_TYPES = [
         'context_vars': ['required_amount', 'current_balance'],
     },
     {
-        'type': 'ban_notification',
-        'label': {'ru': 'Блокировка аккаунта', 'en': 'Account Banned'},
-        'description': {
-            'ru': 'Уведомление о блокировке аккаунта',
-            'en': 'Account banned notification',
-        },
-        'context_vars': ['reason'],
-    },
-    {
-        'type': 'unban_notification',
-        'label': {
-            'ru': 'Разблокировка аккаунта',
-            'en': 'Account Unbanned',
-        },
-        'description': {
-            'ru': 'Уведомление о разблокировке аккаунта',
-            'en': 'Account unbanned notification',
-        },
-        'context_vars': [],
-    },
-    {
         'type': 'warning_notification',
         'label': {'ru': 'Предупреждение', 'en': 'Warning'},
         'description': {
@@ -671,8 +650,6 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
         'new_balance_rubles': 490,
     },
     'daily_insufficient_funds': {'required_amount': '10.00 ₽', 'current_balance': '5.00 ₽'},
-    'ban_notification': {'reason': 'Violation of terms of service'},
-    'unban_notification': {},
     'warning_notification': {'message': 'Please review our terms of service'},
     'referral_bonus': {
         'formatted_bonus': '100.00 ₽',

@@ -429,7 +429,6 @@ async def purchase_gift_from_balance(
     try:
         purchase = await create_purchase(
             db,
-            landing=None,
             tariff=tariff,
             period_days=period_days,
             amount_kopeks=fresh_price,

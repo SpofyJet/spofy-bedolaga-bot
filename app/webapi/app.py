@@ -12,7 +12,6 @@ from app.webapi.docs import add_redoc_endpoint
 from .middleware import RequestLoggingMiddleware, RequestPathContextMiddleware, pool_exhausted_handler
 from .routes import (
     backups,
-    ban_notifications,
     broadcasts,
     campaigns,
     config,
@@ -148,11 +147,6 @@ def create_web_api_app(lifespan: Any = None) -> FastAPI:
     )
     app.include_router(webhooks.router, prefix='/webhooks', tags=['webhooks'])
     app.include_router(websocket.router, tags=['websocket'])
-    app.include_router(
-        ban_notifications.router,
-        prefix='/ban-notifications',
-        tags=['ban-notifications'],
-    )
 
     # Cabinet (Personal Account) routes
     if settings.is_cabinet_enabled():

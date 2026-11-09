@@ -1,4 +1,4 @@
-"""Service for guest (unauthenticated) purchases via landing pages."""
+"""Service for guest (unauthenticated) purchases (gifts)."""
 
 import asyncio
 import re
@@ -37,7 +37,6 @@ from app.database.models import (
     PAY2328_PAID_STATUSES,
     GuestPurchase,
     GuestPurchaseStatus,
-    LandingPage,
     PaymentMethod,
     Tariff,
     TransactionType,
@@ -178,64 +177,8 @@ class GuestPurchaseError(Exception):
         super().__init__(message)
 
 
-async def validate_and_calculate(
-    db: AsyncSession,
-    landing: LandingPage,
-    tariff_id: int,
-    period_days: int,
-) -> tuple[Tariff, int]:
-    """Validate tariff/period against landing config and return (tariff, price_kopeks).
-
-    Raises:
-        GuestPurchaseError: If tariff or period is not allowed or price is unavailable.
-    """
-    allowed_ids = landing.allowed_tariff_ids or []
-    if tariff_id not in allowed_ids:
-        raise GuestPurchaseError('Tariff is not available on this landing page')
-
-    tariff = await get_tariff_by_id(db, tariff_id)
-    if tariff is None or not tariff.is_active:
-        raise GuestPurchaseError('Tariff not found or inactive')
-
-    # Check period against landing-level override (if set)
-    allowed_periods = landing.allowed_periods or {}
-    if allowed_periods:
-        tariff_periods_override = allowed_periods.get(str(tariff_id))
-        if tariff_periods_override is not None:
-            if period_days not in tariff_periods_override:
-                raise GuestPurchaseError('Period is not available for this tariff on this landing page')
-        else:
-            # No override for this tariff -> all tariff periods allowed
-            available = tariff.get_purchasable_periods()
-            if period_days not in available:
-                raise GuestPurchaseError('Period is not available for this tariff')
-    else:
-        # No overrides at all -> use tariff's own periods
-        available = tariff.get_purchasable_periods()
-        if period_days not in available:
-            raise GuestPurchaseError('Period is not available for this tariff')
-
-    price_kopeks = tariff.get_purchasable_price_for_period(period_days)
-    if price_kopeks is None:
-        raise GuestPurchaseError('Price is not configured for this period')
-
-    # Apply landing discount if active
-    if landing.discount_percent and landing.discount_starts_at and landing.discount_ends_at:
-        now = datetime.now(UTC)
-        if landing.discount_starts_at <= now < landing.discount_ends_at:
-            overrides = landing.discount_overrides or {}
-            tariff_override = overrides.get(str(tariff_id))
-            effective_discount = tariff_override if tariff_override is not None else landing.discount_percent
-            from app.services.pricing_engine import PricingEngine
-
-            price_kopeks = max(1, PricingEngine.apply_discount(price_kopeks, effective_discount))
-
-    return tariff, price_kopeks
-
-
 async def create_purchase(
     db: AsyncSession,
-    landing: LandingPage | None,
     tariff: Tariff,
     period_days: int,
     amount_kopeks: int,
@@ -261,7 +204,6 @@ async def create_purchase(
         subid=subid,
         referrer=referrer,
         campaign_slug=campaign_slug,
-        landing_id=landing.id if landing else None,
         tariff_id=tariff.id,
         period_days=period_days,
         amount_kopeks=amount_kopeks,
@@ -282,7 +224,6 @@ async def create_purchase(
         'Guest purchase created',
         purchase_id=purchase.id,
         token_length=len(purchase.token),
-        landing_slug=landing.slug if landing else None,
         tariff_id=tariff.id,
         period_days=period_days,
         amount_kopeks=amount_kopeks,
@@ -398,7 +339,7 @@ async def fulfill_purchase(
             if recipient_type == 'email' and not purchase.is_gift and is_new_account:
                 purchase.auto_login_token = create_auto_login_token(user.id)
             await db.commit()
-            await db.refresh(purchase, attribute_names=['landing', 'user', 'buyer'])
+            await db.refresh(purchase, attribute_names=['user', 'buyer'])
 
             try:
                 await send_guest_notification(
@@ -507,7 +448,7 @@ async def fulfill_purchase(
             purchase.auto_login_token = create_auto_login_token(user.id)
 
         await db.commit()
-        await db.refresh(purchase, attribute_names=['landing', 'user', 'buyer'])
+        await db.refresh(purchase, attribute_names=['user', 'buyer'])
 
         # Save Yandex CID from Redis → DB BEFORE create_transaction, so the
         # central purchase hook fired from create_transaction (every completed
@@ -1454,7 +1395,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
 
         # Single atomic commit: subscription + purchase status + user changes
         await db.commit()
-        await db.refresh(purchase, attribute_names=['landing', 'user', 'buyer'])
+        await db.refresh(purchase, attribute_names=['user', 'buyer'])
 
         # Create transaction so promo group auto-assignment works.
         # Skip for gift recipients — they didn't pay, so their spending shouldn't be inflated.
