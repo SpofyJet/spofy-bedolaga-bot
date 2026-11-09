@@ -749,8 +749,6 @@ class Settings(BaseSettings):
     PLATEGA_MIN_AMOUNT_KOPEKS: int = 10000
     PLATEGA_MAX_AMOUNT_KOPEKS: int = 100000000
     PLATEGA_WEBHOOK_PATH: str = '/platega-webhook'
-    PLATEGA_WEBHOOK_HOST: str = '0.0.0.0'
-    PLATEGA_WEBHOOK_PORT: int = 8086
     PLATEGA_RECURRENT_ENABLED: bool = False  # Рекуррентные СБП-подписки Platega (автопродление)
     # Фоновая сверка через Subscription API Platega (GET /subscription/*). Выключена: у мерчанта метод закрыт (401),
     # а каждый такой запрос после рестарта бота сопровождался блокировкой ключа на минуты (платежи отвечали 401).
@@ -761,7 +759,6 @@ class Settings(BaseSettings):
     WATA_BASE_URL: str = 'https://api.wata.pro/api/h2h'
     WATA_ACCESS_TOKEN: str | None = None
     WATA_TERMINAL_PUBLIC_ID: str | None = None
-    WATA_PAYMENT_DESCRIPTION: str = 'Пополнение баланса'
     WATA_PAYMENT_TYPE: str = 'OneTime'
     WATA_SUCCESS_REDIRECT_URL: str | None = None
     WATA_FAIL_REDIRECT_URL: str | None = None
@@ -770,8 +767,6 @@ class Settings(BaseSettings):
     WATA_MAX_AMOUNT_KOPEKS: int = 100000000
     WATA_REQUEST_TIMEOUT: int = 30
     WATA_WEBHOOK_PATH: str = '/wata-webhook'
-    WATA_WEBHOOK_HOST: str = '0.0.0.0'
-    WATA_WEBHOOK_PORT: int = 8085
     # Дополнительные доверенные прокси перед платёжными вебхуками (CIDR через запятую).
     WEBHOOK_TRUSTED_PROXY_NETWORKS: str = ''
     WATA_PUBLIC_KEY_URL: str | None = None
@@ -781,7 +776,6 @@ class Settings(BaseSettings):
     YANDEX_OFFLINE_CONV_ENABLED: bool = False
     YANDEX_OFFLINE_CONV_COUNTER_ID: str = ''
     YANDEX_OFFLINE_CONV_MEASUREMENT_SECRET: str = ''
-    YANDEX_OFFLINE_CONV_START_PREFIX: str = 'utm_ya_'
     YANDEX_OFFLINE_CONV_DL: str = ''
     YANDEX_OFFLINE_CONV_DT: str = ''
     YANDEX_OFFLINE_CONV_CURRENCY: str = 'RUB'
@@ -939,7 +933,6 @@ class Settings(BaseSettings):
     WEBHOOK_PATH: str = '/webhook'
     WEBHOOK_SECRET_TOKEN: str | None = None
     WEBHOOK_IP: str | None = None  # IP адрес для setWebhook, чтобы Telegram не резолвил домен
-    WEBHOOK_DROP_PENDING_UPDATES: bool = True
     WEBHOOK_MAX_QUEUE_SIZE: int = 1024
     WEBHOOK_WORKERS: int = 4
     WEBHOOK_ENQUEUE_TIMEOUT: float = 0.1
