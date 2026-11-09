@@ -6,7 +6,7 @@
 FIFO. Патч применяется и при явно переданном storage, и при fallback-значении
 по умолчанию — поведение не зависит от выбора вызывающего кода.
 
-RSS берём через ``resource.getrusage`` — без psutil и без чтения ``/proc``,
+Текущий RSS берём из ``/proc/self/statm``, пик — через ``resource.getrusage``, без psutil,
 актуально для Linux-контейнера.
 """
 
@@ -81,17 +81,34 @@ class LimitedMemoryStorage(MemoryStorage):
             self.storage.pop(key, None)
 
 
-def current_rss_mb() -> float:
-    """Текущий RSS процесса в мегабайтах (Linux, без зависимостей)."""
+def peak_rss_mb() -> float:
+    """Пик RSS с момента старта процесса (не убывает)."""
     usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     # Linux отдаёт килобайты, macOS — байты; в контейнере всегда Linux.
     return round(usage / 1024, 1)
 
 
+def current_rss_mb() -> float:
+    """Текущий RSS процесса в мегабайтах.
+
+    Раньше сюда шёл ``ru_maxrss`` — пик с момента старта: после суточной
+    синхронизации с панелью число больше не убывало и выглядело как утечка.
+    Текущее значение — вторая колонка ``/proc/self/statm`` (страницы); если файла
+    нет (не Linux), отдаём пик.
+    """
+    try:
+        with open('/proc/self/statm', encoding='ascii') as statm:
+            pages = int(statm.read().split()[1])
+        return round(pages * resource.getpagesize() / (1024 * 1024), 1)
+    except (OSError, ValueError, IndexError):
+        return peak_rss_mb()
+
+
 def log_memory(prefix: str = 'memory') -> None:
     """Одна строка в лог с RSS; предупреждение при превышении порога."""
     rss = current_rss_mb()
+    peak = peak_rss_mb()
     if rss > RSS_WARN_MB:
-        logger.warning(f'{prefix}: RSS выше порога', rss_mb=rss, threshold_mb=RSS_WARN_MB)
+        logger.warning(f'{prefix}: RSS выше порога', rss_mb=rss, peak_mb=peak, threshold_mb=RSS_WARN_MB)
     else:
-        logger.info(f'{prefix}: RSS', rss_mb=rss)
+        logger.info(f'{prefix}: RSS', rss_mb=rss, peak_mb=peak)
