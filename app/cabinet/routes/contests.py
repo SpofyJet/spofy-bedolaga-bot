@@ -367,8 +367,8 @@ async def submit_contest_answer(
         correct = (round_obj.payload.get('answer') or '').upper()
         is_winner = correct and answer.upper() == correct
 
-    # Лимит победителей и приз — общие с ботом: атомарный счётчик под блокировкой
-    # раунда, приз баланса в копейках (раньше здесь было значение × 100).
+    # Лимит победителей и приз — общие с ботом: атомарный счётчик под блокировкой раунда, приз баланса в
+    # копейках.
     attempt_service = ContestAttemptService()
     is_winner = await attempt_service._atomic_winner_check(db, round_obj.id, bool(is_winner))
 

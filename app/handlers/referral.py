@@ -986,8 +986,7 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     expected_nonce = data.get('confirm_nonce')
     nonce = (callback.data or '').removeprefix(_WITHDRAWAL_CONFIRM_PREFIX.rstrip('_')).lstrip('_')
 
-    # Кнопка живёт, пока открыт именно этот шаг: после ошибки или повторного
-    # оформления старое «Подтвердить» раньше давало «Некорректная сумма».
+    # Кнопка живёт, пока открыт именно этот шаг.
     if (
         current_state != ReferralWithdrawalStates.confirming.state
         or not amount_kopeks

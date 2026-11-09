@@ -668,11 +668,8 @@ class TrafficMonitoringServiceV2:
         users = await self.get_all_users_with_traffic()
         semaphore = asyncio.Semaphore(self.get_concurrency())
 
-        # Список исключений раньше на этом пути не применялся вовсе — и это не
-        # замечали, потому что суточная проверка никогда не находила нарушений:
-        # она читала поле `total`, которого в ответе нет, и всегда получала 0.
-        # Теперь сумма считается верно, проверка ожила — и без фильтра служебные
-        # и туннельные аккаунты немедленно начали бы генерить алерты.
+        # Сумма считается верно, проверка ожила — и без фильтра служебные и туннельные аккаунты немедленно
+        # начали бы генерить алерты.
         excluded_user_ids = set(self.get_excluded_user_ids())
         if excluded_user_ids:
             logger.info('🚫 Исключены пользователи (суточная проверка)', excluded_user_ids=sorted(excluded_user_ids))

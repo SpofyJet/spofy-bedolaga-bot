@@ -1554,9 +1554,7 @@ async def get_users_statistics(db: AsyncSession) -> dict:
     active_result = await db.execute(select(func.count(User.id)).where(User.status == UserStatus.ACTIVE.value))
     active_users = active_result.scalar()
 
-    # «Заблокировано» — только статус «заблокирован». Раньше считалось «всего минус активные»,
-    # и в карточку кабинета попадали удалённые, которых в разы больше, чем заблокированных:
-    # сводка показывала 1097, а список с фильтром «Заблокированные» — одну страницу.
+    # «Заблокировано» — только статус «заблокирован».
     blocked_result = await db.execute(select(func.count(User.id)).where(User.status == UserStatus.BLOCKED.value))
     blocked_users = blocked_result.scalar()
     deleted_result = await db.execute(select(func.count(User.id)).where(User.status == UserStatus.DELETED.value))

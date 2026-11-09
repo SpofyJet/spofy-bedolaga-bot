@@ -91,9 +91,6 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             service = SubscriptionService()
             for subscription in disabled_subs:
                 # Сначала id самой подписки, потом пользователя — в ОБОИХ режимах.
-                # Раньше в single-tariff колонка подписки игнорировалась, и если
-                # бэкфилл оставил строку пользователя неразрешённой (штатный
-                # исход), вызов в панель молча не происходил вовсе.
                 panel_user_id = subscription.remnawave_id or db_user.remnawave_id
                 if not panel_user_id:
                     logger.warning(
@@ -188,9 +185,6 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             service = SubscriptionService()
             for subscription in active_subs:
                 # Сначала id самой подписки, потом пользователя — в ОБОИХ режимах.
-                # Раньше в single-tariff колонка подписки игнорировалась, и если
-                # бэкфилл оставил строку пользователя неразрешённой (штатный
-                # исход), вызов в панель молча не происходил вовсе.
                 panel_user_id = subscription.remnawave_id or db_user.remnawave_id
                 if not panel_user_id:
                     logger.warning(

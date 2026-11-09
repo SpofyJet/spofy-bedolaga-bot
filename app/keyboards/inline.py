@@ -1540,9 +1540,8 @@ def get_subscription_keyboard(
                     )
                 ]
             if settings.is_tariffs_mode() and subscription and not is_legacy_subscription:
-                # На истёкшей/отключённой подписке смена тарифа недоступна (хендлер её
-                # блокирует) — раньше кнопка «Тариф» всё равно показывалась и вела в тупик.
-                # Теперь для таких подписок показываем «Купить тариф» (покупку с нуля).
+                # На истёкшей/отключённой подписке смена тарифа недоступна (хендлер её блокирует). Теперь для
+                # таких подписок показываем «Купить тариф» (покупку с нуля).
                 if getattr(subscription, 'actual_status', None) in ('expired', 'disabled'):
                     settings_row.append(
                         InlineKeyboardButton(
@@ -1567,7 +1566,7 @@ def get_subscription_keyboard(
                     )
             keyboard.append(settings_row)
 
-            # Количество устройств — на самом экране подписки (раньше лежало за «Настройками»)
+            # Количество устройств — на самом экране подписки
             if (
                 settings.is_tariffs_mode()
                 and tariff is not None
@@ -1583,8 +1582,7 @@ def get_subscription_keyboard(
                     ]
                 )
 
-            # Дубль блока докупки трафика удалён (раньше «Докупить трафик» добавлялся
-            # дважды: после главной CTA и после ряда настроек — условия идентичны).
+            # Дубль блока докупки трафика удалён.
 
     if gift_enabled:
         keyboard.append(

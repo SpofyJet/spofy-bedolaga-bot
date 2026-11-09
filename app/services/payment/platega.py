@@ -583,9 +583,8 @@ class PlategaPaymentMixin:
                 status=status,
             )
             if status is not None and status.upper() in pr.CHARGE_SUCCESS and charge_id:
-                # Деньги списаны по привязке, которой у нас нет (запись снесена
-                # вместе с пользователем/подпиской). Раньше — только warning и
-                # 200 OK: Platega списывала дальше, услуги не было.
+                # Деньги списаны по привязке, которой у нас нет (запись снесена вместе с
+                # пользователем/подпиской).
                 await self._handle_orphan_platega_charge(
                     db,
                     record=None,

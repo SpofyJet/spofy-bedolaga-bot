@@ -2815,9 +2815,8 @@ async def try_resume_disabled_daily_after_topup(
     if raw_daily_price <= 0:
         return False
 
-    # Суточное списание — такая же оплата, как продление: обнуление счётчика
-    # решает общая политика, а не жёсткая константа. Раньше здесь стояло
-    # «никогда», и расход копился через все возобновления после пополнения.
+    # Суточное списание — такая же оплата, как продление: обнуление счётчика решает общая политика, а не
+    # жёсткая константа.
     reset_traffic = should_reset_traffic_on_daily_charge(tariff)
     if subscription.status == SubscriptionStatus.LIMITED.value and not reset_traffic:
         # Списание счётчик не обнулит: либо это выключено настройкой, либо

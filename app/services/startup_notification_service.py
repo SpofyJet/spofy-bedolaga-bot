@@ -258,8 +258,7 @@ class StartupNotificationService:
             'users_new': select(func.count(User.id)).where(
                 User.status == UserStatus.ACTIVE.value, User.created_at >= since
             ),
-            # Живые — по статусу И по сроку: статус истёкшей подписки гасит планировщик
-            # не сразу. Раньше триалы считались все за всю историю, включая истёкшие.
+            # Живые — по статусу И по сроку: статус истёкшей подписки гасит планировщик не сразу.
             'paid': select(func.count(Subscription.id)).where(
                 Subscription.is_trial.is_(False),
                 Subscription.status.in_(alive),

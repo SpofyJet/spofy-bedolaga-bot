@@ -989,9 +989,7 @@ class MonitoringService:
 
             _recurrent_sub_ids = await list_provider_recurrent_subscription_ids(db)
 
-            # n22: выборки по всем дням — один раз до цикла. Раньше проверка
-            # «есть ли более срочное» звала _get_expiring_paid_subscriptions на
-            # КАЖДУЮ подписку × каждый день (подписки × дни² запросов за цикл).
+            # n22: выборки по всем дням — один раз до цикла.
             expiring_by_days: dict[int, list] = {}
             urgent_ids_by_days: dict[int, set[int]] = {}
             # Простые значения — заранее: после отката объекты из выборок экспайрятся.
@@ -2632,8 +2630,7 @@ class MonitoringService:
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    # Одна кнопка: она и закрепляет скидку, и ведёт к оплате. Раньше рядом стояло
-                    # «Продлить подписку» — по нему открывалась полная цена, хотя текст обещал скидку.
+                    # Одна кнопка: она и закрепляет скидку, и ведёт к оплате.
                     [
                         build_miniapp_or_callback_button(
                             text=texts.t('DISCOUNT_RETURN_BUTTON', '🎁 Продлить со скидкой {percent}%').format(

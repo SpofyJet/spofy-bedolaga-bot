@@ -707,8 +707,7 @@ TEMPLATE_TYPES = [
     *_webhook_template_types(),
 ]
 
-# Плейсхолдеры, без которых письмо бесполезно: шаблон без них редактор не
-# сохраняет (раньше бот молча подменял такой override стандартным письмом).
+# Плейсхолдеры, без которых письмо бесполезно: шаблон без них редактор не сохраняет.
 REQUIRED_PLACEHOLDERS: dict[str, list[str]] = {
     'email_verification': ['verification_url'],
     'password_reset': ['reset_url'],

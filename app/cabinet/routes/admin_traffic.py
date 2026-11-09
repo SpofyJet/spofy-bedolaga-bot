@@ -146,11 +146,9 @@ async def _aggregate_traffic(
                     per_node = user_traffic.setdefault(panel_user_id, {})
                     per_node[node_uuid] = per_node.get(node_uuid, 0) + total
 
-        # Раньше трафик собирался по одной ноде за раз, и сбой одной ноды терял
-        # только её колонку. Теперь это один запрос на все ноды, поэтому его
-        # провал обнуляет ВСЮ таблицу — и закэшировать такой результат значит
-        # показывать всем админам (и отдавать в CSV-экспорт) нули следующие
-        # пять минут. Отдаём пустой результат, но не запоминаем его.
+        # Это один запрос на все ноды, поэтому его провал обнуляет ВСЮ таблицу — и закэшировать такой
+        # результат значит показывать всем админам (и отдавать в CSV-экспорт) нули следующие пять минут.
+        # Отдаём пустой результат, но не запоминаем его.
         if not usage_failed:
             _traffic_cache[cache_key] = (now, user_traffic, nodes_info)
 
@@ -658,11 +656,7 @@ async def export_traffic_csv(
         start_str = start_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
         end_str = end_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
         period_label = f'{request.start_date}_{request.end_date}'
-        # Длину периода считаем здесь же, где разобрали даты. Раньше она
-        # вычислялась ниже под ПОВТОРНЫМ `if request.start_date and
-        # request.end_date`, то есть start_dt/end_dt читались за 60 строк от
-        # места присваивания под скопированным условием: разойдись эти два
-        # условия — UnboundLocalError и 500 на выгрузке CSV.
+        # Длину периода считаем здесь же, где разобрали даты.
         period_days = max((end_dt - start_dt).days, 1)
     else:
         _validate_period(request.period)

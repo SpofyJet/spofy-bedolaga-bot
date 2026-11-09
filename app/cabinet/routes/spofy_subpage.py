@@ -154,8 +154,7 @@ async def _soft(coro: Any, default: Any, part: str = 'offer part') -> Any:
         )
         return default
     except Exception:
-        # Any other error in a cabinet helper (e.g. a multi-tariff edge case) used to turn the
-        # whole offer into a 500 and every button on the page into an error.
+        # An error in a cabinet helper must not turn the whole offer into a 500.
         logger.exception('spofy subpage: offer part failed', part=part)
         return default
 

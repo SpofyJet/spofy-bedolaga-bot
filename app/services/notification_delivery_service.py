@@ -506,9 +506,7 @@ class NotificationDeliveryService:
         """Notify user about expiring subscription."""
         context = {
             'days_left': days_left,
-            # Localize + humanize: ``str(datetime)`` used to leak raw
-            # ISO with microseconds and tz offset into the rendered
-            # template body. See app/utils/timezone.py::format_email_datetime.
+            # See app/utils/timezone.py::format_email_datetime.
             'expires_at': format_email_datetime(expires_at),
         }
 

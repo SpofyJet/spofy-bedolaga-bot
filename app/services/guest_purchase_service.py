@@ -1291,7 +1291,6 @@ async def notify_gift_claim_available(
     ):
         try:
             # Шаблон guest_gift_link_buyer: сохранённый в редакторе, иначе дефолтный.
-            # Раньше текст был зашит здесь на двух языках и без обёртки.
             buyer_context = {
                 'claim_url': claim_url,
                 'tariff_name': tariff_name,
@@ -1922,11 +1921,8 @@ async def _check_and_recover_pending_purchase(
 
     match = await _find_succeeded_provider_payment(db, base_method, purchase_token)
     if match is None:
-        # Это нормальный путь — гость нажал «Оплатить», но ещё не завершил оплату
-        # у провайдера. Polling задача проверяет каждые N секунд для каждой PENDING
-        # покупки, поэтому раньше этот debug-лог спамил в LOG_LEVEL=DEBUG режиме
-        # без полезной diagnostic info. Реальные ошибки (amount mismatch и т.д.)
-        # логируются на уровне ERROR ниже.
+        # Это нормальный путь — гость нажал «Оплатить», но ещё не завершил оплату у провайдера. Реальные
+        # ошибки (amount mismatch и т.д.) логируются на уровне ERROR ниже.
         return False
 
     provider_payment_id, provider_amount_kopeks = match

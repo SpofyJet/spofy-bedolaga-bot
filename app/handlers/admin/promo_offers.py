@@ -2017,9 +2017,7 @@ async def _send_offer_to_users(
         """Отправляет одно предложение с семафором ограничения"""
         from app.utils.notification_prefs import is_promo_offers_enabled
 
-        # Email-only юзеры (без telegram_id) раньше пропускались целиком —
-        # ни оффера, ни уведомления. Теперь оффер создаётся, а уведомление
-        # уходит на подтверждённую почту (активация — в кабинете).
+        # Оффер создаётся, а уведомление уходит на подтверждённую почту (активация — в кабинете).
         if not user.telegram_id and not (user.email and user.email_verified):
             logger.debug('У пользователя нет ни Telegram, ни подтверждённого email — промо пропущено', user_id=user.id)
             return False

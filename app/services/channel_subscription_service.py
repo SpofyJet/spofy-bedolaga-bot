@@ -324,12 +324,9 @@ class ChannelSubscriptionService:
                 return None  # Uncertain — bot's fault, not the user's
             except TelegramBadRequest as e:
                 err_msg = str(e).lower()
-                # Expected non-membership signals — обрабатываем тихо. Эти ошибки
-                # означают «юзер просто не подписан»: либо никогда не был в канале,
-                # либо вышел, либо удалил Telegram-аккаунт, либо был забанен в канале.
-                # Раньше 'member not found' проваливался в logger.error и через
-                # TelegramNotifierProcessor шёл в админ-чат каждый polling-cycle
-                # (час) — спамил без причины.
+                # Expected non-membership signals — обрабатываем тихо. Эти ошибки означают «юзер просто не
+                # подписан»: либо никогда не был в канале, либо вышел, либо удалил Telegram-аккаунт, либо был
+                # забанен в канале.
                 if (
                     'user not found' in err_msg
                     or 'member not found' in err_msg

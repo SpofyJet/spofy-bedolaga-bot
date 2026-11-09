@@ -308,9 +308,8 @@ async def get_sales_summary(
         )
         renewals_count = renewals_result.scalar() or 0
 
-        # Add-on revenue for the summary card = ALL add-ons (traffic + devices),
-        # so "Доп. услуги" matches the sum of the Add-ons tab. (Previously this was
-        # traffic-only and silently dropped device revenue.)
+        # Add-on revenue for the summary card = ALL add-ons (traffic + devices), so "Доп. услуги" matches the
+        # sum of the Add-ons tab.
         addon_revenue_result = await db.execute(
             select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
                 and_(
@@ -607,9 +606,7 @@ async def get_sales_stats(
         totals = totals_result.one()
         total_sales = totals.count
 
-        # Revenue and the number of payments that make it up, so the average is
-        # money-per-payment. (Previously divided by the count of *new* subscriptions,
-        # while the sum included renewals/add-ons too — that inflated the average.)
+        # Revenue and the number of payments that make it up, so the average is money-per-payment.
         revenue_result = await db.execute(
             select(
                 func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('revenue'),

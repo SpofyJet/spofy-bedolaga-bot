@@ -326,8 +326,8 @@ async def main():
             except Exception as error:
                 stage.warning(f'Не удалось загрузить конфигурацию: {error}')
                 logger.error('❌ Не удалось загрузить конфигурацию', error=error)
-            # Переключатели уведомлений истёкшим и настройки поддержки раньше жили в JSON-файлах
-            # в data/ — один раз переносятся в базу, чтобы прежние значения операторов не пропали.
+            # Переключатели уведомлений истёкшим и настройки поддержки один раз переносятся из JSON-файлов в
+            # базу, чтобы значения операторов не пропали.
             try:
                 from app.database.database import AsyncSessionLocal
                 from app.services.notification_settings_service import NotificationSettingsService

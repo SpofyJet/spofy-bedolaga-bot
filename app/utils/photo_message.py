@@ -183,7 +183,6 @@ async def edit_or_answer_photo(
     media = _resolve_media(callback.message)
 
     # Logo file unavailable (missing / directory bind-mount) — fall back to text.
-    # See #586617: this used to surface as IsADirectoryError on every callback.
     if media is None:
         try:
             await callback.message.delete()

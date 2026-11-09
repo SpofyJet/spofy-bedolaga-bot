@@ -114,9 +114,7 @@ def decode_token(token: str) -> dict[str, Any] | None:
         secret = settings.get_cabinet_jwt_secret()
         return jwt.decode(token, secret, algorithms=[JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
-        # Логирование причины помогает дебажить 401 на стороне юзера
-        # (раньше тихо возвращали None — было невозможно понять, истёк токен
-        # или подпись не сходится).
+        # Логирование причины помогает дебажить 401 на стороне юзера.
         logger.debug('JWT decode: token expired', token_fp=_token_fingerprint(token))
         return None
     except jwt.InvalidTokenError as err:

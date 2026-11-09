@@ -885,7 +885,7 @@ async def _render_user_subscription_overview(
     else:
         subscription = profile['subscription']
 
-    # Suffix used to route back to this exact subscription in multi-tariff mode
+    # Suffix routes back to this exact subscription in multi-tariff mode
     _sid = f'_s{subscription.id}' if settings.is_multi_tariff_enabled() and subscription else ''
 
     text = '📱 <b>Подписка и настройки пользователя</b>\n\n'

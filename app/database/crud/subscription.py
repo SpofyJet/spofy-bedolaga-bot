@@ -993,10 +993,8 @@ async def _housekeep_expired_purchases(
     # прежняя ошибка (база из FIXED_TRAFFIC_LIMIT_GB) выдала безлимит.
     tariff_base = await _tariff_base_traffic_limit(db, subscription)
     if tariff_base is not None:
-        # Тариф без лимита (0) — тоже условие тарифа: подписка безлимитная, даже
-        # если в ней остался чужой лимит (грейс ставил «расход + 1 ГБ», правка
-        # админом). Раньше ноль проходил мимо, и безлимит не возвращался при
-        # продлении (жалоба 2026-09-15). Докупки с безлимитом не складываются.
+        # Тариф без лимита (0) — тоже условие тарифа: подписка безлимитная, даже если в ней остался чужой
+        # лимит (грейс ставил «расход + 1 ГБ», правка админом). Докупки с безлимитом не складываются.
         purchased, _ = await _apply_base_limit_preserving_active_purchases(db, subscription, tariff_base, now=now)
         return purchased
 
@@ -1524,10 +1522,8 @@ async def extend_subscription(
             subscription.traffic_used_gb = 0.0
 
         if is_tariff_change or was_expired:
-            # Базовый лимит обновляется (новый тариф или подписка истекала). Истёкшие
-            # TrafficPurchase убираем, ЕЩЁ АКТИВНЫЕ — сохраняем: их купили отдельно
-            # за деньги, у них собственный срок жизни. Раньше тут был хардкод DELETE
-            # ВСЕХ пакетов — отсюда юзерский баг «трафик слетел после продления».
+            # Базовый лимит обновляется (новый тариф или подписка истекала). Истёкшие TrafficPurchase убираем,
+            # ЕЩЁ АКТИВНЫЕ — сохраняем: их купили отдельно за деньги, у них собственный срок жизни.
             purchased, new_total = await _apply_base_limit_preserving_active_purchases(
                 db, subscription, traffic_limit_gb, now=current_time
             )
@@ -1557,13 +1553,10 @@ async def extend_subscription(
     elif settings.RESET_TRAFFIC_ON_PAYMENT:
         subscription.traffic_used_gb = 0.0
         if subscription.tariff_id is None or was_expired:
-            # Истекают только истёкшие пакеты, активные сохраняются.
-            # Раньше тут был хардкод DELETE всех TrafficPurchase — отсюда жалобы
-            # «при продлении докупленный трафик слетел».
-            # Базу решает тариф подписки, если он есть (см. _resolve_base_traffic_limit):
-            # раньше сюда попадала и истёкшая ТАРИФНАЯ подписка, а базу ей считали
-            # по правилам классического режима — из FIXED_TRAFFIC_LIMIT_GB, и при нуле
-            # там человек после продления получал безлимит вместо лимита тарифа.
+            # Истекают только истёкшие пакеты, активные сохраняются. Базу решает тариф подписки, если он есть
+            # (см. _resolve_base_traffic_limit): раньше сюда попадала и истёкшая ТАРИФНАЯ подписка, а базу ей
+            # считали по правилам классического режима — из FIXED_TRAFFIC_LIMIT_GB, и при нуле там человек
+            # после продления получал безлимит вместо лимита тарифа.
             base_limit = await _resolve_base_traffic_limit(db, subscription)
             purchased, _ = await _apply_base_limit_preserving_active_purchases(
                 db, subscription, base_limit, now=current_time
@@ -1620,11 +1613,9 @@ async def extend_subscription(
             subscription.last_daily_charge_at = None
             logger.info('🔄 Переход с суточного тарифа: очищены daily флаги')
 
-    # В режиме fixed_with_topup при продлении базовый лимит возвращаем к
-    # fixed_limit, но активные TrafficPurchase сохраняем (накопительно).
-    # Раньше здесь был хардкод DELETE всех пакетов — это самая частая причина
-    # репорта «трафик слетел». Теперь fixed_limit = base, активные докупки
-    # суммируются поверх через helper, инвариант сохраняется.
+    # В режиме fixed_with_topup при продлении базовый лимит возвращаем к fixed_limit, но активные
+    # TrafficPurchase сохраняем (накопительно). Fixed_limit = base, активные докупки суммируются поверх через
+    # helper, инвариант сохраняется.
     if traffic_limit_gb is None and settings.is_traffic_fixed() and days > 0 and subscription.tariff_id is None:
         fixed_limit = settings.get_fixed_traffic_limit()
         old_limit = subscription.traffic_limit_gb

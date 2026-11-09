@@ -3048,11 +3048,9 @@ def get_referral_code_keyboard(language: str):
 
 
 async def get_main_menu_text(user, texts, db: AsyncSession):
-    # Single source of truth: delegate to the menu handler's builder so /start
-    # renders the SAME subscription block as "back to menu" — including the
-    # multi-tariff format (🟢 <tariff> — до …). Previously this had its own
-    # stale formatter, so /start showed the legacy "💎 Активна" status until the
-    # user navigated away and back. See app/handlers/menu.py get_main_menu_text.
+    # Single source of truth: delegate to the menu handler's builder so /start renders the SAME subscription
+    # block as "back to menu" — including the multi-tariff format (🟢 <tariff> — до …). See
+    # app/handlers/menu.py get_main_menu_text.
     from app.handlers.menu import get_main_menu_text as build_menu_text
 
     return await build_menu_text(user, texts, db)

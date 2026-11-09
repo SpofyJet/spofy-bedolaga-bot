@@ -778,14 +778,11 @@ async def execute_merge(
             secondary_id=secondary.id,
         )
 
-    # 3. Перенос email + password (unique constraint на email — тот же паттерн).
-    # Email у аккаунта один, поэтому остаётся тот, за которым стоит способ входа:
-    # пароль — осознанный логин, email от OAuth-провайдера — производный (сам вход
-    # через провайдера сохраняется по provider id). Раньше email с паролем
-    # поглощаемого аккаунта пропадал, стоило инициатору иметь любой email — хотя
-    # страница объединения обещает «все способы входа объединятся» (жалоба 2026-09-14).
-    # Источник подтверждения едет вместе с email: пустой источник считается доверенным
-    # для ADMIN_EMAILS, и терять его — значит доверять непроверенному адресу.
+    # 3. Перенос email + password (unique constraint на email — тот же паттерн). Email у аккаунта один,
+    # поэтому остаётся тот, за которым стоит способ входа: пароль — осознанный логин, email от
+    # OAuth-провайдера — производный (сам вход через провайдера сохраняется по provider id). Источник
+    # подтверждения едет вместе с email: пустой источник считается доверенным для ADMIN_EMAILS, и терять его —
+    # значит доверять непроверенному адресу.
     secondary_login_wins = bool(secondary.password_hash) and not primary.password_hash
     if secondary.email and (not primary.email or secondary_login_wins):
         replaced_email = primary.email

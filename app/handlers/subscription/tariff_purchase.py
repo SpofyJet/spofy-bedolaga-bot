@@ -607,9 +607,8 @@ def get_tariff_insufficient_balance_keyboard(
     sbp_rows = _sbp_purchase_rows(tariff_id, texts, period_days=period) if show_sbp else []
 
     trim_rows = [trim_row] if trim_row else []
-    # Способы оплаты на недостающую сумму — сразу, и без автопокупки: корзина сохранена, после
-    # зачисления первая кнопка — «Продолжить оформление» (раньше без автопокупки здесь была только
-    # «Пополнить баланс» и ещё два экрана до выбора способа).
+    # Способы оплаты на недостающую сумму — сразу, и без автопокупки: корзина сохранена, после зачисления
+    # первая кнопка — «Продолжить оформление».
     if missing_kopeks > 0:
         from app.keyboards.inline import get_payment_methods_keyboard
 
@@ -668,9 +667,8 @@ def get_tariff_extend_insufficient_balance_keyboard(
     back_button = InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)
     sbp_rows = sbp_rows or []
 
-    # Способы оплаты на недостающую сумму — сразу, и без автопокупки: корзина сохранена, после
-    # зачисления первая кнопка — «Продолжить оформление» (раньше без автопокупки здесь была только
-    # «Пополнить баланс» и ещё два экрана до выбора способа).
+    # Способы оплаты на недостающую сумму — сразу, и без автопокупки: корзина сохранена, после зачисления
+    # первая кнопка — «Продолжить оформление».
     if missing_kopeks > 0:
         from app.keyboards.inline import get_payment_methods_keyboard
 
@@ -3560,8 +3558,7 @@ async def show_tariff_switch_list(
     # тариф надевается на неё же (confirm_tariff_switch → extend_subscription).
     is_legacy_subscription = _legacy_subscription(subscription)
 
-    # Истёкшая подписка: смены тарифа нет, предлагаем купить новый тариф с нуля
-    # (раньше кнопка «Тариф» вела сюда в тупик на истёкшей подписке).
+    # Истёкшая подписка: смены тарифа нет, предлагаем купить новый тариф с нуля.
     subscription_expired = not subscription.end_date or subscription.end_date <= datetime.now(UTC)
     if subscription_expired and not is_legacy_subscription:
         await callback.message.edit_text(

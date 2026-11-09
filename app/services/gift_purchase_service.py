@@ -360,11 +360,8 @@ async def purchase_gift_from_balance(
                 f"Idempotency key '{idempotency_key}' was already used with different purchase parameters"
             )
 
-        # Транзакция ищется по external_id, собранному из source САМОЙ покупки:
-        # повтор может прийти из другого канала (бот против кабинета), и тогда
-        # аргумент source дал бы чужой ключ. Промахнуться тут нельзя — раньше
-        # фоллбек брал последнюю GIFT_PAYMENT покупателя и при нескольких
-        # подарках подсовывал транзакцию от другого.
+        # Транзакция ищется по external_id, собранному из source САМОЙ покупки: повтор может прийти из другого
+        # канала (бот против кабинета), и тогда аргумент source дал бы чужой ключ. Промахнуться тут нельзя.
         tx = await _find_gift_transaction(db, existing_purchase, idempotency_key, source)
 
         buyer = await db.get(User, buyer_id)

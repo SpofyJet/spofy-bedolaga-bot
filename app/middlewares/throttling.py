@@ -117,10 +117,8 @@ class ThrottlingMiddleware(BaseMiddleware):
                 if current:
                     state_str = str(current)
                     if state_str in _user_ticket_input_states():
-                        # Альбом из нескольких фото и длинный текст, который Telegram
-                        # режет на части, приходят пачкой быстрее лимита. Раньше всё,
-                        # кроме первой части, молча терялось; теперь части собирает
-                        # обработчик обращений (app/handlers/tickets.py).
+                        # Альбом из нескольких фото и длинный текст, который Telegram режет на части, приходят
+                        # пачкой быстрее лимита.
                         return await handler(event, data)
                     is_ticket_state = (':waiting_for_message' in state_str or ':waiting_for_reply' in state_str) and (
                         'TicketStates' in state_str or 'AdminTicketStates' in state_str

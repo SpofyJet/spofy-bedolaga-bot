@@ -335,7 +335,7 @@ async def get_rendered_override(
             )
             return None
 
-    # Маркетинговый override без ссылки отписки в подвале — раньше терялась.
+    # Маркетинговый override без ссылки отписки в подвале.
     rendered = templates._wrap_override_template(
         body_html, language, unsubscribe_url=str(context.get('unsubscribe_url') or ''), context=context
     )

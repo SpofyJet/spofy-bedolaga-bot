@@ -229,11 +229,9 @@ def activity_sources(user_id: int) -> dict[str, tuple]:
     def _map_miniapp_action(c: ButtonClickLog) -> UserActivityItem:
         return _web_action(c, type_='miniapp_action', source='miniapp')
 
-    # button_click_logs делится на три источника: нажатия кнопок бота (пишет
-    # ButtonStatsMiddleware), действия в кабинете (button_type='cabinet') и
-    # действия в Mini App (button_type='miniapp') — оба пишет
-    # user_action_log_service. Раньше третьего не было вовсе, и человек,
-    # живущий в Mini App, выглядел в таймлайне неактивным.
+    # button_click_logs делится на три источника: нажатия кнопок бота (пишет ButtonStatsMiddleware), действия
+    # в кабинете (button_type='cabinet') и действия в Mini App (button_type='miniapp') — оба пишет
+    # user_action_log_service.
     _WEB_SURFACES = ('cabinet', 'miniapp')
     bot_clicks_where = and_(
         ButtonClickLog.user_id == user_id,

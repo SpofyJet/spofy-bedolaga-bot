@@ -61,8 +61,6 @@ class AuthMiddleware(BaseMiddleware):
     ) -> Any:
         # Callback с недоступным сообщением (>48ч) — пропускаем к хендлерам,
         # они сами отправят новое сообщение через edit_or_answer_photo
-        # if isinstance(event, CallbackQuery) and isinstance(event.message, InaccessibleMessage):
-        #     pass  # Раньше здесь был return None, теперь пропускаем дальше
 
         user: TgUser = None
         if isinstance(event, (Message, CallbackQuery)):

@@ -438,7 +438,7 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
             await state.clear()
             return
 
-        # Раньше ответ молча резался до 400 символов, и пользователь получал огрызок.
+        # Длинный ответ не обрезаем: пользователь должен получить его целиком.
         if len(reply_text) > TICKET_MESSAGE_MAX_LENGTH:
             texts = get_texts(db_user.language)
             await message.answer(

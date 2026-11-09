@@ -932,14 +932,10 @@ async def purchase_tariff(
         promo_offer_discount_value = result.promo_offer_discount
         price_before_promo_offer = price_kopeks + promo_offer_discount_value
 
-        # Safety guard: reject purchases whose price is zero because nothing is
-        # configured. Use original_total (pre-discount price) — base_price is
-        # already discounted, so a 100% group discount legitimately makes it 0.
-        #
-        # Нулевая цена сама по себе поломкой НЕ является: бесплатный тариф в
-        # проекте штатный, и бот его продаёт. Признак настроенности — наличие
-        # цены периода, а не её величина; раньше здесь стояла проверка «> 0», и
-        # тариф, показанный кабинетом как «Бесплатно», купить было нельзя.
+        # Safety guard: reject purchases whose price is zero because nothing is configured. Use original_total
+        # (pre-discount price) — base_price is already discounted, so a 100% group discount legitimately makes
+        # it 0. Нулевая цена сама по себе поломкой НЕ является: бесплатный тариф в проекте штатный, и бот его
+        # продаёт.
         if (
             price_kopeks <= 0
             and result.original_total <= 0

@@ -615,10 +615,7 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
             for panel_user in panel_users_to_sync:
                 logger.info('Syncing panel subscription for email', email=user.email, panel_user_id=panel_user.id)
 
-                # Аккаунт уже закреплён за другим человеком — не забираем. Раньше в
-                # одиночном режиме смотрели только users.remnawave_id и пропускали
-                # аккаунт, который держит строка подписки второй записи того же
-                # человека (#3245): вход по почте забирал себе чужую оплату.
+                # Аккаунт уже закреплён за другим человеком — не забираем.
                 from app.services.panel_sync import find_foreign_panel_owner
 
                 owner = await find_foreign_panel_owner(
@@ -966,12 +963,8 @@ async def auth_telegram_widget(
         verified_admin=settings.is_admin(request.id),
     )
 
-    # Resolve referral code to referrer ID for new users.
-    # Order: explicit request.referral_code, then Redis pending_referral
-    # written by /start ref_XYZ. The Redis fallback used to be missing
-    # from this widget endpoint (initData endpoint had it, widget didn't),
-    # so users who hit /start ref_XYZ then logged in via Telegram Login
-    # Widget were silently losing attribution.
+    # Resolve referral code to referrer ID for new users. Order: explicit request.referral_code, then Redis
+    # pending_referral written by /start ref_XYZ.
     referrer_id = None
     if not user:
         if request.referral_code:

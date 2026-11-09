@@ -1560,11 +1560,8 @@ class RemnaWaveWebhookService:
 
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub_id))
 
-        # Clear remnawave linkage
-        # Запоминаем удалённый аккаунт ДО очистки: ниже по нему проверяются
-        # соседние подписки, а в single-tariff идентичность живёт именно здесь.
-        # Пока значение стиралось раньше цикла, соседям было нечем проверяться,
-        # и они молча оставались активными при удалённом панельном аккаунте.
+        # Clear remnawave linkage Запоминаем удалённый аккаунт ДО очистки: ниже по нему проверяются соседние
+        # подписки, а в single-tariff идентичность живёт именно здесь.
         deleted_panel_user_id = getattr(user, 'remnawave_id', None)
         if not settings.is_multi_tariff_enabled():
             if user.remnawave_id:
@@ -1688,10 +1685,8 @@ class RemnaWaveWebhookService:
             other_sub.remnawave_short_uuid = None
             other_sub.connected_squads = []
             other_sub.updated_at = now
-            # Панель только что подтвердила, что аккаунта нет, а строка чистится
-            # целиком — держать числовой id смысла нет ни в одном режиме. Раньше
-            # в single-tariff он оставался и продолжал адресовать удалённого
-            # пользователя, из-за чего бэкфилл считал строку уже связанной.
+            # Панель только что подтвердила, что аккаунта нет, а строка чистится целиком — держать числовой id
+            # смысла нет ни в одном режиме.
             other_sub.remnawave_id = None
             # И исторический uuid — тот же инвариант, что в
             # `validate_and_clean_subscription`: строка с uuid удалённого

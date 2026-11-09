@@ -546,11 +546,7 @@ async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
     # доступом, в отличие от структlog'ов, которые уезжают в external aggregators).
     audit_identifier = str(user.telegram_id) if is_telegram_admin else (user_email or f'user_id={user.id}')
 
-    # Savepoint: на IntegrityError откатывается ТОЛЬКО блок INSERT'а — outer
-    # транзакция caller'а сохраняется. Раньше `await db.rollback()` сбрасывал
-    # всю сессию, что было корректно только потому что в текущих callsite'ах
-    # перед `ensure_superadmin_role_on_login` нет pending writes — но это
-    # fragile инвариант, любой будущий рефактор мог его сломать.
+    # Savepoint: на IntegrityError откатывается ТОЛЬКО блок INSERT'а — outer транзакция caller'а сохраняется.
     try:
         async with db.begin_nested():
             new_assignment = UserRole(

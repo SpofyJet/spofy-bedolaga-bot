@@ -301,9 +301,8 @@ class DailySubscriptionService:
             try:
                 from app.services.subscription_service import SubscriptionService
 
-                # Суточное списание — такая же оплата, как продление: обнуление
-                # счётчика решает общая политика, а не жёсткая константа. Раньше
-                # здесь стояло «никогда», и расход копился через все автосписания.
+                # Суточное списание — такая же оплата, как продление: обнуление счётчика решает общая
+                # политика, а не жёсткая константа.
                 reset_reason = 'суточное списание' if reset_traffic else None
 
                 subscription_service = SubscriptionService()
