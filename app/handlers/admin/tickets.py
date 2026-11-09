@@ -240,7 +240,7 @@ async def view_admin_ticket(
     if ticket.messages:
         message_blocks.append(f'💬 Сообщения ({len(ticket.messages)}):\n\n')
         for msg in ticket.messages:
-            sender = '👤 Пользователь' if msg.is_user_message else '🛠️ Поддержка'
+            sender = '👤 Пользователь' if msg.is_user_message else '🛟 Поддержка'
             block = f'{sender} ({format_local_datetime(msg.created_at, "%d.%m %H:%M")}):\n{html.escape(msg.message_text or "")}\n\n'
             for item in get_ticket_media(msg):
                 label = {'photo': 'фото', 'video': 'видео', 'document': 'файл'}[item['type']]
@@ -815,7 +815,7 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
             if updated.messages:
                 ticket_text += f'💬 Сообщения ({len(updated.messages)}):\n\n'
                 for msg in updated.messages:
-                    sender = '👤 Пользователь' if msg.is_user_message else '🛠️ Поддержка'
+                    sender = '👤 Пользователь' if msg.is_user_message else '🛟 Поддержка'
                     ticket_text += f'{sender} ({format_local_datetime(msg.created_at, "%d.%m %H:%M")}):\n'
                     ticket_text += f'{html.escape(msg.message_text)}\n\n'
                     if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None) in {'photo', 'video'}:

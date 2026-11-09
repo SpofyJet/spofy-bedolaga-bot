@@ -87,7 +87,7 @@ def get_backup_manage_keyboard(backup_filename: str):
         inline_keyboard=[
             [InlineKeyboardButton(text='📥 Восстановить', callback_data=f'backup_restore_file_{backup_filename}')],
             [InlineKeyboardButton(text='🗑️ Удалить', callback_data=f'backup_delete_{backup_filename}')],
-            [InlineKeyboardButton(text='◀️ К списку', callback_data='backup_list')],
+            [InlineKeyboardButton(text='⬅️ К списку', callback_data='backup_list')],
         ]
     )
 
@@ -386,7 +386,7 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
         await message.answer(
             '❌ Пожалуйста, отправьте файл бекапа (.json, .json.gz или .tar.gz)',
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text='◀️ Отмена', callback_data='backup_panel')]]
+                inline_keyboard=[[InlineKeyboardButton(text='⬅️ Отмена', callback_data='backup_panel')]]
             ),
         )
         return
@@ -398,7 +398,7 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
         await message.answer(
             '❌ Неподдерживаемый формат файла. Загрузите .json, .json.gz или .tar.gz файл',
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text='◀️ Отмена', callback_data='backup_panel')]]
+                inline_keyboard=[[InlineKeyboardButton(text='⬅️ Отмена', callback_data='backup_panel')]]
             ),
         )
         return
@@ -407,7 +407,7 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
         await message.answer(
             '❌ Файл слишком большой (максимум 50MB)',
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text='◀️ Отмена', callback_data='backup_panel')]]
+                inline_keyboard=[[InlineKeyboardButton(text='⬅️ Отмена', callback_data='backup_panel')]]
             ),
         )
         return
@@ -453,7 +453,7 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
         await message.answer(
             f'❌ Ошибка загрузки файла: {e!s}',
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text='◀️ Отмена', callback_data='backup_panel')]]
+                inline_keyboard=[[InlineKeyboardButton(text='⬅️ Отмена', callback_data='backup_panel')]]
             ),
         )
 

@@ -2358,7 +2358,7 @@ async def confirm_delete_tariff(
             f'либо переведите подписки на другой тариф.',
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text='◀️ Назад к тарифу', callback_data=f'admin_tariff_view:{tariff_id}')],
+                    [InlineKeyboardButton(text='⬅️ Назад к тарифу', callback_data=f'admin_tariff_view:{tariff_id}')],
                 ]
             ),
             parse_mode='HTML',

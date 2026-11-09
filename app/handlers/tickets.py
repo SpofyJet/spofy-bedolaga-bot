@@ -618,7 +618,7 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         + '\n\n'
     )
     sender_user = texts.t('TICKET_CARD_SENDER_USER', '👤 Вы')
-    sender_support = texts.t('TICKET_CARD_SENDER_SUPPORT', '🛠️ Поддержка')
+    sender_support = texts.t('TICKET_CARD_SENDER_SUPPORT', '🛟 Поддержка')
     attachment_kinds = {
         'photo': texts.t('TICKET_ATTACHMENT_KIND_PHOTO', 'фото'),
         'video': texts.t('TICKET_ATTACHMENT_KIND_VIDEO', 'видео'),

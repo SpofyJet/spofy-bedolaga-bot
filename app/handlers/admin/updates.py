@@ -30,7 +30,7 @@ def get_updates_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
 def get_version_info_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton(text='🔄 Обновить', callback_data='admin_updates_info')],
-        [InlineKeyboardButton(text='◀️ К обновлениям', callback_data='admin_updates')],
+        [InlineKeyboardButton(text='⬅️ К обновлениям', callback_data='admin_updates')],
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)

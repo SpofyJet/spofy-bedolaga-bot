@@ -1243,7 +1243,7 @@ async def start_device_rename(callback: types.CallbackQuery, db_user: User, db: 
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('DEVICE_RENAME_CANCEL_BTN', '✖️ Отмена'),
+                    text=texts.t('DEVICE_RENAME_CANCEL_BTN', '❌ Отмена'),
                     callback_data='device_rename_cancel',
                 )
             ]
