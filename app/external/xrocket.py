@@ -35,6 +35,8 @@ class XRocketService:
         method: str,
         endpoint: str,
         data: dict | None = None,
+        *,
+        not_found: Any | None = None,
     ) -> Any | None:
         if not self.api_token:
             logger.error('xRocket API token не настроен')
@@ -56,7 +58,19 @@ class XRocketService:
                     request_kwargs['json'] = data
 
                 async with session.request(method, url, **request_kwargs) as response:
-                    response_data = await response.json()
+                    if response.status == 404 and not_found is not None:
+                        # Удалённый или истёкший объект: xRocket отвечает HTML-страницей 404.
+                        logger.info('xRocket API: объект не найден', endpoint=endpoint)
+                        return not_found
+
+                    try:
+                        response_data = await response.json(content_type=None)
+                    except ValueError:
+                        logger.warning('xRocket API ответил не JSON', status=response.status, endpoint=endpoint)
+                        return None
+                    if not isinstance(response_data, dict):
+                        logger.warning('xRocket API: неожиданный ответ', status=response.status, endpoint=endpoint)
+                        return None
 
                     if response.status in (200, 201) and response_data.get('success'):
                         return response_data.get('data')
@@ -114,7 +128,18 @@ class XRocketService:
         return result
 
     async def get_invoice(self, invoice_id: str | int) -> dict[str, Any] | None:
-        return await self._make_request('GET', f'tg-invoices/{invoice_id}')
+        """Счёт по id. Удалённый счёт (404) возвращается как истёкший.
+
+        Раньше 404 с HTML-страницей падал на разборе JSON: счёт оставался
+        «активным», и автопроверка каждые три минуты слала ошибку в админ-чат.
+        Оплату это не теряет: оплаченный счёт приходит вебхуком при любом
+        локальном статусе.
+        """
+        return await self._make_request(
+            'GET',
+            f'tg-invoices/{invoice_id}',
+            not_found={'id': invoice_id, 'status': 'expired'},
+        )
 
     async def get_fiat_rate(self, crypto: str, fiat: str = 'RUB') -> float | None:
         """Курс 1 {crypto} = N {fiat}.

@@ -175,3 +175,73 @@ async def test_xrocket_client_has_request_timeout():
 
     timeout = captured.get('timeout')
     assert timeout is not None and 15 <= timeout.total <= 20
+
+
+class _FakeResponse:
+    def __init__(self, status: int, body: str):
+        self.status = status
+        self._body = body
+
+    async def json(self, content_type=None):
+        import json as _json
+
+        return _json.loads(self._body)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _FakeSession:
+    def __init__(self, response: _FakeResponse):
+        self._response = response
+
+    def request(self, method, url, **kwargs):
+        return self._response
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+def _client(monkeypatch, status: int, body: str):
+    from app.external import xrocket as module
+
+    monkeypatch.setattr(module.aiohttp, 'ClientSession', lambda **kwargs: _FakeSession(_FakeResponse(status, body)))
+    service = module.XRocketService()
+    service.api_token = 'token'
+    return service
+
+
+@pytest.mark.asyncio
+async def test_deleted_invoice_is_reported_as_expired(monkeypatch):
+    service = _client(monkeypatch, 404, '<html><body>Not Found</body></html>')
+    assert await service.get_invoice(7375402) == {'id': 7375402, 'status': 'expired'}
+
+
+@pytest.mark.asyncio
+async def test_non_json_answer_is_not_an_exception(monkeypatch):
+    service = _client(monkeypatch, 502, '<html>Bad Gateway</html>')
+    assert await service.get_invoice(1) is None
+
+
+@pytest.mark.asyncio
+async def test_deleted_invoice_leaves_the_autocheck_queue(monkeypatch):
+    from app.services.payment_verification_service import _is_xrocket_pending
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        await _seed(db)
+        svc = _mixin('expired')
+        svc.xrocket_service.get_invoice = AsyncMock(return_value={'id': 'inv-1', 'status': 'expired'})
+
+        result = await svc.get_xrocket_payment_status(db, 42)
+
+        assert result['payment'].status == 'expired'
+        assert not _is_xrocket_pending(result['payment'])
+        user = await db.get(User, 1)
+        await db.refresh(user)
+        assert user.balance_kopeks == 0
