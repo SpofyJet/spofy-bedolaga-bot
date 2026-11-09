@@ -264,11 +264,6 @@ class CasheraService:
     async def get_subscription(self, subscription_uuid: str) -> dict[str, Any]:
         return await self._request('GET', f'/integration/subscriptions/{quote(str(subscription_uuid), safe="")}')
 
-    async def get_subscription_by_external_id(self, external_id: str) -> dict[str, Any]:
-        return await self._request(
-            'GET', f'/integration/subscriptions/by-external-id/{quote(str(external_id), safe="")}'
-        )
-
     async def list_subscription_charges(
         self, subscription_uuid: str, *, page: int = 1, per_page: int = 100
     ) -> list[dict[str, Any]]:

@@ -1320,9 +1320,7 @@ def _should_carry_remaining_days(*, is_trial: bool, source_is_free: bool) -> boo
     """
     if is_trial:
         return should_carry_trial_remaining_days()
-    if source_is_free:
-        return False
-    return True
+    return not source_is_free
 
 
 async def _is_free_source_tariff(db: AsyncSession, tariff_id: int) -> bool:
@@ -3411,29 +3409,6 @@ async def suspend_daily_subscription_insufficient_balance(
         subscription_id=subscription.id,
         user_id=subscription.user_id,
     )
-
-    return subscription
-
-
-async def get_subscription_with_tariff(
-    db: AsyncSession,
-    user_id: int,
-) -> Subscription | None:
-    """Получает подписку пользователя с загруженным тарифом."""
-    result = await db.execute(
-        select(Subscription)
-        .options(
-            selectinload(Subscription.user),
-            selectinload(Subscription.tariff),
-        )
-        .where(Subscription.user_id == user_id)
-        .order_by(Subscription.created_at.desc())
-        .limit(1)
-    )
-    subscription = result.scalar_one_or_none()
-
-    if subscription:
-        subscription = await check_and_update_subscription_status(db, subscription)
 
     return subscription
 

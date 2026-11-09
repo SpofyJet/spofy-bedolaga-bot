@@ -20,8 +20,6 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import or_
-
 
 def case_variants(term: str) -> list[str]:
     """Регистровые варианты термина, по которым имеет смысл искать.
@@ -43,8 +41,3 @@ def contains_conditions(columns: Iterable[Any], term: str) -> list[Any]:
     """ILIKE-условия «колонка содержит term» — по каждой колонке и каждому варианту."""
     patterns = contains_patterns(term)
     return [column.ilike(pattern) for column in columns for pattern in patterns]
-
-
-def contains_clause(columns: Iterable[Any], term: str) -> Any:
-    """Готовое OR-условие «хотя бы одна колонка содержит term»."""
-    return or_(*contains_conditions(columns, term))

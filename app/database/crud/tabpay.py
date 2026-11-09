@@ -146,18 +146,6 @@ def remember_tabpay_event(payment: TabPayPayment, event_key: str) -> None:
     payment.processed_events = processed
 
 
-async def get_pending_tabpay_payments(db: AsyncSession, user_id: int) -> list[TabPayPayment]:
-    """Возвращает незавершённые платежи пользователя."""
-    result = await db.execute(
-        select(TabPayPayment).where(
-            TabPayPayment.user_id == user_id,
-            TabPayPayment.status == 'pending',
-            TabPayPayment.is_paid == False,
-        )
-    )
-    return list(result.scalars().all())
-
-
 async def link_tabpay_payment_to_transaction(
     db: AsyncSession,
     *,

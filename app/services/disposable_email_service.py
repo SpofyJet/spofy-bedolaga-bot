@@ -104,10 +104,10 @@ class DisposableEmailService:
 
         Returns False when the feature is disabled via settings.
         """
-        if not getattr(settings, 'DISPOSABLE_EMAIL_CHECK_ENABLED', True):
+        if not settings.DISPOSABLE_EMAIL_CHECK_ENABLED:
             return False
 
-        extra = parse_extra_domains(getattr(settings, 'DISPOSABLE_EMAIL_EXTRA_DOMAINS', ''))
+        extra = parse_extra_domains(settings.DISPOSABLE_EMAIL_EXTRA_DOMAINS)
         if not self._domains and not extra:
             return False
 
@@ -121,9 +121,9 @@ class DisposableEmailService:
     def get_status(self) -> dict:
         """Return service status for monitoring / health checks."""
         return {
-            'enabled': getattr(settings, 'DISPOSABLE_EMAIL_CHECK_ENABLED', True),
+            'enabled': settings.DISPOSABLE_EMAIL_CHECK_ENABLED,
             'domain_count': self._domain_count,
-            'extra_domain_count': len(parse_extra_domains(getattr(settings, 'DISPOSABLE_EMAIL_EXTRA_DOMAINS', ''))),
+            'extra_domain_count': len(parse_extra_domains(settings.DISPOSABLE_EMAIL_EXTRA_DOMAINS)),
             'last_updated': self._last_updated.isoformat() if self._last_updated else None,
             'running': self._task is not None and not self._task.done(),
         }

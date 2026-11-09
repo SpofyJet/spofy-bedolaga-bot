@@ -143,9 +143,9 @@ async def notify_admins_about_recalculation(result: RecalculationResult) -> None
     from app.config import settings
     from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
 
-    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False):
+    if not settings.ADMIN_NOTIFICATIONS_ENABLED:
         return
-    bot_token = getattr(settings, 'BOT_TOKEN', None)
+    bot_token = settings.BOT_TOKEN
     if not bot_token:
         return
 

@@ -64,15 +64,6 @@ class ReferralWithdrawalService:
         )
         return result.scalar() or 0
 
-    async def get_first_referral_earning_date(self, db: AsyncSession, user_id: int) -> datetime | None:
-        """
-        Получает дату первого реферального начисления.
-        """
-        result = await db.execute(
-            select(func.min(ReferralEarning.created_at)).where(ReferralEarning.user_id == user_id)
-        )
-        return result.scalar()
-
     async def get_user_spending(self, db: AsyncSession, user_id: int) -> int:
         """
         Получает сумму трат пользователя (покупки подписок, сброс трафика и т.д.).
@@ -82,25 +73,6 @@ class ReferralWithdrawalService:
                 Transaction.user_id == user_id,
                 Transaction.type.in_([TransactionType.SUBSCRIPTION_PAYMENT.value, TransactionType.WITHDRAWAL.value]),
                 Transaction.is_completed == True,
-            )
-        )
-        return abs(result.scalar() or 0)
-
-    async def get_user_spending_after_first_earning(self, db: AsyncSession, user_id: int) -> int:
-        """
-        Получает сумму трат ПОСЛЕ первого реферального начисления.
-        Только эти траты могут быть засчитаны как "потрачено из реф. баланса".
-        """
-        first_earning_date = await self.get_first_referral_earning_date(db, user_id)
-        if not first_earning_date:
-            return 0
-
-        result = await db.execute(
-            select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
-                Transaction.user_id == user_id,
-                Transaction.type.in_([TransactionType.SUBSCRIPTION_PAYMENT.value, TransactionType.WITHDRAWAL.value]),
-                Transaction.is_completed == True,
-                Transaction.created_at >= first_earning_date,
             )
         )
         return abs(result.scalar() or 0)
@@ -214,11 +186,6 @@ class ReferralWithdrawalService:
             'available_total': available_total,  # Всего доступно к выводу
             'only_referral_mode': settings.REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE,
         }
-
-    async def get_available_for_withdrawal(self, db: AsyncSession, user_id: int) -> int:
-        """Получает сумму, доступную для вывода."""
-        stats = await self.get_referral_balance_stats(db, user_id)
-        return stats['available_total']
 
     # ==================== ПРОВЕРКИ ====================
 
@@ -545,13 +512,6 @@ class ReferralWithdrawalService:
             select(WithdrawalRequest)
             .where(WithdrawalRequest.status == WithdrawalRequestStatus.PENDING.value)
             .order_by(WithdrawalRequest.created_at.asc())
-        )
-        return result.scalars().all()
-
-    async def get_all_requests(self, db: AsyncSession, limit: int = 50, offset: int = 0) -> list[WithdrawalRequest]:
-        """Получает все заявки на вывод (журнал)."""
-        result = await db.execute(
-            select(WithdrawalRequest).order_by(WithdrawalRequest.created_at.desc()).limit(limit).offset(offset)
         )
         return result.scalars().all()
 

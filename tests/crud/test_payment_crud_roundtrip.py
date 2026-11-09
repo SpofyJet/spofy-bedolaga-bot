@@ -182,19 +182,6 @@ async def test_link_to_transaction_persists(monkeypatch, module: Any, model: Any
 
 
 @pytest.mark.parametrize(('module', 'model', 'prefix'), GATEWAYS)
-async def test_pending_list_excludes_paid(monkeypatch, module: Any, model: Any, prefix: str) -> None:
-    async with memory_session(monkeypatch, [model.__table__]) as db:
-        pending = await _create(module, prefix, db, order_id=f'{prefix}1_pending')
-        paid = await _create(module, prefix, db, order_id=f'{prefix}1_paid', **{f'{prefix}_payment_id': 'ext-2'})
-        await _fn(module, f'update_{prefix}_payment_status')(db=db, payment=paid, status='success', is_paid=True)
-        db.expunge_all()
-
-        rows = await _fn(module, f'get_pending_{prefix}_payments')(db, 1)
-
-        assert [r.order_id for r in rows] == [pending.order_id]
-
-
-@pytest.mark.parametrize(('module', 'model', 'prefix'), GATEWAYS)
 async def test_for_update_lock_is_not_verifiable_on_sqlite(monkeypatch, module: Any, model: Any, prefix: str) -> None:
     """SQLite молча игнорирует FOR UPDATE — блокировка тут НЕ проверяется.
 

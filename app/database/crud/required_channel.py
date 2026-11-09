@@ -69,11 +69,6 @@ async def get_channel_by_id(db: AsyncSession, channel_db_id: int) -> RequiredCha
     return result.scalar_one_or_none()
 
 
-async def get_channel_by_channel_id(db: AsyncSession, channel_id: str) -> RequiredChannel | None:
-    result = await db.execute(select(RequiredChannel).where(RequiredChannel.channel_id == channel_id))
-    return result.scalar_one_or_none()
-
-
 async def add_channel(
     db: AsyncSession,
     channel_id: str,
@@ -180,47 +175,3 @@ async def get_user_channel_subs(
     """Get all channel subscriptions for a user."""
     result = await db.execute(select(UserChannelSubscription).where(UserChannelSubscription.telegram_id == telegram_id))
     return list(result.scalars().all())
-
-
-async def get_user_channel_sub(
-    db: AsyncSession,
-    telegram_id: int,
-    channel_id: str,
-) -> UserChannelSubscription | None:
-    result = await db.execute(
-        select(UserChannelSubscription).where(
-            UserChannelSubscription.telegram_id == telegram_id,
-            UserChannelSubscription.channel_id == channel_id,
-        )
-    )
-    return result.scalar_one_or_none()
-
-
-async def bulk_upsert_user_subs(
-    db: AsyncSession,
-    telegram_id: int,
-    subs: dict[str, bool],  # {channel_id: is_member}
-) -> None:
-    """Batch upsert user subscriptions with single multi-row INSERT."""
-    if not subs:
-        return
-    now = datetime.now(UTC)
-    values = [
-        {
-            'telegram_id': telegram_id,
-            'channel_id': channel_id,
-            'is_member': is_member,
-            'checked_at': now,
-        }
-        for channel_id, is_member in subs.items()
-    ]
-    stmt = pg_insert(UserChannelSubscription).values(values)
-    stmt = stmt.on_conflict_do_update(
-        constraint='uq_user_channel_sub',
-        set_={
-            'is_member': stmt.excluded.is_member,
-            'checked_at': stmt.excluded.checked_at,
-        },
-    )
-    await db.execute(stmt)
-    await db.commit()

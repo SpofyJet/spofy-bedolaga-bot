@@ -197,8 +197,6 @@ async def process_etoplatezhi_payment_amount(
     )
 
 
-ETOPLATEZHI_PAYMENT_METHODS = {'etoplatezhi', 'etoplatezhi_sbp', 'etoplatezhi_card'}
-
 ETOPLATEZHI_SERVICE_MAP: dict[str, str | None] = {
     'etoplatezhi': None,
     'etoplatezhi_sbp': 'sbp',

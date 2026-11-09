@@ -1,4 +1,3 @@
-import asyncio
 import json
 from typing import Any
 
@@ -67,52 +66,3 @@ class HeleketWebhookHandler:
                 'Access-Control-Allow-Headers': 'Content-Type, Authorization',
             },
         )
-
-
-def create_heleket_app(payment_service: PaymentService) -> web.Application:
-    handler = HeleketWebhookHandler(payment_service)
-    app = web.Application()
-    app.router.add_post(settings.HELEKET_WEBHOOK_PATH, handler.handle)
-    app.router.add_get('/heleket/health', handler.health_check)
-    app.router.add_get('/health', handler.health_check)
-    app.router.add_options(settings.HELEKET_WEBHOOK_PATH, handler.options_handler)
-    return app
-
-
-async def start_heleket_webhook_server(payment_service: PaymentService) -> None:
-    if not settings.is_heleket_enabled():
-        logger.info('Heleket отключен, webhook сервер не запускается')
-        return
-
-    app = create_heleket_app(payment_service)
-    runner = web.AppRunner(app)
-    await runner.setup()
-
-    site = web.TCPSite(
-        runner,
-        host=settings.HELEKET_WEBHOOK_HOST,
-        port=settings.HELEKET_WEBHOOK_PORT,
-    )
-
-    try:
-        await site.start()
-        logger.info(
-            'Heleket webhook сервер запущен',
-            HELEKET_WEBHOOK_HOST=settings.HELEKET_WEBHOOK_HOST,
-            HELEKET_WEBHOOK_PORT=settings.HELEKET_WEBHOOK_PORT,
-        )
-        logger.info(
-            'Heleket webhook URL',
-            HELEKET_WEBHOOK_HOST=settings.HELEKET_WEBHOOK_HOST,
-            HELEKET_WEBHOOK_PORT=settings.HELEKET_WEBHOOK_PORT,
-            HELEKET_WEBHOOK_PATH=settings.HELEKET_WEBHOOK_PATH,
-        )
-
-        while True:
-            await asyncio.sleep(1)
-    except asyncio.CancelledError:
-        logger.info('Heleket webhook сервер остановлен по запросу')
-    finally:
-        await site.stop()
-        await runner.cleanup()
-        logger.info('Heleket webhook сервер корректно остановлен')

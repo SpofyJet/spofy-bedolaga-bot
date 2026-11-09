@@ -182,13 +182,6 @@ class CisPayService:
         logger.info('cisPay check_payment', payment_id=payment_id, order_id=order_id)
         return await self._request('GET', '/payments/status', params=params)
 
-    async def get_store_capabilities(self) -> dict[str, Any]:
-        """Возвращает активные методы оплаты магазина и их комиссии.
-
-        GET /store/capabilities
-        """
-        return await self._request('GET', '/store/capabilities')
-
     async def get_balance(self) -> dict[str, Any]:
         """Получает баланс мерчанта.
 

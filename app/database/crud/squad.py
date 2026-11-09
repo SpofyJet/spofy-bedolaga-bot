@@ -1,21 +1,10 @@
 import structlog
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Squad
 
 
 logger = structlog.get_logger(__name__)
-
-
-async def get_squad_by_uuid(db: AsyncSession, uuid: str) -> Squad | None:
-    result = await db.execute(select(Squad).where(Squad.uuid == uuid))
-    return result.scalar_one_or_none()
-
-
-async def get_available_squads(db: AsyncSession) -> list[Squad]:
-    result = await db.execute(select(Squad).where(Squad.is_available == True))
-    return result.scalars().all()
 
 
 async def create_squad(

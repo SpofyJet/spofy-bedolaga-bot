@@ -284,7 +284,7 @@ def _get_autopay_day_options(subscription: Subscription | None) -> list[int]:
         if normalized is not None:
             options.add(normalized)
 
-    default_setting = _normalize_autopay_days(getattr(settings, 'DEFAULT_AUTOPAY_DAYS_BEFORE', None))
+    default_setting = _normalize_autopay_days(settings.DEFAULT_AUTOPAY_DAYS_BEFORE)
     if default_setting is not None:
         options.add(default_setting)
 
@@ -308,7 +308,7 @@ def _build_autopay_payload(
 
     default_days = days_before
     if default_days is None:
-        default_days = _normalize_autopay_days(getattr(settings, 'DEFAULT_AUTOPAY_DAYS_BEFORE', None))
+        default_days = _normalize_autopay_days(settings.DEFAULT_AUTOPAY_DAYS_BEFORE)
     if default_days is None and options:
         default_days = options[0]
 
@@ -666,7 +666,7 @@ async def get_maintenance_status(
     payload: MiniAppSubscriptionRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppMaintenanceStatusResponse:
-    _, _ = await _resolve_user_from_init_data(db, payload.init_data)
+    await _resolve_user_from_init_data(db, payload.init_data)
     status_info = maintenance_service.get_status_info()
     return MiniAppMaintenanceStatusResponse(
         is_active=bool(status_info.get('is_active')),
@@ -683,7 +683,7 @@ async def get_payment_methods(
     payload: MiniAppPaymentMethodsRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppPaymentMethodsResponse:
-    _, _ = await _resolve_user_from_init_data(db, payload.init_data)
+    await _resolve_user_from_init_data(db, payload.init_data)
 
     methods: list[MiniAppPaymentMethod] = []
 
@@ -702,7 +702,7 @@ async def get_payment_methods(
         )
 
     if settings.is_yookassa_enabled():
-        if getattr(settings, 'YOOKASSA_SBP_ENABLED', False):
+        if settings.YOOKASSA_SBP_ENABLED:
             methods.append(
                 MiniAppPaymentMethod(
                     id='yookassa_sbp',
@@ -982,7 +982,7 @@ async def create_payment_link(
         )
 
     if method == 'yookassa_sbp':
-        if not settings.is_yookassa_enabled() or not getattr(settings, 'YOOKASSA_SBP_ENABLED', False):
+        if not settings.is_yookassa_enabled() or not settings.YOOKASSA_SBP_ENABLED:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if amount_kopeks is None or amount_kopeks <= 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
@@ -3098,10 +3098,7 @@ def _is_trial_available_for_user(user: User) -> bool:
         return False
 
     subs = getattr(user, 'subscriptions', None) or []
-    if any(s.is_active for s in subs):
-        return False
-
-    return True
+    return not any(s.is_active for s in subs)
 
 
 @router.post('/subscription', response_model=MiniAppSubscriptionResponse)
@@ -3766,7 +3763,7 @@ async def update_subscription_autopay_endpoint(
         normalized_days = current_days
 
     options = _get_autopay_day_options(subscription)
-    default_day = _normalize_autopay_days(getattr(settings, 'DEFAULT_AUTOPAY_DAYS_BEFORE', None))
+    default_day = _normalize_autopay_days(settings.DEFAULT_AUTOPAY_DAYS_BEFORE)
     if default_day is None and options:
         default_day = options[0]
 
@@ -7828,7 +7825,7 @@ async def toggle_daily_subscription_pause_endpoint(
                 from app.bot_factory import create_bot
                 from app.services.admin_notification_service import AdminNotificationService
 
-                if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+                if settings.ADMIN_NOTIFICATIONS_ENABLED and settings.BOT_TOKEN:
                     bot = create_bot()
                     try:
                         notification_service = AdminNotificationService(bot)

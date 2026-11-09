@@ -333,7 +333,6 @@ class SubscriptionService:
                 await db.commit()
 
                 logger.info('✅ Создан/обновлен RemnaWave пользователь для подписки', subscription_id=subscription.id)
-                logger.info('🔗 Ссылка на подписку', subscription_url=updated_user.subscription_url)
                 strategy_name = settings.DEFAULT_TRAFFIC_RESET_STRATEGY
                 logger.info('📊 Стратегия сброса трафика', strategy_name=strategy_name)
                 return updated_user
@@ -1184,9 +1183,8 @@ class SubscriptionService:
                 await db.refresh(subscription)
                 await db.refresh(user)
                 logger.info(
-                    'Подписка успешно синхронизирована с RemnaWave. URL',
+                    'Подписка успешно синхронизирована с RemnaWave',
                     subscription_id=subscription.id,
-                    subscription_url=subscription.subscription_url,
                 )
                 return True, None
             logger.error('Не удалось синхронизировать подписку с RemnaWave', subscription_id=subscription.id)
@@ -1352,49 +1350,6 @@ class SubscriptionService:
             logger.error('❌ Ошибка валидации подписки', _format_user_log=self._format_user_log(user), error=e)
             await db.rollback()
             return False
-
-    async def get_countries_price_by_uuids(
-        self,
-        country_uuids: list[str],
-        db: AsyncSession,
-        *,
-        promo_group_id: int | None = None,
-    ) -> tuple[int, list[int]]:
-        try:
-            from app.database.crud.server_squad import get_server_squad_by_uuid
-
-            total_price = 0
-            prices_list = []
-
-            for country_uuid in country_uuids:
-                server = await get_server_squad_by_uuid(db, country_uuid)
-                is_allowed = True
-                if promo_group_id is not None and server:
-                    allowed_ids = {pg.id for pg in server.allowed_promo_groups}
-                    is_allowed = promo_group_id in allowed_ids
-
-                if server and server.is_available and not server.is_full and is_allowed:
-                    price = server.price_kopeks
-                    total_price += price
-                    prices_list.append(price)
-                    logger.debug('🏷️ Страна ₽', display_name=server.display_name, price=price / 100)
-                else:
-                    default_price = 0
-                    total_price += default_price
-                    prices_list.append(default_price)
-                    logger.warning(
-                        '⚠️ Сервер недоступен, используем базовую цену: ₽',
-                        country_uuid=country_uuid,
-                        default_price=default_price / 100,
-                    )
-
-            logger.info('💰 Общая стоимость стран: ₽', total_price=total_price / 100)
-            return total_price, prices_list
-
-        except Exception as e:
-            logger.error('Ошибка получения цен стран', error=e)
-            default_prices = [0] * len(country_uuids)
-            return sum(default_prices), default_prices
 
     def _gb_to_bytes(self, gb: int | None) -> int:
         if not gb:  # None or 0

@@ -22,8 +22,6 @@ from app.utils.topup_retry import format_topup_amount_retry
 logger = structlog.get_logger(__name__)
 
 
-JUPITER_PAYMENT_METHODS = {'jupiter', 'jupiter_sbp'}
-
 JUPITER_SERVICE_MAP: dict[str, str | None] = {
     'jupiter': None,
     'jupiter_sbp': 'sbp',

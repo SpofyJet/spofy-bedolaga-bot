@@ -213,7 +213,7 @@ def _resolve_email_date_format() -> str:
     sees the new format immediately on next notification, without a
     bot restart.
     """
-    value = getattr(settings, 'EMAIL_DATE_FORMAT', None)
+    value = settings.EMAIL_DATE_FORMAT
     if not isinstance(value, str) or not value.strip():
         return '%d.%m.%Y, %H:%M'
     return value

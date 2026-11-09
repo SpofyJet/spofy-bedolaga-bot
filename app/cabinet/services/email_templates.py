@@ -21,7 +21,7 @@ class EmailNotificationTemplates:
 
     def __init__(self):
         self.service_name = settings.SMTP_FROM_NAME or 'VPN Service'
-        self.cabinet_url = getattr(settings, 'CABINET_URL', '')
+        self.cabinet_url = settings.CABINET_URL
         # Контекст текущего рендера — чтобы обёртка знала получателя
         # ({username}, {email}), не протаскивая его через все 50 билдеров.
         self._render_context: dict[str, Any] | None = None

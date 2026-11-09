@@ -313,10 +313,6 @@ class LogRotationService:
 
     # === Ручные операции ===
 
-    async def force_rotate(self) -> tuple[bool, str]:
-        """Принудительная ротация (для админ-команды)."""
-        return await self.rotate_logs()
-
     def get_status(self) -> LogRotationStatus:
         """Получить статус сервиса."""
         archive_count = 0

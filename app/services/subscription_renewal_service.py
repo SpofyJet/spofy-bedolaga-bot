@@ -275,18 +275,6 @@ def decode_payment_payload(payload: str, expected_user_id: int | None = None) ->
     )
 
 
-def build_payment_metadata(descriptor: RenewalPaymentDescriptor) -> dict[str, Any]:
-    return {
-        'payment_purpose': _PAYLOAD_PREFIX,
-        'subscription_id': str(descriptor.subscription_id),
-        'period_days': str(descriptor.period_days),
-        'total_amount_kopeks': str(descriptor.total_amount_kopeks),
-        'missing_amount_kopeks': str(descriptor.missing_amount_kopeks),
-        'payload_id': descriptor.payload_id,
-        'pricing_snapshot': descriptor.pricing_snapshot or {},
-    }
-
-
 def parse_payment_metadata(
     metadata: dict[str, Any] | None,
     *,
@@ -339,7 +327,7 @@ def parse_payment_metadata(
 async def with_admin_notification_service(
     handler: Callable[[AdminNotificationService], Awaitable[Any]],
 ) -> None:
-    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False):
+    if not settings.ADMIN_NOTIFICATIONS_ENABLED:
         return
     if not settings.BOT_TOKEN:
         logger.debug('Skipping admin notification: bot token is not configured')

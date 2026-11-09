@@ -134,48 +134,6 @@ async def get_referral_earnings_by_user(
     return result.scalars().all()
 
 
-async def get_referral_earnings_by_referral(db: AsyncSession, referral_id: int) -> list[ReferralEarning]:
-    result = await db.execute(
-        select(ReferralEarning)
-        .where(ReferralEarning.referral_id == referral_id)
-        .order_by(ReferralEarning.created_at.desc())
-    )
-    return result.scalars().all()
-
-
-async def get_referral_earnings_sum(
-    db: AsyncSession, user_id: int, start_date: datetime | None = None, end_date: datetime | None = None
-) -> int:
-    """Денежный заработок пригласившего за период."""
-    money, _days = await get_referral_earnings_totals(db, user_id, start_date=start_date, end_date=end_date)
-    return money
-
-
-async def get_referral_earnings_totals(
-    db: AsyncSession, user_id: int, start_date: datetime | None = None, end_date: datetime | None = None
-) -> tuple[int, int]:
-    """Заработок пригласившего: (копейки, дни).
-
-    Дни — вторая валюта программы, и без них потребитель показывает ноль на
-    установке, где начисления идут днями подписки. Награды приглашённому
-    исключаются: строка принадлежит ему самому, а не владельцу ``user_id``.
-    """
-    query = select(
-        func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
-        func.coalesce(func.sum(ReferralEarning.days_granted), 0),
-    ).where(ReferralEarning.user_id == user_id, not_referee_directed())
-
-    if start_date:
-        query = query.where(ReferralEarning.created_at >= start_date)
-
-    if end_date:
-        query = query.where(ReferralEarning.created_at <= end_date)
-
-    result = await db.execute(query)
-    money, days = result.one()
-    return int(money or 0), int(days or 0)
-
-
 async def get_referral_statistics(db: AsyncSession) -> dict:
     users_with_referrals_result = await db.execute(
         select(func.count(func.distinct(User.id))).where(User.referred_by_id.isnot(None))

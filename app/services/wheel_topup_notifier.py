@@ -28,7 +28,7 @@ _tasks: set[asyncio.Task] = set()
 
 
 def wheel_cabinet_url() -> str:
-    base = (getattr(settings, 'CABINET_URL', '') or '').rstrip('/')
+    base = (settings.CABINET_URL or '').rstrip('/')
     if not base or 'example.com' in base:
         return ''
     return f'{base}/wheel'

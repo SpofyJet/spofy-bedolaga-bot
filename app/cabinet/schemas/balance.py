@@ -39,14 +39,6 @@ class TransactionListResponse(BaseModel):
     pages: int
 
 
-class PaymentOptionResponse(BaseModel):
-    """Payment method option (e.g. Platega sub-methods)."""
-
-    id: str
-    name: str
-    description: str | None = None
-
-
 class PaymentMethodResponse(BaseModel):
     """Available payment method."""
 

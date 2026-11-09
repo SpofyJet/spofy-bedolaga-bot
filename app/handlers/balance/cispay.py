@@ -22,8 +22,6 @@ from app.utils.topup_retry import format_topup_amount_retry
 logger = structlog.get_logger(__name__)
 
 
-CISPAY_PAYMENT_METHODS = {'cispay', 'cispay_card', 'cispay_sbp'}
-
 CISPAY_SERVICE_MAP: dict[str, str | None] = {
     'cispay': None,
     'cispay_card': 'card',

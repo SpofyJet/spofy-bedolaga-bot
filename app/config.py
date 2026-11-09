@@ -3,6 +3,7 @@ import os
 import re
 from collections import defaultdict
 from datetime import time
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import ClassVar, Literal
 from urllib.parse import quote as _url_quote, urlparse
@@ -90,10 +91,6 @@ class Settings(BaseSettings):
     # Closed public registration. Existing users keep normal access.
     INVITE_ONLY_ENABLED: bool = False
     INVITE_ONLY_ALLOW_GIFT_LINKS: bool = True
-
-    # Test email account for development/testing (bypasses email verification and SMTP)
-    TEST_EMAIL: str = ''  # e.g., test@example.com
-    TEST_EMAIL_PASSWORD: str = ''  # Password for test account
 
     SUPPORT_USERNAME: str = '@support'
     # Публичные контакты сервиса, которые кабинет отдаёт в GET /info/service.
@@ -1996,9 +1993,7 @@ class Settings(BaseSettings):
         """
         if telegram_id and telegram_id in self.get_admin_ids():
             return True
-        if email and email.lower() in [e.lower() for e in self.get_admin_emails()]:
-            return True
-        return False
+        return bool(email and email.lower() in [e.lower() for e in self.get_admin_emails()])
 
     def get_admin_ids(self) -> list[int]:
         try:
@@ -2028,32 +2023,6 @@ class Settings(BaseSettings):
 
         except (ValueError, AttributeError):
             return []
-
-    def get_test_email(self) -> str | None:
-        """Get test email for development/testing."""
-        email = (self.TEST_EMAIL or '').strip().lower()
-        return email or None
-
-    def get_test_email_password(self) -> str | None:
-        """Get test email password."""
-        password = (self.TEST_EMAIL_PASSWORD or '').strip()
-        return password or None
-
-    def is_test_email(self, email: str) -> bool:
-        """Check if email is the configured test email."""
-        test_email = self.get_test_email()
-        if not test_email:
-            return False
-        return email.lower().strip() == test_email
-
-    def validate_test_email_password(self, email: str, password: str) -> bool:
-        """Validate test email credentials."""
-        if not self.is_test_email(email):
-            return False
-        test_password = self.get_test_email_password()
-        if not test_password:
-            return False
-        return password == test_password
 
     def get_remnawave_auth_params(self) -> dict[str, str | None]:
         return {
@@ -2520,8 +2489,12 @@ class Settings(BaseSettings):
     def kopeks_to_rubles(self, kopeks: int) -> float:
         return kopeks / 100
 
-    def rubles_to_kopeks(self, rubles: float) -> int:
-        return int(rubles * 100)
+    def rubles_to_kopeks(self, rubles: float | str | Decimal) -> int:
+        """Переводит рубли в копейки без двоичной ошибки: ``int(19.99 * 100)`` дал бы 1998."""
+        amount = Decimal(str(rubles))
+        if not amount.is_finite():
+            raise ValueError('Сумма должна быть конечным числом')
+        return int((amount * 100).to_integral_value(rounding=ROUND_HALF_UP))
 
     @staticmethod
     def _normalize_user_tag(value: str | None, setting_name: str) -> str | None:
@@ -2559,9 +2532,7 @@ class Settings(BaseSettings):
         # 'email' means all non-Telegram users (email, google, yandex, discord, vk, etc.)
         if disabled_for == 'email' and auth_type not in (None, 'telegram'):
             return True
-        if disabled_for == 'telegram' and (auth_type is None or auth_type == 'telegram'):
-            return True
-        return False
+        return bool(disabled_for == 'telegram' and (auth_type is None or auth_type == 'telegram'))
 
     def get_paid_subscription_user_tag(self) -> str | None:
         return self._normalize_user_tag(

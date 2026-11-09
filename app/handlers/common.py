@@ -42,22 +42,6 @@ async def handle_webhook_notification_close(
             pass
 
 
-async def handle_unknown_callback(callback: types.CallbackQuery, db_user: User):
-    texts = get_texts(db_user.language if db_user else 'ru')
-
-    await callback.answer(
-        texts.t(
-            'UNKNOWN_CALLBACK_ALERT',
-            '❓ Неизвестная команда. Попробуйте ещё раз.',
-        ),
-        show_alert=True,
-    )
-
-    logger.warning(
-        'Неизвестный callback от пользователя', callback_data=callback.data, from_user_id=callback.from_user.id
-    )
-
-
 async def handle_noop(callback: types.CallbackQuery, db_user: User):
     try:
         await callback.answer()

@@ -121,9 +121,3 @@ class ServerSyncResponse(BaseModel):
     updated: int
     removed: int
     message: str
-
-
-class ServerSyncRequest(BaseModel):
-    """Request to sync servers."""
-
-    force: bool = False  # Force sync even if recently synced

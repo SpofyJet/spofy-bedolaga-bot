@@ -1,4 +1,3 @@
-from collections.abc import Sequence
 from datetime import UTC, datetime
 
 import structlog
@@ -6,7 +5,7 @@ from sqlalchemy import and_, delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import ContestAttempt, ContestRound, ContestTemplate, User
+from app.database.models import ContestAttempt, ContestRound, ContestTemplate
 
 
 logger = structlog.get_logger(__name__)
@@ -148,13 +147,6 @@ async def finish_round(db: AsyncSession, round_obj: ContestRound) -> ContestRoun
     return round_obj
 
 
-async def increment_winner_count(db: AsyncSession, round_obj: ContestRound) -> ContestRound:
-    round_obj.winners_count += 1
-    await db.commit()
-    await db.refresh(round_obj)
-    return round_obj
-
-
 # Attempts
 async def get_attempt(db: AsyncSession, round_id: int, user_id: int) -> ContestAttempt | None:
     result = await db.execute(
@@ -209,17 +201,3 @@ async def clear_attempts(db: AsyncSession, round_id: int) -> int:
     deleted_count = result.rowcount
     await db.commit()
     return deleted_count
-
-
-async def list_winners(db: AsyncSession, round_id: int) -> Sequence[tuple[User, ContestAttempt]]:
-    result = await db.execute(
-        select(User, ContestAttempt)
-        .join(ContestAttempt, ContestAttempt.user_id == User.id)
-        .where(
-            and_(
-                ContestAttempt.round_id == round_id,
-                ContestAttempt.is_winner.is_(True),
-            )
-        )
-    )
-    return result.all()

@@ -167,27 +167,3 @@ async def deactivate_payment_method(
         )
         return True
     return False
-
-
-async def deactivate_all_user_payment_methods(
-    db: AsyncSession,
-    user_id: int,
-) -> int:
-    """Деактивировать все методы оплаты пользователя. Возвращает количество деактивированных."""
-    result = await db.execute(
-        update(SavedPaymentMethod)
-        .where(
-            SavedPaymentMethod.user_id == user_id,
-            SavedPaymentMethod.is_active == True,
-        )
-        .values(is_active=False, updated_at=datetime.now(UTC))
-    )
-    await db.commit()
-
-    if result.rowcount > 0:
-        logger.info(
-            'Все методы оплаты пользователя деактивированы',
-            user_id=user_id,
-            count=result.rowcount,
-        )
-    return result.rowcount

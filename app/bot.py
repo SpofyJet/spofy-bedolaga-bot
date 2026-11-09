@@ -1,5 +1,5 @@
 import structlog
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.storage.redis import RedisStorage
 
@@ -89,13 +89,6 @@ from app.utils.rich_menu import forget_live_menu_on_callback
 patch_message_methods()
 
 logger = structlog.get_logger(__name__)
-
-
-async def debug_callback_handler(callback: types.CallbackQuery):
-    logger.info('🔍 DEBUG CALLBACK:')
-    logger.info('Data', callback_data=callback.data)
-    logger.info('User', from_user_id=callback.from_user.id)
-    logger.info('Username', username=callback.from_user.username)
 
 
 async def setup_bot(memory: MemoryStorage | None = None) -> tuple[Bot, Dispatcher]:
@@ -322,25 +315,3 @@ async def setup_bot(memory: MemoryStorage | None = None) -> tuple[Bot, Dispatche
     logger.info('Бот успешно настроен')
 
     return bot, dp
-
-
-async def shutdown_bot():
-    try:
-        from app.services.remnawave_retry_queue import remnawave_retry_queue
-
-        await remnawave_retry_queue.stop()
-        logger.info('RemnaWave retry queue остановлен')
-    except Exception as e:
-        logger.error('Ошибка остановки RemnaWave retry queue', error=e)
-
-    try:
-        await maintenance_service.stop_monitoring()
-        logger.info('Мониторинг техработ остановлен')
-    except Exception as e:
-        logger.error('Ошибка остановки мониторинга', error=e)
-
-    try:
-        await cache.close()
-        logger.info('Соединения с кешем закрыты')
-    except Exception as e:
-        logger.error('Ошибка закрытия кеша', error=e)

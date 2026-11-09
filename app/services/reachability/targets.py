@@ -23,7 +23,6 @@ KIND_CIDR = 'cidr'
 PURPOSE_BS = 'bs'
 PURPOSE_REGULAR = 'regular'
 PURPOSE_UNKNOWN = 'unknown'
-PURPOSES = (PURPOSE_BS, PURPOSE_REGULAR, PURPOSE_UNKNOWN)
 
 _BS_MARKERS = ('бс', 'bs', 'lte', 'whitelist', 'белый')
 _HOSTNAME_RE = re.compile(r'^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$')

@@ -1,4 +1,3 @@
-import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -15,6 +14,7 @@ from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import AsyncSessionLocal
 from app.services.remnawave_service import RemnaWaveService
 from app.states import RegistrationStates
+from app.utils.background import spawn_background_task
 from app.utils.check_reg_process import is_registration_process
 from app.utils.support_access import is_payment_support_handler
 from app.utils.validators import sanitize_telegram_name
@@ -239,7 +239,7 @@ class AuthMiddleware(BaseMiddleware):
                         description = settings.format_remnawave_user_description(
                             full_name=db_user.full_name, username=db_user.username, telegram_id=db_user.telegram_id
                         )
-                        asyncio.create_task(
+                        spawn_background_task(
                             _refresh_remnawave_description(
                                 remnawave_id=db_user.remnawave_id,
                                 description=description,
@@ -256,7 +256,7 @@ class AuthMiddleware(BaseMiddleware):
                         )
                         for sub in getattr(db_user, 'subscriptions', None) or []:
                             if sub.remnawave_id and sub.remnawave_id != db_user.remnawave_id:
-                                asyncio.create_task(
+                                spawn_background_task(
                                     _refresh_remnawave_description(
                                         remnawave_id=sub.remnawave_id,
                                         description=description,

@@ -116,33 +116,6 @@ async def update_overpay_payment_status(
     return payment
 
 
-async def get_pending_overpay_payments(db: AsyncSession, user_id: int) -> list[OverpayPayment]:
-    """Получает незавершенные платежи пользователя."""
-    result = await db.execute(
-        select(OverpayPayment).where(
-            OverpayPayment.user_id == user_id,
-            OverpayPayment.status == 'pending',
-            OverpayPayment.is_paid == False,
-        )
-    )
-    return list(result.scalars().all())
-
-
-async def get_expired_pending_overpay_payments(
-    db: AsyncSession,
-) -> list[OverpayPayment]:
-    """Получает просроченные платежи в статусе pending."""
-    now = datetime.now(UTC)
-    result = await db.execute(
-        select(OverpayPayment).where(
-            OverpayPayment.status == 'pending',
-            OverpayPayment.is_paid == False,
-            OverpayPayment.expires_at < now,
-        )
-    )
-    return list(result.scalars().all())
-
-
 async def link_overpay_payment_to_transaction(
     db: AsyncSession,
     *,

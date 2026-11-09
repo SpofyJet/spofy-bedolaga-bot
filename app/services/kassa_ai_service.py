@@ -44,7 +44,7 @@ async def get_public_ip() -> str:
     """
     global _cached_public_ip
 
-    env_ip = getattr(settings, 'SERVER_PUBLIC_IP', None)
+    env_ip = settings.SERVER_PUBLIC_IP
     if env_ip:
         return env_ip
 

@@ -53,12 +53,3 @@ def configure_payment_logger(
 
     # Prevent duplication in parent loggers
     _stdlib_payment_logger.propagate = False
-
-
-def get_payment_logger() -> structlog.stdlib.BoundLogger:
-    """Return the payment logger instance.
-
-    Alternative way to obtain the logger for modules that prefer
-    an explicit function call.
-    """
-    return payment_logger

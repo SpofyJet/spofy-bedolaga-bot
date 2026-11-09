@@ -413,28 +413,6 @@ class KassaAiPaymentMixin:
 
         return True
 
-    async def check_kassa_ai_payment_status(
-        self,
-        db: AsyncSession,
-        order_id: str,
-    ) -> dict[str, Any] | None:
-        """
-        Проверяет статус платежа через API.
-
-        Args:
-            db: Сессия БД
-            order_id: Номер заказа
-
-        Returns:
-            Данные о статусе платежа
-        """
-        try:
-            status_data = await kassa_ai_service.get_order_status(order_id)
-            return status_data
-        except Exception as e:
-            logger.exception('KassaAI: ошибка проверки статуса', e=e)
-            return None
-
     async def get_kassa_ai_payment_status(
         self,
         db: AsyncSession,

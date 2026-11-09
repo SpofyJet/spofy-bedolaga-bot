@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 
 import structlog
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.user import get_user_by_remnawave_id
@@ -17,6 +16,7 @@ from app.database.database import AsyncSessionLocal
 from app.external.remnawave_api import RemnaWaveUser, UserStatus
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.remnawave_service import RemnaWaveService
+from app.utils.background import spawn_background_task
 from app.utils.cache import cache, cache_key
 from app.utils.timezone import format_local_datetime, next_local_wall_clock
 
@@ -124,7 +124,7 @@ class TrafficMonitoringServiceV2:
 
     def get_snapshot_ttl_seconds(self) -> int:
         """TTL для snapshot в Redis (по умолчанию 24 часа)"""
-        return getattr(settings, 'TRAFFIC_SNAPSHOT_TTL_HOURS', 24) * 3600
+        return settings.TRAFFIC_SNAPSHOT_TTL_HOURS * 3600
 
     # ============== Redis операции для snapshot ==============
 
@@ -948,10 +948,6 @@ class TrafficMonitoringSchedulerV2:
         """Запускает быструю проверку немедленно"""
         return await self.service.run_fast_check(self.bot)
 
-    async def run_daily_check_now(self) -> list[TrafficViolation]:
-        """Запускает суточную проверку немедленно"""
-        return await self.service.run_daily_check(self.bot)
-
 
 # ============== Обратная совместимость ==============
 
@@ -962,67 +958,6 @@ class TrafficMonitoringService:
     def __init__(self):
         self._v2 = TrafficMonitoringServiceV2()
         self.remnawave_service = self._v2.remnawave_service
-
-    def is_traffic_monitoring_enabled(self) -> bool:
-        # Используем старый параметр или новые
-        return (
-            settings.TRAFFIC_MONITORING_ENABLED
-            or settings.TRAFFIC_FAST_CHECK_ENABLED
-            or settings.TRAFFIC_DAILY_CHECK_ENABLED
-        )
-
-    def get_traffic_threshold_gb(self) -> float:
-        """Возвращает порог трафика"""
-        if settings.TRAFFIC_FAST_CHECK_ENABLED:
-            return settings.TRAFFIC_FAST_CHECK_THRESHOLD_GB
-        return settings.TRAFFIC_THRESHOLD_GB_PER_DAY
-
-    async def check_user_traffic_threshold(
-        self, db: AsyncSession, panel_user_id: int, user_telegram_id: int = None
-    ) -> tuple:
-        """Проверяет трафик одного пользователя (для обратной совместимости)"""
-        try:
-            threshold_gb = self.get_traffic_threshold_gb()
-            threshold_bytes = threshold_gb * (1024**3)
-
-            # Получаем пользователя из Remnawave
-            async with self.remnawave_service.get_api_client() as api:
-                user = await api.get_user_by_id(panel_user_id)
-
-            if not user or not user.user_traffic:
-                return False, {'total_gb': 0, 'nodes': []}
-
-            used_bytes = user.user_traffic.used_traffic_bytes or 0
-            total_gb = round(used_bytes / (1024**3), 2)
-
-            is_exceeded = used_bytes > threshold_bytes
-
-            traffic_info = {'total_gb': total_gb, 'nodes': [], 'threshold_gb': threshold_gb}
-
-            return is_exceeded, traffic_info
-
-        except Exception as e:
-            logger.error('Ошибка проверки трафика для пользователя', panel_user_id=panel_user_id, error=e)
-            return False, {'total_gb': 0, 'nodes': []}
-
-    async def process_suspicious_traffic(self, db: AsyncSession, panel_user_id: int, traffic_info: dict, bot):
-        """Отправляет уведомление о подозрительном трафике"""
-        violation = TrafficViolation(
-            user_id=panel_user_id,
-            telegram_id=None,
-            full_name=None,
-            username=None,
-            used_traffic_gb=traffic_info.get('total_gb', 0),
-            threshold_gb=traffic_info.get('threshold_gb', self.get_traffic_threshold_gb()),
-            last_node_uuid=None,
-            last_node_name=None,
-            check_type='manual',
-        )
-        await self._v2._send_violation_notifications([violation], bot)
-
-    async def check_all_users_traffic(self, db: AsyncSession, bot):
-        """Старый метод — теперь вызывает быструю проверку"""
-        await self._v2.run_fast_check(bot)
 
 
 # Глобальные экземпляры (создаём до класса-обёртки)
@@ -1064,19 +999,11 @@ class TrafficMonitoringScheduler:
             info.append(f'Суточная: в {time_str}, порог {threshold} ГБ')
         return '; '.join(info) if info else 'Отключен'
 
-    async def _should_send_notification(self, panel_user_id: int) -> bool:
-        """Для обратной совместимости"""
-        return await self._v2_service.should_send_notification(panel_user_id)
-
-    async def _record_notification(self, panel_user_id: int):
-        """Для обратной совместимости"""
-        await self._v2_service.record_notification(panel_user_id)
-
     async def start_monitoring(self):
         await self._v2_scheduler.start()
 
     def stop_monitoring(self):
-        asyncio.create_task(self._v2_scheduler.stop())
+        spawn_background_task(self._v2_scheduler.stop())
 
 
 # Обратная совместимость

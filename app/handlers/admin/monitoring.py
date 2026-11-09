@@ -21,6 +21,7 @@ from app.services.traffic_monitoring_service import (
     traffic_monitoring_scheduler,
 )
 from app.states import AdminStates
+from app.utils.background import spawn_background_task
 from app.utils.decorators import admin_required
 from app.utils.pagination import paginate_list
 from app.utils.timezone import format_local_datetime
@@ -659,7 +660,7 @@ async def start_monitoring_callback(callback: CallbackQuery):
         if not monitoring_service.bot:
             monitoring_service.bot = callback.bot
 
-        asyncio.create_task(monitoring_service.start_monitoring())
+        spawn_background_task(monitoring_service.start_monitoring())
 
         await callback.answer('✅ Мониторинг запущен!')
 
@@ -930,7 +931,7 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
 
 🔧 <b>Система:</b>
 • Интервал: {settings.MONITORING_INTERVAL} мин
-• Уведомления: {'🟢 Вкл' if getattr(settings, 'ENABLE_NOTIFICATIONS', True) else '🔴 Выкл'}
+• Уведомления: {'🟢 Вкл' if settings.ENABLE_NOTIFICATIONS else '🔴 Выкл'}
 • Автооплата: {', '.join(map(str, settings.get_autopay_warning_days()))} дней
 """
 
@@ -1055,7 +1056,7 @@ async def nalogo_force_process_callback(callback: CallbackQuery):
 
 🔧 <b>Система:</b>
 • Интервал: {settings.MONITORING_INTERVAL} мин
-• Уведомления: {'🟢 Вкл' if getattr(settings, 'ENABLE_NOTIFICATIONS', True) else '🔴 Выкл'}
+• Уведомления: {'🟢 Вкл' if settings.ENABLE_NOTIFICATIONS else '🔴 Выкл'}
 • Автооплата: {', '.join(map(str, settings.get_autopay_warning_days()))} дней
 """
 
@@ -1327,7 +1328,7 @@ async def receipts_link_old_callback(callback: CallbackQuery):
             incomes_by_amount = {}
             for income in incomes:
                 amount = float(income.get('totalAmount', income.get('amount', 0)))
-                amount_kopeks = int(amount * 100)
+                amount_kopeks = settings.rubles_to_kopeks(amount)
                 if amount_kopeks not in incomes_by_amount:
                     incomes_by_amount[amount_kopeks] = []
                 incomes_by_amount[amount_kopeks].append(income)

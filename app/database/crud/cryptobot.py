@@ -1,7 +1,7 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -78,16 +78,6 @@ async def get_cryptobot_payment_by_invoice_id_for_update(db: AsyncSession, invoi
     return result.scalar_one_or_none()
 
 
-async def get_cryptobot_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> CryptoBotPayment | None:
-    result = await db.execute(
-        select(CryptoBotPayment)
-        .where(CryptoBotPayment.id == payment_id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    return result.scalar_one_or_none()
-
-
 async def update_cryptobot_payment_status(
     db: AsyncSession,
     invoice_id: str,
@@ -133,28 +123,3 @@ async def link_cryptobot_payment_to_transaction(
 
     logger.info('Связан CryptoBot платеж с транзакцией', invoice_id=invoice_id, transaction_id=transaction_id)
     return payment
-
-
-async def get_user_cryptobot_payments(
-    db: AsyncSession, user_id: int, limit: int = 50, offset: int = 0
-) -> list[CryptoBotPayment]:
-    result = await db.execute(
-        select(CryptoBotPayment)
-        .where(CryptoBotPayment.user_id == user_id)
-        .order_by(CryptoBotPayment.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
-    return result.scalars().all()
-
-
-async def get_pending_cryptobot_payments(db: AsyncSession, older_than_hours: int = 24) -> list[CryptoBotPayment]:
-    cutoff_time = datetime.now(UTC) - timedelta(hours=older_than_hours)
-
-    result = await db.execute(
-        select(CryptoBotPayment)
-        .options(selectinload(CryptoBotPayment.user))
-        .where(and_(CryptoBotPayment.status == 'active', CryptoBotPayment.created_at < cutoff_time))
-        .order_by(CryptoBotPayment.created_at)
-    )
-    return result.scalars().all()

@@ -17,8 +17,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database.models import Base, Subscription, Transaction, TransactionType, User
-from app.services import spofy_subpage_service as completion
-from app.services import subscription_auto_purchase_service as auto_service
+from app.services import spofy_subpage_service as completion, subscription_auto_purchase_service as auto_service
 from app.services.user_cart_service import UserCartService
 from tests.fixtures.sqlite_memory import memory_session
 

@@ -110,27 +110,6 @@ def apply_percentage_discount(amount: int, percent: int) -> tuple[int, int]:
     return discounted, amount - discounted
 
 
-def resolve_discount_percent(
-    user: Optional['User'],
-    promo_group: Optional['PromoGroup'],
-    category: str,
-    *,
-    period_days: int | None = None,
-) -> int:
-    """Определяет размер скидки для указанной категории."""
-
-    if user is not None:
-        try:
-            return user.get_promo_discount(category, period_days)
-        except AttributeError:  # pragma: no cover - defensive guard
-            pass
-
-    if promo_group is not None:
-        return promo_group.get_discount_percent(category, period_days)
-
-    return 0
-
-
 async def compute_simple_subscription_price(
     db: AsyncSession,
     params: dict[str, Any],

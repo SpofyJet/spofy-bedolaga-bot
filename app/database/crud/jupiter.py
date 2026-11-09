@@ -118,31 +118,6 @@ async def update_jupiter_payment_status(
     return payment
 
 
-async def get_pending_jupiter_payments(db: AsyncSession, user_id: int) -> list[JupiterPayment]:
-    """Возвращает незавершённые платежи пользователя."""
-    result = await db.execute(
-        select(JupiterPayment).where(
-            JupiterPayment.user_id == user_id,
-            JupiterPayment.status == 'pending',
-            JupiterPayment.is_paid == False,
-        )
-    )
-    return list(result.scalars().all())
-
-
-async def get_expired_pending_jupiter_payments(db: AsyncSession) -> list[JupiterPayment]:
-    """Возвращает просроченные платежи в статусе pending."""
-    now = datetime.now(UTC)
-    result = await db.execute(
-        select(JupiterPayment).where(
-            JupiterPayment.status == 'pending',
-            JupiterPayment.is_paid == False,
-            JupiterPayment.expires_at < now,
-        )
-    )
-    return list(result.scalars().all())
-
-
 async def link_jupiter_payment_to_transaction(
     db: AsyncSession,
     *,

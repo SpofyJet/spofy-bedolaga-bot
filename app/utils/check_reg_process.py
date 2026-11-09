@@ -24,11 +24,8 @@ def is_registration_process(event: TelegramObject, current_state: str | None) ->
     if current_state in registration_states:
         return True
 
-    if (
+    return bool(
         isinstance(event, CallbackQuery)
         and event.data
         and (event.data in registration_callbacks or event.data.startswith(language_select_prefix))
-    ):
-        return True
-
-    return False
+    )

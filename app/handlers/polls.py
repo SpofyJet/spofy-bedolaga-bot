@@ -15,6 +15,7 @@ from app.database.crud.poll import (
 from app.database.models import PollQuestion, User
 from app.localization.texts import get_texts
 from app.services.poll_service import get_next_question, get_question_option, reward_user_for_poll
+from app.utils.background import spawn_background_task
 
 
 logger = structlog.get_logger(__name__)
@@ -234,7 +235,7 @@ async def handle_poll_answer(
     ):
         await callback.answer(texts.t('POLL_COMPLETED', '🙏 Спасибо за участие в опросе!'))
         return
-    asyncio.create_task(_delete_message_later(callback.bot, callback.message.chat.id, callback.message.message_id))
+    spawn_background_task(_delete_message_later(callback.bot, callback.message.chat.id, callback.message.message_id))
     await callback.answer()
 
 

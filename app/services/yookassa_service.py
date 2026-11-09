@@ -70,8 +70,8 @@ def _patch_yookassa_timeout() -> None:
     if getattr(ApiClient, '_timeout_patched', False):
         return
 
-    connect_timeout = max(1, int(getattr(settings, 'YOOKASSA_HTTP_CONNECT_TIMEOUT', 5) or 5))
-    read_timeout = max(1, int(getattr(settings, 'YOOKASSA_HTTP_READ_TIMEOUT', 15) or 15))
+    connect_timeout = max(1, int(settings.YOOKASSA_HTTP_CONNECT_TIMEOUT or 5))
+    read_timeout = max(1, int(settings.YOOKASSA_HTTP_READ_TIMEOUT or 15))
 
     def execute_with_timeout(self, body, method, path, query_params, request_headers):
         session = self.get_session()
@@ -118,7 +118,7 @@ def _patch_yookassa_timeout() -> None:
 # YK entirely; the floor matches the same defensive pattern used for
 # the timeout values above.
 def _resolve_max_workers() -> int:
-    raw = getattr(settings, 'YOOKASSA_MAX_CONCURRENT_REQUESTS', 4)
+    raw = settings.YOOKASSA_MAX_CONCURRENT_REQUESTS
     try:
         value = int(raw or 4)
     except (TypeError, ValueError):
@@ -144,9 +144,9 @@ class YooKassaService:
         configured_return_url: str | None = None,
         bot_username_for_default_return: str | None = None,
     ):
-        shop_id = shop_id or getattr(settings, 'YOOKASSA_SHOP_ID', None)
-        secret_key = secret_key or getattr(settings, 'YOOKASSA_SECRET_KEY', None)
-        configured_return_url = configured_return_url or getattr(settings, 'YOOKASSA_RETURN_URL', None)
+        shop_id = shop_id or settings.YOOKASSA_SHOP_ID
+        secret_key = secret_key or settings.YOOKASSA_SECRET_KEY
+        configured_return_url = configured_return_url or settings.YOOKASSA_RETURN_URL
 
         self.configured = False
 
@@ -225,9 +225,9 @@ class YooKassaService:
                     'description': description[:128],
                     'quantity': '1.00',
                     'amount': {'value': str(round(amount, 2)), 'currency': currency.upper()},
-                    'vat_code': int(getattr(settings, 'YOOKASSA_VAT_CODE', 1)),
-                    'payment_mode': getattr(settings, 'YOOKASSA_PAYMENT_MODE', 'full_payment'),
-                    'payment_subject': getattr(settings, 'YOOKASSA_PAYMENT_SUBJECT', 'service'),
+                    'vat_code': int(settings.YOOKASSA_VAT_CODE),
+                    'payment_mode': settings.YOOKASSA_PAYMENT_MODE,
+                    'payment_subject': settings.YOOKASSA_PAYMENT_SUBJECT,
                 }
             ]
 
@@ -339,9 +339,9 @@ class YooKassaService:
                     'description': description[:128],
                     'quantity': '1.00',
                     'amount': {'value': str(round(amount, 2)), 'currency': currency.upper()},
-                    'vat_code': int(getattr(settings, 'YOOKASSA_VAT_CODE', 1)),
-                    'payment_mode': getattr(settings, 'YOOKASSA_PAYMENT_MODE', 'full_payment'),
-                    'payment_subject': getattr(settings, 'YOOKASSA_PAYMENT_SUBJECT', 'service'),
+                    'vat_code': int(settings.YOOKASSA_VAT_CODE),
+                    'payment_mode': settings.YOOKASSA_PAYMENT_MODE,
+                    'payment_subject': settings.YOOKASSA_PAYMENT_SUBJECT,
                 }
             ]
 
@@ -518,9 +518,9 @@ class YooKassaService:
                     'description': description[:128],
                     'quantity': '1.00',
                     'amount': {'value': str(round(amount, 2)), 'currency': currency.upper()},
-                    'vat_code': str(getattr(settings, 'YOOKASSA_VAT_CODE', 1)),
-                    'payment_mode': getattr(settings, 'YOOKASSA_PAYMENT_MODE', 'full_payment'),
-                    'payment_subject': getattr(settings, 'YOOKASSA_PAYMENT_SUBJECT', 'service'),
+                    'vat_code': str(settings.YOOKASSA_VAT_CODE),
+                    'payment_mode': settings.YOOKASSA_PAYMENT_MODE,
+                    'payment_subject': settings.YOOKASSA_PAYMENT_SUBJECT,
                 }
             ]
             receipt_data_dict: dict[str, Any] = {'customer': customer_contact_for_receipt, 'items': receipt_items_list}

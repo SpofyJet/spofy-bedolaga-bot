@@ -12,6 +12,7 @@ from app.database.crud.subscription import (
     device_addons_carry_over,
 )
 
+
 STANDARD = SimpleNamespace(device_limit=3, device_price_kopeks=5000, device_price_flat=False, max_device_limit=None)
 BYPASS = SimpleNamespace(device_limit=3, device_price_kopeks=5000, device_price_flat=False, max_device_limit=None)
 ULTIMA = SimpleNamespace(device_limit=5, device_price_kopeks=100000, device_price_flat=True, max_device_limit=None)

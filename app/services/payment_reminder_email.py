@@ -68,7 +68,7 @@ async def send_payment_reminder_email(
     subject, body, button, footer = render_reminder(
         kind, language, amount_kopeks=amount_kopeks, description=description, minutes=minutes
     )
-    cabinet_url = (getattr(settings, 'CABINET_URL', '') or '').rstrip('/')
+    cabinet_url = (settings.CABINET_URL or '').rstrip('/')
     path = '/balance/top-up' if kind == 'payment' else '/subscription/purchase'
     # Оплата: сразу экран способов оплаты с той же суммой, без повторного ввода.
     query = f'?amount={(amount_kopeks + 99) // 100}' if kind == 'payment' and amount_kopeks > 0 else ''

@@ -101,11 +101,6 @@ async def get_current_cabinet_user(
     Raises:
         HTTPException: If token is invalid, expired, or user not found
     """
-    # Check maintenance mode first (except for admins - checked later)
-    if maintenance_service.is_maintenance_active():
-        # We need to check token first to see if user is admin
-        pass  # Will check after getting user
-
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -322,10 +317,9 @@ async def get_current_cabinet_user(
     # поверхности — по ней карточка показывает «последнюю активность», а сторож
     # неактивных решает, кого удалять; cabinet_last_login — только кабинет.
     now = datetime.now(UTC)
-    touched = mark_user_seen(user, now=now)
+    mark_user_seen(user, now=now)
     if not user.cabinet_last_login or (now - user.cabinet_last_login).total_seconds() > 300:
         user.cabinet_last_login = now
-        touched = True
     # Коммитим всегда, даже без изменений: иначе транзакция чтения остаётся открытой и
     # соединение занято всё время обработчика, в том числе на вызовах панели и Telegram.
     try:

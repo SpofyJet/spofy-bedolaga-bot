@@ -1902,7 +1902,7 @@ class MonitoringService:
 
                     autopay_period = (
                         resolve_autopay_period_candidate(getattr(subscription, 'autopay_period_days', None), tariff)
-                        or resolve_autopay_period_candidate(getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0), tariff)
+                        or resolve_autopay_period_candidate(settings.DEFAULT_AUTOPAY_PERIOD_DAYS, tariff)
                         or (tariff.get_shortest_period() if tariff else None)
                         or 30
                     )
@@ -2237,7 +2237,7 @@ class MonitoringService:
                 if prices:
                     period_days = (
                         getattr(subscription, 'autopay_period_days', None)
-                        or getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0)
+                        or settings.DEFAULT_AUTOPAY_PERIOD_DAYS
                         or (tariff_for_price.get_shortest_period() if tariff_for_price else None)
                         or 30
                     )
@@ -3085,7 +3085,7 @@ class MonitoringService:
                 return
 
             # Only alert for subscriptions expiring soon (default 3 days)
-            expiry_days = getattr(settings, 'LOW_BALANCE_ALERT_EXPIRY_DAYS', 3)
+            expiry_days = settings.LOW_BALANCE_ALERT_EXPIRY_DAYS
             expiry_threshold = datetime.now(UTC) + timedelta(days=expiry_days)
 
             result = await db.execute(
@@ -3967,7 +3967,7 @@ class MonitoringService:
 
                 sla_enabled_runtime = SupportSettingsService.get_sla_enabled()
             except Exception:
-                sla_enabled_runtime = getattr(settings, 'SUPPORT_TICKET_SLA_ENABLED', False)
+                sla_enabled_runtime = settings.SUPPORT_TICKET_SLA_ENABLED
             if not sla_enabled_runtime:
                 return
             if not self.bot:
@@ -3980,8 +3980,8 @@ class MonitoringService:
 
                 sla_minutes = max(1, int(SupportSettingsService.get_sla_minutes()))
             except Exception:
-                sla_minutes = max(1, int(getattr(settings, 'SUPPORT_TICKET_SLA_MINUTES', 60)))
-            cooldown_minutes = max(1, int(getattr(settings, 'SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES', 30)))
+                sla_minutes = max(1, int(settings.SUPPORT_TICKET_SLA_MINUTES))
+            cooldown_minutes = max(1, int(settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES))
             now = datetime.now(UTC)
             stale_before = now - timedelta(minutes=sla_minutes)
             cooldown_before = now - timedelta(minutes=cooldown_minutes)
@@ -4056,7 +4056,7 @@ class MonitoringService:
 
     async def _sla_loop(self):
         try:
-            interval_seconds = max(10, int(getattr(settings, 'SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS', 300)))
+            interval_seconds = max(10, int(settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS))
         except Exception:
             interval_seconds = 60
         while self.is_running:

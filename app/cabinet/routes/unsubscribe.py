@@ -37,7 +37,7 @@ router = APIRouter(prefix='/public', tags=['Cabinet:Public'])
 def _page(title: str, message: str, *, ok: bool) -> HTMLResponse:
     """Самодостаточная страница: письма читают где угодно, внешние ресурсы не тянем."""
     service_name = html.escape(settings.SMTP_FROM_NAME or 'VPN')
-    cabinet_url = (getattr(settings, 'CABINET_URL', '') or '').strip()
+    cabinet_url = (settings.CABINET_URL or '').strip()
     accent = '#16a34a' if ok else '#dc2626'
     link = (
         f'<p style="margin:22px 0 0"><a href="{html.escape(cabinet_url, quote=True)}" '
@@ -65,7 +65,7 @@ def _page(title: str, message: str, *, ok: bool) -> HTMLResponse:
 
 
 async def _unsubscribe(token: str, db: AsyncSession) -> bool:
-    if not getattr(settings, 'EMAIL_UNSUBSCRIBE_ENABLED', True):
+    if not settings.EMAIL_UNSUBSCRIBE_ENABLED:
         return False
     return await apply_unsubscribe(db, token)
 

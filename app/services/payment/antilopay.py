@@ -511,16 +511,3 @@ class AntilopayPaymentMixin:
         )
 
         return True
-
-    async def check_antilopay_payment_status(
-        self,
-        db: AsyncSession,
-        order_id: str,
-    ) -> dict[str, Any] | None:
-        """Проверяет статус платежа через API Antilopay."""
-        try:
-            result = await antilopay_service.check_payment(order_id=order_id)
-            return result
-        except Exception as e:
-            logger.error('Antilopay: ошибка проверки статуса', order_id=order_id, error=e)
-            return None

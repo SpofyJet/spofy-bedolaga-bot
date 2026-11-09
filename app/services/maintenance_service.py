@@ -7,6 +7,7 @@ import structlog
 
 from app.config import settings
 from app.external.remnawave_api import RemnaWaveAPI, test_api_connection
+from app.utils.background import spawn_background_task
 from app.utils.cache import cache
 from app.utils.timezone import format_local_datetime
 
@@ -37,7 +38,7 @@ class MaintenanceService:
     def set_bot(self, bot):
         self._bot = bot
         if settings.is_maintenance_mode() and not self._status.is_active:
-            asyncio.create_task(self.enable_maintenance(reason='Включено из системных настроек', auto=False))
+            spawn_background_task(self.enable_maintenance(reason='Включено из системных настроек', auto=False))
         logger.info('Бот установлен для maintenance_service')
 
     @property
@@ -495,28 +496,6 @@ API снова отвечает на запросы.""",
                 'checked_at': end_time,
                 'consecutive_failures': self._status.consecutive_failures,
             }
-
-    async def send_remnawave_status_notification(self, status: str, details: str = '') -> bool:
-        try:
-            status_emojis = {'online': '🟢', 'offline': '🔴', 'warning': '🟡', 'error': '⚠️'}
-
-            emoji = status_emojis.get(status, 'ℹ️')
-
-            message = f"""Статус панели Remnawave изменился
-
-{emoji} <b>Статус:</b> {status.upper()}
-🔗 <b>URL:</b> {settings.REMNAWAVE_API_URL}
-{details}"""
-
-            alert_type = 'error' if status in ['offline', 'error'] else 'info'
-            await self._notify_admins(message, alert_type)
-
-            logger.info('Отправлено уведомление о статусе Remnawave', status=status)
-            return True
-
-        except Exception as e:
-            logger.error('Ошибка отправки уведомления о статусе Remnawave', error=e)
-            return False
 
 
 maintenance_service = MaintenanceService()

@@ -171,11 +171,7 @@ class DonutPaymentMixin:
     def _build_donut_callback_url() -> str | None:
         """Собирает абсолютный callback URL для Donut."""
         webhook_path = settings.DONUT_WEBHOOK_PATH or '/donut-webhook'
-        base = (
-            getattr(settings, 'WEBHOOK_URL', None)
-            or getattr(settings, 'WEB_API_BASE_URL', None)
-            or getattr(settings, 'CABINET_URL', None)
-        )
+        base = settings.WEBHOOK_URL or getattr(settings, 'WEB_API_BASE_URL', None) or settings.CABINET_URL
         if not base:
             return None
         return f'{base.rstrip("/")}{webhook_path if webhook_path.startswith("/") else "/" + webhook_path}'
@@ -481,15 +477,3 @@ class DonutPaymentMixin:
         )
 
         return True
-
-    async def check_donut_payment_status(
-        self,
-        db: AsyncSession,
-        transaction_id: str,
-    ) -> dict[str, Any] | None:
-        """Запрос статуса платежа через API Donut."""
-        try:
-            return await donut_service.check_payment(transaction_id=transaction_id)
-        except Exception as e:
-            logger.error('Donut: ошибка проверки статуса', transaction_id=transaction_id, error=e)
-            return None

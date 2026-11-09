@@ -24,6 +24,7 @@ from app.database.crud.tariff import (
 from app.database.models import PromoGroup, Subscription, SubscriptionStatus, Tariff, Transaction, TransactionType, User
 from app.services.panel_sync import patch_panel_squads
 from app.services.tariff_squad_sync import sync_tariff_squads_in_background
+from app.utils.background import spawn_background_task
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.tariffs import (
@@ -477,7 +478,7 @@ async def update_existing_tariff(
         'external_squad_uuid' in request.model_fields_set and tariff.external_squad_uuid != old_external_squad
     )
     if squads_changed or ext_squad_changed:
-        asyncio.create_task(
+        spawn_background_task(
             _background_sync_squads(tariff_id, admin.id),
             name=f'sync-squads-tariff-{tariff_id}',
         )

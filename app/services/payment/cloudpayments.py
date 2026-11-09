@@ -148,7 +148,7 @@ class CloudPaymentsPaymentMixin:
         test_mode = webhook_data.get('test_mode', False)
 
         # Reject test-mode payments when not in test mode
-        if test_mode and not getattr(settings, 'CLOUDPAYMENTS_TEST_MODE', False):
+        if test_mode and not settings.CLOUDPAYMENTS_TEST_MODE:
             logger.warning(
                 'CloudPayments: rejecting test_mode payment in production',
                 invoice_id=invoice_id,

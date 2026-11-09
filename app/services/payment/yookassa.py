@@ -411,7 +411,7 @@ class YooKassaPaymentMixin:
                 return True
 
             # Reject test-mode payments in production
-            if getattr(payment, 'test_mode', False) and not getattr(settings, 'YOOKASSA_TEST_MODE', False):
+            if getattr(payment, 'test_mode', False) and not settings.YOOKASSA_TEST_MODE:
                 logger.warning(
                     'YooKassa: rejecting test_mode payment in production',
                     yookassa_payment_id=payment.yookassa_payment_id,

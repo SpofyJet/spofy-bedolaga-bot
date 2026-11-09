@@ -227,18 +227,6 @@ async def get_wheel_spin_by_charge_id(db: AsyncSession, telegram_charge_id: str)
     return result.scalar_one_or_none()
 
 
-async def mark_spin_applied(db: AsyncSession, spin_id: int) -> WheelSpin | None:
-    """Отметить спин как примененный."""
-    result = await db.execute(select(WheelSpin).where(WheelSpin.id == spin_id))
-    spin = result.scalar_one_or_none()
-    if spin:
-        spin.is_applied = True
-        spin.applied_at = datetime.now(UTC)
-        await db.commit()
-        await db.refresh(spin)
-    return spin
-
-
 async def get_user_spins_today(db: AsyncSession, user_id: int) -> int:
     """Получить количество спинов пользователя за сегодня."""
     today_start = local_day_start()

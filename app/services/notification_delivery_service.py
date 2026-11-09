@@ -100,10 +100,7 @@ class NotificationDeliveryService:
             user
         ):
             return False
-        if notification_type is NotificationType.PROMO_OFFER and not is_promo_offers_enabled(user):
-            return False
-
-        return True
+        return not (notification_type is NotificationType.PROMO_OFFER and not is_promo_offers_enabled(user))
 
     @property
     def email_service(self):
@@ -400,7 +397,7 @@ class NotificationDeliveryService:
 
             # Inject common context values used across all email templates
             context = {
-                'cabinet_url': getattr(settings, 'CABINET_URL', '') or '',
+                'cabinet_url': settings.CABINET_URL or '',
                 'username': user.first_name or user.username or '',
                 'email': user.email or '',
                 'unsubscribe_url': unsubscribe_url,
@@ -497,34 +494,6 @@ class NotificationDeliveryService:
     # Convenience methods for common notification types
     # ============================================================================
 
-    async def notify_balance_topup(
-        self,
-        user: User,
-        amount_kopeks: int,
-        new_balance_kopeks: int,
-        bot: Bot | None = None,
-        telegram_message: str | None = None,
-        telegram_markup: Any | None = None,
-    ) -> bool:
-        """Notify user about balance top-up."""
-        context = {
-            'amount_kopeks': amount_kopeks,
-            'amount_rubles': amount_kopeks / 100,
-            'new_balance_kopeks': new_balance_kopeks,
-            'new_balance_rubles': new_balance_kopeks / 100,
-            'formatted_amount': settings.format_price(amount_kopeks),
-            'formatted_balance': settings.format_price(new_balance_kopeks),
-        }
-
-        return await self.send_notification(
-            user=user,
-            notification_type=NotificationType.BALANCE_TOPUP,
-            context=context,
-            bot=bot,
-            telegram_message=telegram_message,
-            telegram_markup=telegram_markup,
-        )
-
     async def notify_subscription_expiring(
         self,
         user: User,
@@ -547,23 +516,6 @@ class NotificationDeliveryService:
             user=user,
             notification_type=NotificationType.SUBSCRIPTION_EXPIRING,
             context=context,
-            bot=bot,
-            telegram_message=telegram_message,
-            telegram_markup=telegram_markup,
-        )
-
-    async def notify_subscription_expired(
-        self,
-        user: User,
-        bot: Bot | None = None,
-        telegram_message: str | None = None,
-        telegram_markup: Any | None = None,
-    ) -> bool:
-        """Notify user about expired subscription."""
-        return await self.send_notification(
-            user=user,
-            notification_type=NotificationType.SUBSCRIPTION_EXPIRED,
-            context={},
             bot=bot,
             telegram_message=telegram_message,
             telegram_markup=telegram_markup,

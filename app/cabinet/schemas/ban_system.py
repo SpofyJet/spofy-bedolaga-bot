@@ -218,28 +218,6 @@ class BanAgentsListResponse(BaseModel):
 # === Traffic ===
 
 
-class BanTrafficStats(BaseModel):
-    """Traffic statistics."""
-
-    total_bytes: int = 0
-    upload_bytes: int = 0
-    download_bytes: int = 0
-    total_users: int = 0
-    violators_count: int = 0
-
-
-class BanTrafficUserItem(BaseModel):
-    """User traffic information."""
-
-    username: str
-    email: str | None = None
-    total_bytes: int = 0
-    upload_bytes: int = 0
-    download_bytes: int = 0
-    limit_bytes: int | None = None
-    is_over_limit: bool = False
-
-
 class BanTrafficViolationItem(BaseModel):
     """Traffic limit violation entry."""
 
@@ -299,12 +277,6 @@ class BanSettingsResponse(BaseModel):
     """All settings response."""
 
     settings: list[BanSettingDefinition] = []
-
-
-class BanSettingUpdateRequest(BaseModel):
-    """Request to update a setting."""
-
-    value: Any
 
 
 class BanWhitelistRequest(BaseModel):

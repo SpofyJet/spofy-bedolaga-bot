@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import ipaddress
 import json
 import re
 import ssl
@@ -384,6 +385,7 @@ HAPP_CRYPTO_V4_DEEP_LINK_PREFIX = 'happ://crypt4/'
 # Официальный Happ crypto API: POST {"url": ...} -> {"encrypted_link": "happ://crypt5/..."}.
 # Запасной источник crypt-ссылок, если локальное шифрование выключено/не удалось.
 HAPP_CRYPTO_API_URL = 'https://crypto.happ.su/api-v2.php'
+_LOCAL_PANEL_HOSTNAMES = frozenset({'localhost', 'remnawave', 'remnawave-backend', 'app', 'api'})
 HAPP_CRYPTO_API_COOLDOWN_SECONDS = 600
 HAPP_CRYPTO_API_CACHE_MAX = 512
 
@@ -487,23 +489,17 @@ class RemnaWaveAPI:
         self.authenticated = False
 
     def _detect_connection_type(self) -> str:
-        parsed = urlparse(self.base_url)
-
-        local_hosts = ['localhost', '127.0.0.1', 'remnawave', 'remnawave-backend', 'app', 'api']
-
-        if parsed.hostname in local_hosts:
+        """``local`` только для имён контейнеров и настоящих приватных IP: для них проверка TLS отключается."""
+        hostname = urlparse(self.base_url).hostname
+        if not hostname:
+            return 'external'
+        if hostname in _LOCAL_PANEL_HOSTNAMES or hostname.endswith('.local'):
             return 'local'
-
-        if parsed.hostname:
-            if (
-                parsed.hostname.startswith('192.168.')
-                or parsed.hostname.startswith('10.')
-                or parsed.hostname.startswith('172.')
-                or parsed.hostname.endswith('.local')
-            ):
-                return 'local'
-
-        return 'external'
+        try:
+            address = ipaddress.ip_address(hostname)
+        except ValueError:
+            return 'external'
+        return 'local' if address.is_private or address.is_loopback else 'external'
 
     def _prepare_auth_headers(self) -> dict[str, str]:
         headers = {
@@ -547,10 +543,10 @@ class RemnaWaveAPI:
             if ':' in self.secret_key:
                 key_name, key_value = self.secret_key.split(':', 1)
                 cookies = {key_name: key_value}
-                logger.debug('Используем куки: =***', key_name=key_name)
+                logger.debug('Используем куки панели', key_name=key_name)
             else:
                 cookies = {self.secret_key: self.secret_key}
-                logger.debug('Используем куки: =***', secret_key=self.secret_key)
+                logger.debug('Используем куки панели')
 
         connector_kwargs = {}
 
@@ -1234,16 +1230,6 @@ class RemnaWaveAPI:
         await self._make_request('DELETE', f'/api/internal-squads/{uuid}')
         return True
 
-    async def get_internal_squad_accessible_nodes(self, uuid: str) -> list[RemnaWaveAccessibleNode]:
-        """Получает список доступных нод для Internal Squad"""
-        try:
-            response = await self._make_request('GET', f'/api/internal-squads/{uuid}/accessible-nodes')
-            return [self._parse_accessible_node(node) for node in response['response']['accessibleNodes']]
-        except RemnaWaveAPIError as e:
-            if e.status_code == 404:
-                return []
-            raise
-
     async def add_users_to_internal_squad(self, uuid: str) -> bool:
         """Добавляет всех пользователей в Internal Squad (bulk action).
 
@@ -1287,16 +1273,6 @@ class RemnaWaveAPI:
         )
         return True
 
-    async def reorder_internal_squads(self, items: list[dict[str, Any]]) -> list[RemnaWaveInternalSquad]:
-        """
-        Изменяет порядок Internal Squads
-        items: список словарей с uuid и viewPosition
-        Пример: [{'uuid': '...', 'viewPosition': 0}, {'uuid': '...', 'viewPosition': 1}]
-        """
-        data = {'items': items}
-        response = await self._make_request('POST', '/api/internal-squads/actions/reorder', data)
-        return [self._parse_internal_squad(squad) for squad in response['response']['internalSquads']]
-
     # ============== External Squads API ==============
 
     async def get_external_squads(self) -> list[RemnaWaveExternalSquad]:
@@ -1304,79 +1280,15 @@ class RemnaWaveAPI:
         response = await self._make_request('GET', '/api/external-squads')
         return [self._parse_external_squad(squad) for squad in response['response']['externalSquads']]
 
-    async def get_external_squad_by_uuid(self, uuid: str) -> RemnaWaveExternalSquad | None:
-        """Получает External Squad по UUID"""
-        try:
-            response = await self._make_request('GET', f'/api/external-squads/{uuid}')
-            return self._parse_external_squad(response['response'])
-        except RemnaWaveAPIError as e:
-            if e.status_code == 404:
-                return None
-            raise
-
     async def create_external_squad(self, name: str) -> RemnaWaveExternalSquad:
         data = {'name': name}
         response = await self._make_request('POST', '/api/external-squads', data)
-        return self._parse_external_squad(response['response'])
-
-    async def update_external_squad(
-        self,
-        uuid: str,
-        name: str | None = None,
-        templates: list[dict[str, str]] | None = None,
-        subscription_settings: dict[str, Any] | None = None,
-        host_overrides: dict[str, Any] | None = None,
-        response_headers_add: dict[str, str] | None = None,
-        response_headers_remove: list[str] | None = None,
-        hwid_settings: dict[str, Any] | None = None,
-        custom_remarks: dict[str, Any] | None = None,
-        subpage_config_uuid: str | None = None,
-    ) -> RemnaWaveExternalSquad:
-        data = {'uuid': uuid}
-        if name is not None:
-            data['name'] = name
-        if templates is not None:
-            data['templates'] = templates
-        if subscription_settings is not None:
-            data['subscriptionSettings'] = subscription_settings
-        if host_overrides is not None:
-            data['hostOverrides'] = host_overrides
-        # 3.0.0 разделил `responseHeaders` на добавляемые и удаляемые. Старый ключ
-        # zod срезает молча: PATCH возвращает 200, а настройка хедеров тихо
-        # теряется — поэтому имя поля тут важнее, чем кажется.
-        if response_headers_add is not None:
-            data['responseHeadersAdd'] = response_headers_add
-        if response_headers_remove is not None:
-            data['responseHeadersRemove'] = response_headers_remove
-        if hwid_settings is not None:
-            data['hwidSettings'] = hwid_settings
-        if custom_remarks is not None:
-            data['customRemarks'] = custom_remarks
-        if subpage_config_uuid is not None:
-            data['subpageConfigUuid'] = subpage_config_uuid
-
-        response = await self._make_request('PATCH', '/api/external-squads', data)
         return self._parse_external_squad(response['response'])
 
     async def delete_external_squad(self, uuid: str) -> bool:
         """Удаляет External Squad"""
         await self._make_request('DELETE', f'/api/external-squads/{uuid}')
         return True
-
-    async def add_users_to_external_squad(self, uuid: str) -> bool:
-        """Добавляет всех пользователей в External Squad (bulk action)"""
-        await self._make_request('POST', f'/api/external-squads/{uuid}/bulk-actions/add-users')
-        return True
-
-    async def remove_users_from_external_squad(self, uuid: str) -> bool:
-        """Удаляет всех пользователей из External Squad (bulk action)"""
-        await self._make_request('DELETE', f'/api/external-squads/{uuid}/bulk-actions/remove-users')
-        return True
-
-    async def reorder_external_squads(self, items: list[dict[str, Any]]) -> list[RemnaWaveExternalSquad]:
-        data = {'items': items}
-        response = await self._make_request('POST', '/api/external-squads/actions/reorder', data)
-        return [self._parse_external_squad(squad) for squad in response['response']['externalSquads']]
 
     def _parse_external_squad(self, squad_data: dict) -> RemnaWaveExternalSquad:
         """Парсит данные External Squad"""
@@ -1489,19 +1401,6 @@ class RemnaWaveAPI:
         response = await self._make_request('GET', '/api/subscription-request-history/stats')
         return response['response']
 
-    async def get_system_metadata(self) -> dict[str, Any]:
-        """
-        Получает метаданные системы Remnawave.
-
-        Returns:
-            Dict с полями:
-            - version: версия Remnawave
-            - build: {time, number} - информация о сборке
-            - git: {backend: {commitSha}, node: {commitSha}} - информация о коммитах
-        """
-        response = await self._make_request('GET', '/api/system/metadata')
-        return response['response']
-
     async def get_bandwidth_stats(self, tz: str | None = None) -> dict[str, Any]:
         params = {'tz': tz} if tz else None
         response = await self._make_request('GET', '/api/system/stats/bandwidth', params=params)
@@ -1594,15 +1493,6 @@ class RemnaWaveAPI:
             logger.warning('Failed to get nodes metrics for realtime usage', error=e)
             return []
 
-    async def get_user_stats_usage(self, user_id: int, start_date: str, end_date: str) -> dict[str, Any]:
-        """Потребление трафика пользователем за период.
-
-        Раньше уходило в ``.../legacy``; в 3.0.0 legacy-эндпоинты удалены, и
-        форма ответа другая: ``{categories, sparklineData, topNodes, series}``
-        вместо плоского словаря с ``total``.
-        """
-        return await self.get_bandwidth_stats_user(user_id, start_date, end_date)
-
     # ============== Connections API (GeoCheck, 3.3.0) ==============
 
     async def request_node_geocheck(
@@ -1647,11 +1537,6 @@ class RemnaWaveAPI:
         return response['response']
 
     # ============== Bandwidth Stats API ==============
-
-    async def get_bandwidth_stats_nodes(self, start_date: str, end_date: str) -> dict[str, Any]:
-        params = {'start': start_date, 'end': end_date}
-        response = await self._make_request('GET', '/api/bandwidth-stats/nodes', params=params)
-        return response['response']
 
     async def get_bandwidth_stats_node_users(
         self, node_uuid: str, start_date: str, end_date: str, top_users_limit: int = 10
@@ -1708,37 +1593,6 @@ class RemnaWaveAPI:
             if e.status_code == 404:
                 return None
             raise
-
-    async def create_subscription_page_config(self, name: str) -> SubscriptionPageConfig:
-        data = {'name': name}
-        response = await self._make_request('POST', '/api/subscription-page-configs', data)
-        return self._parse_subscription_page_config(response['response'])
-
-    async def update_subscription_page_config(
-        self, uuid: str, name: str | None = None, config: dict[str, Any] | None = None
-    ) -> SubscriptionPageConfig:
-        data = {'uuid': uuid}
-        if name is not None:
-            data['name'] = name
-        if config is not None:
-            data['config'] = config
-        response = await self._make_request('PATCH', '/api/subscription-page-configs', data)
-        return self._parse_subscription_page_config(response['response'])
-
-    async def delete_subscription_page_config(self, uuid: str) -> bool:
-        await self._make_request('DELETE', f'/api/subscription-page-configs/{uuid}')
-        return True
-
-    async def reorder_subscription_page_configs(self, items: list[dict[str, Any]]) -> list[SubscriptionPageConfig]:
-        data = {'items': items}
-        response = await self._make_request('POST', '/api/subscription-page-configs/actions/reorder', data)
-        configs_data = response['response'].get('configs', [])
-        return [self._parse_subscription_page_config(c) for c in configs_data]
-
-    async def clone_subscription_page_config(self, clone_from_uuid: str) -> SubscriptionPageConfig:
-        data = {'cloneFromUuid': clone_from_uuid}
-        response = await self._make_request('POST', '/api/subscription-page-configs/actions/clone', data)
-        return self._parse_subscription_page_config(response['response'])
 
     def _parse_subscription_page_config(self, data: dict) -> SubscriptionPageConfig:
         """Парсит данные конфигурации страницы подписки"""
@@ -2175,17 +2029,6 @@ class RemnaWaveAPI:
             view_position=squad_data.get('viewPosition', 0),
             created_at=self._parse_optional_datetime(squad_data.get('createdAt')),
             updated_at=self._parse_optional_datetime(squad_data.get('updatedAt')),
-        )
-
-    def _parse_accessible_node(self, node_data: dict) -> RemnaWaveAccessibleNode:
-        """Парсит данные доступной ноды для Internal Squad"""
-        return RemnaWaveAccessibleNode(
-            uuid=node_data['uuid'],
-            node_name=node_data['nodeName'],
-            country_code=node_data['countryCode'],
-            config_profile_uuid=node_data['configProfileUuid'],
-            config_profile_name=node_data['configProfileName'],
-            active_inbounds=node_data.get('activeInbounds', []),
         )
 
     @staticmethod

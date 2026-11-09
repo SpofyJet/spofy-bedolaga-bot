@@ -116,33 +116,6 @@ async def update_paypear_payment_status(
     return payment
 
 
-async def get_pending_paypear_payments(db: AsyncSession, user_id: int) -> list[PayPearPayment]:
-    """Получает незавершенные платежи пользователя."""
-    result = await db.execute(
-        select(PayPearPayment).where(
-            PayPearPayment.user_id == user_id,
-            PayPearPayment.status == 'pending',
-            PayPearPayment.is_paid == False,
-        )
-    )
-    return list(result.scalars().all())
-
-
-async def get_expired_pending_paypear_payments(
-    db: AsyncSession,
-) -> list[PayPearPayment]:
-    """Получает просроченные платежи в статусе pending."""
-    now = datetime.now(UTC)
-    result = await db.execute(
-        select(PayPearPayment).where(
-            PayPearPayment.status == 'pending',
-            PayPearPayment.is_paid == False,
-            PayPearPayment.expires_at < now,
-        )
-    )
-    return list(result.scalars().all())
-
-
 async def link_paypear_payment_to_transaction(
     db: AsyncSession,
     *,

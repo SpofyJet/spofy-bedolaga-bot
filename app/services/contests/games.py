@@ -461,8 +461,3 @@ def get_game_strategy(game_type: GameType | str) -> BaseGameStrategy | None:
         except ValueError:
             return None
     return _GAME_STRATEGIES.get(game_type)
-
-
-def get_all_game_types() -> list[GameType]:
-    """Get list of all supported game types."""
-    return list(_GAME_STRATEGIES.keys())

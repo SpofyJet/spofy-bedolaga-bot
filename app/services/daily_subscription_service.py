@@ -31,7 +31,7 @@ from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
 )
-from app.services.traffic_reset_policy import lift_panel_traffic_limit, should_reset_traffic_on_daily_charge
+from app.services.traffic_reset_policy import should_reset_traffic_on_daily_charge
 
 
 logger = structlog.get_logger(__name__)
@@ -53,11 +53,11 @@ class DailySubscriptionService:
 
     def is_enabled(self) -> bool:
         """Проверяет, включен ли сервис суточных подписок."""
-        return getattr(settings, 'DAILY_SUBSCRIPTIONS_ENABLED', True)
+        return settings.DAILY_SUBSCRIPTIONS_ENABLED
 
     def get_check_interval_minutes(self) -> int:
         """Возвращает интервал проверки в минутах."""
-        return getattr(settings, 'DAILY_SUBSCRIPTIONS_CHECK_INTERVAL_MINUTES', 30)
+        return settings.DAILY_SUBSCRIPTIONS_CHECK_INTERVAL_MINUTES
 
     async def process_daily_charges(self) -> dict:
         """
@@ -862,15 +862,6 @@ class DailySubscriptionService:
             )
         except Exception as e:
             logger.warning('Не удалось отправить уведомление о сбросе трафика', error=e)
-
-    async def _lift_panel_traffic_limit(self, db: AsyncSession, subscription: Subscription) -> None:
-        """Снять с аккаунта в панели статус «трафик исчерпан» после оплаты новых суток.
-
-        Правило общее для всех потоков суточной оплаты — см. ``traffic_reset_policy``.
-        """
-        from app.services.subscription_service import SubscriptionService
-
-        await lift_panel_traffic_limit(db, subscription, service=SubscriptionService())
 
     async def process_auto_resume(self) -> dict:
         """

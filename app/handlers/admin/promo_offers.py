@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 
 import structlog
-from aiogram import Dispatcher, F, types
+from aiogram import Dispatcher, F
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -38,14 +38,12 @@ from app.database.models import (
     User,
     UserStatus,
 )
-from app.keyboards.inline import get_happ_download_button_row
 from app.localization.texts import get_texts
 from app.services.user_service import UserService
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_duration
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
-from app.utils.subscription_utils import get_display_subscription_link
 from app.utils.timezone import format_local_datetime
 
 
@@ -1910,68 +1908,6 @@ async def show_selected_user_details(
         },
     )
     await callback.answer()
-
-
-def _build_connect_button_rows(user: User, texts) -> list[list[InlineKeyboardButton]]:
-    if settings.is_multi_tariff_enabled():
-        subs = getattr(user, 'subscriptions', None) or []
-        subscription = next((s for s in subs if s.subscription_url), None)
-    else:
-        subscription = getattr(user, 'subscription', None)
-    if not subscription:
-        return []
-
-    button_text = texts.t('CONNECT_BUTTON', '🔗 Подключиться')
-    subscription_link = get_display_subscription_link(subscription)
-    connect_mode = settings.CONNECT_BUTTON_MODE
-
-    def _fallback_button() -> InlineKeyboardButton:
-        return InlineKeyboardButton(text=button_text, callback_data='subscription_connect')
-
-    rows: list[list[InlineKeyboardButton]] = []
-
-    if connect_mode == 'miniapp_subscription':
-        if subscription_link:
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        text=button_text,
-                        web_app=types.WebAppInfo(url=subscription_link),
-                    )
-                ]
-            )
-        else:
-            rows.append([_fallback_button()])
-    elif connect_mode == 'miniapp_custom':
-        if settings.MINIAPP_CUSTOM_URL:
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        text=button_text,
-                        web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
-                    )
-                ]
-            )
-        else:
-            rows.append([_fallback_button()])
-    elif connect_mode == 'link':
-        if subscription_link:
-            rows.append([InlineKeyboardButton(text=button_text, url=subscription_link)])
-        else:
-            rows.append([_fallback_button()])
-    elif connect_mode == 'happ_cryptolink':
-        if subscription_link:
-            rows.append([InlineKeyboardButton(text=button_text, callback_data='open_subscription_link')])
-        else:
-            rows.append([_fallback_button()])
-    else:
-        rows.append([_fallback_button()])
-
-    happ_row = get_happ_download_button_row(texts)
-    if happ_row:
-        rows.append(happ_row)
-
-    return rows
 
 
 async def _send_prepaid_tariff_offer(

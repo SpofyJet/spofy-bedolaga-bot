@@ -41,10 +41,6 @@ async def set_faq_enabled(db: AsyncSession, language: str, enabled: bool) -> Faq
     return setting
 
 
-async def upsert_faq_setting(db: AsyncSession, language: str, enabled: bool) -> FaqSetting:
-    return await set_faq_enabled(db, language, enabled)
-
-
 async def get_faq_pages(
     db: AsyncSession,
     language: str,

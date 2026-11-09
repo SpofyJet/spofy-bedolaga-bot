@@ -10,7 +10,6 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -26,14 +25,12 @@ from app.database.crud.user import (
     get_user_by_referral_code,
     get_user_by_telegram_id,
 )
-from app.database.crud.user_message import get_random_active_message
-from app.database.models import GuestPurchase, PinnedMessage, SubscriptionStatus, UserStatus
+from app.database.models import GuestPurchase, PinnedMessage, SubscriptionStatus, User, UserStatus
 from app.handlers.promo_deeplink import claim_promo_link, is_promo_deeplink
 from app.handlers.subscription_deeplinks import SUBSCRIPTION_DEEPLINKS, open_subscription_deeplink
 from app.handlers.ultima_deeplink import is_ultima_deeplink, link_source, open_ultima_offer
 from app.keyboards.inline import (
     get_back_keyboard,
-    get_language_selection_keyboard,
     get_main_menu_keyboard_async,
     get_post_registration_keyboard,
     get_privacy_policy_keyboard,
@@ -90,6 +87,7 @@ from app.services.web_auth_service import (
     link_web_auth_token,
 )
 from app.states import RegistrationStates
+from app.utils.background import spawn_background_task
 from app.utils.gift_links import InvalidGiftTokenError, parse_gift_claim_input
 from app.utils.lifetime import apply_lifetime_period
 from app.utils.long_messages import answer_long_text, edit_long_text, send_long_text
@@ -714,94 +712,11 @@ async def _activate_pending_trial(
         )
         # Подтверждение эфемерное: новая подписка и так видна в меню ниже.
         if confirmation is not None and getattr(confirmation, 'bot', None) is not None:
-            asyncio.create_task(
+            spawn_background_task(
                 _delete_message_later(confirmation.bot, confirmation.chat.id, confirmation.message_id, delay=30)
             )
     except Exception:
         logger.exception('Триал активирован, но подтверждение не отправилось', user_id=user.id)
-
-
-async def _claim_phantom_user(
-    db: AsyncSession,
-    phantom: 'User',
-    *,
-    telegram_id: int,
-    username: str | None,
-    first_name: str | None,
-    last_name: str | None,
-    language: str,
-    referrer_id: int | None,
-) -> tuple[bool, 'User | None']:
-    """Claim a phantom user by backfilling Telegram profile data.
-
-    Returns (success, user). On IntegrityError falls back to existing user lookup.
-
-    Note: Phantom users created when Bot.get_chat() fails at purchase time are matched
-    by username only. Since Telegram usernames are changeable and reassignable, this is
-    inherently vulnerable to username change attacks. When Bot.get_chat() succeeds at
-    purchase time, telegram_id is stored on the user and the phantom path is not used.
-    """
-    from app.utils.validators import sanitize_telegram_name
-
-    phantom.telegram_id = telegram_id
-    phantom.username = username
-    phantom.first_name = sanitize_telegram_name(first_name)
-    phantom.last_name = sanitize_telegram_name(last_name)
-    phantom.language = language
-    phantom.status = UserStatus.ACTIVE.value
-    if referrer_id and referrer_id != phantom.id:
-        phantom.referred_by_id = referrer_id
-    if not phantom.referral_code:
-        phantom.referral_code = await generate_unique_referral_code(db, telegram_id)
-    phantom.updated_at = datetime.now(UTC)
-    phantom.last_activity = datetime.now(UTC)
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        logger.warning(
-            'IntegrityError claiming phantom user, falling back to existing user lookup',
-            phantom_user_id=phantom.id,
-            telegram_id=telegram_id,
-        )
-        existing = await get_user_by_telegram_id(db, telegram_id)
-        return False, existing
-    await db.refresh(phantom, ['subscriptions'])
-    # SECURITY NOTE: Phantom matched by username only (telegram_id was unknown at purchase time).
-    # Telegram usernames are changeable/reassignable, so the claimer may not be the intended
-    # recipient. This is logged at WARNING for admin audit. A confirmation flow would be needed
-    # to fully prevent username spoofing attacks on phantom claims.
-    logger.warning(
-        'Phantom user claimed by username match (verify intended recipient)',
-        phantom_user_id=phantom.id,
-        telegram_id=telegram_id,
-        username=username,
-        has_subscription=phantom.subscription is not None,
-    )
-
-    # Sync Remnawave panel with updated user data (telegram_id, username, etc.)
-    phantom_subs = getattr(phantom, 'subscriptions', None) or []
-    for phantom_sub in phantom_subs:
-        try:
-            subscription_service = SubscriptionService()
-            await subscription_service.update_remnawave_user(db, phantom_sub)
-        except Exception as exc:
-            logger.warning(
-                'Failed to update Remnawave panel after phantom claim',
-                phantom_user_id=phantom.id,
-                subscription_id=phantom_sub.id,
-                error=str(exc),
-            )
-            from app.services.remnawave_retry_queue import remnawave_retry_queue
-
-            if hasattr(phantom_sub, 'id') and hasattr(phantom_sub, 'user_id'):
-                remnawave_retry_queue.enqueue(
-                    subscription_id=phantom_sub.id,
-                    user_id=phantom_sub.user_id,
-                    action='update',
-                )
-
-    return True, phantom
 
 
 async def _merge_phantom_into_active_user(
@@ -1148,20 +1063,6 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
         )
     )
     return True
-
-
-def _get_language_prompt_text() -> str:
-    return '🌐 Выберите язык / Choose your language:'
-
-
-async def _prompt_language_selection(message: types.Message, state: FSMContext) -> None:
-    logger.info('🌐 LANGUAGE: Запрос выбора языка для пользователя', from_user_id=message.from_user.id)
-
-    await state.set_state(RegistrationStates.waiting_for_language)
-    await message.answer(
-        _get_language_prompt_text(),
-        reply_markup=get_language_selection_keyboard(),
-    )
 
 
 async def _continue_registration_after_language(
@@ -3133,10 +3034,6 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
     logger.info('✅ Регистрация завершена для пользователя', telegram_id=user.telegram_id)
 
 
-def _get_subscription_status_simple(texts):
-    return texts.t('SUBSCRIPTION_NONE', 'Нет активной подписки')
-
-
 def _insert_random_message(base_text: str, random_message: str, action_prompt: str) -> str:
     if not random_message:
         return base_text
@@ -3171,28 +3068,6 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
     from app.handlers.menu import get_main_menu_text as build_menu_text
 
     return await build_menu_text(user, texts, db)
-
-
-async def get_main_menu_text_simple(user_name, texts, db: AsyncSession):
-    from app.handlers.menu import _get_website_line
-
-    base_text = texts.MAIN_MENU.format(
-        user_name=html.escape(user_name or ''),
-        subscription_status=_get_subscription_status_simple(texts),
-        website_line=_get_website_line(texts),
-    )
-
-    action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-
-    try:
-        random_message = await get_random_active_message(db)
-        if random_message:
-            return _insert_random_message(base_text, random_message, action_prompt)
-
-    except Exception as e:
-        logger.error('Ошибка получения случайного сообщения', error=e)
-
-    return base_text
 
 
 async def required_sub_channel_check(

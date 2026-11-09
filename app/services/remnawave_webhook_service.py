@@ -213,9 +213,7 @@ class RemnaWaveWebhookService:
                 settings, 'REMNAWAVE_WEBHOOK_NODE_COALESCE_WINDOW_SECONDS', self._NODE_EVENT_COALESCE_WINDOW_SECONDS
             )
         )
-        self._NODE_EVENT_BUFFER_MAX = int(
-            getattr(settings, 'REMNAWAVE_WEBHOOK_NODE_BUFFER_MAX', self._NODE_EVENT_BUFFER_MAX)
-        )
+        self._NODE_EVENT_BUFFER_MAX = int(settings.REMNAWAVE_WEBHOOK_NODE_BUFFER_MAX)
 
         # Per-instance coalescing state for node.connection_* events.
         # `_node_event_flush_task` — текущая «спящая» в окне coalescing задача.
@@ -1905,7 +1903,7 @@ class RemnaWaveWebhookService:
             if not settings.WEBHOOK_NOTIFY_USER_ENABLED:
                 logger.debug('Webhook user notifications disabled globally, skipping first_connected', user_id=user.id)
                 return
-            if not getattr(settings, 'WEBHOOK_NOTIFY_FIRST_CONNECTED', True):
+            if not settings.WEBHOOK_NOTIFY_FIRST_CONNECTED:
                 logger.debug('Webhook first_connected notifications disabled, skipping', user_id=user.id)
                 return
 
@@ -1937,7 +1935,11 @@ class RemnaWaveWebhookService:
                 ]
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [build_miniapp_or_callback_button(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success')],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success'
+                        )
+                    ],
                     *invite_row,
                     [
                         build_miniapp_or_callback_button(

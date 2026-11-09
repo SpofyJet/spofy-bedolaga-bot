@@ -280,10 +280,10 @@ def resolve_simple_subscription_device_limit() -> int:
     """Return the effective device limit for simple subscription flows."""
 
     if settings.is_devices_selection_enabled():
-        return int(getattr(settings, 'SIMPLE_SUBSCRIPTION_DEVICE_LIMIT', 0) or 0)
+        return int(settings.SIMPLE_SUBSCRIPTION_DEVICE_LIMIT or 0)
 
     forced_limit = settings.get_disabled_mode_device_limit()
     if forced_limit is not None:
         return forced_limit
 
-    return int(getattr(settings, 'SIMPLE_SUBSCRIPTION_DEVICE_LIMIT', 0) or 0)
+    return int(settings.SIMPLE_SUBSCRIPTION_DEVICE_LIMIT or 0)

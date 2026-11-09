@@ -382,11 +382,6 @@ async def run_alembic_upgrade() -> None:
     logger.info('Alembic миграции применены')
 
 
-async def stamp_alembic_head() -> None:
-    """Stamp the DB as being at head without running migrations (for existing DBs)."""
-    await _stamp_alembic_revision('head')
-
-
 async def _stamp_alembic_revision(revision: str) -> None:
     """Stamp the DB at a specific revision without running migrations."""
     import asyncio

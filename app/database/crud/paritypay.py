@@ -146,18 +146,6 @@ def remember_paritypay_event(payment: ParityPayPayment, event_key: str) -> None:
     payment.processed_events = processed
 
 
-async def get_pending_paritypay_payments(db: AsyncSession, user_id: int) -> list[ParityPayPayment]:
-    """Возвращает незавершённые платежи пользователя."""
-    result = await db.execute(
-        select(ParityPayPayment).where(
-            ParityPayPayment.user_id == user_id,
-            ParityPayPayment.status == 'pending',
-            ParityPayPayment.is_paid == False,
-        )
-    )
-    return list(result.scalars().all())
-
-
 async def link_paritypay_payment_to_transaction(
     db: AsyncSession,
     *,

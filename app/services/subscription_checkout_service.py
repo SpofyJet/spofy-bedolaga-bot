@@ -68,7 +68,4 @@ def should_offer_checkout_resume(
     if getattr(subscription, 'is_trial', False):
         return True
 
-    if getattr(subscription, 'actual_status', None) == 'expired':
-        return True
-
-    return False
+    return getattr(subscription, 'actual_status', None) == 'expired'

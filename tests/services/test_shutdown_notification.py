@@ -120,7 +120,7 @@ async def test_crash_goes_to_the_errors_topic_with_a_contact_button(admin_chat):
 
     kwargs = bot.send_message.await_args.kwargs
     assert kwargs['message_thread_id'] == 3
-    assert kwargs['reply_markup'].inline_keyboard[0][0].text == '💬 Сообщить разработчику'
+    assert 'reply_markup' not in kwargs
 
 
 @pytest.mark.asyncio

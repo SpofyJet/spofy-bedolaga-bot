@@ -11,6 +11,7 @@ from app.localization.loader import (
     clear_locale_cache,
     load_locale,
 )
+from app.utils.background import spawn_background_task
 
 
 _logger = structlog.get_logger(__name__)
@@ -287,11 +288,11 @@ def get_rules_sync(language: str = DEFAULT_LANGUAGE) -> str:
         return _cached_rules[language]
 
     try:
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(get_rules(language))
 
-    loop.create_task(get_rules(language))
+    spawn_background_task(get_rules(language))
     return _get_cached_rules_value(language)
 
 

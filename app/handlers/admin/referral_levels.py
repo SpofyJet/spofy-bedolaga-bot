@@ -95,16 +95,6 @@ def _fmt_threshold(level) -> str:
     return f'{required} {population}'
 
 
-def _fmt_optional_percent(value: int | None) -> str:
-    """Пустой процент — это ноль, и так и надо писать.
-
-    Показывать «—» было бы двусмысленно: админ прочитал бы это как «берётся
-    откуда-то ещё», хотя откат к глобальному ``REFERRAL_COMMISSION_PERCENT``
-    убран намеренно.
-    """
-    return f'{value}%' if value else 'не начисляется'
-
-
 def _fmt_percent_for_card(level, money_on: bool, tier_mode: bool) -> str:
     """Процент так, как он действительно применится к этому правилу.
 

@@ -111,7 +111,7 @@ async def _send_admin_notification(
     is_pending_activation: bool = False,
 ) -> None:
     """Send admin topic notification about a guest purchase (best-effort)."""
-    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not settings.BOT_TOKEN:
+    if not settings.ADMIN_NOTIFICATIONS_ENABLED or not settings.BOT_TOKEN:
         return
     try:
         from app.bot_factory import create_bot
@@ -1872,7 +1872,7 @@ async def _send_stuck_purchase_alert(data: dict, retry_count: int, phase: str) -
 
     Accepts a plain dict (not ORM object) so it can be called after the session is closed.
     """
-    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not settings.BOT_TOKEN:
+    if not settings.ADMIN_NOTIFICATIONS_ENABLED or not settings.BOT_TOKEN:
         return
     try:
         import html as html_mod
@@ -1910,7 +1910,7 @@ async def _send_amount_mismatch_alert(
     payment_method: str | None,
 ) -> None:
     """Send admin alert when recovery detects an amount mismatch (possible fraud or bug)."""
-    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not settings.BOT_TOKEN:
+    if not settings.ADMIN_NOTIFICATIONS_ENABLED or not settings.BOT_TOKEN:
         return
     try:
         import html as html_mod

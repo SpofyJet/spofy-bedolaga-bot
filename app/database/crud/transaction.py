@@ -383,39 +383,6 @@ async def get_last_subscription_payment_at(db: AsyncSession, user_id: int) -> da
     return value
 
 
-async def complete_transaction(db: AsyncSession, transaction: Transaction) -> Transaction:
-    transaction.is_completed = True
-    transaction.completed_at = datetime.now(UTC)
-
-    await db.commit()
-    await db.refresh(transaction)
-
-    logger.info('✅ Транзакция завершена', transaction_id=transaction.id)
-
-    try:
-        from app.services.promo_group_assignment import (
-            maybe_assign_promo_group_by_total_spent,
-        )
-
-        await maybe_assign_promo_group_by_total_spent(db, transaction.user_id)
-    except Exception as exc:
-        logger.warning(
-            'Не удалось проверить автовыдачу промогруппы для пользователя', user_id=transaction.user_id, exc=exc
-        )
-
-    return transaction
-
-
-async def get_pending_transactions(db: AsyncSession) -> list[Transaction]:
-    result = await db.execute(
-        select(Transaction)
-        .options(selectinload(Transaction.user))
-        .where(Transaction.is_completed == False)
-        .order_by(Transaction.created_at)
-    )
-    return result.scalars().all()
-
-
 async def get_transactions_statistics(
     db: AsyncSession, start_date: datetime | None = None, end_date: datetime | None = None
 ) -> dict:
@@ -569,28 +536,6 @@ async def get_revenue_by_period(db: AsyncSession, days: int = 30) -> list[dict]:
     )
 
     return [{'date': as_date(row.date), 'amount_kopeks': row.amount} for row in result]
-
-
-async def find_tribute_transactions_by_payment_id(
-    db: AsyncSession, payment_id: str, user_telegram_id: int | None = None
-) -> list[Transaction]:
-    query = select(Transaction).options(selectinload(Transaction.user))
-
-    conditions = [
-        Transaction.external_id == f'donation_{payment_id}',
-        Transaction.external_id == payment_id,
-        Transaction.external_id.like(f'%{payment_id}%'),
-    ]
-
-    query = query.where(and_(Transaction.payment_method == PaymentMethod.TRIBUTE.value, or_(*conditions)))
-
-    if user_telegram_id:
-        from app.database.models import User
-
-        query = query.join(User).where(User.telegram_id == user_telegram_id)
-
-    result = await db.execute(query.order_by(Transaction.created_at.desc()))
-    return result.scalars().all()
 
 
 async def check_tribute_payment_duplicate(

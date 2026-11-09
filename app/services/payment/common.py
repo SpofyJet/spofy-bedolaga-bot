@@ -297,27 +297,6 @@ class PaymentCommonMixin:
 
         return None
 
-    async def process_successful_payment(
-        self,
-        payment_id: str,
-        amount_kopeks: int,
-        user_id: int,
-        payment_method: str,
-    ) -> bool:
-        """Общая точка учёта успешных платежей (используется провайдерами при необходимости)."""
-        try:
-            logger.info(
-                'Обработан успешный платеж',
-                payment_id=payment_id,
-                amount_kopeks=amount_kopeks / 100,
-                user_id=user_id,
-                payment_method=payment_method,
-            )
-            return True
-        except Exception as error:
-            logger.error('Ошибка обработки платежа', payment_id=payment_id, error=error)
-            return False
-
 
 async def notify_email_user_topup(user: Any, amount_kopeks: int) -> None:
     """«Пополнение успешно» для юзеров без Telegram (#2952).

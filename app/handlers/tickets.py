@@ -24,6 +24,7 @@ from app.keyboards.inline import (
 )
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
+from app.utils.background import spawn_background_task
 from app.utils.formatters import format_username_link
 from app.utils.miniapp_buttons import build_admin_ticket_cabinet_button
 from app.utils.photo_message import edit_or_answer_photo, safe_edit_or_resend
@@ -102,7 +103,7 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
 
     """Обработать ввод заголовка тикета"""
     if not message.text:
-        asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
+        spawn_background_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
         return
     title = message.text.strip()
 
@@ -110,7 +111,7 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
     prompt_chat_id = data_prompt.get('prompt_chat_id')
     prompt_message_id = data_prompt.get('prompt_message_id')
     # Удалим сообщение пользователя через 2 секунды, чтобы не засорять чат
-    asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
+    spawn_background_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
     if len(title) < 5:
         texts = get_texts(db_user.language)
         text_val = texts.t(
@@ -293,7 +294,7 @@ async def _append_ticket_messages(db: AsyncSession, ticket_id: int, user_id: int
 def _schedule_user_message_delete(message: types.Message) -> None:
     # Удалим сообщение пользователя через 2 секунды, чтобы не засорять чат
     try:
-        asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
+        spawn_background_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
     except Exception as exc:
         logger.debug('Сообщение обращения не поставлено на удаление', error=str(exc))
 

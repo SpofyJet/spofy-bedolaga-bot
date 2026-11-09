@@ -164,11 +164,7 @@ class JupiterPaymentMixin:
     def _build_jupiter_callback_url() -> str | None:
         """Собирает абсолютный callback URL для Jupiter."""
         webhook_path = settings.JUPITER_WEBHOOK_PATH or '/jupiter-webhook'
-        base = (
-            getattr(settings, 'WEBHOOK_URL', None)
-            or getattr(settings, 'WEB_API_BASE_URL', None)
-            or getattr(settings, 'CABINET_URL', None)
-        )
+        base = settings.WEBHOOK_URL or getattr(settings, 'WEB_API_BASE_URL', None) or settings.CABINET_URL
         if not base:
             return None
         return f'{base.rstrip("/")}{webhook_path if webhook_path.startswith("/") else "/" + webhook_path}'
@@ -475,15 +471,3 @@ class JupiterPaymentMixin:
         )
 
         return True
-
-    async def check_jupiter_payment_status(
-        self,
-        db: AsyncSession,
-        transaction_id: str,
-    ) -> dict[str, Any] | None:
-        """Запрос статуса платежа через API Jupiter."""
-        try:
-            return await jupiter_service.check_payment(transaction_id=transaction_id)
-        except Exception as e:
-            logger.error('Jupiter: ошибка проверки статуса', transaction_id=transaction_id, error=e)
-            return None

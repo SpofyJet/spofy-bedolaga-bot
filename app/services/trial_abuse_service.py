@@ -96,49 +96,49 @@ class TrialAbuseService:
     # полей в app/config.py — см. инструкцию по установке)
     # ------------------------------------------------------------------ #
     def is_enabled(self) -> bool:
-        return bool(getattr(settings, 'TRIAL_ABUSE_ENABLED', False))
+        return bool(settings.TRIAL_ABUSE_ENABLED)
 
     def get_interval_hours(self) -> int:
-        return max(1, int(getattr(settings, 'TRIAL_ABUSE_INTERVAL_HOURS', 6)))
+        return max(1, int(settings.TRIAL_ABUSE_INTERVAL_HOURS))
 
     def get_action(self) -> str:
-        action = str(getattr(settings, 'TRIAL_ABUSE_ACTION', 'expire')).strip().lower()
+        action = str(settings.TRIAL_ABUSE_ACTION).strip().lower()
         return action if action in ('expire', 'disable') else 'expire'
 
     def is_notify_enabled(self) -> bool:
-        return bool(getattr(settings, 'TRIAL_ABUSE_NOTIFY', True))
+        return bool(settings.TRIAL_ABUSE_NOTIFY)
 
     def get_min_accounts(self) -> int:
-        return max(2, int(getattr(settings, 'TRIAL_ABUSE_MIN_ACCOUNTS', 2)))
+        return max(2, int(settings.TRIAL_ABUSE_MIN_ACCOUNTS))
 
     def get_start_delay_seconds(self) -> int:
-        return max(0, int(getattr(settings, 'TRIAL_ABUSE_START_DELAY_MINUTES', 5))) * 60
+        return max(0, int(settings.TRIAL_ABUSE_START_DELAY_MINUTES)) * 60
 
     def get_warning_text(self) -> str:
-        text = str(getattr(settings, 'TRIAL_ABUSE_WARNING_TEXT', '') or '').strip()
+        text = str(settings.TRIAL_ABUSE_WARNING_TEXT or '').strip()
         if not text:
             return DEFAULT_WARNING_TEXT
         # В .env переносы строк обычно записывают буквальным \n
         return text.replace('\\n', '\n')
 
     def punish_whole_group(self) -> bool:
-        return bool(getattr(settings, 'TRIAL_ABUSE_PUNISH_WHOLE_GROUP', True))
+        return bool(settings.TRIAL_ABUSE_PUNISH_WHOLE_GROUP)
 
     def get_big_group_min(self) -> int:
-        return max(3, int(getattr(settings, 'TRIAL_ABUSE_BIG_GROUP_MIN', 6)))
+        return max(3, int(settings.TRIAL_ABUSE_BIG_GROUP_MIN))
 
     def get_shared_device_paid_share(self) -> float:
-        return max(0.0, float(getattr(settings, 'TRIAL_ABUSE_SHARED_DEVICE_PAID_SHARE', 0.2)))
+        return max(0.0, float(settings.TRIAL_ABUSE_SHARED_DEVICE_PAID_SHARE))
 
     def get_report_mode(self) -> str:
-        mode = str(getattr(settings, 'TRIAL_ABUSE_REPORT_MODE', 'always')).strip().lower()
+        mode = str(settings.TRIAL_ABUSE_REPORT_MODE).strip().lower()
         return mode if mode in ('always', 'changes', 'never') else 'always'
 
     def get_excluded_telegram_ids(self) -> set[int]:
         """Белый список: админы бота + TRIAL_ABUSE_EXCLUDE_TELEGRAM_IDS."""
         excluded: set[int] = set()
-        raw_custom = str(getattr(settings, 'TRIAL_ABUSE_EXCLUDE_TELEGRAM_IDS', '') or '')
-        raw_admin = getattr(settings, 'ADMIN_IDS', '') or ''
+        raw_custom = str(settings.TRIAL_ABUSE_EXCLUDE_TELEGRAM_IDS or '')
+        raw_admin = settings.ADMIN_IDS or ''
         for raw in (raw_custom, raw_admin if isinstance(raw_admin, str) else ''):
             for chunk in str(raw).replace(';', ',').split(','):
                 chunk = chunk.strip()
@@ -474,7 +474,7 @@ class TrialAbuseService:
     # ------------------------------------------------------------------ #
     def schedule_device_check(self, panel_user_id: Any, hwid: Any) -> None:
         """Из вебхука user_hwid_devices.added: проверить в фоне, вебхук не ждёт."""
-        if not (self.is_enabled() and getattr(settings, 'TRIAL_ABUSE_REALTIME_ENABLED', True)):
+        if not (self.is_enabled() and settings.TRIAL_ABUSE_REALTIME_ENABLED):
             return
         try:
             panel_user_id = int(panel_user_id)
@@ -810,7 +810,7 @@ class TrialAbuseService:
     async def _notify_admin(self, text: str) -> None:
         if not self.bot:
             return
-        chat_id = getattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None)
+        chat_id = settings.ADMIN_NOTIFICATIONS_CHAT_ID
         if not chat_id:
             excluded = self.get_excluded_telegram_ids()
             chat_id = next(iter(excluded), None)

@@ -2415,7 +2415,7 @@ async def process_balance_edit(message: types.Message, db_user: User, state: FSM
 
     try:
         amount_rubles = float(message.text.replace(',', '.'))
-        amount_kopeks = int(amount_rubles * 100)
+        amount_kopeks = settings.rubles_to_kopeks(amount_rubles)
 
         if abs(amount_kopeks) > 10000000:
             await message.answer('❌ Слишком большая сумма (максимум 100,000 ₽)')
@@ -6167,7 +6167,7 @@ async def show_admin_user_autopay(callback: types.CallbackQuery, db_user: User, 
         f'<b>Списание за:</b> {subscription.autopay_days_before} дн. до окончания\n'
         f'<b>Период продления:</b> {period_text}\n\n'
         f'Глобальный дефолт периода: '
-        f'{getattr(settings, "DEFAULT_AUTOPAY_PERIOD_DAYS", 0) or "самый короткий период тарифа"}'
+        f'{settings.DEFAULT_AUTOPAY_PERIOD_DAYS or "самый короткий период тарифа"}'
     )
 
     toggle_label = '❌ Выключить' if subscription.autopay_enabled else '✅ Включить'

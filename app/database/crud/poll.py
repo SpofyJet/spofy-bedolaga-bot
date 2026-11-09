@@ -1,7 +1,7 @@
 from collections.abc import Iterable, Sequence
 
 import structlog
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -101,33 +101,6 @@ async def delete_poll(db: AsyncSession, poll_id: int) -> bool:
     return True
 
 
-async def create_poll_response(
-    db: AsyncSession,
-    poll_id: int,
-    user_id: int,
-) -> PollResponse:
-    result = await db.execute(
-        select(PollResponse).where(
-            and_(
-                PollResponse.poll_id == poll_id,
-                PollResponse.user_id == user_id,
-            )
-        )
-    )
-    response = result.scalar_one_or_none()
-    if response:
-        return response
-
-    response = PollResponse(
-        poll_id=poll_id,
-        user_id=user_id,
-    )
-    db.add(response)
-    await db.commit()
-    await db.refresh(response)
-    return response
-
-
 async def get_poll_response_by_id(
     db: AsyncSession,
     response_id: int,
@@ -177,11 +150,6 @@ async def record_poll_answer(
     await db.commit()
     await db.refresh(answer)
     return answer
-
-
-async def reset_poll_answers(db: AsyncSession, response_id: int) -> None:
-    await db.execute(delete(PollAnswer).where(PollAnswer.response_id == response_id))
-    await db.commit()
 
 
 async def get_poll_statistics(db: AsyncSession, poll_id: int) -> dict:

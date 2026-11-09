@@ -408,10 +408,7 @@ class RemnaWaveService:
         current_status = (current.get('status') or '').upper()
 
         active_statuses = {'ACTIVE', 'TRIAL'}
-        if candidate_status in active_statuses and current_status not in active_statuses:
-            return True
-
-        return False
+        return bool(candidate_status in active_statuses and current_status not in active_statuses)
 
     def _deduplicate_panel_users_by_telegram_id(
         self,
@@ -1017,17 +1014,6 @@ class RemnaWaveService:
         except Exception as e:
             logger.error('Ошибка получения нод из Remnawave', error=e)
             return []
-
-    async def test_connection(self) -> bool:
-        try:
-            async with self.get_api_client() as api:
-                await api.get_system_stats()
-                logger.info('✅ Соединение с Remnawave API работает')
-                return True
-
-        except Exception as e:
-            logger.error('❌ Ошибка соединения с Remnawave API', error=e)
-            return False
 
     async def get_node_details(self, node_uuid: str) -> dict[str, Any] | None:
         try:
@@ -3397,65 +3383,6 @@ class RemnaWaveService:
                 'priority': 'medium',
                 'estimated_time': '3-5 минут',
             }
-
-    async def monitor_panel_status(self, bot) -> dict[str, Any]:
-        try:
-            from app.utils.cache import cache
-
-            previous_status = await cache.get('remnawave_panel_status') or 'unknown'
-
-            status_result = await self.check_panel_health()
-            current_status = status_result.get('status', 'offline')
-
-            if current_status != previous_status and previous_status != 'unknown':
-                await self._send_status_change_notification(bot, previous_status, current_status, status_result)
-
-            await cache.set('remnawave_panel_status', current_status, expire=300)
-
-            return status_result
-
-        except Exception as e:
-            logger.error('Ошибка мониторинга статуса панели Remnawave', error=e)
-            return {'status': 'error', 'error': str(e)}
-
-    async def _send_status_change_notification(
-        self, bot, old_status: str, new_status: str, status_data: dict[str, Any]
-    ):
-        try:
-            from app.services.admin_notification_service import AdminNotificationService
-
-            notification_service = AdminNotificationService(bot)
-
-            details = {
-                'api_url': status_data.get('api_url'),
-                'response_time': status_data.get('response_time'),
-                'last_check': status_data.get('last_check'),
-                'users_online': status_data.get('users_online'),
-                'nodes_online': status_data.get('nodes_online'),
-                'total_nodes': status_data.get('total_nodes'),
-                'old_status': old_status,
-            }
-
-            if new_status == 'offline':
-                details['error'] = status_data.get('api_error')
-            elif new_status == 'degraded':
-                issues = []
-                if status_data.get('response_time', 0) > 10:
-                    issues.append(f'Медленный отклик API ({status_data.get("response_time")}с)')
-                if status_data.get('nodes_health') == 'unhealthy':
-                    issues.append(
-                        f'Проблемы с нодами ({status_data.get("nodes_online")}/{status_data.get("total_nodes")} онлайн)'
-                    )
-                details['issues'] = issues
-
-            await notification_service.send_remnawave_panel_status_notification(new_status, details)
-
-            logger.info(
-                'Отправлено уведомление об изменении статуса панели', old_status=old_status, new_status=new_status
-            )
-
-        except Exception as e:
-            logger.error('Ошибка отправки уведомления об изменении статуса', error=e)
 
     async def send_manual_status_notification(self, bot, status: str, message: str = ''):
         try:

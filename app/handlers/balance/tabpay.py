@@ -22,8 +22,6 @@ from app.utils.topup_retry import format_topup_amount_retry
 logger = structlog.get_logger(__name__)
 
 
-TABPAY_PAYMENT_METHODS = {'tabpay', 'tabpay_card', 'tabpay_sbp'}
-
 TABPAY_SERVICE_MAP: dict[str, str | None] = {
     'tabpay': None,
     'tabpay_card': 'card',

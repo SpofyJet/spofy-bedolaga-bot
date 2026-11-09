@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import and_, select, update
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -160,95 +160,3 @@ async def link_yookassa_payment_to_transaction(
         )
 
     return payment
-
-
-async def get_user_yookassa_payments(
-    db: AsyncSession, user_id: int, limit: int = 50, offset: int = 0
-) -> list[YooKassaPayment]:
-    result = await db.execute(
-        select(YooKassaPayment)
-        .options(selectinload(YooKassaPayment.transaction))
-        .where(YooKassaPayment.user_id == user_id)
-        .order_by(YooKassaPayment.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
-    return result.scalars().all()
-
-
-async def get_pending_yookassa_payments(
-    db: AsyncSession, user_id: int | None = None, limit: int = 100
-) -> list[YooKassaPayment]:
-    query = select(YooKassaPayment).options(selectinload(YooKassaPayment.user))
-
-    conditions = [YooKassaPayment.status.in_(['pending', 'waiting_for_capture'])]
-    if user_id:
-        conditions.append(YooKassaPayment.user_id == user_id)
-
-    result = await db.execute(query.where(and_(*conditions)).order_by(YooKassaPayment.created_at.desc()).limit(limit))
-    return result.scalars().all()
-
-
-async def get_succeeded_yookassa_payments_without_transaction(
-    db: AsyncSession, limit: int = 50
-) -> list[YooKassaPayment]:
-    result = await db.execute(
-        select(YooKassaPayment)
-        .options(selectinload(YooKassaPayment.user))
-        .where(
-            and_(
-                YooKassaPayment.status == 'succeeded',
-                YooKassaPayment.is_paid == True,
-                YooKassaPayment.transaction_id == None,
-            )
-        )
-        .order_by(YooKassaPayment.captured_at.desc())
-        .limit(limit)
-    )
-    return result.scalars().all()
-
-
-async def delete_yookassa_payment(db: AsyncSession, yookassa_payment_id: str) -> bool:
-    result = await db.execute(select(YooKassaPayment).where(YooKassaPayment.yookassa_payment_id == yookassa_payment_id))
-    payment = result.scalar_one_or_none()
-
-    if payment:
-        await db.delete(payment)
-        await db.commit()
-        logger.info('Удален платеж YooKassa', yookassa_payment_id=yookassa_payment_id)
-        return True
-
-    return False
-
-
-async def get_yookassa_payments_stats(db: AsyncSession, user_id: int | None = None) -> dict:
-    from sqlalchemy import case, func
-
-    query = select(
-        func.count(YooKassaPayment.id).label('total_payments'),
-        func.sum(YooKassaPayment.amount_kopeks).label('total_amount_kopeks'),
-        func.sum(case((YooKassaPayment.status == 'succeeded', YooKassaPayment.amount_kopeks), else_=0)).label(
-            'succeeded_amount_kopeks'
-        ),
-        func.count(case((YooKassaPayment.status == 'succeeded', 1), else_=None)).label('succeeded_count'),
-        func.count(case((YooKassaPayment.status == 'pending', 1), else_=None)).label('pending_count'),
-        func.count(case((YooKassaPayment.status.in_(['canceled', 'failed']), 1), else_=None)).label('failed_count'),
-    ).select_from(YooKassaPayment)
-
-    if user_id:
-        query = query.where(YooKassaPayment.user_id == user_id)
-
-    result = await db.execute(query)
-    stats = result.first()
-
-    return {
-        'total_payments': stats.total_payments or 0,
-        'total_amount_kopeks': stats.total_amount_kopeks or 0,
-        'total_amount_rubles': (stats.total_amount_kopeks or 0) / 100,
-        'succeeded_amount_kopeks': stats.succeeded_amount_kopeks or 0,
-        'succeeded_amount_rubles': (stats.succeeded_amount_kopeks or 0) / 100,
-        'succeeded_count': stats.succeeded_count or 0,
-        'pending_count': stats.pending_count or 0,
-        'failed_count': stats.failed_count or 0,
-        'success_rate': (stats.succeeded_count / stats.total_payments * 100) if stats.total_payments > 0 else 0,
-    }

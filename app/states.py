@@ -248,10 +248,6 @@ class AdminStates(StatesGroup):
     editing_tariff_server_limit = State()
 
 
-class SupportStates(StatesGroup):
-    waiting_for_message = State()
-
-
 class TicketStates(StatesGroup):
     waiting_for_title = State()
     waiting_for_message = State()
@@ -277,11 +273,6 @@ class PricingStates(StatesGroup):
     waiting_for_value = State()
 
 
-class AutoPayStates(StatesGroup):
-    setting_autopay_days = State()
-    confirming_autopay_toggle = State()
-
-
 class SquadCreateStates(StatesGroup):
     waiting_for_name = State()
     selecting_inbounds = State()
@@ -303,14 +294,6 @@ class RemnaWaveSyncStates(StatesGroup):
 
 class ContestStates(StatesGroup):
     waiting_for_answer = State()
-
-
-class AdminSubmenuStates(StatesGroup):
-    in_users_submenu = State()
-    in_promo_submenu = State()
-    in_communications_submenu = State()
-    in_settings_submenu = State()
-    in_system_submenu = State()
 
 
 class BlacklistStates(StatesGroup):

@@ -130,24 +130,24 @@ def _loaded_relationship(instance: object, name: str) -> Any:
 class AdminNotificationService:
     def __init__(self, bot: Bot):
         self.bot = bot
-        self.chat_id = getattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None)
-        self.topic_id = getattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None)
-        self.ticket_topic_id = getattr(settings, 'ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID', None)
-        self.enabled = getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
+        self.chat_id = settings.ADMIN_NOTIFICATIONS_CHAT_ID
+        self.topic_id = settings.ADMIN_NOTIFICATIONS_TOPIC_ID
+        self.ticket_topic_id = settings.ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID
+        self.enabled = settings.ADMIN_NOTIFICATIONS_ENABLED
 
         # Маппинг категорий на topic_id (None = fallback на self.topic_id)
         self.category_topics: dict[NotificationCategory, int | None] = {
-            NotificationCategory.PURCHASES: getattr(settings, 'ADMIN_NOTIFICATIONS_PURCHASES_TOPIC_ID', None),
-            NotificationCategory.RENEWALS: getattr(settings, 'ADMIN_NOTIFICATIONS_RENEWALS_TOPIC_ID', None),
-            NotificationCategory.TRIALS: getattr(settings, 'ADMIN_NOTIFICATIONS_TRIALS_TOPIC_ID', None),
-            NotificationCategory.BALANCE: getattr(settings, 'ADMIN_NOTIFICATIONS_BALANCE_TOPIC_ID', None),
-            NotificationCategory.ADDONS: getattr(settings, 'ADMIN_NOTIFICATIONS_ADDONS_TOPIC_ID', None),
-            NotificationCategory.INFRASTRUCTURE: getattr(settings, 'ADMIN_NOTIFICATIONS_INFRASTRUCTURE_TOPIC_ID', None),
-            NotificationCategory.ERRORS: getattr(settings, 'ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID', None),
-            NotificationCategory.PROMO: getattr(settings, 'ADMIN_NOTIFICATIONS_PROMO_TOPIC_ID', None),
-            NotificationCategory.PARTNERS: getattr(settings, 'ADMIN_NOTIFICATIONS_PARTNERS_TOPIC_ID', None),
+            NotificationCategory.PURCHASES: settings.ADMIN_NOTIFICATIONS_PURCHASES_TOPIC_ID,
+            NotificationCategory.RENEWALS: settings.ADMIN_NOTIFICATIONS_RENEWALS_TOPIC_ID,
+            NotificationCategory.TRIALS: settings.ADMIN_NOTIFICATIONS_TRIALS_TOPIC_ID,
+            NotificationCategory.BALANCE: settings.ADMIN_NOTIFICATIONS_BALANCE_TOPIC_ID,
+            NotificationCategory.ADDONS: settings.ADMIN_NOTIFICATIONS_ADDONS_TOPIC_ID,
+            NotificationCategory.INFRASTRUCTURE: settings.ADMIN_NOTIFICATIONS_INFRASTRUCTURE_TOPIC_ID,
+            NotificationCategory.ERRORS: settings.ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID,
+            NotificationCategory.PROMO: settings.ADMIN_NOTIFICATIONS_PROMO_TOPIC_ID,
+            NotificationCategory.PARTNERS: settings.ADMIN_NOTIFICATIONS_PARTNERS_TOPIC_ID,
             NotificationCategory.TICKETS: self.ticket_topic_id,
-            NotificationCategory.WHEEL: getattr(settings, 'ADMIN_NOTIFICATIONS_WHEEL_TOPIC_ID', None),
+            NotificationCategory.WHEEL: settings.ADMIN_NOTIFICATIONS_WHEEL_TOPIC_ID,
         }
 
         # Per-category enabled flags (default True — backwards compatible)
@@ -416,7 +416,7 @@ class AdminNotificationService:
             ]
 
         if campaign.is_subscription_bonus:
-            default_devices = getattr(settings, 'DEFAULT_DEVICE_LIMIT', 1)
+            default_devices = settings.DEFAULT_DEVICE_LIMIT
             details = [
                 (
                     f'📅 {campaign.subscription_duration_days or 0} дн. '
@@ -773,7 +773,7 @@ class AdminNotificationService:
         try:
             from app.utils.markdown_to_telegram import github_markdown_to_telegram_html, truncate_for_blockquote
 
-            repo = getattr(settings, 'VERSION_CHECK_REPO', 'fr1ngg/remnawave-bedolaga-telegram-bot')
+            repo = settings.VERSION_CHECK_REPO
             release_url = f'https://github.com/{repo}/releases/tag/{latest_version.tag_name}'
             repo_url = f'https://github.com/{repo}'
             timestamp = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
@@ -826,27 +826,6 @@ class AdminNotificationService:
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления об обновлении', error=e)
-            return False
-
-    async def send_version_check_error_notification(self, error_message: str, current_version: str) -> bool:
-        if not self._is_enabled():
-            return False
-
-        try:
-            message = f"""⚠️ <b>ОШИБКА ПРОВЕРКИ ОБНОВЛЕНИЙ</b>
-
-    📦 <b>Текущая версия:</b> <code>{current_version}</code>
-    ❌ <b>Ошибка:</b> {error_message}
-
-    🔄 Следующая попытка через час.
-    ⚙️ Проверьте доступность GitHub API и настройки сети.
-
-    ⚙️ <i>Система автоматических обновлений • {format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
-
-            return await self._send_message(message, category=NotificationCategory.ERRORS)
-
-        except Exception as e:
-            logger.error('Ошибка отправки уведомления об ошибке проверки версий', error=e)
             return False
 
     def _build_balance_topup_message(
@@ -2185,145 +2164,6 @@ class AdminNotificationService:
             logger.warning('Не удалось получить названия серверов', error=e)
             return f'{len(squad_uuids)} шт.'
 
-    async def send_maintenance_status_notification(
-        self, event_type: str, status: str, details: dict[str, Any] = None
-    ) -> bool:
-        if not self._is_enabled():
-            return False
-
-        try:
-            details = details or {}
-
-            if event_type == 'enable':
-                if details.get('auto_enabled', False):
-                    icon = '⚠️'
-                    title = 'АВТОМАТИЧЕСКОЕ ВКЛЮЧЕНИЕ ТЕХРАБОТ'
-                else:
-                    icon = '🔧'
-                    title = 'ВКЛЮЧЕНИЕ ТЕХРАБОТ'
-
-            elif event_type == 'disable':
-                icon = '✅'
-                title = 'ОТКЛЮЧЕНИЕ ТЕХРАБОТ'
-
-            elif event_type == 'api_status':
-                if status == 'online':
-                    icon = '🟢'
-                    title = 'API REMNAWAVE ВОССТАНОВЛЕНО'
-                else:
-                    icon = '🔴'
-                    title = 'API REMNAWAVE НЕДОСТУПНО'
-
-            elif event_type == 'monitoring':
-                if status == 'started':
-                    icon = '🔍'
-                    title = 'МОНИТОРИНГ ЗАПУЩЕН'
-                else:
-                    icon = '⏹️'
-                    title = 'МОНИТОРИНГ ОСТАНОВЛЕН'
-            else:
-                icon = 'ℹ️'
-                title = 'СИСТЕМА ТЕХРАБОТ'
-
-            message_parts = [f'{icon} <b>{title}</b>', '']
-
-            if event_type == 'enable':
-                if details.get('reason'):
-                    message_parts.append(f'📋 <b>Причина:</b> {details["reason"]}')
-
-                if details.get('enabled_at'):
-                    enabled_at = details['enabled_at']
-                    if isinstance(enabled_at, str):
-                        enabled_at = datetime.fromisoformat(enabled_at)
-                    message_parts.append(
-                        f'🕐 <b>Время включения:</b> {format_local_datetime(enabled_at, "%d.%m.%Y %H:%M:%S")}'
-                    )
-
-                message_parts.append(
-                    f'🤖 <b>Автоматически:</b> {"Да" if details.get("auto_enabled", False) else "Нет"}'
-                )
-                message_parts.append('')
-                message_parts.append('❗ Обычные пользователи временно не могут использовать бота.')
-
-            elif event_type == 'disable':
-                if details.get('disabled_at'):
-                    disabled_at = details['disabled_at']
-                    if isinstance(disabled_at, str):
-                        disabled_at = datetime.fromisoformat(disabled_at)
-                    message_parts.append(
-                        f'🕐 <b>Время отключения:</b> {format_local_datetime(disabled_at, "%d.%m.%Y %H:%M:%S")}'
-                    )
-
-                if details.get('duration'):
-                    duration = details['duration']
-                    if isinstance(duration, (int, float)):
-                        hours = int(duration // 3600)
-                        minutes = int((duration % 3600) // 60)
-                        if hours > 0:
-                            duration_str = f'{hours}ч {minutes}мин'
-                        else:
-                            duration_str = f'{minutes}мин'
-                        message_parts.append(f'⏱️ <b>Длительность:</b> {duration_str}')
-
-                message_parts.append(
-                    f'🤖 <b>Было автоматическим:</b> {"Да" if details.get("was_auto", False) else "Нет"}'
-                )
-                message_parts.append('')
-                message_parts.append('✅ Сервис снова доступен для пользователей.')
-
-            elif event_type == 'api_status':
-                message_parts.append(f'🔗 <b>API URL:</b> {details.get("api_url", "неизвестно")}')
-
-                if status == 'online':
-                    if details.get('response_time'):
-                        message_parts.append(f'⚡ <b>Время отклика:</b> {details["response_time"]} сек')
-
-                    if details.get('consecutive_failures', 0) > 0:
-                        message_parts.append(f'🔄 <b>Неудачных попыток было:</b> {details["consecutive_failures"]}')
-
-                    message_parts.append('')
-                    message_parts.append('API снова отвечает на запросы.')
-
-                else:
-                    if details.get('consecutive_failures'):
-                        message_parts.append(f'🔄 <b>Попытка №:</b> {details["consecutive_failures"]}')
-
-                    if details.get('error'):
-                        error_msg = str(details['error'])[:100]
-                        message_parts.append(f'❌ <b>Ошибка:</b> {error_msg}')
-
-                    message_parts.append('')
-                    message_parts.append('⚠️ Началась серия неудачных проверок API.')
-
-            elif event_type == 'monitoring':
-                if status == 'started':
-                    if details.get('check_interval'):
-                        message_parts.append(f'🔄 <b>Интервал проверки:</b> {details["check_interval"]} сек')
-
-                    if details.get('auto_enable_configured') is not None:
-                        auto_enable = 'Включено' if details['auto_enable_configured'] else 'Отключено'
-                        message_parts.append(f'🤖 <b>Автовключение:</b> {auto_enable}')
-
-                    if details.get('max_failures'):
-                        message_parts.append(f'🎯 <b>Порог ошибок:</b> {details["max_failures"]}')
-
-                    message_parts.append('')
-                    message_parts.append('Система будет следить за доступностью API.')
-
-                else:
-                    message_parts.append('Автоматический мониторинг API остановлен.')
-
-            message_parts.append('')
-            message_parts.append(f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
-
-            message = '\n'.join(message_parts)
-
-            return await self._send_message(message, category=NotificationCategory.INFRASTRUCTURE)
-
-        except Exception as e:
-            logger.error('Ошибка отправки уведомления о техработах', error=e)
-            return False
-
     async def send_remnawave_panel_status_notification(self, status: str, details: dict[str, Any] = None) -> bool:
         if not self._is_enabled():
             return False
@@ -2702,7 +2542,7 @@ class AdminNotificationService:
                 role=self.resolve_recipient_role(),
             )
 
-            topic_id = getattr(settings, 'REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID', None) or None
+            topic_id = settings.REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID or None
             return await self._send_message(
                 '\n'.join(message_lines),
                 reply_markup=keyboard,

@@ -197,8 +197,6 @@ async def process_aurapay_payment_amount(
     )
 
 
-AURAPAY_PAYMENT_METHODS = {'aurapay', 'aurapay_sbp', 'aurapay_card'}
-
 AURAPAY_SERVICE_MAP: dict[str, str | None] = {
     'aurapay': None,
     'aurapay_sbp': 'sbp',

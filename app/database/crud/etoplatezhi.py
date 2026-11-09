@@ -120,33 +120,6 @@ async def update_etoplatezhi_payment_status(
     return payment
 
 
-async def get_pending_etoplatezhi_payments(db: AsyncSession, user_id: int) -> list[EtoplatezhiPayment]:
-    """Получает незавершенные платежи пользователя."""
-    result = await db.execute(
-        select(EtoplatezhiPayment).where(
-            EtoplatezhiPayment.user_id == user_id,
-            EtoplatezhiPayment.status == 'pending',
-            EtoplatezhiPayment.is_paid == False,
-        )
-    )
-    return list(result.scalars().all())
-
-
-async def get_expired_pending_etoplatezhi_payments(
-    db: AsyncSession,
-) -> list[EtoplatezhiPayment]:
-    """Получает просроченные платежи в статусе pending."""
-    now = datetime.now(UTC)
-    result = await db.execute(
-        select(EtoplatezhiPayment).where(
-            EtoplatezhiPayment.status == 'pending',
-            EtoplatezhiPayment.is_paid == False,
-            EtoplatezhiPayment.expires_at < now,
-        )
-    )
-    return list(result.scalars().all())
-
-
 async def link_etoplatezhi_payment_to_transaction(
     db: AsyncSession,
     *,

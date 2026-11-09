@@ -73,12 +73,6 @@ class PromoRateLimiter:
         self._activations[user_id] = activations
         return len(activations) < MAX_ACTIVATIONS_PER_DAY
 
-    def get_activations_left(self, user_id: int) -> int:
-        now = time.time()
-        activations = self._activations.get(user_id, [])
-        activations = [ts for ts in activations if now - ts < ACTIVATION_WINDOW_SECONDS]
-        return max(0, MAX_ACTIVATIONS_PER_DAY - len(activations))
-
     def cleanup(self) -> None:
         now = time.time()
         if len(self._failed_attempts) > 500:

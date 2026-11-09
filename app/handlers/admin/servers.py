@@ -525,7 +525,7 @@ async def process_server_price_edit(message: types.Message, state: FSMContext, d
             await message.answer('❌ Слишком высокая цена (максимум 10,000 ₽)')
             return
 
-        price_kopeks = int(price_rubles * 100)
+        price_kopeks = settings.rubles_to_kopeks(price_rubles)
 
         server = await update_server_squad(db, server_id, price_kopeks=price_kopeks)
 

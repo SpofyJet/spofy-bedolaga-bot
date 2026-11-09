@@ -1,14 +1,12 @@
 import asyncio
 import time
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from functools import wraps
 from typing import ParamSpec, TypeVar
 
 import structlog
 from sqlalchemy import bindparam, event, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import InterfaceError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
@@ -129,80 +127,6 @@ AsyncSessionLocal = async_sessionmaker(
 # RETRY LOGIC FOR DATABASE OPERATIONS
 # ============================================================================
 
-RETRYABLE_EXCEPTIONS = (OperationalError, InterfaceError, ConnectionRefusedError, OSError, TimeoutError)
-DEFAULT_RETRY_ATTEMPTS = 3
-DEFAULT_RETRY_DELAY = 0.5  # секунды
-
-
-def with_db_retry(
-    attempts: int = DEFAULT_RETRY_ATTEMPTS,
-    delay: float = DEFAULT_RETRY_DELAY,
-    backoff: float = 2.0,
-) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
-    """
-    Декоратор для автоматического retry при сбоях подключения к БД.
-
-    Args:
-        attempts: Количество попыток
-        delay: Начальная задержка между попытками (секунды)
-        backoff: Множитель задержки для каждой следующей попытки
-    """
-
-    def decorator(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
-        @wraps(func)
-        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            last_exception: Exception | None = None
-            current_delay = delay
-
-            for attempt in range(1, attempts + 1):
-                try:
-                    return await func(*args, **kwargs)
-                except RETRYABLE_EXCEPTIONS as e:
-                    last_exception = e
-                    if attempt < attempts:
-                        logger.warning(
-                            'Ошибка БД (попытка /): . Повтор через сек...',
-                            attempt=attempt,
-                            attempts=attempts,
-                            e=str(e)[:100],
-                            current_delay=current_delay,
-                        )
-                        await asyncio.sleep(current_delay)
-                        current_delay *= backoff
-                    else:
-                        logger.error('Ошибка БД: все попыток исчерпаны. Последняя ошибка', attempts=attempts, e=str(e))
-
-            raise last_exception  # type: ignore[misc]
-
-        return wrapper  # type: ignore[return-value]
-
-    return decorator
-
-
-async def execute_with_retry(
-    session: AsyncSession,
-    statement,
-    attempts: int = DEFAULT_RETRY_ATTEMPTS,
-):
-    """Выполнение SQL с retry логикой."""
-    if attempts < 1:
-        raise ValueError(f'attempts must be >= 1, got {attempts}')
-
-    last_exception: Exception | None = None
-    delay = DEFAULT_RETRY_DELAY
-
-    for attempt in range(1, attempts + 1):
-        try:
-            return await session.execute(statement)
-        except RETRYABLE_EXCEPTIONS as e:
-            last_exception = e
-            if attempt < attempts:
-                logger.warning('SQL retry (попытка /)', attempt=attempt, attempts=attempts, e=str(e)[:100])
-                await asyncio.sleep(delay)
-                delay *= 2
-
-    raise last_exception  # type: ignore[misc]
-
 
 # ============================================================================
 # QUERY PERFORMANCE MONITORING
@@ -322,33 +246,6 @@ class DatabaseManager:
         except Exception as e:
             logger.error('Database health check failed', e=e)
             status = 'unhealthy'
-
-        return {
-            'status': status,
-            'latency_ms': round(latency, 2) if latency else None,
-            'pool': _collect_health_pool_metrics(pool),
-        }
-
-    async def health_check_replica(self, timeout: float = HEALTH_CHECK_TIMEOUT) -> dict | None:
-        """Проверка здоровья read replica."""
-        if not self.read_replica_engine:
-            return None
-
-        pool = self.read_replica_engine.pool
-        status = 'unhealthy'
-        latency = None
-
-        try:
-            async with asyncio.timeout(timeout):
-                async with self._read_replica_session_factory() as session:
-                    start = time.time()
-                    await session.execute(text('SELECT 1'))
-                    latency = (time.time() - start) * 1000
-            status = 'healthy'
-        except TimeoutError:
-            status = 'timeout'
-        except Exception as e:
-            logger.error('Read replica health check failed', e=e)
 
         return {
             'status': status,

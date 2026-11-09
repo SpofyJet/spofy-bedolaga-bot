@@ -184,11 +184,6 @@ async def get_promo_offer_template_by_id(db: AsyncSession, template_id: int) -> 
     return result.scalar_one_or_none()
 
 
-async def get_promo_offer_template_by_type(db: AsyncSession, offer_type: str) -> PromoOfferTemplate | None:
-    result = await db.execute(select(PromoOfferTemplate).where(PromoOfferTemplate.offer_type == offer_type))
-    return result.scalar_one_or_none()
-
-
 async def update_promo_offer_template(
     db: AsyncSession,
     template: PromoOfferTemplate,

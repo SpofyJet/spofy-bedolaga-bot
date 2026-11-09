@@ -148,13 +148,3 @@ async def delete_coupon_batch(db: AsyncSession, batch: CouponBatch) -> int:
     await db.delete(batch)
     await db.commit()
     return result.rowcount or 0
-
-
-async def delete_coupon(db: AsyncSession, coupon: Coupon) -> None:
-    """Удаляет один купон партии (например, лишний непогашенный)."""
-    await db.delete(coupon)
-    await db.commit()
-
-
-async def get_coupon_by_id(db: AsyncSession, coupon_id: int) -> Coupon | None:
-    return await db.get(Coupon, coupon_id)

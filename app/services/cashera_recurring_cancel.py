@@ -86,11 +86,6 @@ async def cancel_cashera_recurring_for_subscription_safe(
         logger.warning('Cashera: не удалось отменить автопродление', error=str(error), subscription_id=subscription_id)
 
 
-async def cancel_cashera_recurring_by_local_id(db: AsyncSession, local_id: int) -> bool:
-    """Отмена привязки по локальному id (кабинет/бот). Идемпотентна."""
-    return await cancel_cashera_recurrent_subscription(db, local_id=local_id)
-
-
 async def get_cashera_recurring_status(db: AsyncSession, subscription_id: int) -> dict[str, Any] | None:
     """Состояние живой привязки для UI (бот/кабинет) либо None."""
     record = await sub_crud.get_active_cashera_subscription_by_subscription(db, subscription_id)

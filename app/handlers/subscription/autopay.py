@@ -474,7 +474,7 @@ async def handle_sbp_recurring_menu(
 
             _menu_period = (
                 resolve_autopay_period_candidate(getattr(subscription, 'autopay_period_days', None), _menu_tariff)
-                or resolve_autopay_period_candidate(getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0), _menu_tariff)
+                or resolve_autopay_period_candidate(settings.DEFAULT_AUTOPAY_PERIOD_DAYS, _menu_tariff)
                 or (_menu_tariff.get_shortest_period() if _menu_tariff else None)
                 or 30
             )

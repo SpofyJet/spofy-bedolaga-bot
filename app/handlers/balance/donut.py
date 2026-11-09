@@ -22,8 +22,6 @@ from app.utils.topup_retry import format_topup_amount_retry
 logger = structlog.get_logger(__name__)
 
 
-DONUT_PAYMENT_METHODS = {'donut', 'donut_card', 'donut_sbp', 'donut_sbp_qr'}
-
 DONUT_SERVICE_MAP: dict[str, str | None] = {
     'donut': None,
     'donut_card': 'card',

@@ -786,7 +786,7 @@ async def _append_sbp_recurring_offer(db, subscription, tariff, texts, rows: lis
 
         _offer_period = (
             resolve_autopay_period_candidate(getattr(subscription, 'autopay_period_days', None), tariff)
-            or resolve_autopay_period_candidate(getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0), tariff)
+            or resolve_autopay_period_candidate(settings.DEFAULT_AUTOPAY_PERIOD_DAYS, tariff)
             or (tariff.get_shortest_period() if tariff else None)
             or 30
         )
@@ -1958,39 +1958,6 @@ async def select_tariff_period_with_traffic(
         parse_mode='HTML',
     )
     await callback.answer()
-
-
-async def _remove_excess_panel_devices(
-    db: AsyncSession,
-    subscription,
-    db_user: User,
-    included: int,
-) -> None:
-    """Синкает урезанный лимит устройств в панель и отключает лишние (последние по дате).
-
-    Вызывается ТОЛЬКО после успешной оплаты: до неё лишние устройства не
-    трогаем — иначе человек терял их без покупки (кнопка «Только N устр.»
-    жива и на экране нехватки средств).
-    """
-    from app.handlers.subscription.devices import _get_panel_user_id
-
-    panel_user_id = _get_panel_user_id(subscription, db_user)
-    try:
-        from app.services.subscription_service import SubscriptionService
-
-        await SubscriptionService().update_remnawave_user(db, subscription)
-        if panel_user_id:
-            from app.services.remnawave_service import RemnaWaveService
-
-            async with RemnaWaveService().get_api_client() as api:
-                info = await api.get_user_devices(panel_user_id)
-                devices = info.get('devices', []) if isinstance(info, dict) else []
-                extra = sorted(devices, key=lambda d: d.get('updatedAt') or d.get('createdAt') or '')[included:]
-                for device in extra:
-                    if device.get('hwid'):
-                        await api.remove_device(panel_user_id, device['hwid'])
-    except Exception as error:
-        logger.warning('Не удалось синхронизировать уменьшение устройств с панелью', error=str(error))
 
 
 @error_handler

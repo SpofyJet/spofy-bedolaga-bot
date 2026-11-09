@@ -712,7 +712,7 @@ async def process_daily_price_input(
         if price_rubles <= 0:
             raise ValueError('Цена должна быть положительной')
 
-        price_kopeks = int(price_rubles * 100)
+        price_kopeks = settings.rubles_to_kopeks(price_rubles)
     except ValueError:
         await message.answer(
             '❌ Некорректная цена. Введите положительное число.\nПример: <code>50</code> или <code>99.90</code>',

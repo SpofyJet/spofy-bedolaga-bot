@@ -190,15 +190,6 @@ class PartnerApplicationService:
 
         return True, ''
 
-    async def get_pending_applications(self, db: AsyncSession) -> list[PartnerApplication]:
-        """Получает все заявки на рассмотрении."""
-        result = await db.execute(
-            select(PartnerApplication)
-            .where(PartnerApplication.status == PartnerStatus.PENDING.value)
-            .order_by(PartnerApplication.created_at.asc())
-        )
-        return list(result.scalars().all())
-
     async def get_all_applications(
         self,
         db: AsyncSession,

@@ -33,10 +33,10 @@ class NaloGoService:
         device_id: str | None = None,
         storage_path: str | None = None,
     ):
-        inn = inn or getattr(settings, 'NALOGO_INN', None)
-        password = password or getattr(settings, 'NALOGO_PASSWORD', None)
-        device_id = device_id or getattr(settings, 'NALOGO_DEVICE_ID', None)
-        storage_path = storage_path or getattr(settings, 'NALOGO_STORAGE_PATH', './data/nalogo_tokens.json')
+        inn = inn or settings.NALOGO_INN
+        password = password or settings.NALOGO_PASSWORD
+        device_id = device_id or settings.NALOGO_DEVICE_ID
+        storage_path = storage_path or settings.NALOGO_STORAGE_PATH
 
         self.configured = False
 
@@ -631,82 +631,6 @@ class NaloGoService:
         receipt_data['attempts'] = receipt_data.get('attempts', 0) + 1
         return await cache.lpush(NALOGO_QUEUE_KEY, receipt_data)
 
-    async def find_duplicate_receipt(
-        self,
-        amount: float,
-        created_at: datetime,
-        time_window_minutes: int = 10,
-    ) -> str | None:
-        """Проверяет, не был ли уже создан чек с такой суммой в заданном временном окне.
-
-        Используется для защиты от дублей при таймаутах — когда сервер создал чек,
-        но ответ не вернулся.
-
-        Args:
-            amount: Сумма чека в рублях
-            created_at: Время создания записи в очереди
-            time_window_minutes: Окно поиска в минутах (±)
-
-        Returns:
-            UUID чека если дубликат найден, None если не найден
-        """
-        if not self.configured:
-            return None
-
-        try:
-            # Запрашиваем чеки за день когда был создан запрос
-            from_date = created_at.date()
-            to_date = from_date + timedelta(days=1)
-
-            incomes = await self.get_incomes(
-                from_date=from_date,
-                to_date=to_date,
-                limit=50,
-            )
-
-            if not incomes:
-                return None
-
-            # Ищем чек с такой же суммой в пределах временного окна
-            for income in incomes:
-                income_amount = float(income.get('totalAmount', income.get('amount', 0)))
-
-                # Проверяем сумму (с погрешностью 0.01)
-                if abs(income_amount - amount) > 0.01:
-                    continue
-
-                # Проверяем время
-                operation_time_str = income.get('operationTime')
-                if operation_time_str:
-                    try:
-                        from dateutil.parser import isoparse
-
-                        operation_time = isoparse(operation_time_str)
-                        if operation_time.tzinfo is None:
-                            operation_time = operation_time.replace(tzinfo=UTC)
-
-                        time_diff = abs((operation_time - created_at).total_seconds())
-                        if time_diff <= time_window_minutes * 60:
-                            receipt_uuid = income.get('approvedReceiptUuid', income.get('receiptUuid'))
-                            if receipt_uuid:
-                                logger.info(
-                                    'Найден дубликат чека',
-                                    receipt_uuid=receipt_uuid,
-                                    income_amount=income_amount,
-                                    operation_time=operation_time,
-                                    time_diff=round(time_diff, 0),
-                                )
-                                return receipt_uuid
-                    except Exception as parse_error:
-                        logger.debug('Ошибка парсинга времени чека', parse_error=parse_error)
-                        continue
-
-            return None
-
-        except Exception as error:
-            logger.warning('Ошибка проверки дубликата чека', error=sanitize_proxy_error(error))
-            return None
-
     async def get_incomes(
         self,
         from_date: date | None = None,
@@ -823,7 +747,7 @@ def _receipt_file_stem(receipt_uuid: str) -> str:
     ``{uuid}`` — id чека. Битый шаблон, пустое имя или одни запрещённые символы
     дают прежнее ``receipt_<uuid>``: имя файла не повод потерять чек.
     """
-    pattern = str(getattr(settings, 'NALOGO_RECEIPT_FILENAME', '') or '').strip()
+    pattern = str(settings.NALOGO_RECEIPT_FILENAME or '').strip()
     try:
         stem = pattern.format(uuid=receipt_uuid) if pattern else ''
     except (KeyError, IndexError, ValueError):

@@ -197,8 +197,6 @@ async def process_antilopay_payment_amount(
     )
 
 
-ANTILOPAY_PAYMENT_METHODS = {'antilopay', 'antilopay_sbp', 'antilopay_card', 'antilopay_sberpay'}
-
 ANTILOPAY_SERVICE_MAP: dict[str, str | None] = {
     'antilopay': None,
     'antilopay_sbp': 'sbp',

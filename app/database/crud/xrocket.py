@@ -1,7 +1,7 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -76,16 +76,6 @@ async def get_xrocket_payment_by_invoice_id_for_update(db: AsyncSession, invoice
     return result.scalar_one_or_none()
 
 
-async def get_xrocket_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> XRocketPayment | None:
-    result = await db.execute(
-        select(XRocketPayment)
-        .where(XRocketPayment.id == payment_id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    return result.scalar_one_or_none()
-
-
 async def update_xrocket_payment_status(
     db: AsyncSession,
     invoice_id: str,
@@ -131,28 +121,3 @@ async def link_xrocket_payment_to_transaction(
 
     logger.info('Связан xRocket платеж с транзакцией', invoice_id=invoice_id, transaction_id=transaction_id)
     return payment
-
-
-async def get_user_xrocket_payments(
-    db: AsyncSession, user_id: int, limit: int = 50, offset: int = 0
-) -> list[XRocketPayment]:
-    result = await db.execute(
-        select(XRocketPayment)
-        .where(XRocketPayment.user_id == user_id)
-        .order_by(XRocketPayment.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
-    return result.scalars().all()
-
-
-async def get_pending_xrocket_payments(db: AsyncSession, older_than_hours: int = 24) -> list[XRocketPayment]:
-    cutoff_time = datetime.now(UTC) - timedelta(hours=older_than_hours)
-
-    result = await db.execute(
-        select(XRocketPayment)
-        .options(selectinload(XRocketPayment.user))
-        .where(and_(XRocketPayment.status == 'active', XRocketPayment.created_at < cutoff_time))
-        .order_by(XRocketPayment.created_at)
-    )
-    return result.scalars().all()

@@ -116,33 +116,6 @@ async def update_aurapay_payment_status(
     return payment
 
 
-async def get_pending_aurapay_payments(db: AsyncSession, user_id: int) -> list[AuraPayPayment]:
-    """Получает незавершенные платежи пользователя."""
-    result = await db.execute(
-        select(AuraPayPayment).where(
-            AuraPayPayment.user_id == user_id,
-            AuraPayPayment.status == 'pending',
-            AuraPayPayment.is_paid == False,
-        )
-    )
-    return list(result.scalars().all())
-
-
-async def get_expired_pending_aurapay_payments(
-    db: AsyncSession,
-) -> list[AuraPayPayment]:
-    """Получает просроченные платежи в статусе pending."""
-    now = datetime.now(UTC)
-    result = await db.execute(
-        select(AuraPayPayment).where(
-            AuraPayPayment.status == 'pending',
-            AuraPayPayment.is_paid == False,
-            AuraPayPayment.expires_at < now,
-        )
-    )
-    return list(result.scalars().all())
-
-
 async def link_aurapay_payment_to_transaction(
     db: AsyncSession,
     *,

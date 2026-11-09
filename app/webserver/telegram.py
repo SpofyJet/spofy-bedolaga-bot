@@ -139,14 +139,6 @@ class TelegramWebhookProcessor:
         except TimeoutError as error:
             raise TelegramWebhookOverloadedError from error
 
-    async def wait_until_drained(self, timeout: float | None = None) -> None:
-        if not self._running or self._worker_count == 0:
-            return
-        if timeout is None:
-            await self._queue.join()
-            return
-        await asyncio.wait_for(self._queue.join(), timeout=timeout)
-
     async def _worker_loop(self, worker_id: int) -> None:
         try:
             while True:

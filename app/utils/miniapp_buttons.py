@@ -317,7 +317,7 @@ def build_miniapp_startapp_url(start_param: str) -> str:
     BotFather → /newapp). Возвращает '' если чего-то не хватает.
     """
     bot_username = settings.get_bot_username()
-    app_name = (getattr(settings, 'MINIAPP_APP_SHORT_NAME', '') or '').strip()
+    app_name = (settings.MINIAPP_APP_SHORT_NAME or '').strip()
     if not bot_username or not app_name:
         return ''
     return f'https://t.me/{bot_username}/{app_name}?startapp={start_param}'

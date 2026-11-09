@@ -192,7 +192,7 @@ class NotificationSettingsService:
 
     @classmethod
     def are_notifications_globally_enabled(cls) -> bool:
-        return bool(getattr(settings, 'ENABLE_NOTIFICATIONS', True))
+        return bool(settings.ENABLE_NOTIFICATIONS)
 
     # ------------------------------------------------------------ перенос старого файла
 

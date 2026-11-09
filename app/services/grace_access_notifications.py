@@ -201,7 +201,7 @@ async def _notify_user(bot: Any, event: GraceEvent, subscription: Subscription, 
 
 def grace_allowed_services() -> str:
     """Что остаётся доступным во время grace — словами оператора; пусто = Telegram."""
-    return (getattr(settings, 'GRACE_ACCESS_ALLOWED_SERVICES', '') or '').strip() or 'Telegram'
+    return (settings.GRACE_ACCESS_ALLOWED_SERVICES or '').strip() or 'Telegram'
 
 
 def _as_utc(value: datetime) -> datetime:

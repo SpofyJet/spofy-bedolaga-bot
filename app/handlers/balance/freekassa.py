@@ -341,7 +341,7 @@ async def process_freekassa_custom_amount(
     try:
         amount_text = message.text.replace(',', '.').replace(' ', '').strip()
         amount_rubles = float(amount_text)
-        amount_kopeks = int(amount_rubles * 100)
+        amount_kopeks = settings.rubles_to_kopeks(amount_rubles)
     except (ValueError, TypeError):
         await message.answer(
             texts.t(

@@ -112,7 +112,7 @@ async def _best_subscription(db: AsyncSession, user_id: int, now: datetime) -> S
 
 
 async def _reward_is_suspicious(user: User, subscription: Subscription) -> bool:
-    if not getattr(settings, 'TRIAL_ABUSE_REWARD_GUARD', True):
+    if not settings.TRIAL_ABUSE_REWARD_GUARD:
         return False
     from app.services.trial_abuse_service import trial_abuse_service
 
@@ -157,7 +157,9 @@ async def on_first_connected(db: AsyncSession, user: User, subscription: Subscri
     await _add_days(db, subscription, DAYS_FRIEND)
     await _record(db, user.id, EVENT_INVITED_BONUS, subscription.id)
     await record_decision(
-        KIND_REWARD_GRANTED, f'Друг подключился: +{DAYS_FRIEND} дн. ему и пригласившему', user_id=user.id,
+        KIND_REWARD_GRANTED,
+        f'Друг подключился: +{DAYS_FRIEND} дн. ему и пригласившему',
+        user_id=user.id,
         details={'inviter_id': inviter.id, 'days': DAYS_FRIEND},
     )
     texts = get_texts(user.language)

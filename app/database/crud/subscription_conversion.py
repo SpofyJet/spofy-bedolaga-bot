@@ -103,13 +103,3 @@ async def get_conversion_statistics(db: AsyncSession) -> dict:
         'avg_first_payment_rubles': round((avg_first_payment or 0) / 100, 2),
         'month_conversions': month_conversions,
     }
-
-
-async def get_users_had_trial_count(db: AsyncSession) -> int:
-    conversions_count_result = await db.execute(select(func.count(func.distinct(SubscriptionConversion.user_id))))
-    conversions_count = conversions_count_result.scalar()
-
-    paid_users_result = await db.execute(select(func.count(User.id)).where(User.has_had_paid_subscription == True))
-    paid_users_count = paid_users_result.scalar()
-
-    return max(conversions_count, paid_users_count)

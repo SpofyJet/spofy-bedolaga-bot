@@ -245,11 +245,6 @@ class LavaService:
         logger.info('Lava API invoice/status', order_id=order_id, invoice_id=invoice_id)
         return await self._post('/business/invoice/status', payload)
 
-    async def get_services(self) -> dict[str, Any]:
-        """POST /business/invoice/get-available-tariffs — доступные методы оплаты для shopId."""
-        payload: dict[str, Any] = {'shopId': self.shop_id}
-        return await self._post('/business/invoice/get-available-tariffs', payload)
-
     # ==================== Рекуррентные подписки ====================
     #
     # Подписка оформляется на ПРОДУКТ, созданный в кабинете Lava: цена и

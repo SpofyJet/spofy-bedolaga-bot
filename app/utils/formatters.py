@@ -159,17 +159,6 @@ def format_number(number: float, separator: str = ' ') -> str:
     return f'{number:,}'.replace(',', separator)
 
 
-def format_price_range(min_price: int, max_price: int) -> str:
-    from app.config import settings
-
-    min_formatted = settings.format_price(min_price)
-    max_formatted = settings.format_price(max_price)
-
-    if min_price == max_price:
-        return min_formatted
-    return f'{min_formatted} - {max_formatted}'
-
-
 def truncate_text(text: str, max_length: int = 100, suffix: str = '...') -> str:
     if len(text) <= max_length:
         return text

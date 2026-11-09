@@ -59,7 +59,6 @@ NO_VALUE: Final[str] = '—'
 GITHUB_BOT_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot'
 GITHUB_CABINET_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/bedolaga-cabinet'
 COMMUNITY_URL: Final[str] = 'https://t.me/+wTdMtSWq8YdmZmVi'
-DEVELOPER_CONTACT_URL: Final[str] = 'https://t.me/fringg'
 
 # Ключевые слова для определения типа ошибки
 PERMISSION_ERROR_KEYWORDS: Final[tuple[str, ...]] = ('permission denied', 'errno 13')
@@ -214,12 +213,12 @@ class StartupNotificationService:
 
     def __init__(self, bot: Bot) -> None:
         self.bot = bot
-        self.chat_id = getattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None)
+        self.chat_id = settings.ADMIN_NOTIFICATIONS_CHAT_ID
         # Стартовые/краш-уведомления → топик инфраструктуры, fallback на общий
-        self.topic_id = getattr(settings, 'ADMIN_NOTIFICATIONS_INFRASTRUCTURE_TOPIC_ID', None) or getattr(
+        self.topic_id = settings.ADMIN_NOTIFICATIONS_INFRASTRUCTURE_TOPIC_ID or getattr(
             settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None
         )
-        self.enabled = getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
+        self.enabled = settings.ADMIN_NOTIFICATIONS_ENABLED
 
     def _get_version(self) -> str:
         """Получает версию из pyproject.toml."""
@@ -436,7 +435,7 @@ class StartupNotificationService:
             if self.topic_id and target == self.chat_id:
                 send_kwargs['message_thread_id'] = self.topic_id
 
-            timeout = getattr(settings, 'MONITORING_NOTIFICATION_SEND_TIMEOUT', 20.0)
+            timeout = settings.MONITORING_NOTIFICATION_SEND_TIMEOUT
             msg = await asyncio.wait_for(self.bot.send_photo(**send_kwargs), timeout=timeout)
             _cache_logo_file_id(msg)
 
@@ -669,14 +668,14 @@ async def send_shutdown_notification(
     Шлётся в начале завершения, пока сессия бота жива: Docker даёт на остановку
     около 10 секунд, поэтому вызывающий ограничивает её по времени.
     """
-    chat_id = getattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None)
-    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not chat_id:
+    chat_id = settings.ADMIN_NOTIFICATIONS_CHAT_ID
+    if not settings.ADMIN_NOTIFICATIONS_ENABLED or not chat_id:
         return False
     # Плановая остановка — в топик инфраструктуры, как сообщение о запуске; авария — в ошибки.
     topic_key = (
         'ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID' if reason.is_failure else 'ADMIN_NOTIFICATIONS_INFRASTRUCTURE_TOPIC_ID'
     )
-    topic_id = getattr(settings, topic_key, None) or getattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None)
+    topic_id = getattr(settings, topic_key, None) or settings.ADMIN_NOTIFICATIONS_TOPIC_ID
 
     message_kwargs: dict = {
         'chat_id': chat_id,
@@ -689,10 +688,6 @@ async def send_shutdown_notification(
         'parse_mode': ParseMode.HTML,
         'disable_web_page_preview': True,
     }
-    if reason.is_failure:
-        message_kwargs['reply_markup'] = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text='💬 Сообщить разработчику', url=DEVELOPER_CONTACT_URL)]]
-        )
     if topic_id:
         message_kwargs['message_thread_id'] = topic_id
 
@@ -717,12 +712,10 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
     Returns:
         bool: True если уведомление отправлено успешно
     """
-    chat_id = getattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None)
+    chat_id = settings.ADMIN_NOTIFICATIONS_CHAT_ID
     # Краш → топик ошибок, fallback на общий
-    topic_id = getattr(settings, 'ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID', None) or getattr(
-        settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None
-    )
-    enabled = getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
+    topic_id = settings.ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID or getattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None)
+    enabled = settings.ADMIN_NOTIFICATIONS_ENABLED
 
     if not enabled or not chat_id:
         logger.debug('Уведомление о падении отключено или chat_id не задан')
@@ -769,24 +762,11 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
 
         message_text += f'\n<i>{timestamp}</i>'
 
-        # Кнопка для связи с разработчиком
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text='💬 Сообщить разработчику',
-                        url=DEVELOPER_CONTACT_URL,
-                    ),
-                ],
-            ]
-        )
-
         message_kwargs: dict = {
             'chat_id': chat_id,
             'document': file,
             'caption': message_text,
             'parse_mode': ParseMode.HTML,
-            'reply_markup': keyboard,
         }
 
         if topic_id:

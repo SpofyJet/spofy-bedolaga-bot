@@ -16,12 +16,6 @@ logger = structlog.get_logger(__name__)
 _bot_instance: Bot | None = None
 
 
-def set_webhook_bot(bot: Bot) -> None:
-    """Устанавливает экземпляр бота для отправки уведомлений об ошибках в webhook."""
-    global _bot_instance
-    _bot_instance = bot
-
-
 async def tribute_webhook(request):
     try:
         signature = request.headers.get('trbt-signature', '')

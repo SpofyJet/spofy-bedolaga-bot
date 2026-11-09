@@ -38,20 +38,16 @@ DEFAULT_TIMEOUT = 5
 
 
 def is_configured() -> bool:
-    return bool(
-        getattr(settings, 'ABUSE_API_ENABLED', False)
-        and getattr(settings, 'ABUSE_API_URL', None)
-        and getattr(settings, 'ABUSE_API_KEY', None)
-    )
+    return bool(settings.ABUSE_API_ENABLED and settings.ABUSE_API_URL and settings.ABUSE_API_KEY)
 
 
 def _base_url() -> str:
-    return str(getattr(settings, 'ABUSE_API_URL', '') or '').rstrip('/')
+    return str(settings.ABUSE_API_URL or '').rstrip('/')
 
 
 def _timeout() -> int:
     try:
-        return int(getattr(settings, 'ABUSE_API_TIMEOUT', DEFAULT_TIMEOUT) or DEFAULT_TIMEOUT)
+        return int(settings.ABUSE_API_TIMEOUT or DEFAULT_TIMEOUT)
     except (TypeError, ValueError):
         return DEFAULT_TIMEOUT
 
@@ -61,7 +57,7 @@ async def _get(path: str, params: dict[str, Any]) -> Any | None:
         return None
 
     url = f'{_base_url()}{path}'
-    headers = {'X-API-Key': str(getattr(settings, 'ABUSE_API_KEY', ''))}
+    headers = {'X-API-Key': str(settings.ABUSE_API_KEY)}
     try:
         timeout = aiohttp.ClientTimeout(total=_timeout())
         async with aiohttp.ClientSession(timeout=timeout) as session:

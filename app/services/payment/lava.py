@@ -232,11 +232,7 @@ class LavaPaymentMixin:
     def _build_lava_hook_url() -> str | None:
         """Собирает абсолютный URL вебхука для Lava."""
         webhook_path = settings.LAVA_WEBHOOK_PATH or '/lava-webhook'
-        base = (
-            getattr(settings, 'WEBHOOK_URL', None)
-            or getattr(settings, 'WEB_API_BASE_URL', None)
-            or getattr(settings, 'CABINET_URL', None)
-        )
+        base = settings.WEBHOOK_URL or getattr(settings, 'WEB_API_BASE_URL', None) or settings.CABINET_URL
         if not base:
             return None
         suffix = webhook_path if webhook_path.startswith('/') else f'/{webhook_path}'
@@ -578,24 +574,6 @@ class LavaPaymentMixin:
         )
 
         return True
-
-    async def check_lava_payment_status(
-        self,
-        db: AsyncSession,
-        order_id: str | None = None,
-        invoice_id: str | None = None,
-    ) -> dict[str, Any] | None:
-        """Запрос статуса инвойса через API Lava."""
-        try:
-            return await lava_service.get_invoice_status(order_id=order_id, invoice_id=invoice_id)
-        except Exception as e:
-            logger.error(
-                'Lava: ошибка проверки статуса',
-                order_id=order_id,
-                invoice_id=invoice_id,
-                error=e,
-            )
-            return None
 
     # ==================== Рекуррентные подписки Lava ====================
 
@@ -1312,11 +1290,6 @@ async def get_lava_recurring_status(db: AsyncSession, subscription_id: int) -> d
         'charges_success': record.charges_success,
         'charges_failed': record.charges_failed,
     }
-
-
-async def cancel_lava_recurring_by_local_id(db: AsyncSession, local_id: int) -> bool:
-    """Отмена привязки по локальному id (кабинет/бот). Идемпотентна."""
-    return await _LavaRecurrentAgent().cancel_lava_recurrent_subscription(db, local_id=local_id)
 
 
 async def shift_lava_next_charge_after_manual_extension(

@@ -1,4 +1,3 @@
-import functools
 import json
 from datetime import timedelta
 from typing import Any
@@ -149,29 +148,6 @@ class CacheService:
             logger.error('Ошибка установки TTL для', key=key, error=e)
             return False
 
-    async def get_keys(self, pattern: str = '*') -> list:
-        if not self._connected:
-            return []
-
-        try:
-            keys = await self.redis_client.keys(pattern)
-            return [key.decode() if isinstance(key, bytes) else key for key in keys]
-        except Exception as e:
-            logger.error('Ошибка получения ключей по паттерну', pattern=pattern, error=e)
-            return []
-
-    async def flush_all(self) -> bool:
-        if not self._connected:
-            return False
-
-        try:
-            await self.redis_client.flushall()
-            logger.info('🗑️ Кеш полностью очищен')
-            return True
-        except Exception as e:
-            logger.error('Ошибка очистки кеша', error=e)
-            return False
-
     async def increment(self, key: str, amount: int = 1) -> int | None:
         if not self._connected:
             return None
@@ -180,33 +156,6 @@ class CacheService:
             return await self.redis_client.incrby(key, amount)
         except Exception as e:
             logger.error('Ошибка инкремента', key=key, error=e)
-            return None
-
-    async def set_hash(self, name: str, mapping: dict, expire: int = None) -> bool:
-        if not self._connected:
-            return False
-
-        try:
-            await self.redis_client.hset(name, mapping=mapping)
-            if expire:
-                await self.redis_client.expire(name, expire)
-            return True
-        except Exception as e:
-            logger.error('Ошибка записи хеша', name=name, error=e)
-            return False
-
-    async def get_hash(self, name: str, key: str = None) -> dict | str | None:
-        if not self._connected:
-            return None
-
-        try:
-            if key:
-                value = await self.redis_client.hget(name, key)
-                return value.decode() if value else None
-            hash_data = await self.redis_client.hgetall(name)
-            return {k.decode(): v.decode() for k, v in hash_data.items()}
-        except Exception as e:
-            logger.error('Ошибка получения хеша', name=name, error=e)
             return None
 
     async def lpush(self, key: str, value: Any) -> bool:
@@ -267,23 +216,6 @@ def cache_key(*parts) -> str:
     return ':'.join(str(part) for part in parts)
 
 
-def cached_function(key: str, expire: int = 300):
-    def decorator(func):
-        @functools.wraps(func)
-        async def wrapper(*args, **kwargs):
-            cache_result = await cache.get(key)
-            if cache_result is not None:
-                return cache_result
-
-            result = await func(*args, **kwargs)
-            await cache.set(key, result, expire)
-            return result
-
-        return wrapper
-
-    return decorator
-
-
 class UserCache:
     @staticmethod
     async def get_user_data(user_id: int) -> dict | None:
@@ -314,34 +246,6 @@ class UserCache:
     async def delete_user_session(user_id: int, session_key: str) -> bool:
         key = cache_key('session', user_id, session_key)
         return await cache.delete(key)
-
-
-class SystemCache:
-    @staticmethod
-    async def get_system_stats() -> dict | None:
-        return await cache.get('system:stats')
-
-    @staticmethod
-    async def set_system_stats(stats: dict, expire: int = 300) -> bool:
-        return await cache.set('system:stats', stats, expire)
-
-    @staticmethod
-    async def get_nodes_status() -> list | None:
-        return await cache.get('remnawave:nodes')
-
-    @staticmethod
-    async def set_nodes_status(nodes: list, expire: int = 60) -> bool:
-        return await cache.set('remnawave:nodes', nodes, expire)
-
-    @staticmethod
-    async def get_daily_stats(date: str) -> dict | None:
-        key = cache_key('stats', 'daily', date)
-        return await cache.get(key)
-
-    @staticmethod
-    async def set_daily_stats(date: str, stats: dict) -> bool:
-        key = cache_key('stats', 'daily', date)
-        return await cache.set(key, stats, 86400)  # 24 часа
 
 
 class RateLimitCache:

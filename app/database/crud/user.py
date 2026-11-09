@@ -645,34 +645,6 @@ async def add_user_balance(
         return False
 
 
-async def add_user_balance_by_id(
-    db: AsyncSession,
-    telegram_id: int,
-    amount_kopeks: int,
-    description: str = 'Пополнение баланса',
-    transaction_type: TransactionType = TransactionType.DEPOSIT,
-    payment_method: PaymentMethod | None = None,
-) -> bool:
-    try:
-        user = await get_user_by_telegram_id(db, telegram_id)
-        if not user:
-            logger.error('Пользователь с telegram_id не найден', telegram_id=telegram_id)
-            return False
-
-        return await add_user_balance(
-            db,
-            user,
-            amount_kopeks,
-            description,
-            transaction_type=transaction_type,
-            payment_method=payment_method,
-        )
-
-    except Exception as e:
-        logger.error('Ошибка пополнения баланса пользователя', telegram_id=telegram_id, error=e)
-        return False
-
-
 async def lock_user_for_pricing(db: AsyncSession, user_id: int) -> User:
     """Lock user row with FOR NO KEY UPDATE and return refreshed instance.
 
@@ -1619,35 +1591,6 @@ async def get_users_statistics(db: AsyncSession) -> dict:
     }
 
 
-async def get_users_with_active_subscriptions(db: AsyncSession) -> list[User]:
-    """
-    Получает список пользователей с активными подписками.
-    Используется для мониторинга трафика.
-
-    Returns:
-        Список пользователей с активными подписками и панельной идентичностью
-    """
-    current_time = datetime.now(UTC)
-
-    result = await db.execute(
-        select(User)
-        .join(Subscription, User.id == Subscription.user_id)
-        .where(
-            and_(
-                # Панельная идентичность живёт на User (single-tariff) либо на
-                # Subscription (multi-tariff, где User.remnawave_id не заполняется вовсе).
-                or_(User.remnawave_id.isnot(None), Subscription.remnawave_id.isnot(None)),
-                User.status == UserStatus.ACTIVE.value,
-                Subscription.status == SubscriptionStatus.ACTIVE.value,
-                Subscription.end_date > current_time,
-            )
-        )
-        .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
-    )
-
-    return result.scalars().unique().all()
-
-
 async def create_user_by_email(
     db: AsyncSession,
     email: str,
@@ -2048,14 +1991,3 @@ async def create_user_by_oauth(
         logger.warning('Failed to emit user.created event', error=error)
 
     return user
-
-
-async def lock_user_subscriptions_for_update(db: AsyncSession, user_id: int) -> list[Subscription]:
-    """Lock all subscriptions for a user using SELECT FOR UPDATE."""
-    result = await db.execute(
-        select(Subscription)
-        .where(Subscription.user_id == user_id)
-        .with_for_update()
-        .order_by(Subscription.created_at.desc())
-    )
-    return list(result.scalars().all())

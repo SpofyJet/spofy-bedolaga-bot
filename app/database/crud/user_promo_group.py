@@ -184,26 +184,6 @@ async def get_user_promo_groups(db: AsyncSession, user_id: int) -> list[UserProm
     return list(result.scalars().all())
 
 
-async def get_primary_user_promo_group(db: AsyncSession, user_id: int) -> PromoGroup | None:
-    """
-    Получает промогруппу пользователя с максимальным приоритетом.
-
-    Args:
-        db: Сессия БД
-        user_id: ID пользователя
-
-    Returns:
-        PromoGroup с максимальным приоритетом или None
-    """
-    user_promo_groups = await get_user_promo_groups(db, user_id)
-
-    if not user_promo_groups:
-        return None
-
-    # Первая в списке имеет максимальный приоритет (список уже отсортирован)
-    return user_promo_groups[0].promo_group or None
-
-
 async def has_user_promo_group(db: AsyncSession, user_id: int, promo_group_id: int) -> bool:
     """
     Проверяет наличие промогруппы у пользователя.
@@ -244,43 +224,3 @@ async def count_user_promo_groups(db: AsyncSession, user_id: int) -> int:
     except Exception as error:
         logger.error('Ошибка подсчета промогрупп пользователя', error=error)
         return 0
-
-
-async def replace_user_promo_groups(
-    db: AsyncSession, user_id: int, promo_group_ids: list[int], assigned_by: str = 'admin'
-) -> bool:
-    """
-    Заменяет все промогруппы пользователя на новый список.
-
-    Args:
-        db: Сессия БД
-        user_id: ID пользователя
-        promo_group_ids: Список ID промогрупп
-        assigned_by: Кто назначил
-
-    Returns:
-        True если успешно
-    """
-    try:
-        # Удаляем все текущие промогруппы
-        result = await db.execute(select(UserPromoGroup).where(UserPromoGroup.user_id == user_id))
-        for upg in result.scalars().all():
-            await db.delete(upg)
-        await db.flush()
-
-        # Добавляем новые
-        for promo_group_id in promo_group_ids:
-            user_promo_group = UserPromoGroup(user_id=user_id, promo_group_id=promo_group_id, assigned_by=assigned_by)
-            db.add(user_promo_group)
-        await db.flush()
-
-        await _sync_user_primary_promo_group(db, user_id)
-
-        await db.commit()
-        logger.info('Промогруппы пользователя заменены', user_id=user_id, promo_group_ids=promo_group_ids)
-        return True
-
-    except Exception as error:
-        logger.error('Ошибка замены промогрупп пользователя', error=error)
-        await db.rollback()
-        return False

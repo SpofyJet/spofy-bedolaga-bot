@@ -2805,44 +2805,6 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_yookassa_payment_keyboard(
-    payment_id: str, amount_kopeks: int, confirmation_url: str, language: str = DEFAULT_LANGUAGE
-) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=texts.t('PAY_NOW_BUTTON', '💳 Оплатить'), url=confirmation_url)],
-            [
-                InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
-                    callback_data=f'check_yookassa_status_{payment_id}',
-                )
-            ],
-            [InlineKeyboardButton(text=texts.t('MY_BALANCE_BUTTON', '💰 Мой баланс'), callback_data='menu_balance')],
-        ]
-    )
-
-
-def get_autopay_notification_keyboard(subscription_id: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    sub_btn_text = (
-        texts.t('MY_SUBSCRIPTIONS_BUTTON', '📱 Мои подписки')
-        if settings.is_multi_tariff_enabled()
-        else texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка')
-    )
-
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                build_miniapp_or_callback_button(
-                    text=texts.t('TOPUP_BALANCE_BUTTON', '💳 Пополнить баланс'), callback_data='balance_topup'
-                )
-            ],
-            [build_miniapp_or_callback_button(text=sub_btn_text, callback_data='menu_subscription')],
-        ]
-    )
-
-
 def get_referral_keyboard(language: str = DEFAULT_LANGUAGE, share_url: str | None = None) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
@@ -4034,25 +3996,6 @@ def get_updated_subscription_settings_keyboard(
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
-def get_device_reset_confirm_keyboard(
-    device_info: str, device_index: int, page: int, language: str = DEFAULT_LANGUAGE
-) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=texts.t('RESET_DEVICE_CONFIRM_BUTTON', '✅ Да, сбросить это устройство'),
-                    callback_data=f'confirm_reset_device_{device_index}_{page}',
-                    style='danger',
-                )
-            ],
-            [InlineKeyboardButton(text=texts.CANCEL, callback_data=f'devices_page_{page}')],
-        ]
-    )
 
 
 def get_device_management_help_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:

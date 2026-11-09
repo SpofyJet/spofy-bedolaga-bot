@@ -39,14 +39,14 @@ from app.utils.timezone import format_local_datetime
 logger = structlog.get_logger(__name__)
 
 # Tunables (override via env through Settings if added there; safe defaults here)
-NUDGE1_HOURS = int(getattr(settings, 'FUNNEL_NUDGE1_HOURS', 2))
-NUDGE2_HOURS = int(getattr(settings, 'FUNNEL_NUDGE2_HOURS', 24))
+NUDGE1_HOURS = int(settings.FUNNEL_NUDGE1_HOURS)
+NUDGE2_HOURS = int(settings.FUNNEL_NUDGE2_HOURS)
 NUDGE3_HOURS = int(getattr(settings, 'FUNNEL_NUDGE3_HOURS', 72))
-IDLE_TRIAL_HOURS = int(getattr(settings, 'FUNNEL_IDLE_TRIAL_HOURS', 3))
-NUDGE1_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_NUDGE1_WINDOW_HOURS', 48))
-NUDGE2_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_NUDGE2_WINDOW_HOURS', 168))
+IDLE_TRIAL_HOURS = int(settings.FUNNEL_IDLE_TRIAL_HOURS)
+NUDGE1_WINDOW_HOURS = int(settings.FUNNEL_NUDGE1_WINDOW_HOURS)
+NUDGE2_WINDOW_HOURS = int(settings.FUNNEL_NUDGE2_WINDOW_HOURS)
 NUDGE3_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_NUDGE3_WINDOW_HOURS', 336))
-BATCH_LIMIT = int(getattr(settings, 'FUNNEL_BATCH_LIMIT', 50))
+BATCH_LIMIT = int(settings.FUNNEL_BATCH_LIMIT)
 
 EVENT_NO_TRIAL_1 = 'funnel_no_trial_1'
 EVENT_NO_TRIAL_2 = 'funnel_no_trial_2'
@@ -55,18 +55,18 @@ EVENT_TRIAL_IDLE = 'funnel_trial_idle'
 EVENT_TRIAL_EXP_1 = 'funnel_trial_exp_1'
 EVENT_TRIAL_EXP_2 = 'funnel_trial_exp_2'
 
-TRIAL_EXP1_HOURS = int(getattr(settings, 'FUNNEL_TRIAL_EXP1_HOURS', 2))
-TRIAL_EXP2_HOURS = int(getattr(settings, 'FUNNEL_TRIAL_EXP2_HOURS', 48))
-TRIAL_EXP1_PERCENT = int(getattr(settings, 'FUNNEL_TRIAL_EXP1_PERCENT', 15))
-TRIAL_EXP2_PERCENT = int(getattr(settings, 'FUNNEL_TRIAL_EXP2_PERCENT', 25))
-TRIAL_EXP_VALID_HOURS = int(getattr(settings, 'FUNNEL_TRIAL_EXP_VALID_HOURS', 24))
-TRIAL_EXP_WINDOW_HOURS = int(getattr(settings, 'FUNNEL_TRIAL_EXP_WINDOW_HOURS', 168))
+TRIAL_EXP1_HOURS = int(settings.FUNNEL_TRIAL_EXP1_HOURS)
+TRIAL_EXP2_HOURS = int(settings.FUNNEL_TRIAL_EXP2_HOURS)
+TRIAL_EXP1_PERCENT = int(settings.FUNNEL_TRIAL_EXP1_PERCENT)
+TRIAL_EXP2_PERCENT = int(settings.FUNNEL_TRIAL_EXP2_PERCENT)
+TRIAL_EXP_VALID_HOURS = int(settings.FUNNEL_TRIAL_EXP_VALID_HOURS)
+TRIAL_EXP_WINDOW_HOURS = int(settings.FUNNEL_TRIAL_EXP_WINDOW_HOURS)
 
 EVENT_TRIAL_ENDING = 'funnel_trial_ending_1d'
 EVENT_TRIAL_IDLE_2 = 'funnel_trial_idle_2'
-TRIAL_ENDING_LEAD_HOURS = int(getattr(settings, 'FUNNEL_TRIAL_ENDING_LEAD_HOURS', 24))
-TRIAL_ENDING_MIN_HOURS = int(getattr(settings, 'FUNNEL_TRIAL_ENDING_MIN_HOURS', 3))
-IDLE_TRIAL2_HOURS = int(getattr(settings, 'FUNNEL_IDLE_TRIAL2_HOURS', 24))
+TRIAL_ENDING_LEAD_HOURS = int(settings.FUNNEL_TRIAL_ENDING_LEAD_HOURS)
+TRIAL_ENDING_MIN_HOURS = int(settings.FUNNEL_TRIAL_ENDING_MIN_HOURS)
+IDLE_TRIAL2_HOURS = int(settings.FUNNEL_IDLE_TRIAL2_HOURS)
 
 EVENT_ACTIVE_TRIAL = 'funnel_active_trial'
 # Подписка уже в приложении (есть HWID-устройство в панели), а трафика нет: отдельный текст в тех же
@@ -78,9 +78,9 @@ EVENT_TRIAL_FIRST_CONNECTED = 'trial_first_connected'
 # иначе он глушит напоминание «триал заканчивается» через глобальный 20ч кулдаун.
 # Для коротких триалов (<=2д) места нет → nudge отключается (0): работает ending-1d.
 # Окно выборки всегда шире порога, иначе cohort пустой и nudge молча умирает.
-_TRIAL_HOURS_TOTAL = int(getattr(settings, 'TRIAL_DURATION_DAYS', 3)) * 24
+_TRIAL_HOURS_TOTAL = int(settings.TRIAL_DURATION_DAYS) * 24
 _FUNNEL_COOLDOWN_H = int(getattr(settings, 'FUNNEL_GLOBAL_COOLDOWN_HOURS', 20))
-_ENDING_LEAD_H = int(getattr(settings, 'FUNNEL_TRIAL_ENDING_LEAD_HOURS', 24))
+_ENDING_LEAD_H = int(settings.FUNNEL_TRIAL_ENDING_LEAD_HOURS)
 _LATEST_OK_HOURS = _TRIAL_HOURS_TOTAL - _ENDING_LEAD_H - _FUNNEL_COOLDOWN_H
 _ACTIVE_TRIAL_HOURS_DEFAULT = min(round(_TRIAL_HOURS_TOTAL * 0.6), _LATEST_OK_HOURS) if _LATEST_OK_HOURS >= 12 else 0
 ACTIVE_TRIAL_NUDGE_HOURS = int(getattr(settings, 'FUNNEL_ACTIVE_TRIAL_HOURS', _ACTIVE_TRIAL_HOURS_DEFAULT))
@@ -119,7 +119,7 @@ NUDGE_GLOBAL_COOLDOWN_HOURS = int(getattr(settings, 'FUNNEL_GLOBAL_COOLDOWN_HOUR
 
 
 def _funnel_enabled() -> bool:
-    return bool(getattr(settings, 'FUNNEL_NUDGES_ENABLED', True))
+    return bool(settings.FUNNEL_NUDGES_ENABLED)
 
 
 def _event_sent_clause(event_type: str, min_age_hours: int = 0):
@@ -1094,7 +1094,7 @@ class ActivationFunnelService:
 
     async def process_referral_prompt(self, db: AsyncSession) -> int:
         """Через 3 минуты после оплаты подписки: «Позовите друга — +2 дня». Раз в 30 дней на человека."""
-        if not _funnel_enabled() or not self._send or not getattr(settings, 'REFERRAL_PROGRAM_ENABLED', True):
+        if not _funnel_enabled() or not self._send or not settings.REFERRAL_PROGRAM_ENABLED:
             return 0
         from app.database.models import Transaction, TransactionType
         from app.services.trial_quest_service import DAYS_FRIEND

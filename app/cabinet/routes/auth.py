@@ -1534,8 +1534,6 @@ async def register_email_standalone(
     An email verification link will be sent to confirm the email address.
 
     User must verify email before they can login.
-
-    If TEST_EMAIL is configured, test email accounts are auto-verified.
     """
     await require_email_auth_enabled(db)
     client_ip = get_client_ip(raw_request)
@@ -1550,18 +1548,6 @@ async def register_email_standalone(
         start_parameter=request.referral_code or request.campaign_slug,
     )
     raise_for_registration_decision(email_access)
-
-    # Check if this is a test email registration
-    is_test_email = settings.is_test_email(request.email)
-
-    if is_test_email:
-        # Validate test email password
-        if not settings.validate_test_email_password(request.email, request.password):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Invalid test email password',
-            )
-        logger.info('Test email registration', email=request.email)
 
     # Check for disposable email
     if disposable_email_service.is_disposable(request.email):
@@ -1649,11 +1635,11 @@ async def register_email_standalone(
         user.pending_campaign_slug = request.campaign_slug
 
     # Для тестового email или отключённой верификации - автоматически верифицировать
-    if is_test_email or not settings.is_cabinet_email_verification_enabled():
+    if not settings.is_cabinet_email_verification_enabled():
         user.email_verified = True
         user.email_verified_at = datetime.now(UTC)
         await db.commit()
-        logger.info('Email auto-verified (test or verification disabled)', email=request.email, user_id=user.id)
+        logger.info('Email auto-verified (verification disabled)', email=request.email, user_id=user.id)
         # Sync existing panel subscription (same as manual verification flow)
         try:
             await _sync_subscription_from_panel_by_email(db, user)
@@ -1686,9 +1672,7 @@ async def register_email_standalone(
             logger.error('Failed to process referral registration', error=e)
             # Не прерываем регистрацию из-за ошибки реферальной системы
 
-    # Для тестового email - сразу можно логиниться (уже verified)
-    # Для обычного email - требуется верификация (если включена)
-    verification_required = not is_test_email and settings.is_cabinet_email_verification_enabled()
+    verification_required = settings.is_cabinet_email_verification_enabled()
     return RegisterResponse(
         message='Verification email sent. Please check your inbox.',
         email=request.email,
@@ -1829,10 +1813,7 @@ async def login_email(
     raw_request: Request,
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Login with email and password.
-
-    Test email accounts (configured via TEST_EMAIL) bypass email verification.
-    """
+    """Login with email and password."""
     await require_email_auth_enabled(db)
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_login', limit=10, window=60, fail_closed=True):
@@ -1842,47 +1823,16 @@ async def login_email(
             headers={'Retry-After': '60'},
         )
 
-    # Check if this is a test email login
-    is_test_email = settings.is_test_email(request.email)
-
     # Find user by email (case-insensitive)
     email_lower = (request.email or '').strip().lower()
     result = await db.execute(select(User).where(func.lower(User.email) == email_lower))
     user = result.scalar_one_or_none()
 
     if not user:
-        # For test email - auto-create user if not exists
-        if is_test_email and settings.validate_test_email_password(request.email, request.password):
-            access = await evaluate_public_registration(
-                db,
-                channel=RegistrationChannel.CABINET_EMAIL,
-                existing_user=None,
-                email=request.email,
-                email_verified=False,
-                verified_admin=False,
-            )
-            if not access.allowed:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail='Invalid email or password',
-                )
-            logger.info('Test email login creating new user', email=request.email)
-            password_hash = hash_password(request.password)
-            user = await create_user_by_email(
-                db=db,
-                email=request.email,
-                password_hash=password_hash,
-                first_name='Test User',
-                language='ru',
-            )
-            user.email_verified = True
-            user.email_verified_at = datetime.now(UTC)
-            await db.commit()
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail='Invalid email or password',
-            )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid email or password',
+        )
 
     if not user.password_hash:
         raise HTTPException(
@@ -1914,8 +1864,7 @@ async def login_email(
             detail='Invalid email or password',
         )
 
-    # Test email and disabled verification bypass the check
-    if not user.email_verified and not is_test_email and settings.is_cabinet_email_verification_enabled():
+    if not user.email_verified and settings.is_cabinet_email_verification_enabled():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Please verify your email first',

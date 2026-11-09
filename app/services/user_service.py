@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -19,7 +19,6 @@ from app.database.crud.user import (
     get_user_by_id,
     get_users_count,
     get_users_list,
-    get_users_spending_stats,
     get_users_statistics,
     subtract_user_balance,
     update_user,
@@ -75,74 +74,6 @@ class DeleteUserResult:
 
 
 class UserService:
-    async def send_topup_success_to_user(
-        self,
-        bot: Bot,
-        user: User,
-        amount_kopeks: int,
-        subscription: Subscription | None = None,
-    ) -> bool:
-        """
-        Отправляет пользователю уведомление об успешном пополнении баланса.
-        Если подписки нет - показывает БОЛЬШОЕ предупреждение что нужно активировать.
-        Поддерживает как Telegram, так и email-only пользователей.
-        """
-        texts = get_texts(user.language)
-
-        has_active_subscription = subscription is not None and subscription.status in {'active', 'trial'}
-
-        if has_active_subscription:
-            # У пользователя есть активная подписка - обычное сообщение
-            message = (
-                f'✅ <b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n'
-                f'💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n'
-                f'Спасибо за использование нашего сервиса! 🎉'
-            )
-            extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
-            keyboard = types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
-                            callback_data=extend_callback,
-                        )
-                    ]
-                ]
-            )
-        else:
-            # НЕТ активной подписки - БОЛЬШОЕ ПРЕДУПРЕЖДЕНИЕ
-            message = (
-                f'✅ <b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n'
-                f'💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n'
-                f'{"─" * 25}\n\n'
-                f'⚠️ <b>ВАЖНО!</b> ⚠️\n\n'
-                f'🔴 <b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n'
-                f'Пополнение баланса НЕ активирует подписку автоматически!\n\n'
-                f'👇 <b>Выберите действие:</b>'
-            )
-            extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
-            keyboard = types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [types.InlineKeyboardButton(text='🚀 АКТИВИРОВАТЬ ПОДПИСКУ', callback_data='subscription_buy')],
-                    [types.InlineKeyboardButton(text='💎 ПРОДЛИТЬ ПОДПИСКУ', callback_data=extend_callback)],
-                    [
-                        types.InlineKeyboardButton(
-                            text='📱 ДОБАВИТЬ УСТРОЙСТВА', callback_data='subscription_add_devices'
-                        )
-                    ],
-                ]
-            )
-
-        # Use unified notification delivery service
-        return await notification_delivery_service.notify_balance_topup(
-            user=user,
-            amount_kopeks=amount_kopeks,
-            new_balance_kopeks=user.balance_kopeks,
-            bot=bot,
-            telegram_message=message,
-            telegram_markup=keyboard,
-        )
-
     async def _send_balance_notification(self, bot: Bot, user: User, amount_kopeks: int, admin_name: str) -> bool:
         """
         Отправляет уведомление пользователю о пополнении/списании баланса.
@@ -423,13 +354,6 @@ class UserService:
                 'total_pages': 1,
                 'total_count': 0,
             }
-
-    async def get_user_spending_stats_map(self, db: AsyncSession, user_ids: list[int]) -> dict[int, dict[str, int]]:
-        try:
-            return await get_users_spending_stats(db, user_ids)
-        except Exception as e:
-            logger.error('Ошибка получения статистики трат пользователей', error=e)
-            return {}
 
     async def get_users_by_campaign_page(self, db: AsyncSession, page: int = 1, limit: int = 20) -> dict[str, Any]:
         try:
@@ -1518,90 +1442,3 @@ class UserService:
         except Exception as e:
             logger.error('Ошибка очистки неактивных пользователей', e=e)
             return 0, 0
-
-    async def get_user_activity_summary(self, db: AsyncSession, user_id: int) -> dict[str, Any]:
-        try:
-            user = await get_user_by_id(db, user_id)
-            if not user:
-                return {}
-
-            if settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-                if active_subs:
-                    _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
-                    _pool = _non_daily or active_subs
-                    subscription = max(_pool, key=lambda s: s.days_left)
-                else:
-                    subscription = None
-            else:
-                subscription = await get_subscription_by_user_id(db, user_id)
-            transactions_count = await get_user_transactions_count(db, user_id)
-
-            days_since_registration = (datetime.now(UTC) - user.created_at).days
-
-            days_since_activity = (datetime.now(UTC) - user.last_activity).days if user.last_activity else None
-
-            return {
-                'user_id': user.id,
-                'telegram_id': user.telegram_id,
-                'username': user.username,
-                'full_name': user.full_name,
-                'status': user.status,
-                'language': user.language,
-                'balance_kopeks': user.balance_kopeks,
-                'registration_date': user.created_at,
-                'last_activity': user.last_activity,
-                'days_since_registration': days_since_registration,
-                'days_since_activity': days_since_activity,
-                'has_subscription': subscription is not None,
-                'subscription_active': subscription.is_active if subscription else False,
-                'subscription_trial': subscription.is_trial if subscription else False,
-                'transactions_count': transactions_count,
-                'referrer_id': user.referred_by_id,
-                'referral_code': user.referral_code,
-            }
-
-        except Exception as e:
-            logger.error('Ошибка получения сводки активности пользователя', user_id=user_id, error=e)
-            return {}
-
-    async def get_users_by_criteria(self, db: AsyncSession, criteria: dict[str, Any]) -> list[User]:
-        try:
-            status = criteria.get('status')
-            criteria.get('has_subscription')
-            criteria.get('is_trial')
-            min_balance = criteria.get('min_balance', 0)
-            max_balance = criteria.get('max_balance')
-            days_inactive = criteria.get('days_inactive')
-
-            registered_after = criteria.get('registered_after')
-            registered_before = criteria.get('registered_before')
-
-            users = await get_users_list(db, offset=0, limit=10000, status=status)
-
-            filtered_users = []
-            for user in users:
-                if user.balance_kopeks < min_balance:
-                    continue
-                if max_balance and user.balance_kopeks > max_balance:
-                    continue
-
-                if registered_after and user.created_at < registered_after:
-                    continue
-                if registered_before and user.created_at > registered_before:
-                    continue
-
-                if days_inactive and user.last_activity:
-                    inactive_threshold = datetime.now(UTC) - timedelta(days=days_inactive)
-                    if user.last_activity > inactive_threshold:
-                        continue
-
-                filtered_users.append(user)
-
-            return filtered_users
-
-        except Exception as e:
-            logger.error('Ошибка получения пользователей по критериям', error=e)
-            return []

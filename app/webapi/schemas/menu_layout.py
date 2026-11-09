@@ -119,16 +119,6 @@ class MenuRowConfig(BaseModel):
     model_config = ConfigDict(extra='ignore')
 
 
-class MenuLayoutConfig(BaseModel):
-    """Полная конфигурация меню."""
-
-    version: int = Field(default=1, description='Версия формата конфигурации')
-    rows: list[MenuRowConfig] = Field(default_factory=list, description='Строки меню')
-    buttons: dict[str, MenuButtonConfig] = Field(default_factory=dict, description='Конфигурации кнопок')
-
-    model_config = ConfigDict(extra='ignore')
-
-
 # --- Response schemas ---
 
 
@@ -394,14 +384,6 @@ class MenuLayoutHistoryResponse(BaseModel):
 
     items: list[MenuLayoutHistoryEntry]
     total: int
-
-
-class MenuLayoutRollbackRequest(BaseModel):
-    """Запрос на откат к предыдущей версии."""
-
-    history_id: int = Field(description='ID записи в истории для отката')
-
-    model_config = ConfigDict(extra='forbid')
 
 
 # --- Схемы для валидации ---

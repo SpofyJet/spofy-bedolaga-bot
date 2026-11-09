@@ -77,7 +77,7 @@ async def resolve_gift_claim_channel(
     else:
         resolved_bot_username = None
 
-    resolved_cabinet_url = cabinet_url or getattr(settings, 'CABINET_URL', None)
+    resolved_cabinet_url = cabinet_url or settings.CABINET_URL
     if resolved_cabinet_url:
         try:
             resolved_cabinet_url = _normalize_cabinet_url(resolved_cabinet_url)

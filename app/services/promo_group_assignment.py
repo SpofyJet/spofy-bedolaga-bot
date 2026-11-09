@@ -23,10 +23,10 @@ async def _notify_admins_about_auto_assignment(
     new_group: PromoGroup,
     total_spent_kopeks: int,
 ):
-    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False):
+    if not settings.ADMIN_NOTIFICATIONS_ENABLED:
         return
 
-    bot_token = getattr(settings, 'BOT_TOKEN', None)
+    bot_token = settings.BOT_TOKEN
     if not bot_token:
         logger.debug('BOT_TOKEN не настроен — пропускаем уведомление о промогруппе')
         return

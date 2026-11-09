@@ -14,6 +14,7 @@ from app.services.remnawave_service import (
     RemnaWaveConfigurationError,
     RemnaWaveService,
 )
+from app.utils.background import spawn_background_task
 from app.utils.cache import cache
 from app.utils.timezone import next_local_wall_clock
 
@@ -119,7 +120,7 @@ class RemnaWaveAutoSyncService:
             self._scheduler_task = asyncio.create_task(self._run_scheduler(times))
 
         if run_immediately:
-            asyncio.create_task(self.run_sync_now(reason='immediate'))
+            spawn_background_task(self.run_sync_now(reason='immediate'))
 
     def schedule_refresh(self, *, run_immediately: bool = False) -> None:
         if not self._initialized:

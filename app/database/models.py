@@ -3003,9 +3003,7 @@ class Subscription(Base):
             return False
         if self.is_daily_paused:
             return False
-        if self.status != SubscriptionStatus.ACTIVE.value:
-            return False
-        return True
+        return self.status == SubscriptionStatus.ACTIVE.value
 
 
 class GraceAccessSessionModel(Base):

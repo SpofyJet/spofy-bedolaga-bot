@@ -16,14 +16,13 @@ from app.database.crud.referral_contest import (
     get_contest_leaderboard_with_virtual,
     get_contests_for_events,
     get_contests_for_summaries,
-    get_referrer_score,
     list_virtual_participants,
     mark_daily_summary_sent,
     mark_final_summary_sent,
 )
 from app.database.crud.user import get_user_by_id
 from app.database.database import AsyncSessionLocal
-from app.database.models import ReferralContest, User
+from app.database.models import ReferralContest
 
 
 logger = structlog.get_logger(__name__)
@@ -207,65 +206,6 @@ class ReferralContestService:
         else:
             await mark_daily_summary_sent(db, contest, target_date, summary_dt_utc)
 
-    async def _notify_participants(
-        self,
-        db: AsyncSession,
-        *,
-        contest: ReferralContest,
-        leaderboard: Sequence[tuple[User, int, int]],
-        total_events: int,
-        today_events: int,
-        day_start_utc: datetime,
-        day_end_utc: datetime,
-        is_final: bool,
-    ) -> None:
-        if not settings.is_notifications_enabled() or not settings.is_referral_notifications_enabled():
-            return
-
-        if not self.bot:
-            return
-
-        # leaderboard already sorted by helper
-        score_map = {user.id: (idx + 1, score) for idx, (user, score, _) in enumerate(leaderboard)}
-
-        for user, score, _ in leaderboard:
-            rank = score_map.get(user.id, (None, score))[0]
-            today_score = (
-                await get_referrer_score(
-                    db=db,
-                    contest_id=contest.id,
-                    referrer_id=user.id,
-                    start=day_start_utc,
-                    end=day_end_utc,
-                )
-                if score
-                else 0
-            )
-
-            text = self._build_participant_message(
-                contest=contest,
-                rank=rank or 0,
-                score=score,
-                today_score=today_score,
-                total_events=total_events,
-                today_events=today_events,
-                is_final=is_final,
-            )
-
-            # Skip email-only users (no telegram_id)
-            if not user.telegram_id:
-                logger.debug('Skipping contest notification for email-only user', user_id=user.id)
-                continue
-
-            try:
-                await self.bot.send_message(user.telegram_id, text, disable_web_page_preview=True)
-            except (TelegramForbiddenError, TelegramNotFound):
-                logger.info(
-                    'Не удалось отправить сообщение участнику (вероятно, блокировка)', telegram_id=user.telegram_id
-                )
-            except Exception as exc:
-                logger.error('Ошибка отправки участнику конкурса', telegram_id=user.telegram_id, exc=exc)
-
     async def _notify_admins(
         self,
         *,
@@ -305,9 +245,7 @@ class ReferralContestService:
             lines.append(f'Приз: {html.escape(contest.prize_text)}')
 
         # Respect per-category enable/disable
-        if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not getattr(
-            settings, 'ADMIN_NOTIFICATIONS_PROMO_ENABLED', True
-        ):
+        if not settings.ADMIN_NOTIFICATIONS_ENABLED or not getattr(settings, 'ADMIN_NOTIFICATIONS_PROMO_ENABLED', True):
             return
 
         try:
@@ -368,41 +306,6 @@ class ReferralContestService:
             logger.info('Не удалось отправить сводку конкурса в канал', channel_id=channel_id)
         except Exception as exc:
             logger.error('Ошибка отправки сводки конкурса в канал', channel_id=channel_id, exc=exc)
-
-    def _build_participant_message(
-        self,
-        *,
-        contest: ReferralContest,
-        rank: int,
-        score: int,
-        today_score: int,
-        total_events: int,
-        today_events: int,
-        is_final: bool,
-    ) -> str:
-        status_line = '🏁 Итоги конкурса' if is_final else '📊 Промежуточные итоги'
-        lines = [
-            f'🏆 {html.escape(contest.title)}',
-            status_line,
-            '',
-            f'Ваше место: <b>{rank}</b>',
-            f'Зачётов за всё время: <b>{score}</b>',
-            f'За сегодня: <b>{today_score}</b>',
-            f'Общий пул зачётов: <b>{total_events}</b> (сегодня {today_events})',
-        ]
-
-        if contest.prize_text:
-            lines.append('')
-            lines.append(f'Призовой фонд: {html.escape(contest.prize_text)}')
-
-        if not is_final:
-            remaining = contest.end_at - datetime.now(UTC)
-            if remaining.total_seconds() > 0:
-                hours_left = int(remaining.total_seconds() // 3600)
-                lines.append('')
-                lines.append(f'До окончания: ~{hours_left} ч.')
-
-        return '\n'.join(lines)
 
     async def get_detailed_contest_stats(self, db: AsyncSession, contest_id: int) -> dict:
         from app.database.crud.referral_contest import (

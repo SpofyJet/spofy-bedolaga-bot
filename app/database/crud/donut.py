@@ -116,31 +116,6 @@ async def update_donut_payment_status(
     return payment
 
 
-async def get_pending_donut_payments(db: AsyncSession, user_id: int) -> list[DonutPayment]:
-    """Возвращает незавершённые платежи пользователя."""
-    result = await db.execute(
-        select(DonutPayment).where(
-            DonutPayment.user_id == user_id,
-            DonutPayment.status == 'pending',
-            DonutPayment.is_paid == False,
-        )
-    )
-    return list(result.scalars().all())
-
-
-async def get_expired_pending_donut_payments(db: AsyncSession) -> list[DonutPayment]:
-    """Возвращает просроченные платежи в статусе pending."""
-    now = datetime.now(UTC)
-    result = await db.execute(
-        select(DonutPayment).where(
-            DonutPayment.status == 'pending',
-            DonutPayment.is_paid == False,
-            DonutPayment.expires_at < now,
-        )
-    )
-    return list(result.scalars().all())
-
-
 async def link_donut_payment_to_transaction(
     db: AsyncSession,
     *,

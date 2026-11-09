@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import hmac
 import json
+from collections.abc import AsyncIterator
 from decimal import Decimal, InvalidOperation
 
 import structlog
 from aiogram import Bot
 from fastapi import APIRouter, Request, Response, status
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.mulenpay import get_mulenpay_payment_by_mulen_id
@@ -159,26 +162,29 @@ def _get_webhook_callback_semaphore() -> asyncio.Semaphore:
     return _webhook_callback_semaphore
 
 
+@contextlib.asynccontextmanager
+async def _scoped_db() -> AsyncIterator[AsyncSession]:
+    """Сессия ``get_db`` для вебхука: commit при успехе, rollback при исключении."""
+    session_generator = get_db()
+    session = await anext(session_generator)
+    try:
+        yield session
+    except Exception as error:
+        await session_generator.athrow(error)
+        raise
+    else:
+        await anext(session_generator, None)
+
+
 async def _process_payment_service_callback(
     payment_service: PaymentService,
     payload: dict,
     method_name: str,
 ) -> bool:
     async with _get_webhook_callback_semaphore():
-        db_generator = get_db()
-        try:
-            db = await db_generator.__anext__()
-        except StopAsyncIteration:  # pragma: no cover - defensive guard
-            return False
-
-        try:
+        async with _scoped_db() as db:
             process_callback = getattr(payment_service, method_name)
             return await process_callback(db, payload)
-        finally:
-            try:
-                await db_generator.__anext__()
-            except StopAsyncIteration:
-                pass
 
 
 def _mulenpay_amount_to_kopeks(value: object) -> int | None:
@@ -264,13 +270,7 @@ async def _process_unsigned_mulenpay_callback(payment_service: PaymentService, p
         return _MULENPAY_UNSIGNED_REJECTED
 
     async with _get_webhook_callback_semaphore():
-        db_generator = get_db()
-        try:
-            db = await db_generator.__anext__()
-        except StopAsyncIteration:  # pragma: no cover - defensive guard
-            return _MULENPAY_UNSIGNED_RETRY
-
-        try:
+        async with _scoped_db() as db:
             try:
                 local_payment = await get_mulenpay_payment_by_mulen_id(db, provider_id)
             except Exception as error:
@@ -325,11 +325,6 @@ async def _process_unsigned_mulenpay_callback(payment_service: PaymentService, p
                 return _MULENPAY_UNSIGNED_FAILED
 
             return _MULENPAY_UNSIGNED_PROCESSED if success else _MULENPAY_UNSIGNED_FAILED
-        finally:
-            try:
-                await db_generator.__anext__()
-            except StopAsyncIteration:
-                pass
 
 
 async def _parse_pal24_payload(request: Request) -> dict[str, str]:
@@ -1333,36 +1328,26 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 return Response('Invalid parameters format', status_code=status.HTTP_400_BAD_REQUEST)
 
             # Обрабатываем callback
-            db_generator = get_db()
-            try:
-                db = await db_generator.__anext__()
-            except StopAsyncIteration:
-                return Response('DB Error', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-            try:
-                success = await payment_service.process_freekassa_webhook(
-                    db,
-                    merchant_id=merchant_id_int,
-                    amount=amount_float,
-                    order_id=order_id,
-                    sign=sign,
-                    intid=intid,
-                    cur_id=cur_id_int,
-                    client_ip=client_ip,
-                )
-                if success:
-                    return Response('YES', status_code=status.HTTP_200_OK)
-
-                logger.error('Freekassa webhook processing failed', order_id=order_id, intid=intid)
-                return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
-            except Exception as e:
-                logger.exception('Freekassa webhook processing error', e=e)
-                return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
-            finally:
+            async with _scoped_db() as db:
                 try:
-                    await db_generator.__anext__()
-                except StopAsyncIteration:
-                    pass
+                    success = await payment_service.process_freekassa_webhook(
+                        db,
+                        merchant_id=merchant_id_int,
+                        amount=amount_float,
+                        order_id=order_id,
+                        sign=sign,
+                        intid=intid,
+                        cur_id=cur_id_int,
+                        client_ip=client_ip,
+                    )
+                    if success:
+                        return Response('YES', status_code=status.HTTP_200_OK)
+
+                    logger.error('Freekassa webhook processing failed', order_id=order_id, intid=intid)
+                    return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
+                except Exception as e:
+                    logger.exception('Freekassa webhook processing error', e=e)
+                    return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
 
         routes_registered = True
 
@@ -1409,35 +1394,25 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 return Response('Invalid parameters', status_code=status.HTTP_400_BAD_REQUEST)
 
             # Обрабатываем webhook
-            db_generator = get_db()
-            try:
-                db = await db_generator.__anext__()
-            except StopAsyncIteration:
-                return Response('DB Error', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-            try:
-                success = await payment_service.process_kassa_ai_webhook(
-                    db,
-                    merchant_id=merchant_id_int,
-                    amount=amount_float,
-                    order_id=order_id,
-                    sign=sign,
-                    intid=intid,
-                    cur_id=cur_id_int,
-                )
-                if success:
-                    return Response('YES', status_code=status.HTTP_200_OK)
-
-                logger.error('KassaAI webhook processing failed', order_id=order_id, intid=intid)
-                return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
-            except Exception as e:
-                logger.exception('KassaAI webhook processing error', e=e)
-                return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
-            finally:
+            async with _scoped_db() as db:
                 try:
-                    await db_generator.__anext__()
-                except StopAsyncIteration:
-                    pass
+                    success = await payment_service.process_kassa_ai_webhook(
+                        db,
+                        merchant_id=merchant_id_int,
+                        amount=amount_float,
+                        order_id=order_id,
+                        sign=sign,
+                        intid=intid,
+                        cur_id=cur_id_int,
+                    )
+                    if success:
+                        return Response('YES', status_code=status.HTTP_200_OK)
+
+                    logger.error('KassaAI webhook processing failed', order_id=order_id, intid=intid)
+                    return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
+                except Exception as e:
+                    logger.exception('KassaAI webhook processing error', e=e)
+                    return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
 
         routes_registered = True
 
@@ -1483,34 +1458,24 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 )
 
             # Обрабатываем webhook
-            db_generator = get_db()
-            try:
-                db = await db_generator.__anext__()
-            except StopAsyncIteration:
-                return Response('DB Error', status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-            try:
-                success = await payment_service.process_riopay_webhook(
-                    db,
-                    payload=payload,
-                )
-                if success:
-                    return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
-
-                logger.error(
-                    'RioPay webhook processing failed',
-                    order_id=payload.get('id'),
-                    status=payload.get('status'),
-                )
-                return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
-            except Exception as e:
-                logger.exception('RioPay webhook processing error', e=e)
-                return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
-            finally:
+            async with _scoped_db() as db:
                 try:
-                    await db_generator.__anext__()
-                except StopAsyncIteration:
-                    pass
+                    success = await payment_service.process_riopay_webhook(
+                        db,
+                        payload=payload,
+                    )
+                    if success:
+                        return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+                    logger.error(
+                        'RioPay webhook processing failed',
+                        order_id=payload.get('id'),
+                        status=payload.get('status'),
+                    )
+                    return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
+                except Exception as e:
+                    logger.exception('RioPay webhook processing error', e=e)
+                    return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
 
         routes_registered = True
 
@@ -1691,13 +1656,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             # Validate that the payment exists in our DB (basic anti-spoofing)
             from app.database.crud.overpay import get_overpay_payment_by_order_id
 
-            db_generator = get_db()
-            try:
-                check_db = await db_generator.__anext__()
-            except StopAsyncIteration:
-                return JSONResponse({'status': False}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-            try:
+            async with _scoped_db() as check_db:
                 existing = await get_overpay_payment_by_order_id(check_db, merchant_transaction_id)
                 if not existing:
                     overpay_id = payload.get('id')
@@ -1711,11 +1670,6 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                             merchant_transaction_id=merchant_transaction_id,
                         )
                         return JSONResponse({'status': False}, status_code=status.HTTP_404_NOT_FOUND)
-            finally:
-                try:
-                    await db_generator.__anext__()
-                except StopAsyncIteration:
-                    pass
 
             try:
                 success = await _process_payment_service_callback(

@@ -116,7 +116,7 @@ async def open_ultima_offer(message: types.Message, user, db: AsyncSession, *, s
         )
         return True
 
-    cooldown = int(getattr(settings, 'PROMO_LINK_COOLDOWN_HOURS', 12))
+    cooldown = int(settings.PROMO_LINK_COOLDOWN_HOURS)
     if await _activated_recently(db, user.id, cooldown):
         await _record(db, user.id, 'cooldown', source)
         await message.answer(

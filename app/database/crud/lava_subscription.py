@@ -65,11 +65,6 @@ async def get_lava_subscription_by_id_for_update(db: AsyncSession, sub_id: int) 
     return result.scalar_one_or_none()
 
 
-async def get_lava_subscription_by_lava_id(db: AsyncSession, lava_id: str) -> LavaSubscription | None:
-    result = await db.execute(select(LavaSubscription).where(LavaSubscription.lava_subscription_id == lava_id))
-    return result.scalar_one_or_none()
-
-
 async def get_lava_subscription_by_order_id(db: AsyncSession, order_id: str) -> LavaSubscription | None:
     """Поиск по orderId — основной путь вебхука: списание приходит инвойсом."""
     result = await db.execute(select(LavaSubscription).where(LavaSubscription.order_id == order_id))

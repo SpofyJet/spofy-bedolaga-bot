@@ -275,16 +275,6 @@ class GeocheckJobResponse(BaseModel):
 # ============ Squads (Internal Squads) ============
 
 
-class SquadInfo(BaseModel):
-    """Internal Squad information from RemnaWave."""
-
-    uuid: str
-    name: str
-    members_count: int
-    inbounds_count: int
-    inbounds: list[dict[str, Any]] = Field(default_factory=list)
-
-
 class SquadWithLocalInfo(BaseModel):
     """Squad with local database info."""
 
@@ -425,16 +415,6 @@ class MigrationResponse(BaseModel):
 # ============ Inbounds ============
 
 
-class InboundInfo(BaseModel):
-    """Inbound information."""
-
-    uuid: str
-    tag: str
-    type: str | None = None
-    network: str | None = None
-    security: str | None = None
-
-
 class InboundsListResponse(BaseModel):
     """List of inbounds response."""
 
@@ -443,13 +423,6 @@ class InboundsListResponse(BaseModel):
 
 
 # ============ Auto Sync ============
-
-
-class AutoSyncTime(BaseModel):
-    """Scheduled sync time."""
-
-    hour: int
-    minute: int
 
 
 class AutoSyncStatus(BaseModel):
@@ -496,14 +469,6 @@ class SyncMode(BaseModel):
 
 class SyncResponse(BaseModel):
     """Response after sync operation."""
-
-    success: bool
-    message: str | None = None
-    data: dict[str, Any] | None = None
-
-
-class SyncRecommendations(BaseModel):
-    """Sync recommendations."""
 
     success: bool
     message: str | None = None

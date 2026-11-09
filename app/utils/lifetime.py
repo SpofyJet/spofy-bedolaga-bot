@@ -65,10 +65,6 @@ def is_lifetime_end(end_date: datetime | None) -> bool:
     return _aware(end_date) >= _LIFETIME_DISPLAY_FROM
 
 
-def is_lifetime_subscription(subscription) -> bool:
-    return is_lifetime_end(getattr(subscription, 'end_date', None))
-
-
 def normalize_end_date(value: datetime | None, now: datetime | None = None) -> datetime | None:
     """Дата дальше LIFETIME_MIN_DAYS от текущего момента приводится к LIFETIME_END.
 
@@ -82,16 +78,6 @@ def normalize_end_date(value: datetime | None, now: datetime | None = None) -> d
     if (aware - current).days >= LIFETIME_MIN_DAYS:
         return LIFETIME_END
     return value
-
-
-def period_phrase(days: int, language: str | None = 'ru') -> str | None:
-    """«навсегда» для описаний вида «Покупка тарифа X навсегда» (вместо «на 2222 дня»).
-
-    Возвращает None для обычного периода — тогда вызывающий пишет «на N дней» сам.
-    """
-    if not is_lifetime_period(days):
-        return None
-    return lifetime_label(language).lower() if _lang(language) in {'ru', 'ua', 'uk', 'en'} else lifetime_label(language)
 
 
 _UNIT_RE = r'(?:дн\.|дней|дня|день|днів|days?|d\.|天|روز)'

@@ -504,31 +504,6 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
         )
 
 
-async def mark_ticket_as_answered(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    """Отметить тикет как отвеченный"""
-    ticket_id = int(callback.data.replace('admin_mark_answered_', ''))
-
-    try:
-        success = await TicketCRUD.update_ticket_status(db, ticket_id, TicketStatus.ANSWERED.value)
-
-        if success:
-            texts = get_texts(db_user.language)
-            await callback.answer(
-                texts.t('TICKET_MARKED_ANSWERED', '✅ Тикет отмечен как отвеченный.'), show_alert=True
-            )
-
-            # Обновляем сообщение
-            await view_admin_ticket(callback, db_user, db, state)
-        else:
-            texts = get_texts(db_user.language)
-            await callback.answer(texts.t('TICKET_UPDATE_ERROR', '❌ Ошибка при обновлении тикета.'), show_alert=True)
-
-    except Exception as e:
-        logger.error('Error marking ticket as answered', error=e)
-        texts = get_texts(db_user.language)
-        await callback.answer(texts.t('TICKET_UPDATE_ERROR', '❌ Ошибка при обновлении тикета.'), show_alert=True)
-
-
 async def close_all_open_admin_tickets(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     """Закрыть все открытые тикеты."""
     if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):

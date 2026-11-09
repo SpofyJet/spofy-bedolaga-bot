@@ -24,6 +24,7 @@ from app.database.crud.system_setting import (
 from app.database.database import AsyncSessionLocal
 from app.database.models import SystemSetting
 from app.services.web_api_token_service import ensure_default_web_api_token
+from app.utils.background import spawn_background_task
 
 
 logger = structlog.get_logger(__name__)
@@ -2473,16 +2474,14 @@ class BotConfigurationService:
                 # чтобы новые BACKUP_TIME/INTERVAL вступили в силу немедленно
                 # (без ожидания следующего цикла или рестарта бота).
                 try:
-                    import asyncio
-
                     from app.services.backup_service import backup_service
 
                     backup_service.reload_settings_from_db()
                     if backup_service._settings.auto_backup_enabled:
                         # Перезапускаем таску с пересчётом next_run на основе свежих настроек
-                        asyncio.create_task(backup_service.start_auto_backup())
+                        spawn_background_task(backup_service.start_auto_backup())
                     else:
-                        asyncio.create_task(backup_service.stop_auto_backup())
+                        spawn_background_task(backup_service.stop_auto_backup())
                 except Exception as error:
                     logger.error('Не удалось применить новые настройки бекапа', error=error)
             elif key in {

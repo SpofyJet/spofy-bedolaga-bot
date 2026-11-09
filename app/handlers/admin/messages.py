@@ -1675,7 +1675,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
                 base_filter,
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
                 Subscription.is_trial == False,
-                or_(Subscription.traffic_used_gb == None, Subscription.traffic_used_gb <= 0),
+                or_(Subscription.traffic_used_gb.is_(None), Subscription.traffic_used_gb <= 0),
             )
         )
         result = await db.execute(query)
@@ -1690,7 +1690,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
                 base_filter,
                 Subscription.is_trial == True,
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
-                or_(Subscription.traffic_used_gb == None, Subscription.traffic_used_gb <= 0),
+                or_(Subscription.traffic_used_gb.is_(None), Subscription.traffic_used_gb <= 0),
             )
         )
         result = await db.execute(query)
@@ -1704,7 +1704,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
             .where(
                 base_filter,
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
-                or_(Subscription.traffic_used_gb == None, Subscription.traffic_used_gb <= 0),
+                or_(Subscription.traffic_used_gb.is_(None), Subscription.traffic_used_gb <= 0),
             )
         )
         result = await db.execute(query)

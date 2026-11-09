@@ -1490,9 +1490,9 @@ def _get_website_line(texts) -> str:
     """
     from app.config import settings
 
-    url = (getattr(settings, 'SERVICE_WEBSITE_URL', None) or '').strip()
+    url = (settings.SERVICE_WEBSITE_URL or '').strip()
     if not url:
-        cabinet = (getattr(settings, 'CABINET_URL', '') or '').strip().rstrip('/')
+        cabinet = (settings.CABINET_URL or '').strip().rstrip('/')
         if cabinet and cabinet != settings._CABINET_URL_DEFAULT:
             url = cabinet
     if not url:

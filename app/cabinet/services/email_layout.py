@@ -283,8 +283,8 @@ def build_layout_context(language: str, *, content: str = '', unsubscribe_url: s
         'unsubscribe_block': unsubscribe_block(unsubscribe_url, language),
         # Голая ссылка — для своего текста отписки вместо готового блока.
         'unsubscribe_url': unsubscribe_url or '',
-        'cabinet_url': getattr(settings, 'CABINET_URL', '') or '',
-        'support_username': getattr(settings, 'SUPPORT_USERNAME', '') or '',
+        'cabinet_url': settings.CABINET_URL or '',
+        'support_username': settings.SUPPORT_USERNAME or '',
         'username': '',
         'email': '',
         'date': format_email_datetime(datetime.now(UTC), fmt='%d.%m.%Y'),

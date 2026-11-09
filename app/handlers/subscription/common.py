@@ -132,16 +132,6 @@ def _get_promo_offer_discount_percent(user: User | None) -> int:
     return get_user_active_promo_discount_percent(user)
 
 
-def _apply_promo_offer_discount(user: User | None, amount: int) -> dict[str, int]:
-    percent = _get_promo_offer_discount_percent(user)
-
-    if amount <= 0 or percent <= 0:
-        return {'discounted': amount, 'discount': 0, 'percent': 0}
-
-    discounted, discount_value = apply_percentage_discount(amount, percent)
-    return {'discounted': discounted, 'discount': discount_value, 'percent': percent}
-
-
 def _get_period_hint_from_subscription(subscription: Subscription | None) -> int | None:
     if not subscription or not subscription.end_date:
         return None
@@ -346,7 +336,7 @@ def _get_remnawave_config_uuid() -> str | None:
         return bot_configuration_service.get_current_value('CABINET_REMNA_SUB_CONFIG')
     except Exception as e:
         logger.debug('Could not read CABINET_REMNA_SUB_CONFIG from service, using settings fallback', error=e)
-        return getattr(settings, 'CABINET_REMNA_SUB_CONFIG', None)
+        return settings.CABINET_REMNA_SUB_CONFIG
 
 
 async def load_app_config_async() -> dict[str, Any] | None:

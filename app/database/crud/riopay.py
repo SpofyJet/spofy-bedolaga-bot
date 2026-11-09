@@ -12,6 +12,12 @@ from app.database.models import RioPayPayment
 logger = structlog.get_logger(__name__)
 
 
+async def get_riopay_payment_by_id(db: AsyncSession, payment_id: int) -> RioPayPayment | None:
+    """Получает платеж по ID."""
+    result = await db.execute(select(RioPayPayment).where(RioPayPayment.id == payment_id))
+    return result.scalar_one_or_none()
+
+
 async def create_riopay_payment(
     db: AsyncSession,
     *,
@@ -57,12 +63,6 @@ async def get_riopay_payment_by_order_id(db: AsyncSession, order_id: str) -> Rio
 async def get_riopay_payment_by_riopay_order_id(db: AsyncSession, riopay_order_id: str) -> RioPayPayment | None:
     """Получает платеж по ID от RioPay (UUID)."""
     result = await db.execute(select(RioPayPayment).where(RioPayPayment.riopay_order_id == riopay_order_id))
-    return result.scalar_one_or_none()
-
-
-async def get_riopay_payment_by_id(db: AsyncSession, payment_id: int) -> RioPayPayment | None:
-    """Получает платеж по ID."""
-    result = await db.execute(select(RioPayPayment).where(RioPayPayment.id == payment_id))
     return result.scalar_one_or_none()
 
 
@@ -114,30 +114,3 @@ async def update_riopay_payment_status(
         is_paid=payment.is_paid,
     )
     return payment
-
-
-async def get_pending_riopay_payments(db: AsyncSession, user_id: int) -> list[RioPayPayment]:
-    """Получает незавершенные платежи пользователя."""
-    result = await db.execute(
-        select(RioPayPayment).where(
-            RioPayPayment.user_id == user_id,
-            RioPayPayment.status == 'pending',
-            RioPayPayment.is_paid == False,
-        )
-    )
-    return list(result.scalars().all())
-
-
-async def get_expired_pending_riopay_payments(
-    db: AsyncSession,
-) -> list[RioPayPayment]:
-    """Получает просроченные платежи в статусе pending."""
-    now = datetime.now(UTC)
-    result = await db.execute(
-        select(RioPayPayment).where(
-            RioPayPayment.status == 'pending',
-            RioPayPayment.is_paid == False,
-            RioPayPayment.expires_at < now,
-        )
-    )
-    return list(result.scalars().all())

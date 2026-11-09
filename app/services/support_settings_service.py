@@ -138,9 +138,7 @@ class SupportSettingsService:
     @classmethod
     def get_user_ticket_notifications_enabled(cls) -> bool:
         # Общий выключатель уведомлений пользователям главнее.
-        return bool(settings.SUPPORT_USER_TICKET_NOTIFICATIONS_ENABLED) and bool(
-            getattr(settings, 'ENABLE_NOTIFICATIONS', True)
-        )
+        return bool(settings.SUPPORT_USER_TICKET_NOTIFICATIONS_ENABLED) and bool(settings.ENABLE_NOTIFICATIONS)
 
     @classmethod
     async def set_user_ticket_notifications_enabled(cls, db: AsyncSession, enabled: bool) -> bool:

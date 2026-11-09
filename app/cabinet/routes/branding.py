@@ -1326,9 +1326,9 @@ async def get_analytics_counters(
     google_label = await get_setting_value(db, GOOGLE_ADS_LABEL_KEY) or ''
 
     # Yandex Metrika offline conversions snapshot from Settings
-    oc_enabled = bool(getattr(settings, 'YANDEX_OFFLINE_CONV_ENABLED', False))
-    oc_counter = str(getattr(settings, 'YANDEX_OFFLINE_CONV_COUNTER_ID', '') or '')
-    oc_secret = str(getattr(settings, 'YANDEX_OFFLINE_CONV_MEASUREMENT_SECRET', '') or '')
+    oc_enabled = bool(settings.YANDEX_OFFLINE_CONV_ENABLED)
+    oc_counter = str(settings.YANDEX_OFFLINE_CONV_COUNTER_ID or '')
+    oc_secret = str(settings.YANDEX_OFFLINE_CONV_MEASUREMENT_SECRET or '')
     oc_secret_masked = ('*' * 8 + oc_secret[-4:]) if len(oc_secret) > 4 else ('***' if oc_secret else '')
     oc_goals: list[OfflineConvGoal] = []
     if oc_enabled:
@@ -1384,9 +1384,9 @@ async def update_analytics_counters(
     google_id = await get_setting_value(db, GOOGLE_ADS_ID_KEY) or ''
     google_label = await get_setting_value(db, GOOGLE_ADS_LABEL_KEY) or ''
 
-    oc_enabled = bool(getattr(settings, 'YANDEX_OFFLINE_CONV_ENABLED', False))
-    oc_counter = str(getattr(settings, 'YANDEX_OFFLINE_CONV_COUNTER_ID', '') or '')
-    oc_secret = str(getattr(settings, 'YANDEX_OFFLINE_CONV_MEASUREMENT_SECRET', '') or '')
+    oc_enabled = bool(settings.YANDEX_OFFLINE_CONV_ENABLED)
+    oc_counter = str(settings.YANDEX_OFFLINE_CONV_COUNTER_ID or '')
+    oc_secret = str(settings.YANDEX_OFFLINE_CONV_MEASUREMENT_SECRET or '')
     oc_secret_masked = ('*' * 8 + oc_secret[-4:]) if len(oc_secret) > 4 else ('***' if oc_secret else '')
     oc_goals: list[OfflineConvGoal] = []
     if oc_enabled:

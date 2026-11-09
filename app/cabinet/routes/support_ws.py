@@ -621,12 +621,6 @@ async def _can_reply_ticket(db: AsyncSession, context: WsUserContext, ticket: Ti
     return await _has_permission(db, context, 'tickets:reply')
 
 
-async def _can_update_ticket(db: AsyncSession, context: WsUserContext) -> bool:
-    if context.role == 'owner':
-        return False
-    return await _has_permission(db, context, 'tickets:close')
-
-
 async def _get_visible_ticket(db: AsyncSession, context: WsUserContext, ticket_id: int) -> Ticket | None:
     query = (
         select(Ticket).where(Ticket.id == ticket_id).options(selectinload(Ticket.messages), selectinload(Ticket.user))

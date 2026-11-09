@@ -22,8 +22,6 @@ from app.utils.topup_retry import format_topup_amount_retry
 logger = structlog.get_logger(__name__)
 
 
-LAVA_PAYMENT_METHODS = {'lava', 'lava_card', 'lava_sbp'}
-
 LAVA_SERVICE_MAP: dict[str, str | None] = {
     'lava': None,
     'lava_card': 'card',

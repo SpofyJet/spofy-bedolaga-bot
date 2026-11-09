@@ -112,7 +112,7 @@ async def _send_to_admins(bot: Bot | None, text: str) -> None:
     if bot is not None:
         await AdminNotificationService(bot).send_admin_notification(text, category=NotificationCategory.ERRORS)
         return
-    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not settings.BOT_TOKEN:
+    if not settings.ADMIN_NOTIFICATIONS_ENABLED or not settings.BOT_TOKEN:
         return
     from app.bot_factory import create_bot
 

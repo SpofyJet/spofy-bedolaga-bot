@@ -148,11 +148,6 @@ class Pal24Client:
         response = await self._request('GET', 'bill/status', params={'id': bill_id})
         return response.data
 
-    async def toggle_bill_activity(self, bill_id: str, active: bool) -> dict[str, Any]:
-        payload = {'id': bill_id, 'active': 1 if active else 0}
-        response = await self._request('POST', 'bill/toggle_activity', json_payload=payload)
-        return response.data
-
     async def search_payments(self, **params: Any) -> dict[str, Any]:
         response = await self._request('GET', 'payment/search', params=params)
         return response.data
@@ -163,10 +158,6 @@ class Pal24Client:
 
     async def get_balance(self) -> dict[str, Any]:
         response = await self._request('GET', 'merchant/balance')
-        return response.data
-
-    async def search_bills(self, **params: Any) -> dict[str, Any]:
-        response = await self._request('GET', 'bill/search', params=params)
         return response.data
 
     async def get_bill_payments(self, bill_id: str) -> dict[str, Any]:

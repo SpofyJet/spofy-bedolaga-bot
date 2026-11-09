@@ -22,8 +22,6 @@ from app.utils.topup_retry import format_topup_amount_retry
 logger = structlog.get_logger(__name__)
 
 
-PARITYPAY_PAYMENT_METHODS = {'paritypay', 'paritypay_card', 'paritypay_sbp'}
-
 PARITYPAY_SERVICE_MAP: dict[str, str | None] = {
     'paritypay': None,
     'paritypay_card': 'card',

@@ -222,7 +222,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
 
         try:
             await callback.message.edit_text(text, reply_markup=keyboard)
-        except:
+        except Exception:
             pass
         await callback.answer('Произошла ошибка при загрузке статистики')
 
@@ -399,7 +399,7 @@ async def show_referral_settings(callback: types.CallbackQuery, db_user: User, d
 
 <b>Уведомления:</b>
 • Статус: {'✅ Включены' if settings.REFERRAL_NOTIFICATIONS_ENABLED else '❌ Отключены'}
-• Попытки отправки: {getattr(settings, 'REFERRAL_NOTIFICATION_RETRY_ATTEMPTS', 3)}
+• Попытки отправки: {settings.REFERRAL_NOTIFICATION_RETRY_ATTEMPTS}
 
 {_settings_hint()}
 """
@@ -690,7 +690,7 @@ async def process_test_referral_earning(message: types.Message, db_user: User, d
     try:
         target_telegram_id = int(parts[0])
         amount_rubles = float(parts[1].replace(',', '.'))
-        amount_kopeks = int(amount_rubles * 100)
+        amount_kopeks = settings.rubles_to_kopeks(amount_rubles)
 
         if amount_kopeks <= 0:
             await message.answer('❌ Сумма должна быть положительной')
@@ -1565,7 +1565,7 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
                     ]
                 ),
             )
-        except:
+        except Exception:
             await message.answer(
                 f'❌ Ошибка при анализе файла: {html.escape(str(e))}',
                 reply_markup=types.InlineKeyboardMarkup(

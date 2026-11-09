@@ -46,17 +46,17 @@ class NalogoQueueService:
     @property
     def _check_interval(self) -> int:
         """Интервал проверки очереди в секундах."""
-        return getattr(settings, 'NALOGO_QUEUE_CHECK_INTERVAL', 300)
+        return settings.NALOGO_QUEUE_CHECK_INTERVAL
 
     @property
     def _receipt_delay(self) -> int:
         """Задержка между отправкой чеков в секундах."""
-        return getattr(settings, 'NALOGO_QUEUE_RECEIPT_DELAY', 3)
+        return settings.NALOGO_QUEUE_RECEIPT_DELAY
 
     @property
     def _max_attempts(self) -> int:
         """Максимальное количество попыток отправки чека."""
-        return getattr(settings, 'NALOGO_QUEUE_MAX_ATTEMPTS', 10)
+        return settings.NALOGO_QUEUE_MAX_ATTEMPTS
 
     async def start(self) -> None:
         """Запустить фоновую обработку очереди."""
@@ -234,7 +234,9 @@ class NalogoQueueService:
                     # Fallback на сохранённое имя
                     receipt_name = receipt_data.get(
                         'name',
-                        settings.get_balance_payment_description(int(amount * 100), telegram_user_id=telegram_user_id),
+                        settings.get_balance_payment_description(
+                            settings.rubles_to_kopeks(amount), telegram_user_id=telegram_user_id
+                        ),
                     )
 
                 receipt_uuid = await self._nalogo_service.create_receipt(

@@ -132,13 +132,6 @@ async def count_user_recent_activations(db: AsyncSession, user_id: int, hours: i
     return result.scalar() or 0
 
 
-async def get_user_promocodes(db: AsyncSession, user_id: int) -> list[PromoCodeUse]:
-    result = await db.execute(
-        select(PromoCodeUse).where(PromoCodeUse.user_id == user_id).order_by(PromoCodeUse.used_at.desc())
-    )
-    return result.scalars().all()
-
-
 async def get_promocodes_list(
     db: AsyncSession, offset: int = 0, limit: int = 50, is_active: bool | None = None
 ) -> list[PromoCode]:

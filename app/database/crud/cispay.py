@@ -121,31 +121,6 @@ async def update_cispay_payment_status(
     return payment
 
 
-async def get_pending_cispay_payments(db: AsyncSession, user_id: int) -> list[CisPayPayment]:
-    """Возвращает незавершённые платежи пользователя."""
-    result = await db.execute(
-        select(CisPayPayment).where(
-            CisPayPayment.user_id == user_id,
-            CisPayPayment.status == 'pending',
-            CisPayPayment.is_paid == False,
-        )
-    )
-    return list(result.scalars().all())
-
-
-async def get_expired_pending_cispay_payments(db: AsyncSession) -> list[CisPayPayment]:
-    """Возвращает просроченные платежи в статусе pending."""
-    now = datetime.now(UTC)
-    result = await db.execute(
-        select(CisPayPayment).where(
-            CisPayPayment.status == 'pending',
-            CisPayPayment.is_paid == False,
-            CisPayPayment.expires_at < now,
-        )
-    )
-    return list(result.scalars().all())
-
-
 async def link_cispay_payment_to_transaction(
     db: AsyncSession,
     *,

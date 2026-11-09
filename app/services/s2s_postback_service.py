@@ -14,15 +14,15 @@ except ImportError:
 
 
 def _is_enabled() -> bool:
-    return getattr(settings, 'S2S_POSTBACK_ENABLED', False) and httpx is not None
+    return settings.S2S_POSTBACK_ENABLED and httpx is not None
 
 
 def _get_url(event: str) -> str | None:
     """Get postback URL template for event type."""
     mapping = {
-        'registration': getattr(settings, 'S2S_POSTBACK_REGISTRATION_URL', ''),
-        'trial': getattr(settings, 'S2S_POSTBACK_TRIAL_URL', ''),
-        'purchase': getattr(settings, 'S2S_POSTBACK_PURCHASE_URL', ''),
+        'registration': settings.S2S_POSTBACK_REGISTRATION_URL,
+        'trial': settings.S2S_POSTBACK_TRIAL_URL,
+        'purchase': settings.S2S_POSTBACK_PURCHASE_URL,
     }
     url = mapping.get(event, '')
     return url or None

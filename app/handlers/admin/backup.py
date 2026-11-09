@@ -52,7 +52,7 @@ def get_backup_list_keyboard(backups: list, page: int = 1, per_page: int = 5):
                 date_str = format_local_datetime(dt, '%d.%m %H:%M')
             else:
                 date_str = '?'
-        except:
+        except Exception:
             date_str = '?'
 
         size_str = f'{backup.get("file_size_mb", 0):.1f}MB'
@@ -169,7 +169,7 @@ async def show_backup_list(callback: types.CallbackQuery, db_user: User, db: Asy
     if callback.data.startswith('backup_list_page_'):
         try:
             page = int(callback.data.split('_')[-1])
-        except:
+        except Exception:
             page = 1
 
     backups = await backup_service.get_backup_list()
@@ -214,7 +214,7 @@ async def manage_backup_file(callback: types.CallbackQuery, db_user: User, db: A
             date_str = format_local_datetime(dt, '%d.%m.%Y %H:%M:%S')
         else:
             date_str = 'Неизвестно'
-    except:
+    except Exception:
         date_str = 'Ошибка формата даты'
 
     text = f"""📦 <b>Информация о бекапе</b>

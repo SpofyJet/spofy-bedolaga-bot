@@ -89,11 +89,6 @@ async def get_reward_level(db: AsyncSession, level: int) -> ReferralRewardLevel 
     return result.scalar_one_or_none()
 
 
-async def get_reward_level_by_id(db: AsyncSession, level_id: int) -> ReferralRewardLevel | None:
-    result = await db.execute(select(ReferralRewardLevel).where(ReferralRewardLevel.id == level_id))
-    return result.scalar_one_or_none()
-
-
 async def upsert_reward_level(db: AsyncSession, level: int, **values) -> ReferralRewardLevel:
     """Создать или обновить правило уровня.
 

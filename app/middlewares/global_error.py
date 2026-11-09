@@ -8,7 +8,7 @@ import structlog
 from aiogram import BaseMiddleware, Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, TelegramObject
+from aiogram.types import BufferedInputFile, CallbackQuery, TelegramObject
 from sqlalchemy.exc import InterfaceError, OperationalError
 
 from app.config import settings
@@ -28,7 +28,6 @@ ERROR_MESSAGE_MAX_LENGTH: Final[int] = 500
 REPORT_SEPARATOR_WIDTH: Final[int] = 50
 DATETIME_FORMAT: Final[str] = '%d.%m.%Y %H:%M:%S'
 DATETIME_FORMAT_FILENAME: Final[str] = '%Y%m%d_%H%M%S'
-DEVELOPER_CONTACT_URL: Final[str] = 'https://t.me/fringg'
 
 # Фразы ошибок Telegram API
 OLD_QUERY_PHRASES: Final[tuple[str, ...]] = STALE_CALLBACK_QUERY_PHRASES
@@ -155,50 +154,6 @@ class GlobalErrorMiddleware(BaseMiddleware):
         return 'Unknown'
 
 
-class ErrorStatisticsMiddleware(BaseMiddleware):
-    def __init__(self):
-        self.error_counts = {
-            'old_queries': 0,
-            'message_not_modified': 0,
-            'bot_blocked': 0,
-            'user_deactivated': 0,
-            'other_errors': 0,
-        }
-
-    async def __call__(
-        self,
-        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
-        event: TelegramObject,
-        data: dict[str, Any],
-    ) -> Any:
-        try:
-            return await handler(event, data)
-        except TelegramBadRequest as e:
-            self._count_error(e)
-            raise
-
-    def _count_error(self, error: TelegramBadRequest):
-        error_message = str(error).lower()
-
-        if OLD_QUERY_PHRASES[0] in error_message:
-            self.error_counts['old_queries'] += 1
-        elif MESSAGE_NOT_MODIFIED_PHRASE in error_message:
-            self.error_counts['message_not_modified'] += 1
-        elif BOT_BLOCKED_PHRASE in error_message:
-            self.error_counts['bot_blocked'] += 1
-        elif USER_DEACTIVATED_PHRASE in error_message:
-            self.error_counts['user_deactivated'] += 1
-        else:
-            self.error_counts['other_errors'] += 1
-
-    def get_statistics(self) -> dict:
-        return self.error_counts.copy()
-
-    def reset_statistics(self):
-        for key in self.error_counts:
-            self.error_counts[key] = 0
-
-
 def _looks_like_traceback(text: str) -> bool:
     return text.lstrip().startswith('Traceback') or '\n  File ' in text
 
@@ -261,12 +216,10 @@ async def send_error_to_admin_chat(
     """
     global _last_error_notification
 
-    chat_id = getattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None)
+    chat_id = settings.ADMIN_NOTIFICATIONS_CHAT_ID
     # Используем топик для ошибок, если настроен, иначе общий
-    topic_id = getattr(settings, 'ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID', None) or getattr(
-        settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None
-    )
-    enabled = getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
+    topic_id = settings.ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID or getattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None)
+    enabled = settings.ADMIN_NOTIFICATIONS_ENABLED
 
     if not enabled or not chat_id:
         return 'skipped'
@@ -290,26 +243,13 @@ async def send_error_to_admin_chat(
 
     _last_error_notification = now
 
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text='💬 Сообщить разработчику',
-                    url=DEVELOPER_CONTACT_URL,
-                ),
-            ],
-        ]
-    )
-
     # Rich-вид (Bot API 10.1): трейсбеки инлайн в сворачиваемых блоках с
     # подсветкой — лимит rich-сообщения 32768 символов против 1024 у caption,
     # так что .txt-файл не нужен. При недоступности/переполнении — классический
     # путь с файлом ниже.
     try:
         rich_html = _build_rich_error_report(now, error_type, context)
-        if rich_html and await try_send_rich_admin_message(
-            bot, chat_id, rich_html, thread_id=topic_id, reply_markup=keyboard
-        ):
+        if rich_html and await try_send_rich_admin_message(bot, chat_id, rich_html, thread_id=topic_id):
             _error_buffer.clear()
             logger.info('Rich-уведомление об ошибке отправлено в чат', chat_id=chat_id)
             return 'sent'
@@ -375,7 +315,6 @@ async def send_error_to_admin_chat(
             'document': file,
             'caption': message_text,
             'parse_mode': ParseMode.HTML,
-            'reply_markup': keyboard,
         }
 
         if topic_id:

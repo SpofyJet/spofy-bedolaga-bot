@@ -116,33 +116,6 @@ async def update_rollypay_payment_status(
     return payment
 
 
-async def get_pending_rollypay_payments(db: AsyncSession, user_id: int) -> list[RollyPayPayment]:
-    """Получает незавершенные платежи пользователя."""
-    result = await db.execute(
-        select(RollyPayPayment).where(
-            RollyPayPayment.user_id == user_id,
-            RollyPayPayment.status == 'pending',
-            RollyPayPayment.is_paid == False,
-        )
-    )
-    return list(result.scalars().all())
-
-
-async def get_expired_pending_rollypay_payments(
-    db: AsyncSession,
-) -> list[RollyPayPayment]:
-    """Получает просроченные платежи в статусе pending."""
-    now = datetime.now(UTC)
-    result = await db.execute(
-        select(RollyPayPayment).where(
-            RollyPayPayment.status == 'pending',
-            RollyPayPayment.is_paid == False,
-            RollyPayPayment.expires_at < now,
-        )
-    )
-    return list(result.scalars().all())
-
-
 async def link_rollypay_payment_to_transaction(
     db: AsyncSession,
     *,

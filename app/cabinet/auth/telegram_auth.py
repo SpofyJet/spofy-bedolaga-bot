@@ -146,19 +146,6 @@ def validate_telegram_init_data(init_data: str, max_age_seconds: int = 86400) ->
         return None
 
 
-def extract_telegram_user_from_init_data(init_data: str) -> dict[str, Any] | None:
-    """
-    Extract and validate user info from Telegram WebApp initData.
-
-    Args:
-        init_data: Raw initData string from Telegram WebApp
-
-    Returns:
-        User data dict with id, first_name, last_name, username, etc. or None if invalid
-    """
-    return validate_telegram_init_data(init_data)
-
-
 # JWKS cache (module-level, refreshed periodically)
 _jwks_cache: dict[str, Any] = {}
 _jwks_cache_expiry: datetime | None = None

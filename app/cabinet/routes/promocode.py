@@ -85,7 +85,7 @@ async def activate_promocode(
         balance_after_rubles = result.get('balance_after_kopeks', 0) / 100
 
         # Send admin notification (same as bot handler)
-        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False):
+        if settings.ADMIN_NOTIFICATIONS_ENABLED:
             try:
                 from app.bot_factory import create_bot
                 from app.services.admin_notification_service import AdminNotificationService

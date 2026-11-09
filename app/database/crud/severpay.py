@@ -121,33 +121,6 @@ async def update_severpay_payment_status(
     return payment
 
 
-async def get_pending_severpay_payments(db: AsyncSession, user_id: int) -> list[SeverPayPayment]:
-    """Получает незавершенные платежи пользователя."""
-    result = await db.execute(
-        select(SeverPayPayment).where(
-            SeverPayPayment.user_id == user_id,
-            SeverPayPayment.status == 'pending',
-            SeverPayPayment.is_paid == False,
-        )
-    )
-    return list(result.scalars().all())
-
-
-async def get_expired_pending_severpay_payments(
-    db: AsyncSession,
-) -> list[SeverPayPayment]:
-    """Получает просроченные платежи в статусе pending."""
-    now = datetime.now(UTC)
-    result = await db.execute(
-        select(SeverPayPayment).where(
-            SeverPayPayment.status == 'pending',
-            SeverPayPayment.is_paid == False,
-            SeverPayPayment.expires_at < now,
-        )
-    )
-    return list(result.scalars().all())
-
-
 async def link_severpay_payment_to_transaction(
     db: AsyncSession,
     *,

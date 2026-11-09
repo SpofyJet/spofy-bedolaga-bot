@@ -112,13 +112,11 @@ def _build_retry_message(event: SystemErrorEvent) -> str:
 
 async def _resend_to_admin_chat(event: SystemErrorEvent) -> None:
     """Отправить сохранённую ошибку в админ-чат. Бросает при неудаче."""
-    chat_id = getattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None)
+    chat_id = settings.ADMIN_NOTIFICATIONS_CHAT_ID
     if not chat_id:
         raise RuntimeError('ADMIN_NOTIFICATIONS_CHAT_ID не настроен')
 
-    topic_id = getattr(settings, 'ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID', None) or getattr(
-        settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None
-    )
+    topic_id = settings.ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID or getattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None)
     kwargs: dict[str, Any] = {'chat_id': chat_id, 'parse_mode': 'HTML'}
     if topic_id:
         kwargs['message_thread_id'] = topic_id

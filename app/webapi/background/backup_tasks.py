@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from app.services.backup_service import backup_service
+from app.utils.background import spawn_background_task
 
 
 @dataclass(slots=True)
@@ -31,7 +32,7 @@ class BackupTaskManager:
         async with self._lock:
             self._tasks[task_id] = state
 
-        asyncio.create_task(self._run_task(state))
+        spawn_background_task(self._run_task(state))
         return state
 
     async def _run_task(self, state: BackupTaskState) -> None:

@@ -54,7 +54,7 @@ async def send_promo_offer_email(
 
     language = language or 'ru'
     context = {
-        'cabinet_url': getattr(settings, 'CABINET_URL', '') or '',
+        'cabinet_url': settings.CABINET_URL or '',
         'username': username or '',
         'email': email,
         'message_html': _to_email_html(message_text),

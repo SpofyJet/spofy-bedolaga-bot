@@ -206,26 +206,6 @@ async def notify_user_balance_topup(
     )
 
 
-async def notify_user_balance_change(
-    user_id: int,
-    amount_kopeks: int,
-    new_balance_kopeks: int,
-    description: str = '',
-) -> None:
-    """Уведомить пользователя об изменении баланса."""
-    await cabinet_ws_manager.send_to_user(
-        user_id,
-        {
-            'type': 'balance.change',
-            'amount_kopeks': amount_kopeks,
-            'amount_rubles': amount_kopeks / 100,
-            'new_balance_kopeks': new_balance_kopeks,
-            'new_balance_rubles': new_balance_kopeks / 100,
-            'description': description,
-        },
-    )
-
-
 # ============================================================================
 # Уведомления о подписке
 # ============================================================================
@@ -260,32 +240,6 @@ async def notify_user_subscription_activated(
             'subscription_id': subscription_id,
             'expires_at': _iso_utc(expires_at),
             'tariff_name': tariff_name,
-        },
-    )
-
-
-async def notify_user_subscription_expiring(
-    user_id: int,
-    days_left: int,
-    expires_at: datetime | str | None,
-) -> None:
-    """Уведомить пользователя о скором истечении подписки."""
-    await cabinet_ws_manager.send_to_user(
-        user_id,
-        {
-            'type': 'subscription.expiring',
-            'days_left': days_left,
-            'expires_at': _iso_utc(expires_at),
-        },
-    )
-
-
-async def notify_user_subscription_expired(user_id: int) -> None:
-    """Уведомить пользователя об истечении подписки."""
-    await cabinet_ws_manager.send_to_user(
-        user_id,
-        {
-            'type': 'subscription.expired',
         },
     )
 
@@ -352,90 +306,9 @@ async def notify_user_traffic_purchased(
 # ============================================================================
 
 
-async def notify_user_autopay_success(
-    user_id: int,
-    amount_kopeks: int,
-    new_expires_at: datetime | str | None,
-) -> None:
-    """Уведомить пользователя об успешном автопродлении."""
-    await cabinet_ws_manager.send_to_user(
-        user_id,
-        {
-            'type': 'autopay.success',
-            'amount_kopeks': amount_kopeks,
-            'amount_rubles': amount_kopeks / 100,
-            'new_expires_at': _iso_utc(new_expires_at),
-        },
-    )
-
-
-async def notify_user_autopay_failed(
-    user_id: int,
-    reason: str = '',
-) -> None:
-    """Уведомить пользователя о неудачном автопродлении."""
-    await cabinet_ws_manager.send_to_user(
-        user_id,
-        {
-            'type': 'autopay.failed',
-            'reason': reason,
-        },
-    )
-
-
-async def notify_user_autopay_insufficient_funds(
-    user_id: int,
-    required_kopeks: int,
-    balance_kopeks: int,
-) -> None:
-    """Уведомить о недостатке средств для автопродления."""
-    await cabinet_ws_manager.send_to_user(
-        user_id,
-        {
-            'type': 'autopay.insufficient_funds',
-            'required_kopeks': required_kopeks,
-            'required_rubles': required_kopeks / 100,
-            'balance_kopeks': balance_kopeks,
-            'balance_rubles': balance_kopeks / 100,
-        },
-    )
-
-
 # ============================================================================
 # Уведомления о бане/разбане
 # ============================================================================
-
-
-async def notify_user_ban(user_id: int, reason: str = '') -> None:
-    """Уведомить пользователя о блокировке."""
-    await cabinet_ws_manager.send_to_user(
-        user_id,
-        {
-            'type': 'account.banned',
-            'reason': reason,
-        },
-    )
-
-
-async def notify_user_unban(user_id: int) -> None:
-    """Уведомить пользователя о разблокировке."""
-    await cabinet_ws_manager.send_to_user(
-        user_id,
-        {
-            'type': 'account.unbanned',
-        },
-    )
-
-
-async def notify_user_warning(user_id: int, message: str) -> None:
-    """Уведомить пользователя о предупреждении."""
-    await cabinet_ws_manager.send_to_user(
-        user_id,
-        {
-            'type': 'account.warning',
-            'message': message,
-        },
-    )
 
 
 # ============================================================================
@@ -443,82 +316,6 @@ async def notify_user_warning(user_id: int, message: str) -> None:
 # ============================================================================
 
 
-async def notify_user_referral_bonus(
-    user_id: int,
-    bonus_kopeks: int,
-    referral_name: str = '',
-) -> None:
-    """Уведомить пользователя о реферальном бонусе."""
-    await cabinet_ws_manager.send_to_user(
-        user_id,
-        {
-            'type': 'referral.bonus',
-            'bonus_kopeks': bonus_kopeks,
-            'bonus_rubles': bonus_kopeks / 100,
-            'referral_name': referral_name,
-        },
-    )
-
-
-async def notify_user_referral_registered(
-    user_id: int,
-    referral_name: str = '',
-) -> None:
-    """Уведомить пользователя о регистрации нового реферала."""
-    await cabinet_ws_manager.send_to_user(
-        user_id,
-        {
-            'type': 'referral.registered',
-            'referral_name': referral_name,
-        },
-    )
-
-
 # ============================================================================
 # Прочие уведомления
 # ============================================================================
-
-
-async def notify_user_daily_debit(
-    user_id: int,
-    amount_kopeks: int,
-    new_balance_kopeks: int,
-) -> None:
-    """Уведомить о ежедневном списании."""
-    await cabinet_ws_manager.send_to_user(
-        user_id,
-        {
-            'type': 'subscription.daily_debit',
-            'amount_kopeks': amount_kopeks,
-            'amount_rubles': amount_kopeks / 100,
-            'new_balance_kopeks': new_balance_kopeks,
-            'new_balance_rubles': new_balance_kopeks / 100,
-        },
-    )
-
-
-async def notify_user_traffic_reset(user_id: int) -> None:
-    """Уведомить о сбросе трафика."""
-    await cabinet_ws_manager.send_to_user(
-        user_id,
-        {
-            'type': 'subscription.traffic_reset',
-        },
-    )
-
-
-async def notify_user_payment_received(
-    user_id: int,
-    amount_kopeks: int,
-    payment_method: str = '',
-) -> None:
-    """Уведомить о полученном платеже."""
-    await cabinet_ws_manager.send_to_user(
-        user_id,
-        {
-            'type': 'payment.received',
-            'amount_kopeks': amount_kopeks,
-            'amount_rubles': amount_kopeks / 100,
-            'payment_method': payment_method,
-        },
-    )

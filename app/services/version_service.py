@@ -63,24 +63,13 @@ class VersionInfo:
 class VersionService:
     def __init__(self, bot=None):
         self.bot = bot
-        self.repo = getattr(settings, 'VERSION_CHECK_REPO', 'fr1ngg/remnawave-bedolaga-telegram-bot')
-        self.enabled = getattr(settings, 'VERSION_CHECK_ENABLED', True)
+        self.repo = settings.VERSION_CHECK_REPO
+        self.enabled = settings.VERSION_CHECK_ENABLED
         self.current_version = self._get_current_version()
         self.cache_ttl = 3600
         self._cache: dict = {}
         self._last_check: datetime | None = None
         self._notification_service = None
-
-    async def get_latest_stable_version(self) -> str:
-        try:
-            url = f'https://api.github.com/repos/{self.repo}/releases/latest'
-            async with aiohttp.ClientSession() as session, session.get(url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data['tag_name']
-        except Exception:
-            pass
-        return 'UNKNOW'
 
     def _get_current_version(self) -> str:
         try:

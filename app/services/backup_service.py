@@ -1139,7 +1139,7 @@ class BackupService:
                 logger.warning('Файл отсутствует в архиве', relative_path=relative_path)
                 continue
 
-            await asyncio.to_thread(lambda: target_resolved.parent.mkdir(parents=True, exist_ok=True))
+            await asyncio.to_thread(target_resolved.parent.mkdir, parents=True, exist_ok=True)
             await asyncio.to_thread(shutil.copy2, source_file, target_resolved)
             logger.info('📁 Файл восстановлен', target_resolved=target_resolved)
 
@@ -1857,9 +1857,6 @@ class BackupService:
                 )
         finally:
             await truncate_engine.dispose()
-
-    async def _collect_file_snapshots(self) -> dict[str, dict[str, Any]]:
-        return {}
 
     async def _restore_file_snapshots(self, file_snapshots: dict[str, dict[str, Any]]) -> int:
         return 0

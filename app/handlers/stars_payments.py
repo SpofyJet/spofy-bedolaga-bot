@@ -1,4 +1,5 @@
 import html
+import re
 from decimal import ROUND_HALF_UP, Decimal
 
 import structlog
@@ -507,7 +508,7 @@ async def _handle_trial_payment(
             return False
 
 
-_PURCHASE_TOKEN_RE = __import__('re').compile(r'^[A-Za-z0-9_\-]{10,100}$')
+_PURCHASE_TOKEN_RE = re.compile(r'^[A-Za-z0-9_\-]{10,100}$')
 
 
 def _gift_purchase_problem(purchase, charge_id: str | None) -> str | None:

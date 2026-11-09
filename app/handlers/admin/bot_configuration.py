@@ -341,7 +341,7 @@ def _get_group_status(group_key: str) -> tuple[str, str]:
         return ('🟢', 'Программа активна') if active else ('⚪', 'Бонусы не заданы')
 
     if key == 'core':
-        token_ok = bool(getattr(settings, 'BOT_TOKEN', ''))
+        token_ok = bool(settings.BOT_TOKEN)
         # Channel subscription channels are now managed via DB (admin panel),
         # not a single CHANNEL_LINK setting. Dashboard cannot async-query DB here.
         if token_ok:

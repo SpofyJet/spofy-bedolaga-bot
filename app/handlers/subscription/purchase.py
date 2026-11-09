@@ -2798,7 +2798,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
         else:
             logger.info('Создаем новую подписку для пользователя', telegram_id=db_user.telegram_id)
-            default_device_limit = getattr(settings, 'DEFAULT_DEVICE_LIMIT', 1)
+            default_device_limit = settings.DEFAULT_DEVICE_LIMIT
             resolved_device_limit = selected_devices
 
             if resolved_device_limit is None:
@@ -3506,7 +3506,7 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
             try:
                 from app.services.admin_notification_service import AdminNotificationService
 
-                if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+                if settings.ADMIN_NOTIFICATIONS_ENABLED and settings.BOT_TOKEN:
                     notification_service = AdminNotificationService(callback.bot)
                     await notification_service.send_subscription_purchase_notification(
                         db=db,

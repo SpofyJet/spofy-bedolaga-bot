@@ -172,14 +172,6 @@ class BanSystemAPI:
         """
         return await self._request('GET', f'/api/users/{email}')
 
-    async def get_user_network(self, email: str) -> dict[str, Any]:
-        """
-        Get user network information (WiFi/Mobile detection).
-
-        GET /api/users/{email}/network
-        """
-        return await self._request('GET', f'/api/users/{email}/network')
-
     # === Punishments (Bans) ===
 
     async def get_punishments(self) -> list[dict[str, Any]]:

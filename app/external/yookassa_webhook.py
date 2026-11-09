@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 from ipaddress import (
     IPv4Address,
@@ -112,7 +111,7 @@ _TRUSTED_PROXY_NETWORKS_CACHE: tuple[str, tuple[IPNetwork, ...]] = ('', ())
 def _get_trusted_proxy_networks() -> tuple[IPNetwork, ...]:
     global _TRUSTED_PROXY_NETWORKS_CACHE
 
-    raw_value = getattr(settings, 'YOOKASSA_TRUSTED_PROXY_NETWORKS', '') or ''
+    raw_value = settings.YOOKASSA_TRUSTED_PROXY_NETWORKS or ''
     cached_raw, cached_networks = _TRUSTED_PROXY_NETWORKS_CACHE
 
     if raw_value == cached_raw:
@@ -376,45 +375,3 @@ def create_yookassa_webhook_app(payment_service: PaymentService) -> web.Applicat
     app.router.add_get('/health', health_check)
 
     return app
-
-
-async def start_yookassa_webhook_server(payment_service: PaymentService) -> None:
-    if not settings.is_yookassa_enabled():
-        logger.info('ℹ️ YooKassa отключена, webhook сервер не запускается')
-        return
-
-    try:
-        app = create_yookassa_webhook_app(payment_service)
-
-        runner = web.AppRunner(app)
-        await runner.setup()
-
-        site = web.TCPSite(runner, host=settings.YOOKASSA_WEBHOOK_HOST, port=settings.YOOKASSA_WEBHOOK_PORT)
-
-        await site.start()
-
-        logger.info(
-            '✅ YooKassa webhook сервер запущен',
-            YOOKASSA_WEBHOOK_HOST=settings.YOOKASSA_WEBHOOK_HOST,
-            YOOKASSA_WEBHOOK_PORT=settings.YOOKASSA_WEBHOOK_PORT,
-        )
-        logger.info(
-            '🎯 YooKassa webhook URL',
-            YOOKASSA_WEBHOOK_HOST=settings.YOOKASSA_WEBHOOK_HOST,
-            YOOKASSA_WEBHOOK_PORT=settings.YOOKASSA_WEBHOOK_PORT,
-            YOOKASSA_WEBHOOK_PATH=settings.YOOKASSA_WEBHOOK_PATH,
-        )
-
-        try:
-            while True:
-                await asyncio.sleep(1)
-        except asyncio.CancelledError:
-            logger.info('🛑 YooKassa webhook сервер получил сигнал остановки')
-        finally:
-            await site.stop()
-            await runner.cleanup()
-            logger.info('✅ YooKassa webhook сервер остановлен')
-
-    except Exception as e:
-        logger.error('❌ Ошибка запуска YooKassa webhook сервера', error=e, exc_info=True)
-        raise

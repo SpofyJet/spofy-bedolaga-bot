@@ -29,7 +29,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
         )
 
     if settings.is_yookassa_enabled():
-        if getattr(settings, 'YOOKASSA_SBP_ENABLED', False):
+        if settings.YOOKASSA_SBP_ENABLED:
             methods.append(
                 {
                     'id': 'yookassa_sbp',
@@ -716,95 +716,3 @@ def is_payment_method_available(method_id: str) -> bool:
     if method_id == 'support':
         return settings.is_support_topup_enabled()
     return False
-
-
-def get_payment_method_status() -> dict[str, bool]:
-    """
-    Возвращает статус всех способов оплаты
-    """
-    return {
-        'stars': settings.TELEGRAM_STARS_ENABLED,
-        'yookassa': settings.is_yookassa_enabled(),
-        'tribute': settings.TRIBUTE_ENABLED,
-        'mulenpay': settings.is_mulenpay_enabled(),
-        'wata': settings.is_wata_enabled(),
-        'pal24': settings.is_pal24_enabled(),
-        'cryptobot': settings.is_cryptobot_enabled(),
-        'xrocket': settings.is_xrocket_enabled(),
-        'heleket': settings.is_heleket_enabled(),
-        'platega': settings.is_platega_enabled() and bool(settings.get_platega_active_methods()),
-        'cloudpayments': settings.is_cloudpayments_enabled(),
-        'freekassa': settings.is_freekassa_enabled(),
-        'kassa_ai': settings.is_kassa_ai_enabled(),
-        'riopay': settings.is_riopay_enabled(),
-        'severpay': settings.is_severpay_enabled(),
-        'paypear': settings.is_paypear_enabled(),
-        'rollypay': settings.is_rollypay_enabled(),
-        'overpay': settings.is_overpay_enabled(),
-        'aurapay': settings.is_aurapay_enabled(),
-        'aurapay_sbp': settings.is_aurapay_sbp_enabled(),
-        'aurapay_card': settings.is_aurapay_card_enabled(),
-        'lava': settings.is_lava_enabled(),
-        'lava_sbp': settings.is_lava_sbp_enabled(),
-        'lava_card': settings.is_lava_card_enabled(),
-        'etoplatezhi': settings.is_etoplatezhi_enabled(),
-        'etoplatezhi_sbp': settings.is_etoplatezhi_sbp_enabled(),
-        'etoplatezhi_card': settings.is_etoplatezhi_card_enabled(),
-        'antilopay': settings.is_antilopay_enabled(),
-        'antilopay_sbp': settings.is_antilopay_sbp_enabled(),
-        'antilopay_card': settings.is_antilopay_card_enabled(),
-        'antilopay_sberpay': settings.is_antilopay_sberpay_enabled(),
-        'support': settings.is_support_topup_enabled(),
-    }
-
-
-def get_enabled_payment_methods_count() -> int:
-    """
-    Возвращает количество включенных способов оплаты (не считая поддержку)
-    """
-    count = 0
-    if settings.TELEGRAM_STARS_ENABLED:
-        count += 1
-    if settings.is_yookassa_enabled():
-        count += 1
-    if settings.TRIBUTE_ENABLED:
-        count += 1
-    if settings.is_mulenpay_enabled():
-        count += 1
-    if settings.is_wata_enabled():
-        count += 1
-    if settings.is_pal24_enabled():
-        count += 1
-    if settings.is_cryptobot_enabled():
-        count += 1
-    if settings.is_xrocket_enabled():
-        count += 1
-    if settings.is_heleket_enabled():
-        count += 1
-    if settings.is_platega_enabled() and settings.get_platega_active_methods():
-        count += 1
-    if settings.is_cloudpayments_enabled():
-        count += 1
-    if settings.is_freekassa_enabled():
-        count += 1
-    if settings.is_kassa_ai_enabled():
-        count += 1
-    if settings.is_riopay_enabled():
-        count += 1
-    if settings.is_severpay_enabled():
-        count += 1
-    if settings.is_paypear_enabled():
-        count += 1
-    if settings.is_rollypay_enabled():
-        count += 1
-    if settings.is_overpay_enabled():
-        count += 1
-    if settings.is_aurapay_enabled():
-        count += 1
-    if settings.is_lava_enabled():
-        count += 1
-    if settings.is_etoplatezhi_enabled():
-        count += 1
-    if settings.is_antilopay_enabled():
-        count += 1
-    return count

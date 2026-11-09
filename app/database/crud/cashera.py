@@ -121,18 +121,6 @@ async def update_cashera_payment_status(
     return payment
 
 
-async def get_pending_cashera_payments(db: AsyncSession, user_id: int) -> list[CasheraPayment]:
-    """Возвращает незавершённые платежи пользователя."""
-    result = await db.execute(
-        select(CasheraPayment).where(
-            CasheraPayment.user_id == user_id,
-            CasheraPayment.status == 'pending',
-            CasheraPayment.is_paid == False,
-        )
-    )
-    return list(result.scalars().all())
-
-
 async def link_cashera_payment_to_transaction(
     db: AsyncSession,
     *,

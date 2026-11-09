@@ -35,7 +35,7 @@ def _md_bold_to_html(text: str) -> str:
     иначе Markdown-парсер показывает тег сырым текстом."""
     import re
 
-    return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text, flags=re.S)
+    return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text, flags=re.DOTALL)
 
 
 @admin_required

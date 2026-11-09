@@ -1,6 +1,5 @@
 import html as html_module
 import re
-from datetime import datetime
 
 
 ALLOWED_HTML_TAGS = {
@@ -54,12 +53,6 @@ def validate_telegram_username(username: str) -> bool:
     return re.match(pattern, username) is not None
 
 
-def validate_promocode(code: str) -> bool:
-    if not code or len(code) < 3 or len(code) > 20:
-        return False
-    return code.replace('_', '').replace('-', '').isalnum()
-
-
 def validate_amount(amount_str: str, min_amount: float = 0, max_amount: float = float('inf')) -> float | None:
     try:
         amount = float(amount_str.replace(',', '.'))
@@ -77,13 +70,6 @@ def validate_positive_integer(value: str | int, max_value: int = None) -> int | 
             return num
         return None
     except (ValueError, TypeError):
-        return None
-
-
-def validate_date_string(date_str: str, date_format: str = '%Y-%m-%d') -> datetime | None:
-    try:
-        return datetime.strptime(date_str, date_format)
-    except ValueError:
         return None
 
 
@@ -206,27 +192,6 @@ def sanitize_telegram_name(name: str | None) -> str | None:
         return name.replace('<', '‹').replace('>', '›').replace('&', '＆').strip()
     except Exception:
         return name
-
-
-def validate_device_count(count: str | int) -> int | None:
-    try:
-        count_int = int(count)
-        if 1 <= count_int <= 10:
-            return count_int
-        return None
-    except (ValueError, TypeError):
-        return None
-
-
-def validate_referral_code(code: str) -> bool:
-    if not code:
-        return False
-
-    if code.startswith('ref') and len(code) > 3:
-        user_id_part = code[3:]
-        return user_id_part.isdigit()
-
-    return validate_promocode(code)
 
 
 def validate_html_tags(text: str) -> tuple[bool, str]:

@@ -45,19 +45,19 @@ class BlacklistService:
 
     def is_blacklist_check_enabled(self) -> bool:
         """Проверяет, включена ли проверка черного списка"""
-        return getattr(settings, 'BLACKLIST_CHECK_ENABLED', False)
+        return settings.BLACKLIST_CHECK_ENABLED
 
     def get_blacklist_github_url(self) -> str | None:
         """Получает URL к файлу черного списка на GitHub"""
-        return getattr(settings, 'BLACKLIST_GITHUB_URL', None)
+        return settings.BLACKLIST_GITHUB_URL
 
     def get_blacklist_update_interval_hours(self) -> int:
         """Получает интервал обновления черного списка в часах"""
-        return getattr(settings, 'BLACKLIST_UPDATE_INTERVAL_HOURS', 24)
+        return settings.BLACKLIST_UPDATE_INTERVAL_HOURS
 
     def should_ignore_admins(self) -> bool:
         """Проверяет, нужно ли игнорировать администраторов при проверке черного списка"""
-        return getattr(settings, 'BLACKLIST_IGNORE_ADMINS', True)
+        return settings.BLACKLIST_IGNORE_ADMINS
 
     def is_admin(self, telegram_id: int) -> bool:
         """Проверяет, является ли пользователь администратором"""

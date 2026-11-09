@@ -80,7 +80,7 @@ async def get_public_ip() -> str:
     global _cached_public_ip
 
     # Проверяем переменную окружения
-    env_ip = getattr(settings, 'SERVER_PUBLIC_IP', None)
+    env_ip = settings.SERVER_PUBLIC_IP
     if env_ip:
         return env_ip
 
@@ -427,29 +427,6 @@ class FreekassaService:
                 aiohttp.ClientSession() as session,
                 session.post(
                     f'{API_BASE_URL}/balance',
-                    json=params,
-                    headers={'Content-Type': 'application/json'},
-                    timeout=aiohttp.ClientTimeout(total=30),
-                ) as response,
-            ):
-                return await response.json()
-        except aiohttp.ClientError as e:
-            logger.exception('Freekassa API connection error', error=e)
-            raise
-
-    async def get_payment_systems(self) -> dict[str, Any]:
-        """Получает список доступных платежных систем."""
-        params = {
-            'shopId': self.shop_id,
-            'nonce': int(time.time_ns()),
-        }
-        params['signature'] = self._generate_api_signature(params)
-
-        try:
-            async with (
-                aiohttp.ClientSession() as session,
-                session.post(
-                    f'{API_BASE_URL}/currencies',
                     json=params,
                     headers={'Content-Type': 'application/json'},
                     timeout=aiohttp.ClientTimeout(total=30),

@@ -212,27 +212,6 @@ async def update_purchase_status(
     return purchase
 
 
-async def get_landing_purchase_stats(db: AsyncSession, landing_id: int) -> dict:
-    """Get purchase counts grouped by status for a landing page."""
-    result = await db.execute(
-        select(
-            GuestPurchase.status,
-            func.count(GuestPurchase.id),
-        )
-        .where(GuestPurchase.landing_id == landing_id)
-        .group_by(GuestPurchase.status)
-    )
-    rows = result.all()
-
-    stats = {s.value: 0 for s in GuestPurchaseStatus}
-    stats['total'] = 0
-    for status_value, count in rows:
-        stats[status_value] = count
-        stats['total'] += count
-
-    return stats
-
-
 async def get_all_landing_purchase_stats(db: AsyncSession) -> dict[int, dict]:
     """Get purchase counts grouped by landing_id and status in a single query.
 

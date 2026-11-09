@@ -62,7 +62,7 @@ async def test_send_error_uses_rich_and_clears_buffer():
     assert ge._error_buffer == []
     html = bot.send_rich_message.await_args.kwargs['rich_message'].html
     assert '<pre><code class="language-python">' in html
-    assert bot.send_rich_message.await_args.kwargs['reply_markup'] is not None
+    assert 'reply_markup' not in bot.send_rich_message.await_args.kwargs
 
 
 async def test_send_error_falls_back_to_document_when_rich_unavailable(monkeypatch):

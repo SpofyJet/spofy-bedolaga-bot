@@ -100,7 +100,7 @@ class CloudPaymentsService:
     @staticmethod
     def _amount_to_kopeks(amount: float) -> int:
         """Convert rubles to kopeks."""
-        return int(amount * 100)
+        return settings.rubles_to_kopeks(amount)
 
     async def generate_payment_link(
         self,
@@ -185,40 +185,6 @@ class CloudPaymentsService:
         """Generate unique invoice ID for a payment using internal user ID."""
         return f'cp_{user_id}_{int(time.time())}'
 
-    async def charge_by_token(
-        self,
-        token: str,
-        amount_kopeks: int,
-        account_id: str,
-        invoice_id: str,
-        description: str | None = None,
-    ) -> dict[str, Any]:
-        """
-        Charge a payment using saved card token (recurrent payment).
-
-        Args:
-            token: Card token from previous payment
-            amount_kopeks: Amount in kopeks
-            account_id: User's account ID (telegram_id)
-            invoice_id: Unique invoice ID
-            description: Payment description
-
-        Returns:
-            CloudPayments API response
-        """
-        amount = self._amount_from_kopeks(amount_kopeks)
-
-        payload = {
-            'Amount': amount,
-            'Currency': settings.CLOUDPAYMENTS_CURRENCY,
-            'AccountId': account_id,
-            'Token': token,
-            'InvoiceId': invoice_id,
-            'Description': description or settings.CLOUDPAYMENTS_DESCRIPTION,
-        }
-
-        return await self._request('POST', '/payments/tokens/charge', json=payload)
-
     async def get_payment(self, transaction_id: int) -> dict[str, Any]:
         """Get payment details by CloudPayments transaction ID."""
         return await self._request(
@@ -256,14 +222,6 @@ class CloudPaymentsService:
             payload['Amount'] = self._amount_from_kopeks(amount_kopeks)
 
         return await self._request('POST', '/payments/refund', json=payload)
-
-    async def void_payment(self, transaction_id: int) -> dict[str, Any]:
-        """Cancel an authorized but not captured payment."""
-        return await self._request(
-            'POST',
-            '/payments/void',
-            json={'TransactionId': transaction_id},
-        )
 
     @staticmethod
     def verify_webhook_signature(body: bytes, signature: str, api_secret: str) -> bool:

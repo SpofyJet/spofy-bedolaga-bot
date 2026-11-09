@@ -33,10 +33,6 @@ def normalize_admin_email(value: str) -> str:
     return unicodedata.normalize('NFKC', value).strip().lower()
 
 
-# Backward-compat alias на случай если что-то импортировало private имя.
-_normalize_email = normalize_admin_email
-
-
 def _mask_email(value: str | None) -> str:
     """Маскинг email для логов: `admin@example.com` → `a***@e***.com`."""
     if not value or '@' not in value:

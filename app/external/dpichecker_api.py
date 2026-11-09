@@ -25,7 +25,6 @@ DEFAULT_BASE_URL = 'https://dpichecker.st/api/v1'
 DEFAULT_TIMEOUT = 30.0
 WAIT_EXTRA_SEC = 15
 CHECK_TYPES = ('vpn', 'ip', 'mtproto')
-LOCATIONS = ('russia', 'china', 'iran', 'turkmenistan')
 WAIT_MAX_SEC = 120
 
 

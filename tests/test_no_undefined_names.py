@@ -22,22 +22,8 @@ import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-# Имена, уже присутствовавшие на момент установки храповика.
-#
-# Все, кроме последнего, — АННОТАЦИИ: либо в кавычках, либо в модуле с
-# ``from __future__ import annotations``. Такие не вычисляются при исполнении и
-# упасть не могут; это проверено импортом каждого модуля.
-#
-# 'activate_guest_purchase' отсюда убрано: это был не долг, а регрессия. Имя —
-# алиас существующей guest_purchase_service.activate_purchase, и разделение
-# подарочной активации (b42b75d5) сняло импорт, оставив одну из двух точек
-# вызова. Комментарий утверждал, что функции нет нигде в проекте; это было
-# неверно, и запись в базе мешала вернуть строку обратно.
-KNOWN: dict[str, set[str]] = {
-    'app/handlers/start.py': {'User'},
-    'app/services/payment/heleket.py': {'HeleketPayment'},
-    'app/services/payment_method_config_service.py': {'User'},
-}
+# Базы известных неопределённых имён больше нет: новые F821 ломают тест сразу.
+KNOWN: dict[str, set[str]] = {}
 
 
 def _undefined_names() -> dict[str, set[str]]:

@@ -19,14 +19,12 @@ from app.database.models import DecisionLog
 logger = structlog.get_logger(__name__)
 
 KIND_ABUSE_TRIAL_REMOVED = 'abuse_trial_removed'
-KIND_ABUSE_BIG_DEVICES = 'abuse_big_devices'
 KIND_REWARD_BLOCKED = 'friend_reward_blocked'
 KIND_REWARD_GRANTED = 'friend_reward_granted'
 KIND_MASS_SEND_STARTED = 'mass_send_started'
 KIND_MASS_SEND_FINISHED = 'mass_send_finished'
 KIND_MASS_SEND_RESUMED = 'mass_send_resumed'
 KIND_BROADCAST_RESUMED = 'broadcast_resumed'
-KIND_PROVIDER_BLOCK = 'provider_block'
 
 
 async def record_decision(

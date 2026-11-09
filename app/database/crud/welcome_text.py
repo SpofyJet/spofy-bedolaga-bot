@@ -10,8 +10,6 @@ from app.database.models import User, WelcomeText
 
 logger = structlog.get_logger(__name__)
 
-WELCOME_TEXT_KEY = 'welcome_text'
-
 
 async def get_active_welcome_text(db: AsyncSession) -> str | None:
     result = await db.execute(

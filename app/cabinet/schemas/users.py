@@ -15,17 +15,6 @@ class UserStatusEnum(StrEnum):
     DELETED = 'deleted'
 
 
-class SubscriptionStatusEnum(StrEnum):
-    """Subscription status enum."""
-
-    TRIAL = 'trial'
-    ACTIVE = 'active'
-    EXPIRED = 'expired'
-    DISABLED = 'disabled'
-    LIMITED = 'limited'
-    PENDING = 'pending'
-
-
 class SortByEnum(StrEnum):
     """Sort options for users list."""
 
@@ -601,16 +590,6 @@ class UsersStatsResponse(BaseModel):
 
 
 # === Search ===
-
-
-class UserSearchRequest(BaseModel):
-    """Request for user search."""
-
-    query: str = Field(..., min_length=1, max_length=255)
-    search_by: list[str] = Field(
-        default=['telegram_id', 'username', 'first_name', 'last_name', 'email'], description='Fields to search in'
-    )
-    limit: int = Field(default=20, ge=1, le=100)
 
 
 # === Tariffs for User ===

@@ -75,10 +75,3 @@ class ChannelUpdateRequest(BaseModel):
     @classmethod
     def validate_channel_link(cls, v: str | None) -> str | None:
         return _validate_channel_link_value(v)
-
-
-class ChannelSubscriptionStatus(BaseModel):
-    channel_id: str
-    channel_link: str | None
-    title: str | None
-    is_subscribed: bool

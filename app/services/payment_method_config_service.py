@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.database.models import PaymentMethodConfig, PromoGroup
+from app.database.models import PaymentMethodConfig, PromoGroup, User
 
 
 logger = structlog.get_logger(__name__)
@@ -69,7 +69,7 @@ def _get_method_defaults() -> dict:
         },
         'tribute': {
             'default_display_name': 'Tribute',
-            'is_configured': settings.TRIBUTE_ENABLED and bool(getattr(settings, 'TRIBUTE_DONATE_LINK', '')),
+            'is_configured': settings.TRIBUTE_ENABLED and bool(settings.TRIBUTE_DONATE_LINK),
             'default_min': 10000,
             'default_max': 10000000,
             'available_sub_options': None,

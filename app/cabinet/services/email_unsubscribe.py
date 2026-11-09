@@ -91,14 +91,14 @@ def verify_token(token: str, email: str) -> bool:
 
 def build_unsubscribe_url(user_id: int, email: str, category: str = 'all') -> str:
     """Публичная ссылка отписки. Пустая строка = отписки в этом письме не будет."""
-    if not getattr(settings, 'EMAIL_UNSUBSCRIBE_ENABLED', True):
+    if not settings.EMAIL_UNSUBSCRIBE_ENABLED:
         return ''
     if not user_id or not email:
         return ''
 
-    base = (getattr(settings, 'EMAIL_UNSUBSCRIBE_BASE_URL', '') or '').strip()
+    base = (settings.EMAIL_UNSUBSCRIBE_BASE_URL or '').strip()
     if not base:
-        cabinet_url = (getattr(settings, 'CABINET_URL', '') or '').strip()
+        cabinet_url = (settings.CABINET_URL or '').strip()
         if not cabinet_url:
             return ''
         base = f'{cabinet_url.rstrip("/")}{DEFAULT_UNSUBSCRIBE_PATH}'
@@ -113,7 +113,7 @@ def build_unsubscribe_mailto() -> str:
     ту же проверку: перенос строки или угловая скобка внутри дописали бы в письмо
     произвольный заголовок. Кривой адрес выбрасываем целиком, а не чиним.
     """
-    address = (getattr(settings, 'EMAIL_UNSUBSCRIBE_MAILTO', '') or '').strip()
+    address = (settings.EMAIL_UNSUBSCRIBE_MAILTO or '').strip()
     if not address:
         return ''
     if any(ch in address for ch in '\r\n<>,') or '@' not in address:

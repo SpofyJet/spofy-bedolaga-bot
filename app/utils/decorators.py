@@ -5,7 +5,6 @@ from typing import Any
 import structlog
 from aiogram import types
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.fsm.context import FSMContext
 
 from app.config import settings
 from app.localization.texts import get_texts
@@ -147,35 +146,6 @@ async def _send_error_message(args, kwargs, original_error, func_name: str = 'un
             logger.warning('Ошибка при отправке сообщения об ошибке', error=e)
     except Exception as e:
         logger.warning('Критическая ошибка при отправке сообщения об ошибке', error=e)
-
-
-def state_cleanup(func: Callable) -> Callable:
-    @functools.wraps(func)
-    async def wrapper(*args, **kwargs) -> Any:
-        state = kwargs.get('state')
-
-        try:
-            return await func(*args, **kwargs)
-        except Exception as e:
-            if state and isinstance(state, FSMContext):
-                await state.clear()
-            raise e
-
-    return wrapper
-
-
-def typing_action(func: Callable) -> Callable:
-    @functools.wraps(func)
-    async def wrapper(event: types.Update, *args, **kwargs) -> Any:
-        if isinstance(event, types.Message):
-            try:
-                await event.bot.send_chat_action(chat_id=event.chat.id, action='typing')
-            except Exception as e:
-                logger.warning('Не удалось отправить typing action', error=e)
-
-        return await func(event, *args, **kwargs)
-
-    return wrapper
 
 
 def rate_limit(rate: float = 1.0, key: str = None):

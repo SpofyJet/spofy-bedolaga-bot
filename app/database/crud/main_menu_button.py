@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -115,24 +113,4 @@ async def update_main_menu_button(
 
 async def delete_main_menu_button(db: AsyncSession, button: MainMenuButton) -> None:
     await db.delete(button)
-    await db.commit()
-
-
-async def reorder_main_menu_buttons(
-    db: AsyncSession,
-    ordered_ids: Sequence[int],
-) -> None:
-    if not ordered_ids:
-        return
-
-    order_map = {int(button_id): index for index, button_id in enumerate(ordered_ids)}
-
-    result = await db.execute(select(MainMenuButton).where(MainMenuButton.id.in_(order_map.keys())))
-    buttons = result.scalars().all()
-
-    for button in buttons:
-        desired_order = order_map.get(button.id)
-        if desired_order is not None:
-            button.display_order = desired_order
-
     await db.commit()

@@ -235,38 +235,6 @@ async def get_contest_leaderboard(
     return leaderboard
 
 
-async def get_contest_participants(
-    db: AsyncSession,
-    contest_id: int,
-) -> Sequence[tuple[User, int]]:
-    """Получить участников конкурса.
-
-    Учитывает только рефералов, зарегистрированных В ПЕРИОД конкурса.
-    """
-    contest = await get_referral_contest(db, contest_id)
-    if not contest:
-        return []
-
-    contest_start = contest.start_at
-    contest_end = contest.end_at
-    if contest_end.hour == 0 and contest_end.minute == 0 and contest_end.second == 0:
-        contest_end = contest_end.replace(hour=23, minute=59, second=59, microsecond=999999)
-
-    result = await db.execute(
-        select(User, func.count(ReferralContestEvent.id).label('referral_count'))
-        .join(User, User.id == ReferralContestEvent.referrer_id)
-        .where(
-            and_(
-                ReferralContestEvent.contest_id == contest_id,
-                ReferralContestEvent.occurred_at >= contest_start,
-                ReferralContestEvent.occurred_at <= contest_end,
-            )
-        )
-        .group_by(User.id)
-    )
-    return result.all()
-
-
 async def get_referrer_score(
     db: AsyncSession,
     contest_id: int,
@@ -304,14 +272,6 @@ async def get_contest_events_count(
         query = query.where(ReferralContestEvent.occurred_at < end)
     result = await db.execute(query)
     return int(result.scalar_one())
-
-
-async def get_contest_events(
-    db: AsyncSession,
-    contest_id: int,
-) -> list[ReferralContestEvent]:
-    result = await db.execute(select(ReferralContestEvent).where(ReferralContestEvent.contest_id == contest_id))
-    return list(result.scalars().all())
 
 
 async def mark_daily_summary_sent(
@@ -489,52 +449,6 @@ async def get_contest_transaction_breakdown(
         'subscription_total': subscription_total,
         'deposit_total': deposit_total,
     }
-
-
-async def upsert_contest_event(
-    db: AsyncSession,
-    *,
-    contest_id: int,
-    referrer_id: int,
-    referral_id: int,
-    amount_kopeks: int = 0,
-    event_type: str = 'subscription_purchase',
-) -> tuple[ReferralContestEvent, bool]:
-    """Создать или обновить событие конкурса.
-
-    Returns:
-        Tuple[ReferralContestEvent, bool]: (событие, создано_новое)
-    """
-    result = await db.execute(
-        select(ReferralContestEvent).where(
-            and_(
-                ReferralContestEvent.contest_id == contest_id,
-                ReferralContestEvent.referral_id == referral_id,
-            )
-        )
-    )
-    existing = result.scalar_one_or_none()
-
-    if existing:
-        # Обновляем сумму если она изменилась
-        if existing.amount_kopeks != amount_kopeks:
-            existing.amount_kopeks = amount_kopeks
-            await db.commit()
-            await db.refresh(existing)
-        return existing, False
-
-    event = ReferralContestEvent(
-        contest_id=contest_id,
-        referrer_id=referrer_id,
-        referral_id=referral_id,
-        amount_kopeks=amount_kopeks,
-        event_type=event_type,
-        occurred_at=datetime.now(UTC),
-    )
-    db.add(event)
-    await db.commit()
-    await db.refresh(event)
-    return event, True
 
 
 async def debug_contest_transactions(

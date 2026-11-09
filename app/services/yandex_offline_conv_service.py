@@ -96,8 +96,8 @@ def _pageview_payload(cid: str) -> dict[str, str]:
     payload.update(
         {
             't': 'pageview',
-            'dl': settings.YANDEX_OFFLINE_CONV_DL or 'https://web.mtrxvps.ru',
-            'dt': settings.YANDEX_OFFLINE_CONV_DT or 'Matrixxx VPN',
+            'dl': settings.YANDEX_OFFLINE_CONV_DL or settings.CABINET_URL,
+            'dt': settings.YANDEX_OFFLINE_CONV_DT or 'Spofy',
         }
     )
     return payload
@@ -123,12 +123,8 @@ def _ecommerce_purchase_payload(
 ) -> dict[str, str]:
     """Build ecommerce:purchase payload for Metrika Measurement Protocol."""
 
-    service_name = (
-        getattr(settings, 'YANDEX_OFFLINE_CONV_DT', '')
-        or getattr(settings, 'PAYMENT_SERVICE_NAME', '')
-        or 'Subscription'
-    )
-    currency = getattr(settings, 'YANDEX_OFFLINE_CONV_CURRENCY', '') or 'RUB'
+    service_name = settings.YANDEX_OFFLINE_CONV_DT or settings.PAYMENT_SERVICE_NAME or 'Subscription'
+    currency = settings.YANDEX_OFFLINE_CONV_CURRENCY or 'RUB'
     payload = _base_payload(cid)
     payload.update(
         {
@@ -238,11 +234,6 @@ async def _fire_bg(event_name: str, event_fn, user_id: int, **kwargs) -> None:
         )
 
 
-async def fire_registration_bg(user_id: int) -> None:
-    """Fire registration event in background with its own DB session."""
-    await _fire_bg('registration', on_registration, user_id)
-
-
 async def fire_trial_bg(user_id: int) -> None:
     """Fire trial event in background with its own DB session."""
     await _fire_bg('trial', on_trial, user_id)
@@ -280,28 +271,6 @@ async def store_cid(
     except Exception as exc:
         logger.error('failed to store CID', user_id=user_id, error=str(exc))
         return False
-
-
-async def store_cid_and_fire_registration(
-    user_id: int,
-    cid: str | None,
-    *,
-    source: str = 'web',
-) -> None:
-    """Store Yandex CID and fire registration conversion in background (best-effort).
-
-    Opens its own DB session so it never interferes with the caller's transaction.
-    """
-    if not cid:
-        return
-    try:
-        async with AsyncSessionLocal() as db:
-            stored = await store_cid(db, user_id, cid, source=source)
-            if stored:
-                await db.commit()
-                spawn_bg(fire_registration_bg(user_id))
-    except Exception as exc:
-        logger.warning('Failed to store CID and fire registration', user_id=user_id, error=str(exc))
 
 
 async def store_cid_and_fire_purchase(
@@ -429,13 +398,13 @@ async def _upload_offline_conversion_yclid(yclid: str, amount_rubles: float, ts:
     Measurement Protocol collect, which only attributes the first purchase.
     Returns True when Metrika accepts the upload (response contains 'uploading').
     """
-    token = getattr(settings, 'YANDEX_OFFLINE_CONV_OAUTH_TOKEN', '') or ''
-    counter = str(getattr(settings, 'YANDEX_OFFLINE_CONV_COUNTER_ID', '') or '')
-    goal = str(getattr(settings, 'YANDEX_OFFLINE_CONV_PURCHASE_GOAL_ID', '') or '')
+    token = settings.YANDEX_OFFLINE_CONV_OAUTH_TOKEN or ''
+    counter = str(settings.YANDEX_OFFLINE_CONV_COUNTER_ID or '')
+    goal = str(settings.YANDEX_OFFLINE_CONV_PURCHASE_GOAL_ID or '')
     if not (token and counter and goal and yclid):
         return False
 
-    currency = getattr(settings, 'YANDEX_OFFLINE_CONV_CURRENCY', '') or 'RUB'
+    currency = settings.YANDEX_OFFLINE_CONV_CURRENCY or 'RUB'
     csv = f'Yclid,Target,DateTime,Price,Currency\n{yclid},{goal},{ts},{amount_rubles},{currency}\n'
     url = (
         f'https://api-metrika.yandex.net/management/v1/counter/{counter}'
@@ -530,19 +499,3 @@ async def on_purchase(db: AsyncSession, user_id: int, amount_kopeks: int) -> Non
             await _upload_offline_conversion_yclid(yclid, amount_kopeks / 100, int(time.time()))
     except Exception as exc:
         logger.error('purchase offline conversion (yclid) failed', user_id=user_id, error=str(exc))
-
-
-def parse_cid_from_start_param(param: str) -> tuple[str | None, str]:
-    """Extract Yandex CID from bot start parameter.
-
-    If param starts with the configured prefix (e.g. 'utm_ya_'),
-    returns (cid, original_param). Otherwise returns (None, original_param).
-    Original param is always preserved for UTM tracking.
-    """
-    prefix = settings.YANDEX_OFFLINE_CONV_START_PREFIX
-    if not prefix or not param.startswith(prefix):
-        return None, param
-
-    cid = param[len(prefix) :]
-    normalized = _normalize_cid(cid)
-    return normalized, param  # Keep original param for UTM tracking

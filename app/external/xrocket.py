@@ -72,12 +72,6 @@ class XRocketService:
             logger.error('Ошибка запроса к xRocket API', error=e)
             return None
 
-    async def get_app_info(self) -> dict[str, Any] | None:
-        return await self._make_request('GET', 'app/info')
-
-    async def get_version(self) -> dict[str, Any] | None:
-        return await self._make_request('GET', 'version')
-
     async def create_invoice(
         self,
         amount: float,
@@ -121,10 +115,6 @@ class XRocketService:
 
     async def get_invoice(self, invoice_id: str | int) -> dict[str, Any] | None:
         return await self._make_request('GET', f'tg-invoices/{invoice_id}')
-
-    async def delete_invoice(self, invoice_id: str | int) -> bool:
-        result = await self._make_request('DELETE', f'tg-invoices/{invoice_id}')
-        return result is not None
 
     async def get_fiat_rate(self, crypto: str, fiat: str = 'RUB') -> float | None:
         """Курс 1 {crypto} = N {fiat}.

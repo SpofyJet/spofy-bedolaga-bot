@@ -86,17 +86,6 @@ async def get_tariff_by_id(
     return result.scalars().first()
 
 
-async def count_tariffs(db: AsyncSession, *, include_inactive: bool = False) -> int:
-    """Подсчитывает количество тарифов."""
-    query = select(func.count(Tariff.id))
-
-    if not include_inactive:
-        query = query.where(Tariff.is_active.is_(True))
-
-    result = await db.execute(query)
-    return int(result.scalar_one())
-
-
 async def get_trial_tariff(db: AsyncSession) -> Tariff | None:
     """Получает тариф, доступный для триала (is_trial_available=True).
 
