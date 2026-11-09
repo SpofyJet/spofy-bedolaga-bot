@@ -52,8 +52,8 @@ from app.services.spofy_subpage_service import (
     checkout_serializer,
     tag_current_cart_as_subpage,
 )
-from app.services.user_cart_service import user_cart_service
 from app.services.traffic_cycle_service import next_traffic_reset_at
+from app.services.user_cart_service import user_cart_service
 from app.utils.lifetime import for_period_ru, is_lifetime_end, is_lifetime_period
 from app.utils.pricing_utils import format_period_description
 
@@ -181,6 +181,18 @@ def _restricted(user: User) -> str | None:
         return 'subscription_restricted'
     if user.restriction_topup:
         return 'topup_restricted'
+    return None
+
+
+def _subscription_block(subscription: Subscription) -> str | None:
+    """Отключённой подписке покупку не оформляем.
+
+    Исполнитель покупки корзину такой подписки выбрасывает
+    (``subscription_auto_purchase_service``): человек заплатил бы, а деньги
+    молча остались бы на балансе. Отказываем до создания корзины и платежа.
+    """
+    if SubscriptionStatus.DISABLED.value in {subscription.status, subscription.actual_status}:
+        return 'subscription_disabled'
     return None
 
 
@@ -436,7 +448,7 @@ async def _record_subpage_open(db: AsyncSession, user: User, subscription: Subsc
 async def _offer(short_uuid: str, db: AsyncSession) -> dict[str, Any]:
     user, subscription = await resolve_owner(db, short_uuid)
     await _record_subpage_open(db, user, subscription)
-    restriction = _restricted(user)
+    restriction = _restricted(user) or _subscription_block(subscription)
 
     methods = await _soft(get_payment_methods(user=user, db=db), [], 'payment_methods')
     renewal = (
@@ -498,7 +510,7 @@ async def checkout(
 
 async def _checkout(short_uuid: str, body: CheckoutRequest, db: AsyncSession) -> dict[str, Any]:
     user, subscription = await resolve_owner(db, short_uuid)
-    restriction = _restricted(user)
+    restriction = _restricted(user) or _subscription_block(subscription)
     if restriction:
         raise HTTPException(status.HTTP_403_FORBIDDEN, restriction)
 

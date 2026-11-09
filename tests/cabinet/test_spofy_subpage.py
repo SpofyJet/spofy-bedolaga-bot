@@ -935,3 +935,31 @@ def test_snapshot_has_no_reset_day_without_a_reset(november_third):
 
     for subscription in (unlimited, forever, trial, other_mode, ends_before):
         assert bridge.snapshot(subscription)['traffic_reset_at'] is None
+
+
+@pytest.mark.parametrize('kind', ['renew', 'tariff', 'devices'])
+async def test_disabled_subscription_is_refused_before_any_cart(monkeypatch, auto_on, topup, kind):
+    disabled = _subscription(status='disabled', actual_status='disabled')
+    monkeypatch.setattr(bridge, 'resolve_owner', AsyncMock(return_value=(_user(), disabled)))
+    carts = {
+        name: AsyncMock(return_value=19900) for name in ('save_renewal_cart', 'save_tariff_cart', 'save_devices_cart')
+    }
+    for name, mock in carts.items():
+        monkeypatch.setattr(bridge, name, mock)
+
+    body = bridge.CheckoutRequest(kind=kind, period_days=30, tariff_id=7, devices=1, payment_method='platega')
+    with pytest.raises(HTTPException) as error:
+        await bridge.checkout('abcdefgh', body, db=None)
+
+    assert error.value.status_code == 403
+    assert error.value.detail == 'subscription_disabled'
+    for mock in carts.values():
+        mock.assert_not_awaited()
+    topup.assert_not_awaited()
+
+
+def test_offer_reason_for_disabled_subscription():
+    assert bridge._subscription_block(_subscription(status='disabled', actual_status='disabled')) == (
+        'subscription_disabled'
+    )
+    assert bridge._subscription_block(_subscription()) is None
