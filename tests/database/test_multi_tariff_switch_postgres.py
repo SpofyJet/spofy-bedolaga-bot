@@ -92,7 +92,6 @@ async def test_purchase_endpoint_never_discards_a_pinned_paid_subscription(
 
 @asynccontextmanager
 async def switch_data(postgres_database, monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'TARIFF_SWITCH_UPGRADE_ENABLED', True)
     monkeypatch.setattr(settings, 'TARIFF_SWITCH_DOWNGRADE_ENABLED', True)

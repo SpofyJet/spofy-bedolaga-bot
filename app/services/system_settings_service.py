@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import (
     ENV_OVERRIDE_KEYS,
     Settings,
-    clear_db_period_prices,
     refresh_classic_period_prices,
     refresh_period_prices,
     refresh_traffic_prices,
@@ -311,7 +310,6 @@ class BotConfigurationService:
         'DEVICES_SELECTION_ENABLED': 'SUBSCRIPTIONS_CORE',
         'DEVICES_SELECTION_DISABLED_AMOUNT': 'SUBSCRIPTIONS_CORE',
         'BASE_SUBSCRIPTION_PRICE': 'SUBSCRIPTIONS_CORE',
-        'SALES_MODE': 'SUBSCRIPTIONS_CORE',
         'DEFAULT_TRAFFIC_RESET_STRATEGY': 'TRAFFIC',
         'RESET_TRAFFIC_ON_PAYMENT': 'TRAFFIC',
         'RESET_TRAFFIC_ON_TARIFF_SWITCH': 'TRAFFIC',
@@ -576,10 +574,6 @@ class BotConfigurationService:
             ChoiceOption('success', '🟢 Зелёный'),
             ChoiceOption('danger', '🔴 Красный'),
         ],
-        'SALES_MODE': [
-            ChoiceOption('classic', '📋 Классический (периоды из .env)'),
-            ChoiceOption('tariffs', '📦 Тарифы (из кабинета)'),
-        ],
         'SERVER_STATUS_MODE': [
             ChoiceOption('disabled', '🚫 Отключено'),
             ChoiceOption('external_link', '🌐 Внешняя ссылка'),
@@ -802,19 +796,6 @@ class BotConfigurationService:
             'format': 'Булево значение.',
             'example': 'true',
         },
-        'SALES_MODE': {
-            'description': (
-                'Режим продажи подписок. '
-                '«Классический» — выбор периода из .env (PRICE_14_DAYS и т.д.). '
-                '«Тарифы» — готовые тарифные планы из кабинета с серверами и лимитами.'
-            ),
-            'format': 'Выберите один из доступных режимов.',
-            'example': 'tariffs',
-            'warning': (
-                'При смене режима логика покупки подписки полностью меняется. '
-                'В режиме «Тарифы» пользователи выбирают готовый тарифный план.'
-            ),
-        },
         'SIMPLE_SUBSCRIPTION_ENABLED': {
             'description': 'Показывает в меню пункт с быстрой покупкой подписки.',
             'format': 'Булево значение.',
@@ -987,7 +968,7 @@ class BotConfigurationService:
                 'Работает только в режиме продаж «Тарифы». '
                 'При включении синхронизация с панелью переключается на мультитарифный режим.'
             ),
-            'dependencies': 'SALES_MODE=tariffs, MAX_ACTIVE_SUBSCRIPTIONS',
+            'dependencies': 'MAX_ACTIVE_SUBSCRIPTIONS',
         },
         'MAX_ACTIVE_SUBSCRIPTIONS': {
             'description': (
@@ -2137,9 +2118,6 @@ class BotConfigurationService:
         if sync_web_api_token:
             await cls._sync_default_web_api_token()
 
-        # После загрузки всех overrides (включая SALES_MODE) — пересчитать цены,
-        # т.к. ensure_tariffs_synced мог загрузить тарифные цены до того как
-        # SALES_MODE=classic был применён из system_settings
         refresh_period_prices()
         refresh_classic_period_prices()
 
@@ -2270,11 +2248,6 @@ class BotConfigurationService:
         if key in {'WEB_API_DEFAULT_TOKEN', 'WEB_API_DEFAULT_TOKEN_NAME'}:
             await cls._sync_default_web_api_token()
 
-        if key == 'SALES_MODE' and settings.is_tariffs_mode():
-            from app.database.crud.tariff import load_period_prices_from_db
-
-            await load_period_prices_from_db(db)
-
     @classmethod
     async def reset_value(
         cls,
@@ -2305,11 +2278,6 @@ class BotConfigurationService:
         if key in {'WEB_API_DEFAULT_TOKEN', 'WEB_API_DEFAULT_TOKEN_NAME'}:
             await cls._sync_default_web_api_token()
 
-        if key == 'SALES_MODE' and settings.is_tariffs_mode():
-            from app.database.crud.tariff import load_period_prices_from_db
-
-            await load_period_prices_from_db(db)
-
     @classmethod
     def _apply_to_settings(cls, key: str, value: Any) -> None:
         if cls._is_env_override(key):
@@ -2317,12 +2285,7 @@ class BotConfigurationService:
             return
         try:
             setattr(settings, key, value)
-            if key == 'SALES_MODE':
-                if settings.is_classic_mode():
-                    clear_db_period_prices()
-                refresh_period_prices()
-                refresh_classic_period_prices()
-            elif key in {
+            if key in {
                 'PRICE_14_DAYS',
                 'PRICE_30_DAYS',
                 'PRICE_60_DAYS',

@@ -45,7 +45,6 @@ from app.services.panel_sync import should_create_panel_account
 from app.services.pricing_engine import PricingEngine, pricing_engine
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
-    PurchaseBalanceError,
     PurchaseValidationError,
 )
 from app.services.subscription_service import SubscriptionService
@@ -407,98 +406,86 @@ async def get_purchase_options(
 ) -> dict[str, Any]:
     """Get all subscription purchase options (periods, servers, traffic, devices)."""
     try:
-        settings.get_sales_mode()
-
         # Tariffs mode - return list of tariffs
-        if settings.is_tariffs_mode():
-            # Use get_primary_promo_group() for correct promo group resolution
-            # (handles both legacy promo_group FK and new user_promo_groups M2M)
-            promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
-            if promo_group is None:
-                # Fallback to legacy promo_group attribute
-                promo_group = user.promo_group
-            promo_group_id = promo_group.id if promo_group else None
-            tariffs = await get_tariffs_for_user(db, promo_group_id)
+        # Use get_primary_promo_group() for correct promo group resolution
+        # (handles both legacy promo_group FK and new user_promo_groups M2M)
+        promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
+        if promo_group is None:
+            # Fallback to legacy promo_group attribute
+            promo_group = user.promo_group
+        promo_group_id = promo_group.id if promo_group else None
+        tariffs = await get_tariffs_for_user(db, promo_group_id)
 
-            if settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+        if settings.is_multi_tariff_enabled():
+            from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
-                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-                purchased_tariff_ids = {s.tariff_id for s in active_subs if s.tariff_id and not s.is_trial}
+            active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+            purchased_tariff_ids = {s.tariff_id for s in active_subs if s.tariff_id and not s.is_trial}
 
-                if subscription_id:
-                    from app.database.crud.subscription import get_subscription_by_id_for_user
+            if subscription_id:
+                from app.database.crud.subscription import get_subscription_by_id_for_user
 
-                    subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
-                elif active_subs:
-                    _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
-                    _pool = _non_daily or active_subs
-                    subscription = max(_pool, key=lambda s: s.days_left)
-                else:
-                    subscription = None
+                subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
+            elif active_subs:
+                _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+                _pool = _non_daily or active_subs
+                subscription = max(_pool, key=lambda s: s.days_left)
             else:
-                purchased_tariff_ids = set()
-                subscription = await get_subscription_by_user_id(db, user.id)
-            current_tariff_id = subscription.tariff_id if subscription else None
-            language = user.language or 'ru'
+                subscription = None
+        else:
+            purchased_tariff_ids = set()
+            subscription = await get_subscription_by_user_id(db, user.id)
+        current_tariff_id = subscription.tariff_id if subscription else None
+        language = user.language or 'ru'
 
-            # Determine subscription status for frontend to decide purchase vs switch flow
-            subscription_status = None
-            subscription_is_expired = False
-            if subscription:
-                subscription_status = subscription.actual_status
-                subscription_is_expired = subscription_status == 'expired'
+        # Determine subscription status for frontend to decide purchase vs switch flow
+        subscription_status = None
+        subscription_is_expired = False
+        if subscription:
+            subscription_status = subscription.actual_status
+            subscription_is_expired = subscription_status == 'expired'
 
-            # Free (0₽) source tariff: switching is blocked (free_tariff_cannot_switch,
-            # TARIFF_SWITCH_RESET_FREE_DAYS) — frontend must offer the purchase flow
-            # instead of the prorated switch.
-            subscription_on_free_tariff = False
-            if current_tariff_id and settings.TARIFF_SWITCH_RESET_FREE_DAYS:
-                _current_tariff = await get_tariff_by_id(db, current_tariff_id)
-                subscription_on_free_tariff = bool(_current_tariff is not None and _current_tariff.is_free)
+        # Free (0₽) source tariff: switching is blocked (free_tariff_cannot_switch,
+        # TARIFF_SWITCH_RESET_FREE_DAYS) — frontend must offer the purchase flow
+        # instead of the prorated switch.
+        subscription_on_free_tariff = False
+        if current_tariff_id and settings.TARIFF_SWITCH_RESET_FREE_DAYS:
+            _current_tariff = await get_tariff_by_id(db, current_tariff_id)
+            subscription_on_free_tariff = bool(_current_tariff is not None and _current_tariff.is_free)
 
-            tariff_responses = []
-            for tariff in tariffs:
-                tariff_data = await _build_tariff_response(db, tariff, current_tariff_id, language, user, subscription)
-                # In multi-tariff mode: mark purchased tariffs so frontend can filter them
-                if settings.is_multi_tariff_enabled() and tariff.id in purchased_tariff_ids:
-                    tariff_data['is_purchased'] = True
-                else:
-                    tariff_data['is_purchased'] = False
-                tariff_responses.append(tariff_data)
+        tariff_responses = []
+        for tariff in tariffs:
+            tariff_data = await _build_tariff_response(db, tariff, current_tariff_id, language, user, subscription)
+            # In multi-tariff mode: mark purchased tariffs so frontend can filter them
+            if settings.is_multi_tariff_enabled() and tariff.id in purchased_tariff_ids:
+                tariff_data['is_purchased'] = True
+            else:
+                tariff_data['is_purchased'] = False
+            tariff_responses.append(tariff_data)
 
-            return {
-                'sales_mode': 'tariffs',
-                'tariffs': tariff_responses,
-                'current_tariff_id': current_tariff_id,
-                'balance_kopeks': user.balance_kopeks,
-                'balance_label': settings.format_price(user.balance_kopeks),
-                # Include subscription status info for frontend decision making
-                'subscription_status': subscription_status,
-                'subscription_is_expired': subscription_is_expired,
-                'subscription_on_free_tariff': subscription_on_free_tariff,
-                'has_subscription': subscription is not None,
-                # Multi-tariff: all tariffs purchased flag for frontend fallback
-                'all_tariffs_purchased': len(purchased_tariff_ids) >= len(tariffs)
-                if settings.is_multi_tariff_enabled()
-                else False,
-                # Направления смены тарифа
-                'tariff_switch_upgrade_enabled': settings.TARIFF_SWITCH_UPGRADE_ENABLED,
-                'tariff_switch_downgrade_enabled': settings.TARIFF_SWITCH_DOWNGRADE_ENABLED,
-                # СБП-оформление (Platega recurrent): фронт показывает кнопку
-                # «Оформить с автооплатой СБП» рядом с покупкой с баланса.
-                'platega_recurrent_enabled': settings.is_platega_recurrent_enabled(),
-            }
+        return {
+            'tariffs': tariff_responses,
+            'current_tariff_id': current_tariff_id,
+            'balance_kopeks': user.balance_kopeks,
+            'balance_label': settings.format_price(user.balance_kopeks),
+            # Include subscription status info for frontend decision making
+            'subscription_status': subscription_status,
+            'subscription_is_expired': subscription_is_expired,
+            'subscription_on_free_tariff': subscription_on_free_tariff,
+            'has_subscription': subscription is not None,
+            # Multi-tariff: all tariffs purchased flag for frontend fallback
+            'all_tariffs_purchased': len(purchased_tariff_ids) >= len(tariffs)
+            if settings.is_multi_tariff_enabled()
+            else False,
+            # Направления смены тарифа
+            'tariff_switch_upgrade_enabled': settings.TARIFF_SWITCH_UPGRADE_ENABLED,
+            'tariff_switch_downgrade_enabled': settings.TARIFF_SWITCH_DOWNGRADE_ENABLED,
+            # СБП-оформление (Platega recurrent): фронт показывает кнопку
+            # «Оформить с автооплатой СБП» рядом с покупкой с баланса.
+            'platega_recurrent_enabled': settings.is_platega_recurrent_enabled(),
+        }
 
         # Classic mode - return periods
-        context = await purchase_service.build_options(db, user, subscription_id=subscription_id)
-        payload = context.payload
-        payload['sales_mode'] = 'classic'
-        # Автооплата — свойство системы, а не режима продаж. Без этих признаков
-        # кабинет спрашивал состояние автооплаты у каждой подписки и узнавал об
-        # отключённой фиче из ответа 403 — по красной строке в консоли на запрос.
-        payload['platega_recurrent_enabled'] = settings.is_platega_recurrent_enabled()
-        return payload
 
     except PurchaseValidationError as e:
         raise HTTPException(
@@ -521,41 +508,10 @@ async def preview_purchase(
 ) -> dict[str, Any]:
     """Calculate and preview the total price for selected options (classic mode only)."""
     # This endpoint is for classic mode only, tariffs mode uses /purchase-tariff
-    if settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This endpoint is not available in tariffs mode. Use /purchase-tariff instead.',
-        )
-
-    try:
-        context = await purchase_service.build_options(db, user)
-
-        # Convert request to dict for parsing
-        selection_dict = {
-            'period_id': request.selection.period_id,
-            'period_days': request.selection.period_days,
-            'traffic_value': request.selection.traffic_value,
-            'servers': request.selection.servers,
-            'devices': request.selection.devices,
-        }
-
-        selection = purchase_service.parse_selection(context, selection_dict)
-        pricing = await purchase_service.calculate_pricing(db, context, selection)
-        preview = purchase_service.build_preview_payload(context, pricing)
-
-        return preview
-
-    except PurchaseValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
-    except Exception as e:
-        logger.error('Failed to calculate purchase preview for user', user_id=user.id, error=e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to calculate price',
-        )
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail='This endpoint is not available in tariffs mode. Use /purchase-tariff instead.',
+    )
 
 
 @router.post('/purchase')
@@ -572,150 +528,10 @@ async def submit_purchase(
         )
 
     # This endpoint is for classic mode only, tariffs mode uses /purchase-tariff
-    if settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This endpoint is not available in tariffs mode. Use /purchase-tariff instead.',
-        )
-
-    try:
-        from app.database.crud.user import lock_user_for_pricing
-
-        user = await lock_user_for_pricing(db, user.id)
-        context = await purchase_service.build_options(db, user)
-
-        # Convert request to dict for parsing
-        selection_dict = {
-            'period_id': request.selection.period_id,
-            'period_days': request.selection.period_days,
-            'traffic_value': request.selection.traffic_value,
-            'servers': request.selection.servers,
-            'devices': request.selection.devices,
-        }
-
-        selection = purchase_service.parse_selection(context, selection_dict)
-        pricing = await purchase_service.calculate_pricing(db, context, selection)
-        result = await purchase_service.submit_purchase(db, context, pricing)
-
-        subscription = result['subscription']
-
-        # Send email notification for email-only users
-        if not user.telegram_id and user.email and user.email_verified:
-            try:
-                is_new_subscription = result.get('was_trial_conversion') or not context.subscription
-                notification_type = (
-                    NotificationType.SUBSCRIPTION_ACTIVATED
-                    if is_new_subscription
-                    else NotificationType.SUBSCRIPTION_RENEWED
-                )
-                end_date_str = format_local_datetime(subscription.end_date, '%d.%m.%Y') if subscription.end_date else ''
-                await notification_delivery_service.send_notification(
-                    user=user,
-                    notification_type=notification_type,
-                    context={
-                        'expires_at': end_date_str,  # for SUBSCRIPTION_ACTIVATED
-                        'new_expires_at': end_date_str,  # for SUBSCRIPTION_RENEWED
-                        'traffic_limit_gb': subscription.traffic_limit_gb,
-                        'device_limit': subscription.device_limit,
-                        'tariff_name': '',  # classic mode has no tariff
-                    },
-                    bot=None,
-                )
-            except Exception as notif_error:
-                logger.warning('Failed to send subscription notification to', email=user.email, notif_error=notif_error)
-
-        # Отправляем уведомление админам о покупке подписки
-        try:
-            from app.bot_factory import create_bot
-            from app.services.admin_notification_service import AdminNotificationService
-
-            if settings.ADMIN_NOTIFICATIONS_ENABLED:
-                bot = create_bot()
-                try:
-                    notification_service = AdminNotificationService(bot)
-                    is_new_subscription = result.get('was_trial_conversion') or not context.subscription
-                    await notification_service.send_subscription_purchase_notification(
-                        db=db,
-                        user=user,
-                        subscription=subscription,
-                        transaction=result.get('transaction'),
-                        period_days=selection.period.days,
-                        was_trial_conversion=result.get('was_trial_conversion', False),
-                        amount_kopeks=pricing.final_total,
-                        purchase_type='renewal' if not is_new_subscription else 'first_purchase',
-                    )
-                finally:
-                    await bot.session.close()
-        except Exception as e:
-            logger.error('Failed to send admin notification for subscription purchase', error=e)
-
-        # Refresh expired objects after db.commit() in _record_subscription_event
-        await db.refresh(subscription)
-
-        # Persist Yandex CID (if frontend cached it) and fire offline-conv
-        # purchase event — closes the race where the separate /yandex-cid POST
-        # hadn't completed yet. See #558449.
-        try:
-            from app.services import yandex_offline_conv_service as yandex_conv
-
-            # Purchase event fires centrally from create_transaction; here we
-            # only persist the request-body CID synchronously (#558449).
-            await yandex_conv.store_cid_only(
-                user.id,
-                request.yandex_cid,
-            )
-        except Exception as yconv_err:
-            logger.debug('yandex_conv purchase hook failed (non-fatal)', user_id=user.id, error=str(yconv_err))
-
-        return {
-            'success': True,
-            'message': result['message'],
-            'subscription': _subscription_to_response(subscription, user=user),
-            'was_trial_conversion': result.get('was_trial_conversion', False),
-        }
-
-    except PurchaseValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        )
-    except PurchaseBalanceError as e:
-        # Save cart for auto-purchase after balance top-up
-        try:
-            total_price = pricing.final_total if 'pricing' in locals() else 0
-            cart_data = {
-                'cart_mode': 'subscription_purchase',
-                'period_id': request.selection.period_id,
-                'period_days': request.selection.period_days,
-                'traffic_gb': request.selection.traffic_value,  # _prepare_auto_purchase expects traffic_gb
-                'countries': request.selection.servers,  # _prepare_auto_purchase expects countries
-                'devices': request.selection.devices,
-                'total_price': total_price,
-                'user_id': user.id,
-                'saved_cart': True,
-                'return_to_cart': True,
-                'source': 'cabinet',
-            }
-            await user_cart_service.save_user_cart(user.id, cart_data)
-            logger.info('Cart saved for auto-purchase (cabinet /purchase) user', user_id=user.id)
-        except Exception as cart_error:
-            logger.error('Error saving cart for auto-purchase (cabinet /purchase)', cart_error=cart_error)
-
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                'code': 'insufficient_funds',
-                'message': str(e),
-                'cart_saved': True,
-                'cart_mode': 'subscription_purchase',
-            },
-        )
-    except Exception as e:
-        logger.error('Failed to submit purchase for user', user_id=user.id, error=e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to process purchase',
-        )
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail='This endpoint is not available in tariffs mode. Use /purchase-tariff instead.',
+    )
 
 
 # ============ Tariff Purchase (for tariffs mode) ============
@@ -738,11 +554,6 @@ async def purchase_tariff(
     checkout_external_id = None
     try:
         # Check tariffs mode
-        if not settings.is_tariffs_mode():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Tariffs mode is not enabled',
-            )
 
         # Get tariff
         tariff = await get_tariff_by_id(db, request.tariff_id)
@@ -1542,7 +1353,6 @@ async def get_trial_info(
             duration_days=settings.TRIAL_DURATION_DAYS,
             traffic_limit_gb=settings.TRIAL_TRAFFIC_LIMIT_GB,
             device_limit=settings.TRIAL_DEVICE_LIMIT,
-            requires_payment=bool(settings.TRIAL_PAYMENT_ENABLED),
             price_kopeks=0,
             price_rubles=0,
             reason_unavailable='Trial is not available for your account type',
@@ -1551,8 +1361,6 @@ async def get_trial_info(
     duration_days = settings.TRIAL_DURATION_DAYS
     traffic_limit_gb = settings.TRIAL_TRAFFIC_LIMIT_GB
     device_limit = settings.TRIAL_DEVICE_LIMIT
-    requires_payment = bool(settings.TRIAL_PAYMENT_ENABLED)
-    price_kopeks = settings.TRIAL_ACTIVATION_PRICE if requires_payment else 0
 
     # Get trial parameters from tariff if configured (same logic as activate_trial)
     try:
@@ -1589,9 +1397,6 @@ async def get_trial_info(
             duration_days=duration_days,
             traffic_limit_gb=traffic_limit_gb,
             device_limit=device_limit,
-            requires_payment=requires_payment,
-            price_kopeks=price_kopeks,
-            price_rubles=price_kopeks / 100,
             reason_unavailable='You already have an active subscription',
         )
 
@@ -1601,9 +1406,6 @@ async def get_trial_info(
             duration_days=duration_days,
             traffic_limit_gb=traffic_limit_gb,
             device_limit=device_limit,
-            requires_payment=requires_payment,
-            price_kopeks=price_kopeks,
-            price_rubles=price_kopeks / 100,
             reason_unavailable='Trial already used',
         )
 
@@ -1612,9 +1414,6 @@ async def get_trial_info(
         duration_days=duration_days,
         traffic_limit_gb=traffic_limit_gb,
         device_limit=device_limit,
-        requires_payment=requires_payment,
-        price_kopeks=price_kopeks,
-        price_rubles=price_kopeks / 100,
     )
 
 
@@ -1656,61 +1455,6 @@ async def activate_trial(
         await validate_trial_checkout_squads(db)
     except CheckoutSquadsUnavailableError as error:
         raise HTTPException(status_code=409, detail={'code': error.code, 'message': error.message}) from error
-
-    # Check if trial requires payment
-    requires_payment = bool(settings.TRIAL_PAYMENT_ENABLED)
-    if requires_payment:
-        from app.database.crud.user import subtract_user_balance
-
-        price_kopeks = settings.TRIAL_ACTIVATION_PRICE
-        if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Insufficient balance. Need {price_kopeks / 100:.2f} RUB',
-            )
-        trial_description = 'Активация триальной подписки'
-        success = await subtract_user_balance(
-            db,
-            user,
-            price_kopeks,
-            trial_description,
-            mark_as_paid_subscription=True,
-        )
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail='Failed to charge trial activation fee',
-            )
-
-        # Persist the request-body CID BEFORE create_transaction. The
-        # SUBSCRIPTION_PAYMENT below fires the purchase event centrally
-        # (background fire_purchase_bg reads the CID from the DB), so the CID
-        # must be stored and committed first or the fire races it and no-ops
-        # (#558449). store_cid_and_fire_trial below still handles the separate
-        # 'trial-add' event.
-        cabinet_cid = request.yandex_cid if request is not None else None
-        try:
-            from app.services import yandex_offline_conv_service as yandex_conv
-
-            await yandex_conv.store_cid_only(user.id, cabinet_cid)
-        except Exception as yconv_err:
-            logger.debug(
-                'yandex_conv CID persist (pre-transaction) failed (non-fatal)',
-                user_id=user.id,
-                error=str(yconv_err),
-            )
-
-        # Создаём транзакцию для учёта списания за триал
-        await create_transaction(
-            db,
-            user_id=user.id,
-            type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=price_kopeks,
-            description=trial_description,
-            payment_method=PaymentMethod.BALANCE,
-        )
-
-        logger.info('User paid kopeks for trial activation', user_id=user.id, price_kopeks=price_kopeks)
 
     # Get trial parameters from tariff if configured (same logic as bot handler)
     trial_duration = settings.TRIAL_DURATION_DAYS
@@ -1816,26 +1560,17 @@ async def activate_trial(
             bot = create_bot()
             try:
                 notification_service = AdminNotificationService(bot)
-                charged_amount = settings.TRIAL_ACTIVATION_PRICE if requires_payment else None
-                await notification_service.send_trial_activation_notification(
-                    db, user, subscription, charged_amount_kopeks=charged_amount
-                )
+                await notification_service.send_trial_activation_notification(db, user, subscription)
             finally:
                 await bot.session.close()
     except Exception as e:
         logger.error('Failed to send trial activation notification', error=e)
 
-    # Yandex.Metrika offline conversion — sibling to #558449. Fire two events
-    # when applicable: the regular 'trial-add' for every trial activation,
-    # plus 'purchase' if TRIAL_PAYMENT_ENABLED and money was actually charged.
+    # Yandex.Metrika offline conversion: 'trial-add' for every trial activation.
     cabinet_cid = request.yandex_cid if request is not None else None
     try:
         from app.services import yandex_offline_conv_service as yandex_conv
 
-        # 'trial-add' event still fires here. The paid-trial 'purchase' event is
-        # NOT fired here anymore: when a trial activation fee is charged it
-        # creates a SUBSCRIPTION_PAYMENT transaction, which fires the purchase
-        # event centrally from create_transaction (avoids double-fire).
         await yandex_conv.store_cid_and_fire_trial(user.id, cabinet_cid)
     except Exception as yconv_err:
         logger.debug(

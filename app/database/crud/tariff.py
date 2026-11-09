@@ -626,12 +626,9 @@ async def load_period_prices_from_db(db: AsyncSession) -> None:
     Загружает периоды/цены из тарифа в PERIOD_PRICES.
     Работает ТОЛЬКО в режиме tariffs. В режиме classic используются цены из .env.
     """
-    from app.config import set_period_prices_from_db, settings
+    from app.config import set_period_prices_from_db
 
     # В режиме classic НЕ загружаем цены из тарифов - используем .env
-    if settings.is_classic_mode():
-        logger.info('Режим classic: цены периодов берутся из .env, тарифы игнорируются')
-        return
 
     try:
         # Ищем тариф "Стандартный" или первый активный тариф

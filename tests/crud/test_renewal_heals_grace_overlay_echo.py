@@ -18,7 +18,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -174,7 +173,6 @@ async def _seed(db, *rows) -> None:
 @pytest.mark.asyncio
 async def test_tariff_renewal_returns_the_squad_and_limit_the_grace_overlay_overwrote(monkeypatch) -> None:
     """Сценарий жалобы №2: «Продлить» в кабинете — только дни."""
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     now = datetime.now(UTC)
     real_end = now - timedelta(hours=1)
     started = real_end + timedelta(seconds=30)
@@ -197,35 +195,12 @@ async def test_tariff_renewal_returns_the_squad_and_limit_the_grace_overlay_over
 
 
 @pytest.mark.asyncio
-async def test_classic_renewal_returns_the_chosen_servers_and_their_limit(monkeypatch) -> None:
-    """Классика: серверы выбирал человек, лимит не из тарифа — вернуть можно только из сессии."""
-    monkeypatch.setattr(settings, 'SALES_MODE', 'classic')
-    now = datetime.now(UTC)
-    real_end = now - timedelta(hours=1)
-    session = _session(
-        started_at=real_end + timedelta(seconds=30),
-        billing_before=_billing(end_at=real_end, squads=(SRV_A, SRV_B), limit_gb=100),
-    )
-    async with memory_session(monkeypatch, TABLES) as db:
-        await _seed(db)
-        subscription = _leaked_subscription(grace_until=session.grace_until, tariff_id=None)
-        await _seed_rows(db, subscription, _session_to_model(session))
-
-        await extend_subscription(db, subscription, 30)
-        await db.refresh(subscription)
-
-    assert sorted(subscription.connected_squads) == sorted([SRV_A, SRV_B])
-    assert subscription.traffic_limit_gb == 100, 'в классике лимит грейса остался бы навсегда'
-
-
-@pytest.mark.asyncio
 async def test_second_grace_that_snapshotted_the_echo_does_not_become_the_source(monkeypatch) -> None:
     """Не продлил сразу: у «даты грейса» выдан второй грейс, и его снимок уже с оверлеем.
 
     Источник — последний снимок, который сам не оверлей; иначе продление «вернуло»
     бы сквад грейса.
     """
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     now = datetime.now(UTC)
     real_end = now - timedelta(days=4)
     first = _session(
@@ -259,7 +234,6 @@ async def test_cart_that_already_set_the_tariff_squads_still_counts_from_the_rea
     а дата конца грейса в ней осталась — новый срок считался от неё (+3 дня даром).
     Дата конца грейса — самостоятельный признак.
     """
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     now = datetime.now(UTC)
     real_end = now - timedelta(hours=1)
     session = _session(
@@ -281,151 +255,10 @@ async def test_cart_that_already_set_the_tariff_squads_still_counts_from_the_rea
     assert subscription.traffic_limit_gb == 0
 
 
-@pytest.mark.asyncio
-async def test_squads_changed_after_grace_are_left_alone(monkeypatch) -> None:
-    """Сквады уже не оверлей (админ поменял, человек купил другой тариф) — продление их не трогает."""
-    monkeypatch.setattr(settings, 'SALES_MODE', 'classic')
-    now = datetime.now(UTC)
-    real_end = now - timedelta(days=10)
-    session = _session(
-        started_at=real_end + timedelta(seconds=30),
-        billing_before=_billing(end_at=real_end, squads=(SRV_A,), limit_gb=100),
-    )
-    async with memory_session(monkeypatch, TABLES) as db:
-        await _seed(db)
-        subscription = _leaked_subscription(grace_until=now + timedelta(days=5), tariff_id=None)
-        subscription.connected_squads = [SRV_B]
-        subscription.traffic_limit_gb = 200
-        await _seed_rows(db, subscription, _session_to_model(session))
-
-        await extend_subscription(db, subscription, 30)
-        await db.refresh(subscription)
-
-    assert subscription.connected_squads == [SRV_B]
-    assert subscription.traffic_limit_gb == 200
-    assert subscription.end_date.replace(tzinfo=UTC) > now + timedelta(days=34), 'живой срок продлён от своей даты'
-
-
-@pytest.mark.asyncio
-async def test_fractional_usage_limit_echo_is_recognised(monkeypatch) -> None:
-    """Ревью 2026-09-15: лимит приходил в подписку округлённым вниз — «расход 7,3 + 1» = 8 ГБ.
-
-    На стенде расход был ровно 7 ГБ, и сравнение в байтах срабатывало; в жизни
-    расход дробный, и в классике лимит грейса оставался навсегда.
-    """
-    monkeypatch.setattr(settings, 'SALES_MODE', 'classic')
-    now = datetime.now(UTC)
-    real_end = now - timedelta(hours=1)
-    session = _session(
-        started_at=real_end + timedelta(seconds=30),
-        billing_before=_billing(end_at=real_end, squads=(SRV_A, SRV_B), limit_gb=100),
-    )
-    session = replace(session, overlay=replace(session.overlay, traffic_limit_bytes=int(8.3 * GIB)))
-    async with memory_session(monkeypatch, TABLES) as db:
-        await _seed(db)
-        subscription = _leaked_subscription(grace_until=session.grace_until, tariff_id=None)
-        subscription.traffic_limit_gb = 8  # int(8,3 ГиБ) — как его переносил импорт
-        await _seed_rows(db, subscription, _session_to_model(session))
-
-        await extend_subscription(db, subscription, 30)
-        await db.refresh(subscription)
-
-    assert subscription.traffic_limit_gb == 100
-
-
-@pytest.mark.asyncio
-async def test_grace_squad_that_is_also_sold_does_not_trigger_a_false_repair(monkeypatch) -> None:
-    """Ревью 2026-09-15: сквад грейса — обычный продаваемый сервер, человек честно на нём.
-
-    Был на «премиуме» (A), истёк, получил грейс (сквад G), потом честно перешёл на
-    тариф с G. Сквады совпадают с оверлеем, но дата — нет: это не эхо, трогать нельзя.
-    """
-    monkeypatch.setattr(settings, 'SALES_MODE', 'classic')
-    now = datetime.now(UTC)
-    real_end = now - timedelta(days=10)
-    session = _session(
-        started_at=real_end + timedelta(seconds=30),
-        billing_before=_billing(end_at=real_end, squads=(SRV_A,), limit_gb=100),
-    )
-    async with memory_session(monkeypatch, TABLES) as db:
-        await _seed(db, _server(GRACE, is_available=True))
-        subscription = _leaked_subscription(grace_until=now + timedelta(days=12), tariff_id=None)
-        subscription.traffic_limit_gb = 50
-        await _seed_rows(db, subscription, _session_to_model(session))
-
-        await extend_subscription(db, subscription, 30)
-        await db.refresh(subscription)
-
-    assert subscription.connected_squads == [GRACE], 'честно купленный сервер отобран'
-    assert subscription.traffic_limit_gb == 50
-
-
-@pytest.mark.asyncio
-async def test_server_added_by_a_purchase_stays_next_to_the_returned_ones(monkeypatch) -> None:
-    """Простая покупка добавляет свой сервер к сквадам подписки: {G, X} → свои серверы + X."""
-    from app.services.grace_access_echo import undo_grace_overlay_echo
-
-    monkeypatch.setattr(settings, 'SALES_MODE', 'classic')
-    now = datetime.now(UTC)
-    real_end = now - timedelta(hours=1)
-    session = _session(
-        started_at=real_end + timedelta(seconds=30),
-        billing_before=_billing(end_at=real_end, squads=(SRV_A,), limit_gb=100),
-    )
-    extra = 'cccccccc-0000-0000-0000-000000000003'
-    async with memory_session(monkeypatch, TABLES) as db:
-        await _seed(db)
-        subscription = _leaked_subscription(grace_until=session.grace_until, tariff_id=None)
-        subscription.connected_squads = [GRACE, extra]
-        await _seed_rows(db, subscription, _session_to_model(session))
-
-        changed = await undo_grace_overlay_echo(db, subscription)
-
-    assert subscription.connected_squads == [SRV_A, extra]
-    assert {'connected_squads', 'end_date'} <= changed
-
-
 async def _seed_rows(db, *rows) -> None:
     for row in rows:
         db.add(row)
     await db.commit()
-
-
-@pytest.mark.asyncio
-async def test_classic_renewal_price_counts_the_real_servers_not_the_grace_squad(monkeypatch) -> None:
-    """Цена считается до продления: по скваду грейса она выходила без своих серверов.
-
-    Стенд обновления (2026-09-15): «Сервер не найден в БД» на скваде грейса — человек
-    платил только базу, а продление возвращало ему оба сервера.
-    """
-    from app.database.models import ServerSquad
-    from app.services.pricing_engine import pricing_engine
-
-    monkeypatch.setattr(settings, 'SALES_MODE', 'classic')
-    now = datetime.now(UTC)
-    real_end = now - timedelta(hours=1)
-    session = _session(
-        started_at=real_end + timedelta(seconds=30),
-        billing_before=_billing(end_at=real_end, squads=(SRV_A, SRV_B), limit_gb=100),
-    )
-    async with memory_session(monkeypatch, TABLES) as db:
-        await _seed(
-            db,
-            ServerSquad(squad_uuid=SRV_A, display_name='A', is_available=True, price_kopeks=5000),
-            ServerSquad(squad_uuid=SRV_B, display_name='B', is_available=True, price_kopeks=7000),
-        )
-        leaked = _leaked_subscription(grace_until=session.grace_until, tariff_id=None)
-        await _seed_rows(db, leaked, _session_to_model(session))
-        leaked_price = await pricing_engine.calculate_renewal_price(db, leaked, 30)
-
-        clean = _leaked_subscription(grace_until=now + timedelta(days=3), tariff_id=None)
-        clean.id, clean.remnawave_short_id, clean.remnawave_id = 11, 'sub11', PANEL_ID + 1
-        clean.connected_squads, clean.traffic_limit_gb = [SRV_A, SRV_B], 100
-        await _seed_rows(db, clean)
-        clean_price = await pricing_engine.calculate_renewal_price(db, clean, 30)
-
-    assert leaked_price.final_total == clean_price.final_total
-    assert leaked_price.final_total > 0
 
 
 @pytest.mark.asyncio
@@ -438,7 +271,6 @@ async def test_paid_on_old_code_the_next_renewal_returns_the_servers(monkeypatch
     тарифе). Получить такой сквад подписка могла только от грейса. Дату не трогаем:
     её сдвинула оплата, эти дни человек купил.
     """
-    monkeypatch.setattr(settings, 'SALES_MODE', sales_mode)
     now = datetime.now(UTC)
     real_end = now - timedelta(days=5)
     session = _session(
@@ -464,7 +296,6 @@ async def test_paid_on_old_code_the_next_renewal_returns_the_servers(monkeypatch
 @pytest.mark.asyncio
 async def test_grace_squad_that_a_tariff_sells_is_left_alone(monkeypatch) -> None:
     """Сквад грейса входит в тариф — на нём можно быть честно, по скваду не узнать."""
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     now = datetime.now(UTC)
     real_end = now - timedelta(days=5)
     session = _session(
@@ -485,33 +316,10 @@ async def test_grace_squad_that_a_tariff_sells_is_left_alone(monkeypatch) -> Non
 
 
 @pytest.mark.asyncio
-async def test_grace_squad_next_to_a_bought_server_is_not_recognised_without_the_date(monkeypatch) -> None:
-    """Серверы — не ровно сквад грейса: без даты оверлея это уже не эхо, трогать нельзя."""
-    monkeypatch.setattr(settings, 'SALES_MODE', 'classic')
-    now = datetime.now(UTC)
-    real_end = now - timedelta(days=5)
-    session = _session(
-        started_at=real_end + timedelta(seconds=30),
-        billing_before=_billing(end_at=real_end, squads=(SRV_A,), limit_gb=100),
-    )
-    async with memory_session(monkeypatch, TABLES) as db:
-        await _seed(db, _server(SRV_B, is_available=True), _server(GRACE, is_available=False))
-        subscription = _renewed_on_old_code(grace_until=session.grace_until, tariff_id=None)
-        subscription.connected_squads = [GRACE, SRV_B]
-        await _seed_rows(db, subscription, _session_to_model(session))
-
-        await extend_subscription(db, subscription, 30)
-        await db.refresh(subscription)
-
-    assert set(subscription.connected_squads) == {GRACE, SRV_B}
-
-
-@pytest.mark.asyncio
 async def test_recurring_charge_order_counts_the_new_period_from_the_real_end(monkeypatch) -> None:
     """Lava и Platega продлевают методом модели: починка идёт до него, как в самих шлюзах."""
     from app.services.grace_access_echo import undo_grace_overlay_echo
 
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     now = datetime.now(UTC)
     real_end = now - timedelta(hours=1)
     session = _session(

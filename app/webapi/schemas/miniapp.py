@@ -210,7 +210,6 @@ class MiniAppSubscriptionRenewalOptionsResponse(BaseModel):
     autopay_settings: MiniAppSubscriptionAutopay | None = None
     # Флаги для определения типа действия (покупка vs продление)
     is_trial: bool = Field(default=False, alias='isTrial')
-    sales_mode: str = Field(default='classic', alias='salesMode')
 
     model_config = ConfigDict(populate_by_name=True, extra='allow')
 
@@ -640,7 +639,6 @@ class MiniAppTariffsResponse(BaseModel):
     """Ответ со списком тарифов."""
 
     success: bool = True
-    sales_mode: str = 'tariffs'
     tariffs: list[MiniAppTariff] = Field(default_factory=list)
     current_tariff: MiniAppCurrentTariff | None = None
     balance_kopeks: int = 0
@@ -783,12 +781,8 @@ class MiniAppSubscriptionResponse(BaseModel):
     trial_available: bool = False
     trial_duration_days: int | None = None
     trial_status: str | None = None
-    trial_payment_required: bool = Field(default=False, alias='trialPaymentRequired')
-    trial_price_kopeks: int | None = Field(default=None, alias='trialPriceKopeks')
-    trial_price_label: str | None = Field(default=None, alias='trialPriceLabel')
 
     # Режим продаж и тариф
-    sales_mode: str = Field(default='classic', alias='salesMode')
     current_tariff: MiniAppCurrentTariff | None = Field(default=None, alias='currentTariff')
 
     model_config = ConfigDict(extra='allow', populate_by_name=True)

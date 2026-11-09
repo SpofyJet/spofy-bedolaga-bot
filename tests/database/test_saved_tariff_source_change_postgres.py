@@ -32,7 +32,6 @@ async def test_saved_source_change_respects_multi_selection_and_single_switch_po
     postgres_database, monkeypatch, entry, multi, source_status, target_exists
 ):
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     quote = AsyncMock(side_effect=AssertionError('stale source reached pricing'))
     monkeypatch.setattr(pricing_engine, 'calculate_tariff_purchase_price', quote)
     now = datetime.now(UTC)

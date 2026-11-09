@@ -47,7 +47,6 @@ async def real_migration(postgres_database, monkeypatch, base, flow='cabinet'):
         pytest.skip('Explicit disposable loopback Remnawave URL/token required')
     assert urlparse(url).hostname in {'127.0.0.1', 'localhost', '::1'}, 'Only disposable local panels permitted'
     token = (await asyncio.to_thread(Path(token_file).read_text)).strip()
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'MAX_DEVICES_LIMIT', 10)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)
@@ -56,7 +55,6 @@ async def real_migration(postgres_database, monkeypatch, base, flow='cabinet'):
     monkeypatch.setattr('app.services.subscription_renewal_service.with_admin_notification_service', AsyncMock())
     monkeypatch.setattr(telegram.AdminNotificationService, 'send_subscription_purchase_notification', AsyncMock())
     monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())
-    monkeypatch.setattr(auto, 'clear_subscription_checkout_draft', AsyncMock())
 
     @asynccontextmanager
     async def client(self):

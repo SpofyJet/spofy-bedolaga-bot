@@ -62,7 +62,6 @@ def _spy(monkeypatch) -> tuple[AsyncMock, AsyncMock]:
 
 def _multi_tariff(monkeypatch, enabled: bool) -> None:
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', enabled)
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs' if enabled else 'classic')
 
 
 @pytest.mark.asyncio

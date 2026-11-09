@@ -22,7 +22,6 @@ TABLES = list(Base.metadata.sorted_tables)
 
 @pytest.fixture(autouse=True)
 def tariffs_mode(monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0)
     monkeypatch.setattr(NotificationSettingsService, 'are_notifications_globally_enabled', staticmethod(lambda: True))

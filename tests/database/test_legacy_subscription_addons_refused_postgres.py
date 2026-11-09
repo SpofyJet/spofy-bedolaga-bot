@@ -34,7 +34,6 @@ DEVICE_LIMIT = 3
 @pytest.fixture(autouse=True)
 def tariffs_mode_with_classic_prices(monkeypatch):
     """Режим тарифов без мультитарифа; классические цены заданы — без сторожа продажа бы состоялась."""
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'PRICE_PER_DEVICE', 5_000)
     monkeypatch.setattr(settings, 'DEVICES_SELECTION_ENABLED', True)

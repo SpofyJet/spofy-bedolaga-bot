@@ -28,7 +28,6 @@ TABLES = list(Base.metadata.sorted_tables)
 
 @pytest.fixture
 def panel(monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
     monkeypatch.setattr(settings, 'DAILY_SUBSCRIPTIONS_ENABLED', True)

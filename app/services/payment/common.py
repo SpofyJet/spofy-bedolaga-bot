@@ -21,10 +21,6 @@ from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import AsyncSessionLocal, get_db
 from app.database.models import Subscription
 from app.localization.texts import get_texts
-from app.services.subscription_checkout_service import (
-    has_subscription_checkout_draft,
-    should_offer_checkout_resume,
-)
 from app.services.user_cart_service import user_cart_service
 from app.utils.miniapp_buttons import build_main_menu_button, build_miniapp_or_callback_button
 from app.utils.payment_logger import payment_logger as logger
@@ -120,14 +116,6 @@ class PaymentCommonMixin:
                     resume_button = build_miniapp_or_callback_button(
                         text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
                         callback_data='return_to_saved_cart',
-                        style='success',
-                    )
-            else:
-                draft_exists = await has_subscription_checkout_draft(user.id)
-                if should_offer_checkout_resume(user, draft_exists, subscription=subscription):
-                    resume_button = build_miniapp_or_callback_button(
-                        text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                        callback_data='subscription_resume_checkout',
                         style='success',
                     )
 

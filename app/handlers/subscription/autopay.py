@@ -14,27 +14,11 @@ from app.keyboards.inline import (
     get_autopay_days_keyboard,
     get_autopay_keyboard,
     get_autopay_period_keyboard,
-    get_countries_keyboard,
-    get_devices_keyboard,
-    get_subscription_period_keyboard,
-    get_traffic_packages_keyboard,
 )
 from app.localization.texts import get_texts
-from app.services.subscription_checkout_service import (
-    clear_subscription_checkout_draft,
-)
 from app.services.user_cart_service import user_cart_service
-from app.states import SubscriptionStates
 from app.utils.formatters import format_datetime
 from app.utils.photo_message import edit_or_answer_photo
-
-from .countries import (
-    _build_countries_selection_text,
-    _get_available_countries,
-    _get_preselected_free_countries,
-    _should_show_countries_management,
-)
-from .pricing import _build_subscription_period_prompt
 
 
 logger = structlog.get_logger(__name__)
@@ -155,7 +139,7 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
             return
 
         # Classic subscriptions cannot use autopay when tariff mode is enabled
-        if settings.is_tariffs_mode() and not subscription.tariff_id:
+        if not subscription.tariff_id:
             texts = get_texts(db_user.language)
             await callback.answer(
                 texts.t(
@@ -874,63 +858,10 @@ async def handle_sbp_recurring_cancel_confirm(
         await handle_sbp_recurring_menu(callback, db_user, db, state)
 
 
-async def handle_subscription_config_back(
-    callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession
-):
-    current_state = await state.get_state()
-    texts = get_texts(db_user.language)
-
-    if current_state == SubscriptionStates.selecting_traffic.state:
-        await callback.message.edit_text(
-            await _build_subscription_period_prompt(db_user, texts, db),
-            reply_markup=get_subscription_period_keyboard(db_user.language, db_user),
-            parse_mode='HTML',
-        )
-        await state.set_state(SubscriptionStates.selecting_period)
-
-    elif current_state == SubscriptionStates.selecting_countries.state:
-        if settings.is_traffic_selectable():
-            await callback.message.edit_text(
-                texts.SELECT_TRAFFIC, reply_markup=get_traffic_packages_keyboard(db_user.language)
-            )
-            await state.set_state(SubscriptionStates.selecting_traffic)
-        else:
-            await callback.message.edit_text(
-                await _build_subscription_period_prompt(db_user, texts, db),
-                reply_markup=get_subscription_period_keyboard(db_user.language, db_user),
-                parse_mode='HTML',
-            )
-            await state.set_state(SubscriptionStates.selecting_period)
-
-    elif current_state == SubscriptionStates.selecting_devices.state:
-        await _show_previous_configuration_step(callback, state, db_user, texts, db)
-
-    elif current_state == SubscriptionStates.confirming_purchase.state:
-        if settings.is_devices_selection_enabled():
-            data = await state.get_data()
-            selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
-
-            await callback.message.edit_text(
-                texts.SELECT_DEVICES, reply_markup=get_devices_keyboard(selected_devices, db_user.language)
-            )
-            await state.set_state(SubscriptionStates.selecting_devices)
-        else:
-            await _show_previous_configuration_step(callback, state, db_user, texts, db)
-
-    else:
-        from app.handlers.menu import show_main_menu
-
-        await show_main_menu(callback, db_user, db)
-        await state.clear()
-
-    await callback.answer()
-
-
 async def handle_subscription_cancel(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     get_texts(db_user.language)
 
     await state.clear()
-    await clear_subscription_checkout_draft(db_user.id)
 
     # Multi-tariff safe: delete only the cart for the current subscription
     # to avoid nuking carts belonging to other subscriptions.
@@ -963,46 +894,3 @@ async def handle_subscription_cancel(callback: types.CallbackQuery, state: FSMCo
     await show_main_menu(callback, db_user, db)
 
     await callback.answer('❌ Покупка отменена')
-
-
-async def _show_previous_configuration_step(
-    callback: types.CallbackQuery,
-    state: FSMContext,
-    db_user: User,
-    texts,
-    db: AsyncSession,
-):
-    if await _should_show_countries_management(db_user):
-        countries = await _get_available_countries(db_user.promo_group_id)
-        data = await state.get_data()
-        selected_countries = data.get('countries', [])
-
-        # Если страны не выбраны — автоматически предвыбираем бесплатные
-        if not selected_countries:
-            selected_countries = _get_preselected_free_countries(countries)
-            data['countries'] = selected_countries
-            await state.set_data(data)
-
-        # Формируем текст с описаниями сквадов
-        selection_text = _build_countries_selection_text(countries, texts.SELECT_COUNTRIES)
-        await callback.message.edit_text(
-            selection_text,
-            reply_markup=get_countries_keyboard(countries, selected_countries, db_user.language),
-            parse_mode='HTML',
-        )
-        await state.set_state(SubscriptionStates.selecting_countries)
-        return
-
-    if settings.is_traffic_selectable():
-        await callback.message.edit_text(
-            texts.SELECT_TRAFFIC, reply_markup=get_traffic_packages_keyboard(db_user.language)
-        )
-        await state.set_state(SubscriptionStates.selecting_traffic)
-        return
-
-    await callback.message.edit_text(
-        await _build_subscription_period_prompt(db_user, texts, db),
-        reply_markup=get_subscription_period_keyboard(db_user.language, db_user),
-        parse_mode='HTML',
-    )
-    await state.set_state(SubscriptionStates.selecting_period)

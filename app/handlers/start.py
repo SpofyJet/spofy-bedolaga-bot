@@ -609,8 +609,6 @@ async def _activate_pending_trial(
     Вызывается перед показом главного меню, чтобы меню сразу отрисовало новую
     подписку. Все гейты повторяют cabinet POST /trial и activate_trial бота:
     триал включён, не отключён для auth_type юзера, не использован ранее.
-    Платный триал (TRIAL_PAYMENT_ENABLED + цена) этим путём не активируется —
-    rich-меню для него ведёт на оплату в миниапп. Must be called BEFORE
     state.clear().
     """
     try:
@@ -622,8 +620,6 @@ async def _activate_pending_trial(
         if settings.TRIAL_DURATION_DAYS <= 0 or settings.TRIAL_DISABLED_FOR == 'all':
             return
         if settings.is_trial_disabled_for_user(user.auth_type):
-            return
-        if settings.is_trial_paid_activation_enabled():
             return
         if user.is_trial_already_used():
             return
@@ -1368,7 +1364,6 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     # Зарегистрированному юзеру бесплатный триал выдаётся ниже
     # (_activate_pending_trial) перед показом меню — меню сразу отрисует новую
     # подписку. Новый юзер получает предложение триала после регистрации штатно.
-    # Платный триал (TRIAL_PAYMENT_ENABLED) этим путём не активируется — только
     # оплата в миниаппе.
     if start_parameter == 'trial':
         await state.update_data(pending_trial=True)

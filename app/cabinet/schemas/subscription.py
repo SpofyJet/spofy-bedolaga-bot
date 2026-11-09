@@ -166,8 +166,7 @@ class AutopayUpdateRequest(BaseModel):
 
 class TrialActivateRequest(BaseModel):
     """Optional body for POST /trial — used to forward the Yandex CID for the
-    offline-conversion trial-add (and purchase, when TRIAL_PAYMENT_ENABLED)
-    events. The endpoint previously took no body so cabinet calls can still
+    offline-conversion trial-add events. The endpoint previously took no body so cabinet calls can still
     POST without a payload — all fields are optional."""
 
     # See PurchasePreviewRequest.yandex_cid (#558449).
@@ -185,9 +184,6 @@ class TrialInfoResponse(BaseModel):
     duration_days: int
     traffic_limit_gb: int
     device_limit: int
-    requires_payment: bool = False
-    price_kopeks: int = 0
-    price_rubles: float = 0.0
     reason_unavailable: str | None = None
 
 

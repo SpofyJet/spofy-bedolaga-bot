@@ -137,9 +137,7 @@ def _sections(stats: _StartupStats) -> list[tuple[str, list[tuple[str, str]]]]:
 
 
 def _mode_label(stats: _StartupStats) -> str:
-    return {'classic': 'классика', 'tariffs': 'тарифы', 'multi_tariff': 'мультитариф'}.get(
-        stats.sales_mode, stats.sales_mode
-    )
+    return {'tariffs': 'тарифы', 'multi_tariff': 'мультитариф'}.get(stats.sales_mode, stats.sales_mode)
 
 
 def render_startup_message(stats: _StartupStats, *, timestamp: str) -> str:
@@ -297,7 +295,7 @@ class StartupNotificationService:
             panel_latency_ms=latency_ms,
             maintenance=bool(settings.is_maintenance_mode()),
             # Мультитариф — разновидность режима «тарифы», поэтому одна строка на оба.
-            sales_mode='multi_tariff' if settings.is_multi_tariff_enabled() else settings.get_sales_mode(),
+            sales_mode='multi_tariff' if settings.is_multi_tariff_enabled() else 'tariffs',
         )
 
     async def _check_remnawave_connection(self) -> tuple[bool, str, int | None]:

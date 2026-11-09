@@ -967,17 +967,14 @@ async def _render_user_subscription_overview(
         ]
 
         # Кнопки тарифов в режиме тарифов
-        if settings.is_tariffs_mode():
-            keyboard.append(
-                [
-                    types.InlineKeyboardButton(
-                        text='📦 Сменить тариф', callback_data=f'admin_sub_change_tariff_{user_id}{_sid}'
-                    ),
-                    types.InlineKeyboardButton(
-                        text='💳 Купить тариф', callback_data=f'admin_tariff_buy_{user_id}{_sid}'
-                    ),
-                ]
-            )
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text='📦 Сменить тариф', callback_data=f'admin_sub_change_tariff_{user_id}{_sid}'
+                ),
+                types.InlineKeyboardButton(text='💳 Купить тариф', callback_data=f'admin_tariff_buy_{user_id}{_sid}'),
+            ]
+        )
 
         if subscription.is_active:
             keyboard.append(
@@ -4808,9 +4805,7 @@ async def _admin_buy_periods(db: AsyncSession, subscription: Subscription) -> li
 
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
         return tariff.get_available_periods() if tariff else None
-    if settings.is_tariffs_mode():
-        return None
-    return settings.get_available_subscription_periods()
+    return None
 
 
 def _parse_admin_buy_callback(callback_data: str) -> tuple[int, int, int | None, int | None]:

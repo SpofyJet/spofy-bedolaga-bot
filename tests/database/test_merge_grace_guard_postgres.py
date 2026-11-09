@@ -31,7 +31,6 @@ async def test_open_grace_merge_rejection_preserves_identity_money_and_retry(
     postgres_database, monkeypatch, multi, grace_owner, state
 ):
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     now = datetime.now(UTC)
     token_data = {'primary_user_id': 1, 'secondary_user_id': 2}
     restore = AsyncMock()

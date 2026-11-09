@@ -22,7 +22,6 @@ pytestmark = pytest.mark.postgres
 async def test_paid_renewal_resets_bot_and_panel_together(
     postgres_database, monkeypatch, reset, expired, multi, panel_exists
 ):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'TRAFFIC_SELECTION_MODE', 'fixed_with_topup')
     monkeypatch.setattr(settings, 'FIXED_TRAFFIC_LIMIT_GB', 100)
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)

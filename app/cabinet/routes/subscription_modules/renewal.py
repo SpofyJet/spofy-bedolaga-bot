@@ -49,7 +49,7 @@ async def get_renewal_options(
         return []
 
     # Classic subscriptions cannot be renewed when tariff mode is enabled
-    if settings.is_tariffs_mode() and not subscription.tariff_id:
+    if not subscription.tariff_id:
         return []
 
     _non_renewable = {SubscriptionStatus.DISABLED.value, SubscriptionStatus.PENDING.value}
@@ -136,7 +136,7 @@ async def renew_subscription(
         )
 
     # Classic subscriptions cannot be renewed when tariff mode is enabled
-    if settings.is_tariffs_mode() and not subscription.tariff_id:
+    if not subscription.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Classic subscriptions cannot be renewed. Please purchase a tariff.',

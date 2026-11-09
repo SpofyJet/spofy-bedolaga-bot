@@ -29,7 +29,6 @@ NEW_CRYPTO = 'happ://crypt5/new-test-payload'
 @pytest.mark.parametrize('url', [None, OLD_URL, NEW_URL])
 @pytest.mark.parametrize('crypto', [None, '', NEW_CRYPTO])
 async def test_url_refresh_invalidates_only_its_stale_crypto(postgres_database, monkeypatch, flow, multi, url, crypto):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'CONNECT_BUTTON_MODE', 'happ_cryptolink')
     now = datetime.now(UTC)
@@ -127,7 +126,6 @@ async def test_cabinet_regenerates_crypto_for_the_changed_url(
 ):
     from app.cabinet.routes.subscription_modules import status
 
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'CONNECT_BUTTON_MODE', 'happ_cryptolink')
     monkeypatch.setattr(status, '_load_app_config_async', AsyncMock(return_value={'platforms': {}}))

@@ -30,7 +30,6 @@ PANEL_ID = 9001
 
 @pytest.fixture
 def panel(monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', 'delete')
     monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_id', {})

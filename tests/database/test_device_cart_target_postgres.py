@@ -27,7 +27,6 @@ pytestmark = [pytest.mark.postgres, pytest.mark.asyncio]
 @pytest.mark.parametrize('entry', ['cart', 'purchase', 'legacy', 'telegram_add', 'telegram_change'])
 @pytest.mark.parametrize('target_state', ['present', 'deleted', 'foreign', 'legacy_unpinned'])
 async def test_device_topup_keeps_selected_subscription(postgres_database, monkeypatch, carts, entry, target_state):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
     service, uid, _ = carts

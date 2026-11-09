@@ -30,10 +30,8 @@ logger = structlog.get_logger(__name__)
 
 async def _reject_classic_checkout_in_tariff_mode(callback: types.CallbackQuery) -> bool:
     """Old simple-purchase buttons must not bypass the tariff renewal entry."""
-    if settings.is_tariffs_mode() or settings.is_multi_tariff_enabled():
-        await callback.answer('Откройте покупку или продление подписки и выберите тариф', show_alert=True)
-        return True
-    return False
+    await callback.answer('Откройте покупку или продление подписки и выберите тариф', show_alert=True)
+    return True
 
 
 @error_handler

@@ -1784,7 +1784,7 @@ class MonitoringService:
                     continue
 
                 # Skip classic subscriptions (tariff_id=NULL) when tariff mode is active
-                if settings.is_tariffs_mode() and not sub.tariff_id:
+                if not sub.tariff_id:
                     logger.debug(
                         'Пропускаем классическую подписку без тарифа в autopay (tariff mode)',
                         sub_id=sub.id,

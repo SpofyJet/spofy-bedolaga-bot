@@ -80,10 +80,8 @@ async def test_stale_telegram_button_denied_before_checkout(monkeypatch, handler
 
 @pytest.mark.parametrize('platform', ['cabinet', 'miniapp'])
 async def test_api_purchase_denied_without_group(monkeypatch, platform):
-    from app.config import settings
     from app.database.crud import user as users
 
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     user = SimpleNamespace(id=42, language='ru', balance_kopeks=10000, get_primary_promo_group=lambda: None)
     monkeypatch.setattr(users, 'lock_user_for_pricing', AsyncMock(return_value=user))
     db = AsyncMock()

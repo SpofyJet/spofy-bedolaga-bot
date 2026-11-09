@@ -69,7 +69,6 @@ class Panel:
 @pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('state', ['missing_user', 'stale_both', 'stale_user', 'timeout', 'foreign'])
 async def test_identity_sync_repairs_only_proven_dead_links(postgres_database, monkeypatch, multi, state):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)
     end = datetime.now(UTC) + timedelta(days=30)

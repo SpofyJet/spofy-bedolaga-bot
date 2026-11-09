@@ -7,7 +7,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config import settings
 from app.database.models import Subscription, User
 from app.utils.subscription_time import ends_within_days
 
@@ -59,11 +58,11 @@ async def lock_autopay_target_checked(
         eligible = (
             user.status == 'active'
             and subscription.autopay_enabled is True
-            and subscription.is_trial is False
-            and subscription.end_date == expected_end_date
-            and not subscription.is_daily_paused
-            and not (tariff and tariff.is_daily)
-            and not (settings.is_tariffs_mode() and not subscription.tariff_id)
+            and (subscription.is_trial is False)
+            and (subscription.end_date == expected_end_date)
+            and (not subscription.is_daily_paused)
+            and (not (tariff and tariff.is_daily))
+            and (bool(subscription.tariff_id))
         )
         if expired_only:
             eligible = (

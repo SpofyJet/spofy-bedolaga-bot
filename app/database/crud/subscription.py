@@ -2922,33 +2922,6 @@ async def create_sbp_pending_subscription(
     return subscription
 
 
-# Обратная совместимость: алиас для триальной подписки
-async def create_pending_trial_subscription(
-    db: AsyncSession,
-    user_id: int,
-    duration_days: int,
-    traffic_limit_gb: int = 0,
-    device_limit: int = 1,
-    connected_squads: list[str] = None,
-    payment_method: str = 'pending',
-    total_price_kopeks: int = 0,
-    tariff_id: int | None = None,
-) -> Subscription:
-    """Creates a pending trial subscription. Wrapper for create_pending_subscription with is_trial=True."""
-    return await create_pending_subscription(
-        db=db,
-        user_id=user_id,
-        duration_days=duration_days,
-        traffic_limit_gb=traffic_limit_gb,
-        device_limit=device_limit,
-        connected_squads=connected_squads,
-        payment_method=payment_method,
-        total_price_kopeks=total_price_kopeks,
-        is_trial=True,
-        tariff_id=tariff_id,
-    )
-
-
 async def activate_pending_subscription(
     db: AsyncSession,
     user_id: int,

@@ -81,13 +81,11 @@ async def test_selected_classic_devices_are_priced_and_preserved(
     custom_traffic=None,
     custom_enabled=False,
 ):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'MAX_DEVICES_LIMIT', global_max)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())
-    monkeypatch.setattr(auto, 'clear_subscription_checkout_draft', AsyncMock())
     monkeypatch.setattr(telegram.user_cart_service, 'delete_user_cart', AsyncMock())
     monkeypatch.setattr(telegram.user_cart_service, 'delete_subscription_cart', AsyncMock())
     monkeypatch.setattr('app.services.subscription_renewal_service.with_admin_notification_service', AsyncMock())
@@ -422,7 +420,6 @@ async def test_invalid_selected_classic_subscription_is_rejected_before_pricing(
 
     from app.services.pricing_engine import pricing_engine
 
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     pricing = AsyncMock(side_effect=AssertionError('Invalid selected source reached pricing'))
     monkeypatch.setattr(pricing_engine, 'calculate_tariff_purchase_price', pricing)
@@ -492,7 +489,6 @@ async def test_divergent_paid_pin_falls_back_to_requested_tariff_before_pricing(
         pass
 
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     pricing = AsyncMock(side_effect=PricingBoundary)
     monkeypatch.setattr(pricing_engine, 'calculate_tariff_purchase_price', pricing)
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
@@ -561,13 +557,11 @@ async def test_custom_fallback_prefers_active_tariff_over_later_disabled_record(
 
 
 async def test_daily_insufficient_balance_cart_replays_selected_classic(postgres_database, monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'MAX_DEVICES_LIMIT', 10)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)
     monkeypatch.setattr('app.services.subscription_renewal_service.with_admin_notification_service', AsyncMock())
     monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())
-    monkeypatch.setattr(auto, 'clear_subscription_checkout_draft', AsyncMock())
     saved_cart = AsyncMock()
     monkeypatch.setattr(telegram.user_cart_service, 'save_user_cart', saved_cart)
     now = datetime.now(UTC)

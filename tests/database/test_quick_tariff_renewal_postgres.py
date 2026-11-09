@@ -14,7 +14,6 @@ from app.config import CLASSIC_PERIOD_PRICES, settings
 from app.database.crud.user import get_user_by_id
 from app.database.models import (
     Base,
-    PromoGroup,
     Subscription,
     Tariff,
     TrafficPurchase,
@@ -170,7 +169,6 @@ async def test_insufficient_balance_cart_retains_tariff_and_subscription(postgre
         from app.services import subscription_auto_purchase_service as auto
 
         monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())
-        monkeypatch.setattr(auto, 'clear_subscription_checkout_draft', AsyncMock())
         c.user.balance_kopeks = 40000
         await c.db.commit()
         assert await auto._auto_extend_subscription(c.db, c.user, cart)
@@ -212,52 +210,6 @@ async def test_stale_simple_checkout_does_not_sell_classic_parameters_to_tariff(
         assert c.sub.end_date == c.now - timedelta(days=1)
         assert not (await c.db.scalars(select(Transaction))).all()
         assert c.callback.answer.call_args.kwargs.get('show_alert') is True
-
-
-@pytest.mark.parametrize('entry', ['quick', 'cabinet'])
-@pytest.mark.parametrize('case', ['promo', 'group_and_promo', 'free', 'unlimited', 'classic_mode'])
-async def test_quick_tariff_renewal_price_variants(postgres_database, monkeypatch, case, entry):
-    async with checkout(postgres_database, monkeypatch) as c:
-        tariff = await c.db.get(Tariff, 1)
-        expected = 30000
-        if case in ('promo', 'group_and_promo'):
-            c.user.promo_offer_discount_percent = 20
-            c.user.promo_offer_discount_expires_at = c.now + timedelta(days=1)
-            expected = 24000
-            if case == 'group_and_promo':
-                group = PromoGroup(id=1, name='Test', period_discounts={'30': 10}, device_discount_percent=20)
-                c.db.add(group)
-                await c.db.flush()
-                c.user.promo_group_id = 1
-                expected = 20800  # (20000*0.9 + 10000*0.8)*0.8
-        elif case == 'free':
-            tariff.period_prices = {'30': 0}
-            tariff.device_price_kopeks = 0
-            expected = 0
-        elif case == 'unlimited':
-            tariff.device_limit = c.sub.device_limit = 0
-            expected = 20000
-        else:
-            monkeypatch.setattr(settings, 'SALES_MODE', 'classic')
-        await c.db.commit()
-        if entry == 'quick':
-            await handle_simple_subscription_purchase(c.callback, c.state, c.user, c.db)
-        else:
-            from app.cabinet.routes.subscription_modules.renewal import (
-                RenewalRequest,
-                renew_subscription,
-            )
-
-            await renew_subscription(RenewalRequest(period_days=30), c.user, c.db, subscription_id=10)
-        await c.db.refresh(c.user)
-        await c.db.refresh(c.sub)
-        assert c.user.balance_kopeks == 400000 - expected
-        assert c.sub.end_date == c.end + timedelta(days=30)
-        assert c.sub.device_limit == (0 if case == 'unlimited' else 3)
-        transactions = (await c.db.scalars(select(Transaction))).all()
-        assert len(transactions) == 1 and transactions[0].amount_kopeks == -expected
-        if case in ('promo', 'group_and_promo'):
-            assert c.user.promo_offer_discount_percent == 0
 
 
 @pytest.mark.parametrize(
@@ -343,7 +295,6 @@ async def test_saved_quick_renewal_cannot_switch_tariff_or_leave_unrecorded_char
             error = asyncio.CancelledError() if failure == 'cancel' else RuntimeError('synthetic ledger failure')
             monkeypatch.setattr(auto, 'create_transaction', AsyncMock(side_effect=error))
         monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())
-        monkeypatch.setattr(auto, 'clear_subscription_checkout_draft', AsyncMock())
         await c.db.commit()
         if failure == 'cancel':
             with pytest.raises(asyncio.CancelledError):
@@ -374,7 +325,6 @@ async def test_saved_tariff_renewal_preserves_addons_bought_after_cart(postgres_
         c.db.add(TrafficPurchase(subscription_id=10, traffic_gb=25, expires_at=c.now + timedelta(days=20)))
         await c.db.commit()
         monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())
-        monkeypatch.setattr(auto, 'clear_subscription_checkout_draft', AsyncMock())
         assert await auto._auto_extend_subscription(c.db, c.user, cart)
         await c.db.refresh(c.user)
         await c.db.refresh(c.sub)

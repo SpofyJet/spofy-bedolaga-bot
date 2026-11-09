@@ -29,13 +29,11 @@ PANEL_ID = 555
 
 @pytest.fixture
 def multi_tariff(monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
 
 
 @pytest.fixture
 def single_tariff(monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
 
 

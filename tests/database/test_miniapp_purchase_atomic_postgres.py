@@ -41,7 +41,6 @@ TABLES = list(Base.metadata.sorted_tables)
 
 @pytest.fixture(autouse=True)
 def isolated_purchase(monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', False)
@@ -297,40 +296,6 @@ async def test_auxiliary_rollback_does_not_report_paid_purchase_as_failure(postg
         assert len(list(await db.scalars(select(Transaction)))) == 1
         if stage == 'servers':
             assert not list(await db.scalars(select(Subscription).where(Subscription.is_trial.is_(True))))
-
-
-async def test_insufficient_cabinet_purchase_still_saves_cart_and_returns_402(postgres_database, monkeypatch):
-    from fastapi import HTTPException
-
-    from app.cabinet.routes.subscription_modules import purchase as cabinet
-
-    monkeypatch.setattr(settings, 'SALES_MODE', 'classic')
-    async with postgres_session(postgres_database, TABLES) as db:
-        context, pricing, old_end = await _prepare(db)
-        context.user.balance_kopeks = 0
-        await db.commit()
-        uid = context.user.id
-        monkeypatch.setattr(cabinet.purchase_service, 'build_options', AsyncMock(return_value=context))
-        monkeypatch.setattr(cabinet.purchase_service, 'parse_selection', lambda *args: pricing.selection)
-        monkeypatch.setattr(cabinet.purchase_service, 'calculate_pricing', AsyncMock(return_value=pricing))
-        saved = {}
-
-        async def save_cart(user_id, cart):
-            saved[user_id] = cart
-
-        monkeypatch.setattr(cabinet.user_cart_service, 'save_user_cart', save_cart)
-        with pytest.raises(HTTPException) as failure:
-            await cabinet.submit_purchase(
-                cabinet.PurchasePreviewRequest(selection={'period_days': 30, 'traffic_value': 200, 'devices': 4}),
-                context.user,
-                db,
-            )
-        assert failure.value.status_code == 402
-        assert saved[uid]['return_to_cart'] is True
-        await db.refresh(context.user)
-        await db.refresh(context.subscription)
-        assert context.user.balance_kopeks == 0
-        assert context.subscription.end_date == old_end
 
 
 @pytest.mark.parametrize('failure', ['exception', 'none'])

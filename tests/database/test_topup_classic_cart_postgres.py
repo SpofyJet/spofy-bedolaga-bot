@@ -93,14 +93,12 @@ async def cart_service(monkeypatch):
 async def test_topup_finalizer_purchases_selected_classic(
     postgres_database, monkeypatch, provider, cart_case, cart_service
 ):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
     monkeypatch.setattr(settings, 'DAILY_SUBSCRIPTIONS_ENABLED', True)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)
     monkeypatch.setattr(settings, 'MAX_DEVICES_LIMIT', 10)
     monkeypatch.setattr('app.services.subscription_renewal_service.with_admin_notification_service', AsyncMock())
-    monkeypatch.setattr(auto, 'clear_subscription_checkout_draft', AsyncMock())
     service = cart_service
     monkeypatch.setattr(common, 'user_cart_service', service)
     monkeypatch.setattr(auto, 'user_cart_service', service)

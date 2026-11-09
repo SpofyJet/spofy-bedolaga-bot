@@ -14,23 +14,11 @@ def _user(subs=(), used=False):
 
 def test_new_user_sees_one_thought_and_trial(monkeypatch):
     monkeypatch.setattr(settings, 'TRIAL_DURATION_DAYS', 2)
-    monkeypatch.setattr(settings, 'TRIAL_PAYMENT_ENABLED', False)
     monkeypatch.setattr(settings, 'TRIAL_DISABLED_FOR', 'none')
     assert menu.is_new_user_with_free_trial(_user())
     text = menu._new_user_menu_text(get_texts('ru'))
     assert '2 дня бесплатно' in text
     assert 'Выберите действие' not in text
-
-
-def test_existing_or_used_trial_keeps_normal_menu(monkeypatch):
-    monkeypatch.setattr(settings, 'TRIAL_DURATION_DAYS', 2)
-    monkeypatch.setattr(settings, 'TRIAL_PAYMENT_ENABLED', False)
-    monkeypatch.setattr(settings, 'TRIAL_DISABLED_FOR', 'none')
-    assert not menu.is_new_user_with_free_trial(_user(used=True))
-    assert not menu.is_new_user_with_free_trial(_user(subs=[object()]))
-    monkeypatch.setattr(settings, 'TRIAL_PAYMENT_ENABLED', True)
-    monkeypatch.setattr(settings, 'TRIAL_ACTIVATION_PRICE', 1000)
-    assert not menu.is_new_user_with_free_trial(_user())
 
 
 def _tariff():

@@ -559,7 +559,6 @@ class TestPanelSync:
     @pytest.mark.asyncio
     async def test_extended_subscription_known_to_panel_calls_update(self, monkeypatch):
         monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-        monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
         create, update = _panel_spy(monkeypatch)
         async with memory_session(monkeypatch, TABLES) as db:
             target = _subscription(1, tariff_id=PRO_TARIFF_ID)

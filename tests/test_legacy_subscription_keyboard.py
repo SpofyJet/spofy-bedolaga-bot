@@ -44,7 +44,6 @@ def _patch_setting(monkeypatch, name: str, value: bool) -> None:
 def _patch_mode(monkeypatch, *, tariffs: bool) -> None:
     from app.config import Settings
 
-    monkeypatch.setattr(Settings, 'is_tariffs_mode', lambda self: tariffs)
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: tariffs)
     monkeypatch.setattr(kb, 'get_display_subscription_link', lambda sub: None)
 
@@ -83,16 +82,6 @@ def test_subscription_with_tariff_keeps_renew_and_autopay(monkeypatch):
     assert 'subscription_extend' in cbs
     assert 'subscription_autopay' in cbs
     assert 'instant_switch' in cbs
-
-
-def test_classic_mode_subscription_keeps_renew(monkeypatch):
-    """В классическом режиме подписка без тарифа — обычная, продление на месте."""
-    _patch_mode(monkeypatch, tariffs=False)
-
-    cbs = _keyboard(_sub(tariff_id=None))
-
-    assert 'subscription_extend' in cbs
-    assert 'tariff_switch' not in cbs
 
 
 def test_legacy_subscription_has_no_traffic_topup_even_if_classic_topup_is_on(monkeypatch):

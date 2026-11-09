@@ -263,19 +263,18 @@ async def _already_nudged_recently(db: AsyncSession, user_id: int) -> bool:
 async def _resolve_trial_days(db: AsyncSession) -> int:
     """Actual trial duration: trial tariff overrides env (mirrors purchase.py logic)."""
     days = settings.TRIAL_DURATION_DAYS
-    if settings.is_tariffs_mode():
-        try:
-            from app.database.crud.tariff import get_tariff_by_id, get_trial_tariff
+    try:
+        from app.database.crud.tariff import get_tariff_by_id, get_trial_tariff
 
-            trial_tariff = await get_trial_tariff(db)
-            if not trial_tariff:
-                trial_tariff_id = settings.get_trial_tariff_id()
-                if trial_tariff_id > 0:
-                    trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
-            if trial_tariff and getattr(trial_tariff, 'trial_duration_days', None):
-                days = trial_tariff.trial_duration_days
-        except Exception as error:
-            logger.debug('Не удалось получить триальный тариф для funnel', error=str(error))
+        trial_tariff = await get_trial_tariff(db)
+        if not trial_tariff:
+            trial_tariff_id = settings.get_trial_tariff_id()
+            if trial_tariff_id > 0:
+                trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
+        if trial_tariff and getattr(trial_tariff, 'trial_duration_days', None):
+            days = trial_tariff.trial_duration_days
+    except Exception as error:
+        logger.debug('Не удалось получить триальный тариф для funnel', error=str(error))
     return days
 
 

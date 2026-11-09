@@ -530,11 +530,7 @@ def _days_phrase(days: int, language: str) -> str:
 
 def _invite_trial_block(texts) -> str:
     """Что получает друг: пробный период без карты и +N дней за подключение по ссылке (квест)."""
-    if (
-        settings.TRIAL_DURATION_DAYS <= 0
-        or settings.TRIAL_DISABLED_FOR == 'all'
-        or settings.is_trial_paid_activation_enabled()
-    ):
+    if settings.TRIAL_DURATION_DAYS <= 0 or settings.TRIAL_DISABLED_FOR == 'all':
         return ''
     language = getattr(texts, 'language', 'ru')
     trial_days = settings.TRIAL_DURATION_DAYS

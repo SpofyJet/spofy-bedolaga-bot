@@ -25,7 +25,6 @@ pytestmark = pytest.mark.postgres
 async def test_multi_renew_reaches_switch_for_selected_subscription(
     postgres_database, monkeypatch, flow, selected, reason='active'
 ):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', reason != 'single')
     monkeypatch.setattr(settings, 'TARIFF_SWITCH_UPGRADE_ENABLED', reason != 'disabled')
     monkeypatch.setattr(settings, 'TARIFF_SWITCH_DOWNGRADE_ENABLED', reason != 'disabled')

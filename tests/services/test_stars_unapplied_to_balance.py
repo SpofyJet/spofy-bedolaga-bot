@@ -244,26 +244,3 @@ async def test_handler_does_not_claim_balance_topup_for_activated_subscription()
 
     # «Подписка активирована» шлёт сервис; «Баланс пополнен» здесь было бы неправдой.
     message.answer.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_paid_trial_without_pending_subscription_goes_to_balance(monkeypatch):
-    from app.handlers.stars_payments import _handle_trial_payment
-
-    message = _message()
-    with ExitStack() as stack:
-        alert = _settings_patches(stack)
-        async with memory_session(monkeypatch, TABLES) as db:
-            user = await _user(db)
-            kwargs = dict(message=message, db=db, user=user, stars_amount=100, payload='trial_77', texts=None)
-            assert await _handle_trial_payment(**kwargs, charge_id=CHARGE) is False
-            assert await _handle_trial_payment(**kwargs, charge_id=CHARGE) is True  # повтор
-            rows = await _transactions(db)
-            balance = (await db.get(User, 1)).balance_kopeks
-
-    assert balance == 15000
-    # Ни «оплаты пробной подписки» без подписки, ни второго зачисления.
-    assert [(r.type, r.external_id) for r in rows] == [(TransactionType.DEPOSIT.value, CHARGE)]
-    alert.assert_awaited_once()
-    message.answer.assert_awaited_once()
-    assert 'зачислена на баланс' in message.answer.await_args.args[0]

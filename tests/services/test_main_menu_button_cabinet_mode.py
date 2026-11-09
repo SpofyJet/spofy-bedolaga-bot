@@ -374,15 +374,9 @@ async def test_topup_success_keyboard_renders_callback_main_menu_button_in_cabin
     # decorations on the keyboard, not the Main Menu row we care about.
     mixin_instance = type('_TestMixin', (PaymentCommonMixin,), {})()
 
-    with (
-        patch(
-            'app.services.payment.common.user_cart_service.has_user_cart',
-            AsyncMock(return_value=False),
-        ),
-        patch(
-            'app.services.payment.common.has_subscription_checkout_draft',
-            AsyncMock(return_value=False),
-        ),
+    with patch(
+        'app.services.payment.common.user_cart_service.has_user_cart',
+        AsyncMock(return_value=False),
     ):
         keyboard = await mixin_instance.build_topup_success_keyboard(user)
 

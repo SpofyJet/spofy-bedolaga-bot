@@ -265,7 +265,6 @@ class UserDetailResponse(BaseModel):
     remnawave_id: int | None = None
 
     # Режим продаж бота: плитки карточки в классике, тарифах и мультитарифе разные.
-    sales_mode: str = 'tariffs'
     multi_tariff_enabled: bool = False
 
 

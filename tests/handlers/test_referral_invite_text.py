@@ -13,7 +13,6 @@ from app.localization.texts import get_texts
 def _trial(monkeypatch):
     monkeypatch.setattr(settings, 'TRIAL_DURATION_DAYS', 2)
     monkeypatch.setattr(settings, 'TRIAL_DISABLED_FOR', 'none')
-    monkeypatch.setattr(type(settings), 'is_trial_paid_activation_enabled', lambda self: False)
     monkeypatch.setattr(type(settings), 'is_referral_levels_scheme', lambda self: False)
     monkeypatch.setattr(settings, 'REFERRAL_FIRST_TOPUP_BONUS_KOPEKS', 0)
 

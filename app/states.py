@@ -9,12 +9,6 @@ class RegistrationStates(StatesGroup):
 
 
 class SubscriptionStates(StatesGroup):
-    selecting_period = State()
-    selecting_traffic = State()
-    selecting_countries = State()
-    selecting_devices = State()
-    confirming_purchase = State()
-
     adding_countries = State()
     adding_traffic = State()
     adding_devices = State()

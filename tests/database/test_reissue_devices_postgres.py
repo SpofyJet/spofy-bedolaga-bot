@@ -55,7 +55,6 @@ class Panel(RemnaWaveAPI):
 async def test_reissue_resets_selected_hwid_and_preserves_new_link(
     postgres_database, monkeypatch, flow, multi, outcome
 ):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'SUBSCRIPTION_REVOKE_ENABLED', True)
     panel = Panel(outcome)
@@ -156,7 +155,6 @@ async def test_reissue_resets_selected_hwid_and_preserves_new_link(
 async def test_reissue_never_guesses_or_accepts_a_foreign_subscription(postgres_database, monkeypatch, flow, selected):
     from fastapi import HTTPException
 
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'SUBSCRIPTION_REVOKE_ENABLED', True)
     panel = Panel('ok')

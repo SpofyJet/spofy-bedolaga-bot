@@ -33,7 +33,6 @@ async def test_tariff_purchase_uses_same_reset_decision_in_db_and_panel(
 ):
     from app.services import subscription_renewal_service as renewal
 
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', reset)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_TARIFF_SWITCH', False)

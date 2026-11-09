@@ -165,7 +165,6 @@ async def lab(monkeypatch):
 
     monkeypatch.setattr(rt, 'AsyncSessionLocal', maker)
     monkeypatch.setattr(rt, 'announce_grace_event', AsyncMock())
-    monkeypatch.setattr(rt.settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(rt.settings, 'MULTI_TARIFF_ENABLED', True)
 
     panel = SimpleNamespace(applied=[])

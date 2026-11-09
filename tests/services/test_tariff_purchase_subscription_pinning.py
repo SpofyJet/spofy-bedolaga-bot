@@ -27,11 +27,9 @@ from tests.fixtures.sqlite_memory import memory_session
 
 @asynccontextmanager
 async def purchase_context(monkeypatch, *, source=True):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'MAX_ACTIVE_SUBSCRIPTIONS', 1)
     monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())
-    monkeypatch.setattr(auto, 'clear_subscription_checkout_draft', AsyncMock())
     monkeypatch.setattr(SubscriptionService, 'create_remnawave_user', AsyncMock())
     monkeypatch.setattr('app.services.subscription_renewal_service.with_admin_notification_service', AsyncMock())
     async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:

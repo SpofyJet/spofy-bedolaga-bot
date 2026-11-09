@@ -38,7 +38,6 @@ pytestmark = pytest.mark.postgres
     ],
 )
 async def test_guest_nonrenewal_keeps_existing_panel_reset_policy(postgres_database, monkeypatch, kind, multi, expired):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', True)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_TARIFF_SWITCH', False)
@@ -117,7 +116,6 @@ async def test_paid_existing_purchase_preserves_traffic_contract(
     )
     from app.utils.cache import cache
 
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', reset)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)

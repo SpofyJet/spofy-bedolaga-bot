@@ -411,7 +411,6 @@ def _trial_offer_link(user: User, texts) -> str:
 
     Бесплатный триал — диплинк t.me/<bot>?start=trial (обрабатывается в
     start.py: активация + перерисовка меню с новой подпиской). Платный триал
-    (TRIAL_PAYMENT_ENABLED + цена) активируется только через оплату — ссылка
     ведёт в миниапп-кабинет (дашборд с TrialOfferCard, startapp=trial).
     """
     if settings.TRIAL_DURATION_DAYS <= 0 or settings.TRIAL_DISABLED_FOR == 'all':
@@ -425,11 +424,8 @@ def _trial_offer_link(user: User, texts) -> str:
         logger.debug('Не удалось проверить доступность триала для rich-меню', error=str(error))
         return ''
 
-    if settings.is_trial_paid_activation_enabled():
-        url = build_miniapp_startapp_url('trial')
-    else:
-        bot_username = settings.get_bot_username()
-        url = f'https://t.me/{bot_username}?start=trial' if bot_username else ''
+    bot_username = settings.get_bot_username()
+    url = f'https://t.me/{bot_username}?start=trial' if bot_username else ''
     if not url:
         return ''
 
@@ -505,7 +501,7 @@ async def _build_single_subscription_block(user: User, texts, db: AsyncSession) 
 
     is_daily_tariff = False
     tariff_line = ''
-    if settings.is_tariffs_mode() and subscription.tariff_id:
+    if subscription.tariff_id:
         try:
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
         except Exception as error:

@@ -71,7 +71,7 @@ async def get_traffic_packages(
     # charges, so the period hint mirrors POST: 30 days for tariff packages
     # (billed monthly), otherwise the prorated remaining days (ceil, min 1) —
     # the same value calculate_prorated_price() returns as days_charged.
-    is_tariff_mode = settings.is_tariffs_mode() and bool(subscription.tariff_id)
+    is_tariff_mode = bool(subscription.tariff_id)
     if is_tariff_mode:
         period_hint_days = 30
     elif subscription.end_date:
@@ -180,7 +180,7 @@ async def purchase_traffic(
         )
     tariff = None
     base_price_kopeks = 0
-    is_tariff_mode = settings.is_tariffs_mode() and subscription.tariff_id
+    is_tariff_mode = subscription.tariff_id
 
     # Режим тарифов
     if is_tariff_mode:
@@ -492,7 +492,7 @@ async def save_traffic_cart(
     # Get traffic price from tariff or settings
     tariff = None
     base_price_kopeks = 0
-    is_tariff_mode = settings.is_tariffs_mode() and subscription.tariff_id
+    is_tariff_mode = subscription.tariff_id
 
     if is_tariff_mode:
         tariff = await get_tariff_by_id(db, subscription.tariff_id)

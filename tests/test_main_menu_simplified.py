@@ -142,7 +142,6 @@ def test_inactive_subscription_without_link_has_no_dead_connect(monkeypatch):
 def test_inactive_multi_tariff_connect_targets_exact_subscription(monkeypatch):
     monkeypatch.setattr(settings, 'CONNECT_BUTTON_MODE', 'guide')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     sub = SimpleNamespace(
         id=45,
         actual_status='expired',
@@ -167,31 +166,6 @@ def test_support_is_not_in_main_menu_even_when_enabled(monkeypatch):
     assert 'menu_support' not in _flat(kb) and 'menu_info' in _flat(kb)
 
 
-async def test_pending_checkout_suppresses_only_random_menu_message(monkeypatch):
-    from app.handlers import menu as menu_mod
-
-    user = SimpleNamespace(id=123, full_name='User')
-    texts = SimpleNamespace(
-        MAIN_MENU='Hello {user_name}\n{subscription_status}\nChoose:',
-        t=lambda key, default: default,
-    )
-    monkeypatch.setattr(menu_mod.settings, 'MULTI_TARIFF_ENABLED', True)
-    monkeypatch.setattr(menu_mod.settings, 'SALES_MODE', 'tariffs')
-    monkeypatch.setattr(menu_mod, '_get_multi_tariff_status', AsyncMock(return_value=('Active', '')))
-    monkeypatch.setattr(menu_mod, 'build_promo_offer_hint', AsyncMock(return_value='Real promo'))
-    monkeypatch.setattr(menu_mod, 'build_test_access_hint', AsyncMock(return_value=None))
-    monkeypatch.setattr(menu_mod, 'has_subscription_checkout_draft', AsyncMock(return_value=True))
-    monkeypatch.setattr(menu_mod, 'should_offer_checkout_resume', lambda user, draft: draft)
-    random_message = AsyncMock(return_value='Random promo')
-    monkeypatch.setattr(menu_mod, 'get_random_active_message', random_message)
-
-    result = await menu_mod.get_main_menu_text(user, texts, AsyncMock())
-
-    assert 'Real promo' in result
-    assert 'Random promo' not in result
-    random_message.assert_not_awaited()
-
-
 async def test_random_menu_message_remains_without_pending_checkout(monkeypatch):
     from app.handlers import menu as menu_mod
 
@@ -201,12 +175,9 @@ async def test_random_menu_message_remains_without_pending_checkout(monkeypatch)
         t=lambda key, default: default,
     )
     monkeypatch.setattr(menu_mod.settings, 'MULTI_TARIFF_ENABLED', True)
-    monkeypatch.setattr(menu_mod.settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(menu_mod, '_get_multi_tariff_status', AsyncMock(return_value=('Active', '')))
     monkeypatch.setattr(menu_mod, 'build_promo_offer_hint', AsyncMock(return_value=None))
     monkeypatch.setattr(menu_mod, 'build_test_access_hint', AsyncMock(return_value=None))
-    monkeypatch.setattr(menu_mod, 'has_subscription_checkout_draft', AsyncMock(return_value=False))
-    monkeypatch.setattr(menu_mod, 'should_offer_checkout_resume', lambda user, draft: False)
     monkeypatch.setattr(menu_mod, 'has_resumable_cart', AsyncMock(return_value=False))
     monkeypatch.setattr(menu_mod, 'get_random_active_message', AsyncMock(return_value='Random promo'))
 
@@ -223,22 +194,6 @@ async def test_free_trial_is_activated_in_one_tap(monkeypatch):
     user = MagicMock(language='ru', auth_type='telegram')
     user.is_trial_already_used.return_value = False
     callback = MagicMock(message=MagicMock(edit_text=AsyncMock()), answer=AsyncMock())
-    monkeypatch.setattr(settings, 'TRIAL_PAYMENT_ENABLED', False, raising=False)
     await purchase.show_trial_offer(callback, user, MagicMock())
     activate.assert_awaited_once()
     callback.message.edit_text.assert_not_awaited()  # экрана «Активировать?» больше нет
-
-
-async def test_paid_trial_still_shows_the_offer_screen(monkeypatch):
-    from app.handlers.subscription import purchase
-    from app.services import trial_activation_service
-
-    activate = AsyncMock()
-    monkeypatch.setattr(purchase, 'activate_trial', activate)
-    monkeypatch.setattr(trial_activation_service, 'get_trial_activation_charge_amount', lambda: 9900)
-    user = MagicMock(language='ru', auth_type='telegram')
-    user.is_trial_already_used.return_value = False
-    callback = MagicMock(message=MagicMock(edit_text=AsyncMock()), answer=AsyncMock())
-    await purchase.show_trial_offer(callback, user, MagicMock())
-    activate.assert_not_awaited()
-    callback.message.edit_text.assert_awaited()  # платный пробный период показывает экран с ценой

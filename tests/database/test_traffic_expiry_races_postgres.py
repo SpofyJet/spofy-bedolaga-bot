@@ -24,7 +24,6 @@ def isolate_external_effects(monkeypatch):
     from app.services import subscription_service
 
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     panel = SimpleNamespace(
         update_remnawave_user=AsyncMock(return_value=SimpleNamespace(used_traffic_bytes=0)),
         _gb_to_bytes=lambda gb: int(gb * 1024**3),

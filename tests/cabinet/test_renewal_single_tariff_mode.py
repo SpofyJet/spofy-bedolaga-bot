@@ -40,7 +40,6 @@ class _FakePanelSync:
 
 @pytest.fixture(autouse=True)
 def single_tariff_mode(monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
 
 

@@ -73,7 +73,6 @@ def _state() -> AsyncMock:
 
 
 def _patch(monkeypatch, sub, *, switch_enabled: bool) -> None:
-    monkeypatch.setattr(Settings, 'is_tariffs_mode', lambda self: True)
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
     monkeypatch.setattr(tp.settings, 'TARIFF_SWITCH_UPGRADE_ENABLED', switch_enabled)
     monkeypatch.setattr(tp.settings, 'TARIFF_SWITCH_DOWNGRADE_ENABLED', switch_enabled)

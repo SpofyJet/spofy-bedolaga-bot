@@ -92,11 +92,6 @@ def test_healthy_start_shows_every_section_and_no_warnings():
     assert 'Требует внимания' not in text
 
 
-@pytest.mark.parametrize(('mode', 'label'), [('classic', 'классика'), ('tariffs', 'тарифы')])
-def test_sales_mode_is_named(mode, label):
-    assert f'Режим продаж: {label}' in render_startup_message(_stats(sales_mode=mode), timestamp='t')
-
-
 def test_problems_are_called_out_explicitly():
     stats = _stats(
         panel_connected=False, panel_status='недоступна', panel_latency_ms=None, maintenance=True, open_tickets=3

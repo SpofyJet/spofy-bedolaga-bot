@@ -127,7 +127,6 @@ async def test_bot_and_saved_checkout_refuse_all_deleted_squads(postgres_databas
         monkeypatch.setattr(SubscriptionService, 'update_remnawave_user', AsyncMock())
         monkeypatch.setattr(telegram, 'should_create_panel_account', AsyncMock(return_value=True))
         monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())
-        monkeypatch.setattr(auto, 'clear_subscription_checkout_draft', AsyncMock())
         monkeypatch.setattr(auto, '_notify_email_user_auto_purchase', AsyncMock())
 
         @asynccontextmanager
@@ -166,90 +165,3 @@ async def test_bot_and_saved_checkout_refuse_all_deleted_squads(postgres_databas
             list((await db.execute(select(Subscription.__table__).order_by(Subscription.id))).mappings()) == before_subs
         )
         assert list(await db.scalars(select(Transaction))) == []
-
-
-@pytest.mark.parametrize('flow', ['cabinet', 'telegram', 'miniapp'])
-@pytest.mark.parametrize('paid', [False, True])
-@pytest.mark.parametrize('trial_config', ['flag', 'setting'])
-async def test_paid_trial_refuses_before_charge_and_trial_creation(
-    postgres_database, monkeypatch, flow, paid, trial_config
-):
-    import inspect
-
-    from app.config import settings
-    from app.handlers.subscription import purchase as telegram
-    from app.services.subscription_service import SubscriptionService
-    from app.webapi.routes import miniapp
-    from app.webapi.schemas.miniapp import MiniAppSubscriptionTrialRequest
-
-    async with switch_data(postgres_database, monkeypatch) as (db, _existing):
-        user = User(id=4, telegram_id=4, language='ru', balance_kopeks=10000)
-        db.add(user)
-        target = await db.get(Tariff, 3)
-        target.allowed_squads = ['masked-deleted']
-        target.is_trial_available = trial_config == 'flag'
-        monkeypatch.setattr(settings, 'TRIAL_TARIFF_ID', 3 if trial_config == 'setting' else 0)
-        await db.commit()
-        await db.refresh(user, ['subscriptions'])
-        monkeypatch.setattr(settings, 'TRIAL_PAYMENT_ENABLED', paid)
-        monkeypatch.setattr(settings, 'TRIAL_ACTIVATION_PRICE', 100)
-        monkeypatch.setattr(SubscriptionService, 'create_remnawave_user', AsyncMock())
-        monkeypatch.setattr(miniapp, '_authorize_miniapp_user', AsyncMock(return_value=user))
-
-        @asynccontextmanager
-        async def api():
-            yield SimpleNamespace(get_internal_squads=AsyncMock(return_value=[]))
-
-        monkeypatch.setattr(preflight, 'RemnaWaveService', lambda: SimpleNamespace(get_api_client=api))
-        if flow == 'telegram':
-            callback = SimpleNamespace(answer=AsyncMock(), message=SimpleNamespace(edit_text=AsyncMock()))
-            handler = telegram.handle_trial_pay_with_balance if paid else telegram.activate_trial
-            await inspect.unwrap(handler)(callback, user, db)
-            assert any(
-                'Серверы' in str(call)
-                for call in callback.answer.await_args_list + callback.message.edit_text.await_args_list
-            )
-        else:
-            with pytest.raises(HTTPException) as exc:
-                if flow == 'cabinet':
-                    await purchase.activate_trial(None, user, db)
-                else:
-                    await miniapp.activate_subscription_trial_endpoint(
-                        MiniAppSubscriptionTrialRequest(init_data='masked'), db
-                    )
-            assert exc.value.status_code == 409
-            assert exc.value.detail['code'] == 'tariff_servers_unavailable'
-        await db.refresh(user)
-        assert user.balance_kopeks == 10000
-        assert not user.has_had_paid_subscription
-        assert list(await db.scalars(select(Subscription).where(Subscription.user_id == 4))) == []
-        assert list(await db.scalars(select(Transaction).where(Transaction.user_id == 4))) == []
-
-
-async def test_classic_cabinet_trial_still_uses_configured_inactive_tariff(postgres_database, monkeypatch):
-    """A stored trial tariff is also used by cabinet classic provisioning, unlike Telegram."""
-    from app.config import settings
-    from app.services.subscription_service import SubscriptionService
-
-    async with switch_data(postgres_database, monkeypatch) as (db, _existing):
-        user = User(id=4, telegram_id=4, language='ru', balance_kopeks=10000)
-        db.add(user)
-        target = await db.get(Tariff, 3)
-        target.is_active = False
-        target.is_trial_available = False
-        target.allowed_squads = ['masked-deleted']
-        await db.commit()
-        await db.refresh(user, ['subscriptions'])
-        monkeypatch.setattr(settings, 'SALES_MODE', 'classic')
-        monkeypatch.setattr(settings, 'TRIAL_TARIFF_ID', 3)
-        monkeypatch.setattr(settings, 'TRIAL_PAYMENT_ENABLED', True)
-        monkeypatch.setattr(settings, 'TRIAL_ACTIVATION_PRICE', 100)
-        monkeypatch.setattr(SubscriptionService, 'create_remnawave_user', AsyncMock())
-        # Demonstrate the existing provisioning selection independently of preflight.
-        monkeypatch.setattr(preflight, 'validate_trial_checkout_squads', AsyncMock())
-        await purchase.activate_trial(None, user, db)
-        subscription = await db.scalar(select(Subscription).where(Subscription.user_id == 4))
-        assert subscription.tariff_id == 3
-        assert subscription.connected_squads == ['masked-deleted']
-        await db.refresh(user)
-        assert user.balance_kopeks == 9900

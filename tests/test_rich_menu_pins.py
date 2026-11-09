@@ -85,7 +85,6 @@ def test_trial_deeplink_wired_in_start():
     assert coupon_drain < trial_drain
 
     helper = source.index('async def _activate_pending_trial(')
-    assert 'is_trial_paid_activation_enabled' in source[helper : helper + 3000]
     assert 'is_trial_already_used' in source[helper : helper + 3000]
 
     # Подтверждение активации — эфемерное: удаляется отложенной задачей

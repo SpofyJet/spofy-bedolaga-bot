@@ -10,7 +10,6 @@ from app.handlers.admin import users
 
 @pytest.fixture
 def case(monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'classic')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(type(settings), 'get_available_subscription_periods', lambda self: [30, 60])
     selected = SimpleNamespace(id=22, tariff_id=None, traffic_limit_gb=100, device_limit=3, connected_squads=[])
@@ -61,7 +60,8 @@ async def invoke(case, stage, suffix='_s22', period=30):
 
 
 @pytest.mark.parametrize('stage', ['select', 'confirm', 'execute'])
-async def test_explicit_subscription_retained(case, stage):
+async def test_explicit_subscription_retained(case, stage, monkeypatch):
+    monkeypatch.setattr(users, '_admin_buy_periods', AsyncMock(return_value=[30, 60]))
     await invoke(case, stage)
     assert all(call.args[2] is case.selected for call in case.price.await_args_list)
     case.lookup.assert_awaited_once_with(case.db, 22, 7)
@@ -89,7 +89,6 @@ async def test_legacy_unpinned_uses_profile_subscription(case, stage):
 
 @pytest.mark.parametrize('stage', ['select', 'confirm', 'execute'])
 async def test_tariff_mode_requires_tariff_before_pricing(case, monkeypatch, stage):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     await invoke(case, stage)
     case.price.assert_not_awaited()
     case.debit.assert_not_awaited()

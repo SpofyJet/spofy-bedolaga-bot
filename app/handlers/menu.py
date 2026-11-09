@@ -30,10 +30,6 @@ from app.services.main_menu_button_service import MainMenuButtonService
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
 from app.services.spofy_subpage_service import has_resumable_cart
-from app.services.subscription_checkout_service import (
-    has_subscription_checkout_draft,
-    should_offer_checkout_resume,
-)
 from app.services.support_settings_service import SupportSettingsService
 from app.states import RegistrationStates
 from app.utils.display_mode import is_visible_in_bot
@@ -186,9 +182,6 @@ async def build_main_menu_keyboard(db_user: User, db: AsyncSession):
     has_active_subscription = any(sub.is_active or getattr(sub, 'actual_status', None) == 'limited' for sub in _subs)
     subscription_is_active = has_active_subscription
 
-    draft_exists = await has_subscription_checkout_draft(db_user.id)
-    show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
-
     # Проверяем наличие сохраненной корзины в Redis
     try:
         has_saved_cart = await has_resumable_cart(db_user.id)
@@ -219,7 +212,6 @@ async def build_main_menu_keyboard(db_user: User, db: AsyncSession):
         subscription_is_active=subscription_is_active,
         balance_kopeks=db_user.balance_kopeks,
         subscription=db_user.subscription,  # Uses primary subscription (multi-tariff compatible via property)
-        show_resume_checkout=show_resume_checkout,
         has_saved_cart=has_saved_cart,
         custom_buttons=custom_buttons,
     )
@@ -1502,7 +1494,7 @@ def _get_website_line(texts) -> str:
 
 def is_new_user_with_free_trial(user) -> bool:
     """Ни одной подписки и бесплатный пробный ещё доступен — тот же гейт, что у кнопки пробного в меню."""
-    if settings.TRIAL_DURATION_DAYS <= 0 or settings.is_trial_paid_activation_enabled():
+    if settings.TRIAL_DURATION_DAYS <= 0:
         return False
     try:
         if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', None) or 'telegram'):
@@ -1554,7 +1546,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
         tariff_info_block = ''
 
         subscription = getattr(user, 'subscription', None)
-        if settings.is_tariffs_mode() and subscription and subscription.tariff_id:
+        if subscription and subscription.tariff_id:
             try:
                 from app.database.crud.tariff import get_tariff_by_id
 
@@ -1608,10 +1600,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
     # test-access подсказки выше сохраняются: у них есть конкретные условия.
     has_pending_checkout = False
     try:
-        draft_exists = await has_subscription_checkout_draft(user.id)
-        has_pending_checkout = should_offer_checkout_resume(user, draft_exists)
-        if not has_pending_checkout:
-            has_pending_checkout = await has_resumable_cart(user.id)
+        has_pending_checkout = await has_resumable_cart(user.id)
     except Exception as e:
         logger.debug('Не удалось проверить незавершённое оформление для главного меню', error=e)
 

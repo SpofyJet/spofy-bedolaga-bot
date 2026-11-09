@@ -22,7 +22,6 @@ pytestmark = pytest.mark.postgres
 async def test_tariff_renewal_preserves_base_and_only_active_purchases(
     postgres_database, monkeypatch, mode, reset, expired, base, explicit
 ):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'TRAFFIC_SELECTION_MODE', mode)
     monkeypatch.setattr(settings, 'FIXED_TRAFFIC_LIMIT_GB', 100)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', reset)

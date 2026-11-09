@@ -53,7 +53,6 @@ def account(*, tag=None, panel_id=9001, short='shared-short', username='account_
 
 
 def service(monkeypatch, accounts, *, multi=True):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'TRIAL_USER_TAG', 'TRIAL')
     api = SimpleNamespace(

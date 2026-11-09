@@ -36,7 +36,6 @@ class _FakePanelSync:
 
 @pytest.fixture(autouse=True)
 def tariffs_mode(monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0)
 

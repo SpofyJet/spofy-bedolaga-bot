@@ -72,7 +72,6 @@ def _fake_sub(tariff) -> SimpleNamespace:
 def _patch_tariffs_mode(monkeypatch):
     from app.config import Settings
 
-    monkeypatch.setattr(Settings, 'is_tariffs_mode', lambda self: True)
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
     monkeypatch.setattr(kb, 'get_display_subscription_link', lambda sub: None)
 

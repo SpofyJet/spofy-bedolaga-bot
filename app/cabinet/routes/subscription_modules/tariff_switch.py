@@ -64,11 +64,6 @@ async def preview_tariff_switch(
     subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Preview tariff switch - shows cost calculation."""
-    if not settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Tariffs mode is not enabled',
-        )
 
     subscription = await _resolve_switch_subscription(db, user, subscription_id)
 
@@ -244,11 +239,6 @@ async def switch_tariff(
     subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Switch to a different tariff without changing end date."""
-    if not settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Tariffs mode is not enabled',
-        )
 
     resolved = await _resolve_switch_subscription(db, user, subscription_id)
 

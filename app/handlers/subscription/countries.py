@@ -6,32 +6,23 @@ from aiogram import types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import lock_user_for_pricing, subtract_user_balance
 from app.database.models import TransactionType, User
 from app.keyboards.inline import (
     get_back_keyboard,
-    get_countries_keyboard,
-    get_devices_keyboard,
     get_insufficient_balance_keyboard,
     get_manage_countries_keyboard,
 )
 from app.localization.texts import get_texts
-from app.services.pricing_engine import PricingEngine, pricing_engine
-from app.services.subscription_checkout_service import (
-    save_subscription_checkout_draft,
-    should_offer_checkout_resume,
-)
+from app.services.pricing_engine import PricingEngine
 from app.services.subscription_service import SubscriptionService
-from app.states import SubscriptionStates
 from app.utils.pricing_utils import (
     apply_percentage_discount,
     calculate_prorated_price,
 )
 
 from .common import _get_period_hint_from_subscription, logger
-from .summary import present_subscription_summary
 
 
 async def _resolve_subscription(callback, db_user, db, state=None):
@@ -248,8 +239,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
     data = await state.get_data()
     texts = get_texts(db_user.language)
 
-    await save_subscription_checkout_draft(db_user.id, dict(data))
-    resume_callback = 'subscription_resume_checkout' if should_offer_checkout_resume(db_user, True) else None
+    resume_callback = None
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
@@ -515,70 +505,6 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
     await callback.answer()
 
 
-async def select_country(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
-    country_uuid = callback.data.split('_')[1]
-    data = await state.get_data()
-
-    if 'period_days' not in data:
-        await callback.answer('❌ Данные подписки устарели. Начните оформление заново.', show_alert=True)
-        return
-
-    selected_countries = data.get('countries', [])
-    if country_uuid in selected_countries:
-        selected_countries.remove(country_uuid)
-    else:
-        selected_countries.append(country_uuid)
-
-    countries = await _get_available_countries(db_user.promo_group_id)
-    allowed_country_ids = {country['uuid'] for country in countries}
-
-    if country_uuid not in allowed_country_ids and country_uuid not in selected_countries:
-        await callback.answer('❌ Сервер недоступен для вашей промогруппы', show_alert=True)
-        return
-
-    data['countries'] = selected_countries
-
-    # Вычисляем цену через PricingEngine с актуальными FSM-данными
-    pricing_result = await pricing_engine.calculate_classic_new_subscription_price(
-        db,
-        data['period_days'],
-        list(selected_countries),
-        data.get('traffic_gb', 0) or 0,
-        data.get('devices', settings.DEFAULT_DEVICE_LIMIT),
-        user=db_user,
-    )
-    data['total_price'] = pricing_result.final_total
-    await state.set_data(data)
-
-    await callback.message.edit_reply_markup(
-        reply_markup=get_countries_keyboard(countries, selected_countries, db_user.language)
-    )
-    await callback.answer()
-
-
-async def countries_continue(callback: types.CallbackQuery, state: FSMContext, db_user: User):
-    data = await state.get_data()
-    texts = get_texts(db_user.language)
-
-    if not data.get('countries'):
-        await callback.answer('⚠️ Выберите хотя бы одну страну!', show_alert=True)
-        return
-
-    if not settings.is_devices_selection_enabled():
-        if await present_subscription_summary(callback, state, db_user, texts):
-            await callback.answer()
-        return
-
-    selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
-
-    await callback.message.edit_text(
-        texts.SELECT_DEVICES, reply_markup=get_devices_keyboard(selected_devices, db_user.language)
-    )
-
-    await state.set_state(SubscriptionStates.selecting_devices)
-    await callback.answer()
-
-
 async def _get_available_countries(promo_group_id: int | None = None):
     from app.database.crud.server_squad import get_available_server_squads
     from app.database.database import AsyncSessionLocal
@@ -668,32 +594,6 @@ async def _get_available_countries(promo_group_id: int | None = None):
 async def _get_countries_info(squad_uuids):
     countries = await _get_available_countries()
     return [c for c in countries if c['uuid'] in squad_uuids]
-
-
-def _get_preselected_free_countries(countries: list[dict]) -> list[str]:
-    """Получить UUID бесплатных серверов для автоматического предвыбора."""
-    return [c['uuid'] for c in countries if c.get('is_available', True) and c.get('price_kopeks', 0) == 0]
-
-
-def _build_countries_selection_text(countries: list[dict], base_text: str) -> str:
-    """
-    Формирует текст выбора серверов с описаниями.
-
-    Если у серверов есть description — добавляет их под базовым текстом.
-    """
-    descriptions = []
-    for country in countries:
-        if not country.get('is_available', True):
-            continue
-        desc = country.get('description', '').strip()
-        if desc:
-            name = html.escape(country.get('name', ''))
-            descriptions.append(f'<b>{name}</b>\n{html.escape(desc)}')
-
-    if not descriptions:
-        return base_text
-
-    return f'{base_text}\n\n' + '\n\n'.join(descriptions)
 
 
 async def handle_add_country_to_subscription(

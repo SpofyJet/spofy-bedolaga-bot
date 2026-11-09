@@ -14,7 +14,6 @@ from tests.fixtures.sqlite_memory import memory_session
 def free_trial(monkeypatch):
     monkeypatch.setattr(settings, 'TRIAL_DURATION_DAYS', 3)
     monkeypatch.setattr(settings, 'TRIAL_DISABLED_FOR', 'none')
-    monkeypatch.setattr(settings, 'TRIAL_PAYMENT_ENABLED', False)
     monkeypatch.setattr(settings, 'TRIAL_TARIFF_ID', 0)
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(start, 'SubscriptionService', lambda: SimpleNamespace(is_configured=False))
@@ -82,32 +81,3 @@ async def test_deeplink_trial_duration_persisted_on_postgres(postgres_database, 
         monkeypatch.setattr(settings, 'TRIAL_TARIFF_ID', 1)
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
         await activate(db, lookup, 7, 7)
-
-
-@pytest.mark.parametrize('gate', ['no_pending', 'duration_zero', 'disabled_all', 'disabled_telegram', 'paid', 'used'])
-async def test_deeplink_trial_keeps_activation_gates(monkeypatch, free_trial, gate):
-    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
-        user = User(
-            id=42,
-            telegram_id=42,
-            first_name='Test',
-            language='ru',
-            status='active',
-            auth_type='telegram',
-            subscriptions=[],
-            has_had_paid_subscription=gate == 'used',
-        )
-        db.add(user)
-        await db.commit()
-        if gate == 'duration_zero':
-            monkeypatch.setattr(settings, 'TRIAL_DURATION_DAYS', 0)
-        if gate in {'disabled_all', 'disabled_telegram'}:
-            monkeypatch.setattr(settings, 'TRIAL_DISABLED_FOR', gate.removeprefix('disabled_'))
-        if gate == 'paid':
-            monkeypatch.setattr(settings, 'TRIAL_PAYMENT_ENABLED', True)
-            monkeypatch.setattr(settings, 'TRIAL_ACTIVATION_PRICE', 100)
-        state = SimpleNamespace(
-            get_data=AsyncMock(return_value={'pending_trial': gate != 'no_pending'}), update_data=AsyncMock()
-        )
-        await start._activate_pending_trial(db, state, user, AsyncMock(return_value=None))
-        assert (await db.scalars(select(Subscription))).all() == []

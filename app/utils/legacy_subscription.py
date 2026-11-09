@@ -12,12 +12,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.config import settings
-
 
 def is_legacy_subscription(subscription: Any) -> bool:
     """Платная подписка без тарифа при включённом режиме тарифов."""
-    if subscription is None or not settings.is_tariffs_mode():
+    if subscription is None:
         return False
     if getattr(subscription, 'is_trial', False):
         return False

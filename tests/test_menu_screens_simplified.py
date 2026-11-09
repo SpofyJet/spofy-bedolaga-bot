@@ -62,7 +62,6 @@ def _paid_sub(**kw):
 
 
 def test_paid_subscription_screen_has_devices_and_their_count(monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs', raising=False)
     monkeypatch.setattr(settings, 'SUBSCRIPTION_REVOKE_ENABLED', True, raising=False)
     kb = inline.get_subscription_keyboard('ru', True, False, _paid_sub())
     cbs = _cbs(kb)
@@ -75,7 +74,6 @@ def test_paid_subscription_screen_has_devices_and_their_count(monkeypatch):
 
 
 def test_devices_count_hidden_when_tariff_cannot_sell_devices(monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs', raising=False)
     sub = _paid_sub()
     sub.tariff.device_price_kopeks = 0
     assert 'subscription_change_devices' not in _flat(inline.get_subscription_keyboard('ru', True, False, sub))
@@ -88,7 +86,6 @@ async def test_old_settings_back_button_lands_on_the_subscription_screen(monkeyp
 
     shown = AsyncMock()
     monkeypatch.setattr(purchase, 'show_subscription_info', shown)
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs', raising=False)
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False, raising=False)
     monkeypatch.setattr(tariff_crud, 'get_tariff_by_id', AsyncMock(return_value=SimpleNamespace(id=2)))
     user = MagicMock(language='ru', subscription=SimpleNamespace(is_trial=False, tariff_id=2))

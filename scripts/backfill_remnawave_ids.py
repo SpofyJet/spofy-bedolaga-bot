@@ -124,7 +124,6 @@ async def _run(apply: bool) -> int:
     logger.info(
         'backfill: конфигурация загружена',
         multi_tariff=settings.is_multi_tariff_enabled(),
-        sales_mode=settings.SALES_MODE,
     )
     print(f'  режим: {"МУЛЬТИТАРИФ" if settings.is_multi_tariff_enabled() else "однотарифный"}')
 

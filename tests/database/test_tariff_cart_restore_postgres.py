@@ -42,7 +42,6 @@ pytestmark = pytest.mark.postgres
     ],
 )
 async def test_restore_validates_and_requotes(postgres_database, monkeypatch, mode, case):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'MAX_DEVICES_LIMIT', 10)
     saved = AsyncMock()

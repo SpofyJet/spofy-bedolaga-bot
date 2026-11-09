@@ -221,7 +221,6 @@ async def test_renewal_cart_rejects_trial_and_unknown_period(monkeypatch):
 async def test_tariff_cart_for_trial_user(monkeypatch):
     user, sub = _user(), _subscription(is_trial=True, tariff=None, device_limit=1)
     tariff = _tariff()
-    monkeypatch.setattr(Settings, 'is_tariffs_mode', lambda self: True)
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr(bridge, 'get_tariff_by_id', AsyncMock(return_value=tariff))
     monkeypatch.setattr(
@@ -237,7 +236,6 @@ async def test_tariff_cart_for_trial_user(monkeypatch):
 
 
 async def test_tariff_cart_refuses_daily_and_multi_tariff(monkeypatch):
-    monkeypatch.setattr(Settings, 'is_tariffs_mode', lambda self: True)
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
     with pytest.raises(HTTPException):
         await bridge.save_tariff_cart(None, _user(), _subscription(), 7, 30)

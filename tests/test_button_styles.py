@@ -32,7 +32,6 @@ def _fake_sub(actual_status: str = 'active') -> SimpleNamespace:
 def _patch_subscription_screen(monkeypatch):
     from app.config import Settings
 
-    monkeypatch.setattr(Settings, 'is_tariffs_mode', lambda self: True)
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
     monkeypatch.setattr(kb.settings, 'CONNECT_BUTTON_MODE', 'link')
     monkeypatch.setattr(kb, 'get_display_subscription_link', lambda sub: 'https://example.com/sub')

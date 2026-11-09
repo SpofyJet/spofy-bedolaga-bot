@@ -23,7 +23,6 @@ from tests.services.test_grace_access_service import FakePanelGateway
 @pytest.mark.parametrize('reason', [GraceReason.EXPIRED, GraceReason.LIMITED])
 @pytest.mark.parametrize('multi', [False, True])
 async def test_oauth_grace_is_discovered_and_persisted_without_telegram(monkeypatch, provider, reason, multi):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'GRACE_ACCESS_EXPIRED_SQUAD_UUID', '11111111-1111-1111-1111-111111111111')
     monkeypatch.setattr(settings, 'GRACE_ACCESS_LIMITED_SQUAD_UUID', '22222222-2222-2222-2222-222222222222')

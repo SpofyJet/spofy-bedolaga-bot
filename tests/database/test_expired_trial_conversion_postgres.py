@@ -114,13 +114,11 @@ async def test_expired_trial_purchase_preserves_identity(
     monkeypatch.setattr(
         'app.bot_factory.create_bot', lambda: SimpleNamespace(session=SimpleNamespace(close=AsyncMock()))
     )
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_TARIFF_SWITCH', False)
     monkeypatch.setattr(settings, 'TRIAL_ADD_REMAINING_DAYS_TO_PAID', False)
     monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())
-    monkeypatch.setattr(auto, 'clear_subscription_checkout_draft', AsyncMock())
     monkeypatch.setattr(telegram.user_cart_service, 'delete_user_cart', AsyncMock())
     monkeypatch.setattr(telegram.user_cart_service, 'delete_subscription_cart', AsyncMock())
     notification = AsyncMock()

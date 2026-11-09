@@ -48,7 +48,6 @@ from app.services.gift_purchase_service import (
 )
 from app.services.pricing_engine import PricingEngine, pricing_engine
 from app.services.spofy_subpage_context import cart_purchase_source, purchase_source_context
-from app.services.subscription_checkout_service import clear_subscription_checkout_draft
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
     PurchaseBalanceError,
@@ -347,7 +346,7 @@ async def _prepare_auto_extend_context(
         return None
 
     # Block auto-renewal of classic subscriptions when tariff mode is enabled
-    if settings.is_tariffs_mode() and not subscription.tariff_id:
+    if not subscription.tariff_id:
         logger.info(
             '🔁 Автопокупка: пропускаем классическую подписку без тарифа (режим тарифов включён)',
             format_user_id=_format_user_id(user),
@@ -715,7 +714,6 @@ async def _auto_extend_subscription(
             )
 
     await _delete_cart_for_subscription(user.id, cart_data)
-    await clear_subscription_checkout_draft(user.id)
 
     texts = get_texts(user.language)
     period_label = format_period_description(
@@ -1208,7 +1206,6 @@ async def _auto_purchase_tariff(
 
     # Очищаем корзину (per-subscription if subscription_id is in cart)
     await _delete_cart_for_subscription(user.id, cart_data)
-    await clear_subscription_checkout_draft(user.id)
 
     # Уведомление администраторам (не зависит от наличия bot)
     try:
@@ -1549,7 +1546,6 @@ async def _auto_purchase_daily_tariff(
 
     # Очищаем корзину (per-subscription if subscription_id is in cart)
     await _delete_cart_for_subscription(user.id, cart_data)
-    await clear_subscription_checkout_draft(user.id)
 
     # Уведомление администраторам (не зависит от наличия bot)
     try:
@@ -2108,12 +2104,12 @@ async def _auto_add_traffic(
 
     # Recompute base price from tariff/settings (config may have changed since cart was saved)
     tariff = None
-    if settings.is_tariffs_mode() and subscription.tariff_id:
+    if subscription.tariff_id:
         from app.database.crud.tariff import get_tariff_by_id
 
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
-    if settings.is_tariffs_mode() and subscription.tariff_id:
+    if subscription.tariff_id:
         if tariff is None or not tariff.can_topup_traffic():
             await _delete_cart_for_subscription(user.id, cart_data)
             return False
@@ -2143,7 +2139,7 @@ async def _auto_add_traffic(
     )
 
     # Prorate for classic mode (tariff mode uses monthly price as-is)
-    is_tariff_mode = settings.is_tariffs_mode() and subscription.tariff_id
+    is_tariff_mode = subscription.tariff_id
     if is_tariff_mode:
         price_kopeks = discounted_per_month
     elif subscription and subscription.end_date:
@@ -3188,7 +3184,6 @@ async def _process_single_cart(
             subscription_id=cart_sub_id,
         )
         await _delete_cart_for_subscription(user.id, cart_data)
-        await clear_subscription_checkout_draft(user.id)
         return False
 
     # Race condition guard (per-subscription): skip if THIS subscription was
@@ -3737,7 +3732,6 @@ async def _process_legacy_generic_cart(
         return False
 
     await _delete_cart_for_subscription(user.id, cart_data)
-    await clear_subscription_checkout_draft(user.id)
 
     subscription = purchase_result.get('subscription')
     transaction = purchase_result.get('transaction')

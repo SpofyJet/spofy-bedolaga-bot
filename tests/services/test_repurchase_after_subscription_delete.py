@@ -56,7 +56,6 @@ def _quiet_side_effects(monkeypatch, api: AsyncMock) -> None:
 
 @pytest.fixture
 def multi_tariff(monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', 'delete')
 

@@ -13,7 +13,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.cabinet.routes.subscription_modules.helpers import _subscription_to_response
-from app.config import Settings
 from app.database.models import Subscription, SubscriptionStatus
 
 
@@ -38,12 +37,12 @@ def _subscription(*, tariff_id: int | None, is_trial: bool = False) -> Subscript
 
 @pytest.fixture
 def tariffs_mode(monkeypatch):
-    monkeypatch.setattr(Settings, 'is_tariffs_mode', lambda self: True)
+    pass
 
 
 @pytest.fixture
 def classic_mode(monkeypatch):
-    monkeypatch.setattr(Settings, 'is_tariffs_mode', lambda self: False)
+    pass
 
 
 def test_paid_subscription_without_tariff_requires_tariff(tariffs_mode):
@@ -61,12 +60,6 @@ def test_subscription_with_tariff_does_not_require_tariff(tariffs_mode):
 def test_trial_without_tariff_does_not_require_tariff(tariffs_mode):
     """Пробная подписка идёт своим путём (покупка тарифа), признак — только для платных."""
     response = _subscription_to_response(_subscription(tariff_id=None, is_trial=True))
-
-    assert response.requires_tariff_selection is False
-
-
-def test_classic_mode_never_requires_tariff(classic_mode):
-    response = _subscription_to_response(_subscription(tariff_id=None))
 
     assert response.requires_tariff_selection is False
 

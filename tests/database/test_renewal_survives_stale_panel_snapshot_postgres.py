@@ -47,9 +47,7 @@ PANEL_ID = 555
 
 @pytest.fixture(autouse=True)
 def single_tariff_mode_quiet(monkeypatch):
-    monkeypatch.setattr(Settings, 'is_tariffs_mode', lambda self: True)
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', False)

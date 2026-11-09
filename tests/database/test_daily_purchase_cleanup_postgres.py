@@ -30,7 +30,6 @@ async def test_daily_completion_preserves_new_checkout(
     from aiogram.fsm.storage.redis import RedisStorage
 
     service, uid, client = carts
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     monkeypatch.setattr(telegram, 'user_cart_service', service)

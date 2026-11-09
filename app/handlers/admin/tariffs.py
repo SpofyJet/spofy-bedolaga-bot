@@ -423,19 +423,6 @@ async def show_tariffs_list(
     texts = get_texts(db_user.language)
 
     # Проверяем режим продаж
-    if not settings.is_tariffs_mode():
-        await callback.message.edit_text(
-            '⚠️ <b>Режим тарифов отключен</b>\n\n'
-            'Для использования тарифов установите:\n'
-            '<code>SALES_MODE=tariffs</code>\n\n'
-            'Текущий режим: <code>classic</code>',
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text=texts.BACK, callback_data='admin_panel')]]
-            ),
-            parse_mode='HTML',
-        )
-        await callback.answer()
-        return
 
     tariffs_data = await get_tariffs_with_subscriptions_count(db, include_inactive=True)
 

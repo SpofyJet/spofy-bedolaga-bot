@@ -20,7 +20,6 @@ pytestmark = pytest.mark.postgres
     'case', ['pinned', 'single_legacy', 'no_autopay', 'one_autopay', 'two_autopay', 'topup_disabled', 'package_removed']
 )
 async def test_saved_traffic_respects_selection_and_tariff(postgres_database, monkeypatch, case):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(type(settings), 'get_traffic_topup_price', lambda self, gb: 1000)
     monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())

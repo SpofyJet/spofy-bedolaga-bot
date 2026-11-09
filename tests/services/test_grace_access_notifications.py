@@ -123,7 +123,6 @@ async def lab(monkeypatch):
     monkeypatch.setattr(settings, 'GRACE_ACCESS_DURATION_HOURS', 72)
     monkeypatch.setattr(settings, 'GRACE_ACCESS_ALLOWED_SERVICES', 'Telegram и личный кабинет')
     # Подпись тарифа в тексте — правило мультитарифа, как у вебхуков.
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     try:
         yield SimpleNamespace(maker=maker, admin=admin_send, user=user_send, bot=SimpleNamespace())

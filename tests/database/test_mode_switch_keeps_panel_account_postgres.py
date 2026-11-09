@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.cabinet.routes.subscription_modules.devices import _resolve_panel_user_id
-from app.config import Settings, settings
+from app.config import Settings
 from app.database.models import Base, Subscription, SubscriptionStatus, User
 from app.handlers.subscription.devices import _get_panel_user_id
 from app.services.subscription_service import SubscriptionService
@@ -79,7 +79,6 @@ def panel(monkeypatch) -> _PanelApi:
     async def fake_api_client(self):
         yield api
 
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(SubscriptionService, 'get_api_client', fake_api_client)
     monkeypatch.setattr(SubscriptionService, 'validate_and_clean_subscription', AsyncMock(return_value=True))
     monkeypatch.setattr('app.services.panel_sync.payload.get_traffic_reset_strategy', lambda _tariff: 'NO_RESET')

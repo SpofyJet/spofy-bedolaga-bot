@@ -52,7 +52,6 @@ def _state() -> AsyncMock:
 
 @pytest.fixture(autouse=True)
 def tariffs_mode(monkeypatch):
-    monkeypatch.setattr(Settings, 'is_tariffs_mode', lambda self: True)
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
 
 

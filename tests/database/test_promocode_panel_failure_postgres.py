@@ -35,7 +35,6 @@ pytestmark = pytest.mark.postgres
 async def test_trial_provisioning_failure_releases_usage_and_allows_retry(
     postgres_database, monkeypatch, failure, multi, entry
 ):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
 
@@ -126,7 +125,6 @@ async def test_trial_provisioning_failure_releases_usage_and_allows_retry(
 @pytest.mark.parametrize('kind', ['subscription_days', 'balance_and_days', 'trial_subscription', 'traffic_only'])
 @pytest.mark.parametrize('multi', [False, True])
 async def test_existing_subscription_promo_survives_panel_rollback(postgres_database, monkeypatch, kind, multi):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     queue = RemnaWaveRetryQueue()

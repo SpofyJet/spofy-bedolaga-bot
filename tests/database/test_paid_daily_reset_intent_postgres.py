@@ -85,7 +85,6 @@ class Panel:
 @pytest.fixture
 def panel(monkeypatch):
     panel = Panel()
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', True)
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)

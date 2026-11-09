@@ -103,7 +103,6 @@ def cart_service(monkeypatch):
 @pytest.fixture(autouse=True)
 def _classic_mode(monkeypatch):
     """Классический режим продаж: цена устройства из настроек, одна подписка."""
-    monkeypatch.setattr(settings, 'SALES_MODE', 'classic')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
     monkeypatch.setattr(settings, 'PRICE_PER_DEVICE', DEVICE_PRICE)

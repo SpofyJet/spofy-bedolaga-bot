@@ -353,8 +353,6 @@ class Settings(BaseSettings):
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
     TRIAL_DEVICE_LIMIT: int = 2
     TRIAL_ADD_REMAINING_DAYS_TO_PAID: bool = False
-    TRIAL_PAYMENT_ENABLED: bool = False
-    TRIAL_ACTIVATION_PRICE: int = 0
     TRIAL_USER_TAG: str | None = None
     TRIAL_DISABLED_FOR: str = 'none'  # none, email, telegram, all
     DEFAULT_TRAFFIC_LIMIT_GB: int = 100
@@ -450,10 +448,8 @@ class Settings(BaseSettings):
     # Режим продаж подписок:
     # - classic: классический режим (выбор серверов, трафика, устройств, периода отдельно)
     # - tariffs: режим тарифов (готовые пакеты с фиксированными параметрами)
-    SALES_MODE: str = 'tariffs'
 
     # Multi-tariff mode: allows users to purchase multiple tariffs simultaneously
-    # Only works when SALES_MODE='tariffs'
     MULTI_TARIFF_ENABLED: bool = False
     MAX_ACTIVE_SUBSCRIPTIONS: int = 10
 
@@ -2235,49 +2231,15 @@ class Settings(BaseSettings):
 
     def is_multi_tariff_enabled(self) -> bool:
         """Проверяет, включен ли мультитарифный режим."""
-        return self.MULTI_TARIFF_ENABLED and self.SALES_MODE == 'tariffs'
+        return self.MULTI_TARIFF_ENABLED
 
     def get_max_active_subscriptions(self) -> int:
         """Максимальное число одновременных подписок (>1 только в multi-tariff)."""
         return self.MAX_ACTIVE_SUBSCRIPTIONS if self.is_multi_tariff_enabled() else 1
 
-    def is_tariffs_mode(self) -> bool:
-        """Проверяет, включен ли режим продаж 'Тарифы'."""
-        return self.SALES_MODE == 'tariffs'
-
-    def is_classic_mode(self) -> bool:
-        """Проверяет, включен ли классический режим продаж."""
-        return self.SALES_MODE != 'tariffs'
-
-    def get_sales_mode(self) -> str:
-        """Возвращает текущий режим продаж."""
-        return self.SALES_MODE if self.SALES_MODE in ('classic', 'tariffs') else 'tariffs'
-
     def get_trial_tariff_id(self) -> int:
         """Возвращает ID тарифа для триала (0 = использовать стандартные настройки)."""
         return max(0, self.TRIAL_TARIFF_ID)
-
-    def is_trial_paid_activation_enabled(self) -> bool:
-        # TRIAL_PAYMENT_ENABLED - главный переключатель платной активации
-        # Если выключен - триал бесплатный, независимо от цены
-        if not self.TRIAL_PAYMENT_ENABLED:
-            return False
-        # Если включен - проверяем что цена > 0
-        return self.TRIAL_ACTIVATION_PRICE > 0
-
-    def get_trial_activation_price(self) -> int:
-        try:
-            value = int(self.TRIAL_ACTIVATION_PRICE)
-        except (TypeError, ValueError):
-            logger.warning(
-                'Некорректное значение TRIAL_ACTIVATION_PRICE', TRIAL_ACTIVATION_PRICE=self.TRIAL_ACTIVATION_PRICE
-            )
-            return 0
-
-        if value < 0:
-            return 0
-
-        return value
 
     def is_support_topup_enabled(self) -> bool:
         return bool(self.SUPPORT_TOPUP_ENABLED)
@@ -3428,7 +3390,7 @@ def refresh_period_prices() -> None:
     """
     PERIOD_PRICES.clear()
 
-    if _DB_PERIOD_PRICES and settings.is_tariffs_mode():
+    if _DB_PERIOD_PRICES:
         # Используем цены из БД тарифов (только в режиме tariffs)
         PERIOD_PRICES.update(_DB_PERIOD_PRICES)
     else:

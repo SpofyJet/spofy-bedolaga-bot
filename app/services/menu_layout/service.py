@@ -735,8 +735,7 @@ class MenuLayoutService:
             if not settings.is_traffic_topup_enabled():
                 return False
             # В режиме тарифов докупка трафика недоступна
-            if settings.is_tariffs_mode():
-                return False
+            return False
 
         # is_admin
         if conditions.get('is_admin') is True:
@@ -801,7 +800,7 @@ class MenuLayoutService:
 
         # has_saved_cart
         if conditions.get('has_saved_cart') is True:
-            if not context.has_saved_cart and not context.show_resume_checkout:
+            if not context.has_saved_cart:
                 return False
 
         # --- Расширенные условия ---

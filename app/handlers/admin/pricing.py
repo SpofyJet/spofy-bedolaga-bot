@@ -97,24 +97,6 @@ TRIAL_ENTRIES: tuple[SettingEntry, ...] = (
         action='input',
     ),
     SettingEntry(
-        key='TRIAL_PAYMENT_ENABLED',
-        section='trial',
-        label_ru='💳 Платная активация',
-        label_en='💳 Paid activation',
-        action='toggle',
-        description_ru='Если включено — за активацию триала будет списываться указанная сумма.',
-        description_en='When enabled, the configured amount is charged during trial activation.',
-    ),
-    SettingEntry(
-        key='TRIAL_ACTIVATION_PRICE',
-        section='trial',
-        label_ru='💰 Стоимость активации',
-        label_en='💰 Activation price',
-        action='price',
-        description_ru='Указывается в копейках. 0 — бесплатная активация.',
-        description_en='Amount in kopeks. 0 — free activation.',
-    ),
-    SettingEntry(
         key='TRIAL_ADD_REMAINING_DAYS_TO_PAID',
         section='trial',
         label_ru='➕ Добавлять оставшиеся дни к платной подписке',
@@ -342,8 +324,6 @@ def _format_trial_summary(lang_code: str) -> str:
     traffic = settings.TRIAL_TRAFFIC_LIMIT_GB
     devices = settings.TRIAL_DEVICE_LIMIT
     price_note = ''
-    if settings.is_trial_paid_activation_enabled():
-        price_note = f', 💳 {settings.format_price(settings.get_trial_activation_price())}'
 
     traffic_label = _format_traffic_label(traffic, lang_code, short=True)
     devices_label = f'{devices}📱' if lang_code == 'ru' else f'{devices}📱'

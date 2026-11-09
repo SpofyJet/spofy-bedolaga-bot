@@ -42,13 +42,11 @@ async def test_daily_auto_activation_is_atomic(
     multi=True,
     trial=False,
 ):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'MAX_DEVICES_LIMIT', 10)
     monkeypatch.setattr(settings, 'TARIFF_SWITCH_RESET_FREE_DAYS', True)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())
-    monkeypatch.setattr(auto, 'clear_subscription_checkout_draft', AsyncMock())
     monkeypatch.setattr('app.services.subscription_renewal_service.with_admin_notification_service', AsyncMock())
     now = datetime.now(UTC)
     monkeypatch.setattr(SubscriptionService, 'create_remnawave_user', AsyncMock())

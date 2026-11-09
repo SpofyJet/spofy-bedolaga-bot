@@ -86,14 +86,7 @@ from app.services.subscription_renewal_service import (
 from app.services.subscription_service import SubscriptionService
 from app.services.tariff_switch_policy import remaining_days_for_switch, should_reset_used_traffic
 from app.services.traffic_reset_policy import should_reset_traffic_on_tariff_purchase
-from app.services.trial_activation_service import (
-    TrialPaymentChargeFailed,
-    TrialPaymentInsufficientFunds,
-    charge_trial_activation_if_required,
-    preview_trial_activation_charge,
-    revert_trial_activation,
-    rollback_trial_subscription_activation,
-)
+from app.services.trial_activation_service import revert_trial_activation
 from app.services.user_action_log_service import mark_user_seen, schedule_miniapp_action_log
 from app.utils.currency_converter import currency_converter
 from app.utils.lifetime import for_period_ru
@@ -2686,9 +2679,6 @@ async def get_subscription_details(
 
     trial_available = _is_trial_available_for_user(user)
     trial_duration_days = settings.TRIAL_DURATION_DAYS if settings.TRIAL_DURATION_DAYS > 0 else None
-    trial_price_kopeks = settings.get_trial_activation_price()
-    trial_payment_required = settings.is_trial_paid_activation_enabled() and trial_price_kopeks > 0
-    trial_price_label = settings.format_price(trial_price_kopeks) if trial_payment_required else None
 
     subscription_missing_reason = None
     if subscription is None:
@@ -2786,10 +2776,6 @@ async def get_subscription_details(
         trial_available=trial_available,
         trial_duration_days=trial_duration_days,
         trial_status='available' if trial_available else 'unavailable',
-        trial_payment_required=trial_payment_required,
-        trial_price_kopeks=trial_price_kopeks if trial_payment_required else None,
-        trial_price_label=trial_price_label,
-        sales_mode=settings.get_sales_mode(),
         current_tariff=await _get_current_tariff_model(db, subscription, user) if subscription else None,
         **autopay_extras,
     )
@@ -2882,9 +2868,7 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
         description=tariff.description,
         tier_level=tariff.tier_level,
         traffic_limit_gb=tariff.traffic_limit_gb,
-        traffic_limit_label=_format_traffic_limit_label(tariff.traffic_limit_gb)
-        if settings.is_tariffs_mode()
-        else f'{tariff.traffic_limit_gb} ГБ',
+        traffic_limit_label=_format_traffic_limit_label(tariff.traffic_limit_gb),
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
@@ -3038,20 +3022,6 @@ async def activate_subscription_trial_endpoint(
             },
         )
 
-    try:
-        preview_trial_activation_charge(user)
-    except TrialPaymentInsufficientFunds as error:
-        missing = error.missing_amount
-        raise HTTPException(
-            status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                'code': 'insufficient_funds',
-                'message': 'Not enough funds to activate the trial',
-                'missing_amount_kopeks': missing,
-                'required_amount_kopeks': error.required_amount,
-                'balance_kopeks': error.balance_amount,
-            },
-        ) from error
     forced_devices = None
     if not settings.is_devices_selection_enabled():
         forced_devices = settings.get_disabled_mode_device_limit()
@@ -3063,31 +3033,30 @@ async def activate_subscription_trial_endpoint(
     tariff_id_for_trial = None
     trial_duration = None  # None = использовать TRIAL_DURATION_DAYS
 
-    if settings.is_tariffs_mode():
-        try:
-            from app.database.crud.tariff import get_tariff_by_id, get_trial_tariff
+    try:
+        from app.database.crud.tariff import get_tariff_by_id, get_trial_tariff
 
-            # Триальный тариф может быть неактивным — используется для отдельных лимитов
-            trial_tariff = await get_trial_tariff(db)
+        # Триальный тариф может быть неактивным — используется для отдельных лимитов
+        trial_tariff = await get_trial_tariff(db)
 
-            if not trial_tariff:
-                trial_tariff_id = settings.get_trial_tariff_id()
-                if trial_tariff_id > 0:
-                    trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
+        if not trial_tariff:
+            trial_tariff_id = settings.get_trial_tariff_id()
+            if trial_tariff_id > 0:
+                trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
 
-            if trial_tariff:
-                from app.database.crud.server_squad import get_effective_tariff_squad_uuids
+        if trial_tariff:
+            from app.database.crud.server_squad import get_effective_tariff_squad_uuids
 
-                trial_traffic_limit = trial_tariff.traffic_limit_gb
-                trial_device_limit = trial_tariff.device_limit
-                trial_squads = await get_effective_tariff_squad_uuids(db, trial_tariff.allowed_squads)
-                tariff_id_for_trial = trial_tariff.id
-                tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
-                if tariff_trial_days:
-                    trial_duration = tariff_trial_days
-                logger.info('Miniapp: используем триальный тариф', trial_tariff_name=trial_tariff.name)
-        except Exception as e:
-            logger.error('Ошибка получения триального тарифа', error=e)
+            trial_traffic_limit = trial_tariff.traffic_limit_gb
+            trial_device_limit = trial_tariff.device_limit
+            trial_squads = await get_effective_tariff_squad_uuids(db, trial_tariff.allowed_squads)
+            tariff_id_for_trial = trial_tariff.id
+            tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
+            if tariff_trial_days:
+                trial_duration = tariff_trial_days
+            logger.info('Miniapp: используем триальный тариф', trial_tariff_name=trial_tariff.name)
+    except Exception as e:
+        logger.error('Ошибка получения триального тарифа', error=e)
 
     from app.services.checkout_squad_validation import CheckoutSquadsUnavailableError, validate_checkout_squads
 
@@ -3116,57 +3085,6 @@ async def activate_subscription_trial_endpoint(
             },
         ) from error
 
-    charged_amount = 0
-    try:
-        charged_amount = await charge_trial_activation_if_required(db, user)
-    except TrialPaymentInsufficientFunds as error:
-        rollback_success = await rollback_trial_subscription_activation(db, subscription)
-        await db.refresh(user)
-        if not rollback_success:
-            raise HTTPException(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    'code': 'trial_rollback_failed',
-                    'message': 'Failed to revert trial activation after charge error',
-                },
-            ) from error
-
-        logger.error('Balance check failed after trial creation for user', user_id=user.id, error=error)
-        raise HTTPException(
-            status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                'code': 'insufficient_funds',
-                'message': 'Not enough funds to activate the trial',
-                'missing_amount_kopeks': error.missing_amount,
-                'required_amount_kopeks': error.required_amount,
-                'balance_kopeks': error.balance_amount,
-            },
-        ) from error
-    except TrialPaymentChargeFailed as error:
-        rollback_success = await rollback_trial_subscription_activation(db, subscription)
-        await db.refresh(user)
-        if not rollback_success:
-            raise HTTPException(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    'code': 'trial_rollback_failed',
-                    'message': 'Failed to revert trial activation after charge error',
-                },
-            ) from error
-
-        logger.error(
-            'Failed to charge balance for trial activation after subscription creation',
-            subscription_id=subscription.id,
-            error=error,
-        )
-        raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                'code': 'charge_failed',
-                'message': 'Failed to charge balance for trial activation',
-            },
-        ) from error
-
     await db.refresh(user)
     await db.refresh(subscription)
 
@@ -3175,27 +3093,13 @@ async def activate_subscription_trial_endpoint(
         await subscription_service.create_remnawave_user(db, subscription)
     except RemnaWaveConfigurationError as error:  # pragma: no cover - configuration issues
         logger.error('RemnaWave update skipped due to configuration error', error=error)
-        revert_result = await revert_trial_activation(
-            db,
-            user,
-            subscription,
-            charged_amount,
-            refund_description='Возврат оплаты за активацию триала в мини-приложении',
-        )
+        revert_result = await revert_trial_activation(db, user, subscription)
         if not revert_result.subscription_rolled_back:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
                     'code': 'trial_rollback_failed',
                     'message': 'Failed to revert trial activation after RemnaWave error',
-                },
-            ) from error
-        if charged_amount > 0 and not revert_result.refunded:
-            raise HTTPException(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    'code': 'trial_refund_failed',
-                    'message': 'Failed to refund trial activation charge after RemnaWave error',
                 },
             ) from error
 
@@ -3210,27 +3114,13 @@ async def activate_subscription_trial_endpoint(
         logger.error(
             'Failed to create RemnaWave user for trial subscription', subscription_id=subscription.id, error=error
         )
-        revert_result = await revert_trial_activation(
-            db,
-            user,
-            subscription,
-            charged_amount,
-            refund_description='Возврат оплаты за активацию триала в мини-приложении',
-        )
+        revert_result = await revert_trial_activation(db, user, subscription)
         if not revert_result.subscription_rolled_back:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
                     'code': 'trial_rollback_failed',
                     'message': 'Failed to revert trial activation after RemnaWave error',
-                },
-            ) from error
-        if charged_amount > 0 and not revert_result.refunded:
-            raise HTTPException(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    'code': 'trial_refund_failed',
-                    'message': 'Failed to refund trial activation charge after RemnaWave error',
                 },
             ) from error
 
@@ -3258,7 +3148,6 @@ async def activate_subscription_trial_endpoint(
         duration_days = settings.TRIAL_DURATION_DAYS
 
     language_code = _normalize_language_code(user)
-    charged_amount_label = settings.format_price(charged_amount) if charged_amount > 0 else None
     if language_code in {'ru', 'fa'}:
         if duration_days:
             message = f'Триал активирован на {duration_days} дн. Приятного пользования!'
@@ -3269,19 +3158,8 @@ async def activate_subscription_trial_endpoint(
     else:
         message = 'Trial activated successfully. Enjoy!'
 
-    if charged_amount_label:
-        if language_code in {'ru', 'fa'}:
-            message = f'{message}\n\n💳 С вашего баланса списано {charged_amount_label}.'
-        else:
-            message = f'{message}\n\n💳 {charged_amount_label} has been deducted from your balance.'
-
     await with_admin_notification_service(
-        lambda service: service.send_trial_activation_notification(
-            db,
-            user,
-            subscription,
-            charged_amount_kopeks=charged_amount,
-        )
+        lambda service: service.send_trial_activation_notification(db, user, subscription)
     )
 
     return MiniAppSubscriptionTrialResponse(
@@ -3289,8 +3167,6 @@ async def activate_subscription_trial_endpoint(
         subscription_id=subscription.id,
         trial_status='activated',
         trial_duration_days=duration_days,
-        charged_amount_kopeks=charged_amount if charged_amount > 0 else None,
-        charged_amount_label=charged_amount_label,
         balance_kopeks=user.balance_kopeks,
         balance_label=settings.format_price(user.balance_kopeks),
     )
@@ -4393,14 +4269,13 @@ async def get_subscription_renewal_options_endpoint(
     _validate_subscription_id(payload.subscription_id, subscription)
 
     # Block classic subscription renewal when tariff mode is active
-    if settings.is_tariffs_mode() and not subscription.tariff_id:
+    if not subscription.tariff_id:
         return MiniAppSubscriptionRenewalOptionsResponse(
             periods=[],
             currency=(getattr(user, 'balance_currency', None) or 'RUB').upper(),
             balance_kopeks=user.balance_kopeks,
             balance_label=settings.format_price(user.balance_kopeks),
             status_message='Classic subscriptions cannot be renewed. Please purchase a tariff.',
-            sales_mode=settings.get_sales_mode(),
         )
 
     periods, pricing_map, default_period_id = await _prepare_subscription_renewal_options(
@@ -4463,7 +4338,6 @@ async def get_subscription_renewal_options_endpoint(
         autopay=renewal_autopay_payload,
         autopay_settings=renewal_autopay_payload,
         is_trial=bool(subscription.is_trial),
-        sales_mode=settings.get_sales_mode(),
         **renewal_autopay_extras,
     )
 
@@ -4495,7 +4369,7 @@ async def submit_subscription_renewal_endpoint(
     _validate_subscription_id(payload.subscription_id, subscription)
 
     # Block classic subscription renewal when tariff mode is active
-    if settings.is_tariffs_mode() and not subscription.tariff_id:
+    if not subscription.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
@@ -5735,14 +5609,6 @@ async def get_tariffs_endpoint(
     user = await _authorize_miniapp_user(payload.init_data, db)
 
     # Проверяем режим продаж
-    if not settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'tariffs_mode_disabled',
-                'message': 'Tariffs mode is not enabled',
-            },
-        )
 
     # Получаем промогруппу пользователя (с приоритетом)
     from app.services.pricing_engine import PricingEngine
@@ -5798,7 +5664,6 @@ async def get_tariffs_endpoint(
 
     return MiniAppTariffsResponse(
         success=True,
-        sales_mode='tariffs',
         tariffs=tariff_models,
         current_tariff=current_tariff_model,
         balance_kopeks=user.balance_kopeks,
@@ -5821,15 +5686,6 @@ async def purchase_tariff_endpoint(
             detail={
                 'code': 'subscription_restricted',
                 'message': 'Subscription purchases are restricted for this account',
-            },
-        )
-
-    if not settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'tariffs_mode_disabled',
-                'message': 'Tariffs mode is not enabled',
             },
         )
 
@@ -6103,12 +5959,6 @@ async def preview_tariff_switch_endpoint(
 
     user = await _authorize_miniapp_user(payload.init_data, db)
 
-    if not settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'tariffs_mode_disabled', 'message': 'Tariffs mode is not enabled'},
-        )
-
     subs = user.subscriptions or []
     active = [s for s in subs if s.is_active and s.tariff_id]
     subscription = active[0] if len(active) == 1 else None
@@ -6221,12 +6071,6 @@ async def switch_tariff_endpoint(
 ):
     """Переключение тарифа без изменения даты окончания."""
     user = await _authorize_miniapp_user(payload.init_data, db)
-
-    if not settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'tariffs_mode_disabled', 'message': 'Tariffs mode is not enabled'},
-        )
 
     subs = getattr(user, 'subscriptions', None) or []
     if payload.subscription_id:
@@ -6532,14 +6376,6 @@ async def purchase_traffic_topup_endpoint(
     _validate_subscription_id(payload.subscription_id, subscription)
 
     # Проверяем режим тарифов
-    if not settings.is_tariffs_mode():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'tariffs_mode_disabled',
-                'message': 'Traffic top-up is only available in tariffs mode',
-            },
-        )
 
     # Проверяем наличие тарифа
     tariff_id = subscription.tariff_id

@@ -154,7 +154,7 @@ async def get_main_menu_keyboard_async(
     # n13: проверяем, поддерживает ли тариф докупку трафика (скрываем кнопку на безлимите)
     traffic_topup_tariff_allowed = None
     try:
-        if settings.is_tariffs_mode() and subscription is not None and getattr(subscription, 'tariff_id', None):
+        if subscription is not None and getattr(subscription, 'tariff_id', None):
             if (getattr(subscription, 'traffic_limit_gb', 0) or 0) > 0:
                 from app.database.crud.tariff import get_tariff_by_id
 
@@ -850,7 +850,7 @@ def get_main_menu_keyboard(
         # В классическом режиме проверяем глобальные настройки
         show_traffic_topup = False
         if has_live_access and subscription and not subscription.is_trial and (subscription.traffic_limit_gb or 0) > 0:
-            if settings.is_tariffs_mode() and getattr(subscription, 'tariff_id', None):
+            if getattr(subscription, 'tariff_id', None):
                 # n13: скрываем кнопку, если тариф не поддерживает докупку (безлимит/выключено)
                 show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE and traffic_topup_tariff_allowed is not False
             elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
@@ -1507,11 +1507,8 @@ def get_subscription_keyboard(
             # В режиме тарифов проверяем can_topup_traffic() у тарифа, в классическом - глобальные настройки
             show_traffic_topup = False
             if subscription and (subscription.traffic_limit_gb or 0) > 0:
-                if settings.is_tariffs_mode():
-                    # Старая подписка без тарифа классических докупок не получает
-                    show_traffic_topup = bool(tariff and tariff.can_topup_traffic())
-                elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
-                    show_traffic_topup = True
+                # Старая подписка без тарифа классических докупок не получает
+                show_traffic_topup = bool(tariff and tariff.can_topup_traffic())
 
             if show_traffic_topup:
                 keyboard.append(
@@ -1525,7 +1522,7 @@ def get_subscription_keyboard(
                 )
 
             # Ряд: [Устройства] [Тариф]; без тарифов (классика) — прежние «Настройки»
-            if settings.is_tariffs_mode() and tariff is not None and not is_legacy_subscription:
+            if tariff is not None and (not is_legacy_subscription):
                 settings_row = [
                     InlineKeyboardButton(
                         text=texts.t('SUB_DEVICES_BUTTON', '📱 Устройства'),
@@ -1539,7 +1536,7 @@ def get_subscription_keyboard(
                         callback_data='subscription_settings',
                     )
                 ]
-            if settings.is_tariffs_mode() and subscription and not is_legacy_subscription:
+            if subscription and (not is_legacy_subscription):
                 # На истёкшей/отключённой подписке смена тарифа недоступна (хендлер её блокирует). Теперь для
                 # таких подписок показываем «Купить тариф» (покупку с нуля).
                 if getattr(subscription, 'actual_status', None) in ('expired', 'disabled'):
@@ -1568,10 +1565,9 @@ def get_subscription_keyboard(
 
             # Количество устройств — на самом экране подписки
             if (
-                settings.is_tariffs_mode()
-                and tariff is not None
-                and not is_legacy_subscription
-                and (getattr(tariff, 'device_price_kopeks', None) or 0) > 0
+                tariff is not None
+                and (not is_legacy_subscription)
+                and ((getattr(tariff, 'device_price_kopeks', None) or 0) > 0)
             ):
                 keyboard.append(
                     [
@@ -1703,24 +1699,6 @@ def get_insufficient_balance_keyboard_with_cart(
     return keyboard
 
 
-def get_trial_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=texts.t('TRIAL_ACTIVATE_BUTTON', '🎁 Активировать'),
-                    callback_data='trial_activate',
-                    style='success',
-                ),
-            ],
-            [
-                InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu'),
-            ],
-        ]
-    )
-
-
 def _spofy_days_word(n: int) -> str:
     n = abs(int(n))
     if 11 <= (n % 100) <= 14:
@@ -1804,144 +1782,6 @@ def get_subscription_period_keyboard(
     # Кнопка "Простая покупка" была убрана из выбора периода подписки
 
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
-def get_traffic_packages_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
-    from app.config import settings
-
-    if settings.is_traffic_topup_blocked():
-        return get_back_keyboard(language)
-
-    logger.info('🔍 RAW CONFIG', TRAFFIC_PACKAGES_CONFIG=settings.TRAFFIC_PACKAGES_CONFIG)
-
-    all_packages = settings.get_traffic_packages()
-    logger.info('🔍 ALL PACKAGES', all_packages=all_packages)
-
-    enabled_packages = [pkg for pkg in all_packages if pkg['enabled']]
-    disabled_packages = [pkg for pkg in all_packages if not pkg['enabled']]
-
-    logger.info('🔍 ENABLED: packages', enabled_packages_count=len(enabled_packages))
-    logger.info('🔍 DISABLED: packages', disabled_packages_count=len(disabled_packages))
-
-    for pkg in disabled_packages:
-        logger.info('🔍 DISABLED PACKAGE: kopeks, enabled', pkg=pkg['gb'], pkg_2=pkg['price'], pkg_3=pkg['enabled'])
-
-    texts = get_texts(language)
-    keyboard = []
-
-    traffic_packages = settings.get_traffic_packages()
-
-    for package in traffic_packages:
-        gb = package['gb']
-        package['price']
-        enabled = package['enabled']
-
-        if not enabled:
-            continue
-
-        if gb == 0:
-            text = f'♾️ Безлимит - {settings.format_price(package["price"])}'
-        else:
-            text = f'📊 {gb} ГБ - {settings.format_price(package["price"])}'
-
-        keyboard.append([InlineKeyboardButton(text=text, callback_data=f'traffic_{gb}')])
-
-    if not keyboard:
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('TRAFFIC_PACKAGES_NOT_CONFIGURED', '⚠️ Пакеты трафика не настроены'),
-                    callback_data='no_traffic_packages',
-                )
-            ]
-        )
-
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='subscription_config_back')])
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
-def get_countries_keyboard(
-    countries: list[dict], selected: list[str], language: str = DEFAULT_LANGUAGE
-) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    keyboard = []
-
-    for country in countries:
-        if not country.get('is_available', True):
-            continue
-
-        emoji = '✅' if country['uuid'] in selected else '⚪'
-
-        if country['price_kopeks'] > 0:
-            price_text = f' (+{texts.format_price(country["price_kopeks"])})'
-        else:
-            price_text = ' (бесплатно)'
-
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    text=f'{emoji} {country["name"]}{price_text}', callback_data=f'country_{country["uuid"]}'
-                )
-            ]
-        )
-
-    if not keyboard:
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('NO_SERVERS_AVAILABLE', '❌ Нет доступных серверов'), callback_data='no_servers'
-                )
-            ]
-        )
-
-    keyboard.extend(
-        [
-            [
-                InlineKeyboardButton(
-                    text=texts.t('CONTINUE_BUTTON', '✅ Продолжить'), callback_data='countries_continue'
-                )
-            ],
-            [InlineKeyboardButton(text=texts.BACK, callback_data='subscription_config_back')],
-        ]
-    )
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
-def get_devices_keyboard(current: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    keyboard = []
-
-    start_devices = settings.DEFAULT_DEVICE_LIMIT
-    max_devices = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else 100
-    end_devices = min(max_devices + 1, start_devices + 10)
-
-    buttons = []
-
-    for devices in range(start_devices, end_devices):
-        price = max(0, devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
-        price_text = f' (+{texts.format_price(price)})' if price > 0 else ' (включено)'
-        emoji = '✅' if devices == current else '⚪'
-
-        button_text = f'{emoji} {devices}{price_text}'
-
-        buttons.append(InlineKeyboardButton(text=button_text, callback_data=f'devices_{devices}'))
-
-    for i in range(0, len(buttons), 2):
-        if i + 1 < len(buttons):
-            keyboard.append([buttons[i], buttons[i + 1]])
-        else:
-            keyboard.append([buttons[i]])
-
-    keyboard.extend(
-        [
-            [InlineKeyboardButton(text=texts.t('CONTINUE_BUTTON', '✅ Продолжить'), callback_data='devices_continue')],
-            [InlineKeyboardButton(text=texts.BACK, callback_data='subscription_config_back')],
-        ]
-    )
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 

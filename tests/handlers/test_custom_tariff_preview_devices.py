@@ -26,7 +26,6 @@ from tests.fixtures.sqlite_memory import memory_session
 async def test_custom_preview_shows_inherited_devices_and_checkout_price(
     monkeypatch, entry, expired, multi, base_limit
 ):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
         now = datetime.now(UTC)

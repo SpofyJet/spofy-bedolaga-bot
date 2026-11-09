@@ -27,7 +27,6 @@ TABLES = list(Base.metadata.sorted_tables)
 
 @pytest.fixture(autouse=True)
 def quiet_settings(monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', False)
@@ -138,7 +137,6 @@ async def test_two_workers_cannot_charge_the_same_due_cycle(postgres_database, m
 @pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('entry', ['monitor', 'topup'])
 async def test_imported_subscription_with_autopay_off_never_charges(postgres_database, monkeypatch, mode, multi, entry):
-    monkeypatch.setattr(settings, 'SALES_MODE', mode)
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     async with postgres_session(postgres_database, TABLES) as db:
         user, sub, _ = await _seed(db, datetime.now(UTC))

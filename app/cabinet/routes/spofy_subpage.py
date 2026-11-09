@@ -175,7 +175,7 @@ def _restricted(user: User) -> str | None:
 
 async def tariff_offers(db: AsyncSession, user: User, subscription: Subscription) -> list[dict[str, Any]]:
     """Tariffs a trial (or tariff-less) user can buy; plain period tariffs only (v1)."""
-    if not settings.is_tariffs_mode() or settings.is_multi_tariff_enabled():
+    if settings.is_multi_tariff_enabled():
         return []
 
     promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
@@ -222,7 +222,7 @@ async def save_renewal_cart(db: AsyncSession, user: User, subscription: Subscrip
     """Mirror of POST /subscription/renew on insufficient funds — without ever charging."""
     if subscription.is_trial:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Trial subscriptions are converted by buying a tariff')
-    if settings.is_tariffs_mode() and not subscription.tariff_id:
+    if not subscription.tariff_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Classic subscriptions cannot be renewed')
     actual_status = subscription.actual_status
     if actual_status in {SubscriptionStatus.DISABLED.value, SubscriptionStatus.PENDING.value}:
@@ -274,8 +274,6 @@ async def save_tariff_cart(
     db: AsyncSession, user: User, subscription: Subscription, tariff_id: int, period_days: int
 ) -> int:
     """Mirror of POST /subscription/purchase-tariff on insufficient funds (plain period tariffs)."""
-    if not settings.is_tariffs_mode():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Tariffs mode is not enabled')
     if settings.is_multi_tariff_enabled():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Use the cabinet for multi-tariff purchases')
 

@@ -17,8 +17,6 @@ from app.keyboards.inline import (
     get_add_traffic_keyboard,
     get_add_traffic_keyboard_from_tariff,
     get_back_keyboard,
-    get_countries_keyboard,
-    get_devices_keyboard,
     get_insufficient_balance_keyboard,
     get_reset_traffic_confirm_keyboard,
 )
@@ -27,7 +25,6 @@ from app.services.pricing_engine import PricingEngine
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
-from app.states import SubscriptionStates
 from app.utils.legacy_subscription import is_legacy_subscription
 from app.utils.pricing_utils import (
     calculate_prorated_price,
@@ -40,13 +37,6 @@ from .common import (
     get_traffic_switch_keyboard,
     logger,
 )
-from .countries import (
-    _build_countries_selection_text,
-    _get_available_countries,
-    _get_preselected_free_countries,
-    _should_show_countries_management,
-)
-from .summary import present_subscription_summary
 
 
 async def _resolve_subscription(callback, db_user, db, state=None):
@@ -126,7 +116,7 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
         return
 
     # Режим тарифов - проверяем настройки тарифа
-    if settings.is_tariffs_mode() and subscription.tariff_id:
+    if subscription.tariff_id:
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
         if not tariff or not tariff.can_topup_traffic():
             await callback.answer(
@@ -499,54 +489,6 @@ async def get_traffic_packages_info() -> str:
         return f'⚠️ Ошибка получения информации: {e}'
 
 
-async def select_traffic(callback: types.CallbackQuery, state: FSMContext, db_user: User):
-    traffic_gb = int(callback.data.split('_')[1])
-    texts = get_texts(db_user.language)
-
-    data = await state.get_data()
-    data['traffic_gb'] = traffic_gb
-
-    traffic_price = settings.get_traffic_price(traffic_gb)
-    data['total_price'] += traffic_price
-
-    await state.set_data(data)
-
-    if await _should_show_countries_management(db_user):
-        countries = await _get_available_countries(db_user.promo_group_id)
-        # Автоматически предвыбираем бесплатные серверы
-        preselected = _get_preselected_free_countries(countries)
-        data['countries'] = preselected
-        await state.set_data(data)
-        # Формируем текст с описаниями сквадов
-        selection_text = _build_countries_selection_text(countries, texts.SELECT_COUNTRIES)
-        await callback.message.edit_text(
-            selection_text,
-            reply_markup=get_countries_keyboard(countries, preselected, db_user.language),
-            parse_mode='HTML',
-        )
-        await state.set_state(SubscriptionStates.selecting_countries)
-        await callback.answer()
-        return
-
-    countries = await _get_available_countries(db_user.promo_group_id)
-    available_countries = [c for c in countries if c.get('is_available', True)]
-    data['countries'] = [available_countries[0]['uuid']] if available_countries else []
-    await state.set_data(data)
-
-    if settings.is_devices_selection_enabled():
-        selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
-
-        await callback.message.edit_text(
-            texts.SELECT_DEVICES, reply_markup=get_devices_keyboard(selected_devices, db_user.language)
-        )
-        await state.set_state(SubscriptionStates.selecting_devices)
-        await callback.answer()
-        return
-
-    if await present_subscription_summary(callback, state, db_user, texts):
-        await callback.answer()
-
-
 async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     from app.database.crud.tariff import get_tariff_by_id
 
@@ -560,7 +502,7 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     base_price = 0
     tariff = None
 
-    if settings.is_tariffs_mode() and subscription and subscription.tariff_id:
+    if subscription and subscription.tariff_id:
         # Режим тарифов - берем цену из тарифа
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
         if tariff and tariff.can_topup_traffic():
@@ -599,7 +541,7 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     # На тарифах пакеты трафика покупаются на 1 месяц (30 дней),
     # цена в тарифе уже месячная — не умножаем на оставшиеся месяцы подписки.
     # Пропорциональный расчёт применяем только в классическом режиме.
-    is_tariff_mode = settings.is_tariffs_mode() and subscription and subscription.tariff_id
+    is_tariff_mode = subscription and subscription.tariff_id
 
     if is_tariff_mode:
         price = discounted_per_month

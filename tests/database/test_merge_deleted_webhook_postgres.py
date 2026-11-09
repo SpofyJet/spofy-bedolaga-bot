@@ -49,7 +49,6 @@ def panel(monkeypatch):
 async def test_late_deleted_event_after_email_telegram_merge_preserves_paid_subscription(
     postgres_database, monkeypatch, panel, secondary_balance, keep, legacy, trial, mode
 ):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', mode)
     monkeypatch.setattr(merge, '_sync_transferred_subscriptions_to_panel', AsyncMock())
@@ -162,7 +161,6 @@ async def test_late_deleted_event_after_email_telegram_merge_preserves_paid_subs
 @pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('identity', ['numeric', 'short', 'legacy', 'unknown', 'conflicting', 'legacy-conflicting'])
 async def test_deleted_event_targets_only_current_identity(postgres_database, monkeypatch, multi, identity):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_id', {})
     monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_telegram_id', {})
@@ -208,7 +206,6 @@ async def test_deleted_event_targets_only_current_identity(postgres_database, mo
 
 
 async def test_rotated_short_id_keeps_legacy_numeric_identity(postgres_database, monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     now = datetime.now(UTC)
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
@@ -245,7 +242,6 @@ async def test_rotated_short_id_keeps_legacy_numeric_identity(postgres_database,
 async def test_deleted_event_resolved_before_merge_commit_cannot_clear_survivor_identity(
     postgres_database, monkeypatch
 ):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_id', {})
     monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_telegram_id', {})
@@ -314,7 +310,6 @@ async def test_deleted_event_resolved_before_merge_commit_cannot_clear_survivor_
 
 
 async def test_multi_merge_keeps_both_identities_independent(postgres_database, monkeypatch):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(merge, '_sync_transferred_subscriptions_to_panel', AsyncMock())
     monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_id', {})

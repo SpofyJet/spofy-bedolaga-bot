@@ -63,13 +63,11 @@ class Panel(RemnaWaveAPI):
 async def test_same_tariff_90_day_purchase_preserves_hwid(
     postgres_database, monkeypatch, flow, reset_devices, multi, expired, trial
 ):
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', reset_devices)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', True)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())
-    monkeypatch.setattr(auto, 'clear_subscription_checkout_draft', AsyncMock())
     monkeypatch.setattr('app.services.subscription_renewal_service.with_admin_notification_service', AsyncMock())
     now = datetime.now(UTC)
     end = now + timedelta(days=-1 if expired else 5)

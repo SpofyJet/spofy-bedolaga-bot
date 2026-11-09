@@ -27,7 +27,6 @@ from app.config import settings
 def test_sales_mode_fields_follow_settings(
     monkeypatch: pytest.MonkeyPatch, sales_mode: str, multi: bool, expected: dict
 ) -> None:
-    monkeypatch.setattr(settings, 'SALES_MODE', sales_mode)
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
 
     assert _sales_mode_fields() == expected

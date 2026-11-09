@@ -85,7 +85,6 @@ def _subscription(
 
 
 def _configure(monkeypatch, *, reset_on_payment: bool, traffic_mode: str, fixed_gb: int) -> None:
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', reset_on_payment)
     monkeypatch.setattr(settings, 'TRAFFIC_SELECTION_MODE', traffic_mode)
     monkeypatch.setattr(settings, 'FIXED_TRAFFIC_LIMIT_GB', fixed_gb)
@@ -230,16 +229,6 @@ async def test_custom_traffic_tariff_falls_back_to_tariff_default_when_base_is_l
 # ── прежнее поведение, которое не должно сломаться ──
 
 
-async def test_classic_expired_renewal_still_takes_the_fixed_limit(monkeypatch):
-    """Без тарифа базовый лимит по-прежнему из настройки фиксированного режима."""
-    _configure(monkeypatch, reset_on_payment=True, traffic_mode='fixed', fixed_gb=100)
-    monkeypatch.setattr(settings, 'SALES_MODE', 'classic')
-
-    subscription = await _renew(monkeypatch, _subscription(tariff_id=None, traffic_limit_gb=50))
-
-    assert subscription.traffic_limit_gb == 100
-
-
 async def test_active_tariff_renewal_keeps_tariff_base_plus_active_topup(monkeypatch):
     _configure(monkeypatch, reset_on_payment=True, traffic_mode='fixed', fixed_gb=0)
     now = datetime.now(UTC)
@@ -308,19 +297,6 @@ async def test_active_renewal_of_unlimited_tariff_stays_unlimited(monkeypatch):
     )
 
     assert subscription.traffic_limit_gb == 0
-
-
-async def test_classic_active_renewal_keeps_its_limit(monkeypatch):
-    """Классическая подписка тарифа не имеет — её лимит продление не пересобирает."""
-    _configure(monkeypatch, reset_on_payment=False, traffic_mode='selectable', fixed_gb=100)
-    monkeypatch.setattr(settings, 'SALES_MODE', 'classic')
-
-    subscription = await _renew(
-        monkeypatch,
-        _subscription(status=SubscriptionStatus.ACTIVE.value, days_from_now=10, tariff_id=None, traffic_limit_gb=80),
-    )
-
-    assert subscription.traffic_limit_gb == 80
 
 
 async def test_reset_off_expired_renewal_keeps_the_limit(monkeypatch):

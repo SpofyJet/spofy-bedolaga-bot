@@ -30,7 +30,6 @@ async def test_daily_promo_days_defer_charge_and_keep_access(
 ):
     import app.database.crud.subscription as subscription_crud
 
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     panel_updates = []
 
