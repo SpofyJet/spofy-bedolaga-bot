@@ -1405,7 +1405,7 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
         # None или InaccessibleMessage (например, уведомление старше 48ч) — редактировать нельзя
         texts = get_texts(db_user.language)
         await callback.answer(
-            texts.t('MESSAGE_TOO_OLD', '⚠️ Сообщение устарело, откройте тикет в панели.'), show_alert=True
+            texts.t('MESSAGE_TOO_OLD', '⚠️ Сообщение устарело. Откройте обращение заново.'), show_alert=True
         )
         return
     await safe_edit_or_resend(message, text, kb)

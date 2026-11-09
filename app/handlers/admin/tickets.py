@@ -339,7 +339,7 @@ async def reply_to_admin_ticket(callback: types.CallbackQuery, state: FSMContext
     if not isinstance(message, types.Message):
         # None или InaccessibleMessage (например, уведомление старше 48ч) — редактировать нельзя
         await callback.answer(
-            texts.t('MESSAGE_TOO_OLD', '⚠️ Сообщение устарело, откройте тикет в панели.'), show_alert=True
+            texts.t('MESSAGE_TOO_OLD', '⚠️ Сообщение устарело. Откройте обращение заново.'), show_alert=True
         )
         return
 
@@ -679,7 +679,7 @@ async def block_user_in_ticket(callback: types.CallbackQuery, state: FSMContext,
     if not isinstance(message, types.Message):
         # None или InaccessibleMessage (например, уведомление старше 48ч) — редактировать нельзя
         await callback.answer(
-            texts.t('MESSAGE_TOO_OLD', '⚠️ Сообщение устарело, откройте тикет в панели.'), show_alert=True
+            texts.t('MESSAGE_TOO_OLD', '⚠️ Сообщение устарело. Откройте обращение заново.'), show_alert=True
         )
         return
     # Save original ticket message ids to update it after blocking without reopening
