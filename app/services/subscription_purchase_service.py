@@ -27,6 +27,7 @@ from app.database.crud.user import subtract_user_balance
 from app.database.models import PaymentMethod, ServerSquad, Subscription, SubscriptionStatus, TransactionType, User
 from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
+from app.services.traffic_cycle import begin_traffic_cycle
 from app.utils.pricing_utils import (
     apply_percentage_discount,
     calculate_months_from_days,
@@ -1126,6 +1127,7 @@ class MiniAppSubscriptionPurchaseService:
                     extension_base_date = subscription.end_date
                 else:
                     subscription.start_date = now
+                    begin_traffic_cycle(subscription, now)
 
                 subscription.end_date = (
                     extension_base_date + timedelta(days=pricing.selection.period.days) + bonus_period

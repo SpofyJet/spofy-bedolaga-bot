@@ -24,6 +24,7 @@ from app.database.models import (
     User,
     UserStatus,
 )
+from app.services.traffic_cycle import begin_traffic_cycle, keep_traffic_cycle
 from app.utils.subscription_time import ends_within_days
 from app.utils.timezone import format_local_datetime, local_day_start
 
@@ -315,6 +316,7 @@ async def create_trial_subscription(
     if existing and existing.is_trial and existing.status == SubscriptionStatus.PENDING.value:
         existing.status = SubscriptionStatus.ACTIVE.value
         existing.start_date = datetime.now(UTC)
+        begin_traffic_cycle(existing, existing.start_date)
         existing.end_date = end_date
         existing.traffic_limit_gb = traffic_limit_gb
         existing.device_limit = device_limit
@@ -447,6 +449,8 @@ async def _revive_paid_subscription(
     now = datetime.now(UTC)
     was_alive = subscription.end_date is not None and subscription.end_date > now
 
+    if not was_alive or subscription.is_trial:
+        begin_traffic_cycle(subscription, now)
     subscription.is_trial = False
     subscription.status = SubscriptionStatus.ACTIVE.value
     subscription.traffic_limit_gb = traffic_limit_gb
@@ -869,6 +873,10 @@ async def replace_subscription(
 
     if tariff_id is not None:
         subscription.tariff_id = tariff_id
+    if subscription.end_date and subscription.end_date > current_time and not subscription.is_trial:
+        keep_traffic_cycle(subscription)
+    else:
+        begin_traffic_cycle(subscription, current_time)
     subscription.status = SubscriptionStatus.ACTIVE.value
     subscription.is_trial = is_trial
     subscription.start_date = current_time
@@ -1410,6 +1418,11 @@ async def extend_subscription(
         SubscriptionStatus.DISABLED.value,
         SubscriptionStatus.LIMITED.value,
     ) or (subscription.end_date is not None and subscription.end_date <= current_time)
+
+    if days > 0 and (subscription.end_date is None or subscription.end_date <= current_time or subscription.is_trial):
+        begin_traffic_cycle(subscription, current_time)
+    elif is_tariff_change:
+        keep_traffic_cycle(subscription)
 
     if is_tariff_change:
         logger.info('🔄 Обнаружена СМЕНА тарифа', tariff_id=subscription.tariff_id, tariff_id_2=tariff_id)
@@ -2817,6 +2830,7 @@ async def create_pending_subscription(
         existing_subscription.status = SubscriptionStatus.PENDING.value
         existing_subscription.is_trial = is_trial
         existing_subscription.start_date = current_time
+        begin_traffic_cycle(existing_subscription, current_time)
         existing_subscription.end_date = end_date
         existing_subscription.traffic_limit_gb = traffic_limit_gb
         existing_subscription.device_limit = device_limit
@@ -3025,6 +3039,7 @@ async def activate_pending_trial_subscription(
     # Обновляем статус подписки на ACTIVE
     current_time = datetime.now(UTC)
     pending_subscription.status = SubscriptionStatus.ACTIVE.value
+    begin_traffic_cycle(pending_subscription, current_time)
 
     # Обновляем даты
     if not pending_subscription.start_date or pending_subscription.start_date < current_time:

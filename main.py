@@ -40,6 +40,7 @@ from app.services.reachability.service import reachability_service
 from app.services.remnawave_sync_service import remnawave_sync_service
 from app.services.reporting_service import reporting_service
 from app.services.system_settings_service import bot_configuration_service
+from app.services.traffic_cycle_service import traffic_cycle_service
 from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
 from app.services.trial_abuse_service import trial_abuse_service
 from app.services.version_service import version_service
@@ -380,6 +381,7 @@ async def main():
         trial_abuse_service.start_task()
         bypass_downgrade_service.set_bot(bot)
         bypass_downgrade_service.start_task()
+        traffic_cycle_service.start_task()
         daily_subscription_service.set_bot(bot)
         telegram_notifier.set_bot(bot)
 
@@ -982,6 +984,7 @@ async def main():
         logger.info('ℹ️ Остановка антиабуза триалов...')
         trial_abuse_service.stop()
         bypass_downgrade_service.stop()
+        traffic_cycle_service.stop()
 
         if daily_subscription_task and not daily_subscription_task.done():
             logger.info('ℹ️ Остановка сервиса суточных подписок...')

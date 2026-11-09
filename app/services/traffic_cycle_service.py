@@ -1,0 +1,145 @@
+"""Ежемесячный сброс трафика в день покупки подписки.
+
+Панель умеет считать месяц только от своей даты создания пользователя, поэтому
+в панели стоит NO_RESET, а счётчик обнуляет этот проход.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import UTC, datetime
+
+import structlog
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
+from app.config import settings
+from app.database.crud.subscription import reactivate_subscription, update_subscription_usage
+from app.database.models import Subscription, SubscriptionStatus, Tariff
+from app.services.traffic_cycle import MODE, is_cycle_due
+from app.utils.timezone import get_local_timezone
+
+
+logger = structlog.get_logger(__name__)
+
+_INTERVAL_SECONDS = 3600
+_PAUSE_SECONDS = 0.3
+_LIVE_STATUSES = (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.LIMITED.value)
+
+
+def _uses_cycle(tariff_mode: str | None) -> bool:
+    return (tariff_mode or settings.DEFAULT_TRAFFIC_RESET_STRATEGY or '').upper() == MODE
+
+
+class TrafficCycleService:
+    def __init__(self) -> None:
+        self._task: asyncio.Task | None = None
+
+    def start_task(self) -> None:
+        if self._task is None or self._task.done():
+            self._task = asyncio.create_task(self._run(), name='traffic-cycle')
+
+    def stop(self) -> None:
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
+
+    async def _run(self) -> None:
+        while True:
+            try:
+                stats = await self.run_once()
+                if any(stats.values()):
+                    logger.info('Сброс трафика от дня покупки', **stats)
+            except asyncio.CancelledError:
+                raise
+            except Exception as error:
+                logger.error('Сброс трафика: ошибка прохода', error=str(error), exc_info=True)
+            await asyncio.sleep(_INTERVAL_SECONDS)
+
+    async def _due_ids(self, db) -> list[int]:
+        now = datetime.now(UTC)
+        tz = get_local_timezone()
+        rows = await db.execute(
+            select(
+                Subscription.id,
+                Subscription.traffic_cycle_anchor_at,
+                Subscription.start_date,
+                Subscription.traffic_cycle_reset_at,
+                Tariff.traffic_reset_mode,
+            )
+            .outerjoin(Tariff, Tariff.id == Subscription.tariff_id)
+            .where(
+                Subscription.status.in_(_LIVE_STATUSES),
+                Subscription.is_trial.is_(False),
+                Subscription.traffic_limit_gb > 0,
+                Subscription.end_date > now,
+            )
+        )
+        return [
+            row.id
+            for row in rows
+            if _uses_cycle(row.traffic_reset_mode)
+            and (row.traffic_cycle_anchor_at or row.start_date) is not None
+            and is_cycle_due(row.traffic_cycle_anchor_at or row.start_date, row.traffic_cycle_reset_at, now, tz)
+        ]
+
+    async def run_once(self) -> dict[str, int]:
+        from app.database.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            ids = await self._due_ids(db)
+
+        stats = {'reset': 0, 'failed': 0, 'skipped': 0}
+        for subscription_id in ids:
+            try:
+                async with AsyncSessionLocal() as db:
+                    stats['reset' if await self._reset_one(db, subscription_id) else 'skipped'] += 1
+            except asyncio.CancelledError:
+                raise
+            except Exception as error:
+                stats['failed'] += 1
+                logger.warning('Сброс трафика не удался', subscription_id=subscription_id, error=str(error))
+            await asyncio.sleep(_PAUSE_SECONDS)
+        return stats
+
+    async def _reset_one(self, db, subscription_id: int) -> bool:
+        from app.services.bypass_downgrade_service import bypass_downgrade_service
+        from app.services.subscription_service import SubscriptionService
+        from app.services.traffic_reset_policy import lift_panel_traffic_limit
+
+        subscription = (
+            await db.execute(
+                select(Subscription)
+                .where(Subscription.id == subscription_id)
+                .options(selectinload(Subscription.user), selectinload(Subscription.tariff))
+                .with_for_update(of=Subscription)
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        now = datetime.now(UTC)
+        if subscription is None or subscription.status not in _LIVE_STATUSES or subscription.end_date <= now:
+            return False
+        anchor = subscription.traffic_cycle_anchor_at or subscription.start_date
+        if anchor is None or not is_cycle_due(anchor, subscription.traffic_cycle_reset_at, now, get_local_timezone()):
+            return False
+
+        user = subscription.user
+        panel_user_id = subscription.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
+        if not panel_user_id:
+            return False
+
+        service = SubscriptionService()
+        async with service.get_api_client() as api:
+            await api.reset_user_traffic(panel_user_id, enrich=False)
+
+        was_limited = subscription.status == SubscriptionStatus.LIMITED.value
+        subscription.traffic_cycle_reset_at = now
+        await update_subscription_usage(db, subscription, 0.0)
+        if was_limited:
+            await reactivate_subscription(db, subscription)
+            await lift_panel_traffic_limit(db, subscription, service=service)
+        await bypass_downgrade_service.restore(db, user, subscription, source='traffic_cycle')
+        logger.info('Трафик сброшен в день покупки', subscription_id=subscription.id, user_id=subscription.user_id)
+        return True
+
+
+traffic_cycle_service = TrafficCycleService()

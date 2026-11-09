@@ -44,6 +44,7 @@ from app.keyboards.admin import (
 from app.localization.texts import Texts, get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
+from app.services.traffic_cycle import begin_traffic_cycle
 from app.services.user_service import UserService
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
@@ -5164,6 +5165,7 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                 extension_base_date = subscription.end_date
             else:
                 subscription.start_date = current_time
+                begin_traffic_cycle(subscription, current_time)
 
             subscription.end_date = extension_base_date + timedelta(days=period_days) + bonus_period
             subscription.pending_panel_expire_at = subscription.end_date
@@ -5272,11 +5274,8 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                     tariff_line = f'\n📦 Тариф: «{subscription.tariff.name}»'
                 await callback.bot.send_message(
                     chat_id=target_user.telegram_id,
-                    text=f'💳 <b>Администратор продлил вашу подписку</b>\n\n'
-                    f'📅 Подписка продлена на {period_days} дней\n'
-                    f'💰 Списано с баланса: {settings.format_price(price_kopeks)}\n'
-                    f'📅 Подписка действительна до: {format_datetime(subscription.end_date)}'
-                    f'{tariff_line}',
+                    text=f'✅ <b>Подписка продлена до {format_datetime(subscription.end_date)}</b>{tariff_line}\n\n'
+                    f'Продлили на {period_days} дн., с баланса списано {settings.format_price(price_kopeks)}.',
                     parse_mode='HTML',
                     reply_markup=keyboard(subscription_button(get_texts(target_user.language))),
                 )
@@ -5699,13 +5698,10 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
             if callback.bot and target_user.telegram_id and settings.is_notifications_enabled():
                 await callback.bot.send_message(
                     chat_id=target_user.telegram_id,
-                    text=f'💳 <b>Администратор оформил вам тариф</b>\n\n'
-                    f'📦 Тариф: {html.escape(tariff.name)}\n'
-                    f'📊 Трафик: {traffic}\n'
-                    f'📱 Устройств: {Texts.format_device_limit(tariff.device_limit)}\n'
-                    f'📅 Период: {period} дней\n'
-                    f'💰 Списано с баланса: {settings.format_price(price_kopeks)}\n'
-                    f'📅 Действует до: {format_datetime(subscription.end_date)}',
+                    text=f'✅ <b>Тариф «{html.escape(tariff.name)}» подключён</b>\n\n'
+                    f'Трафик: {traffic}\n'
+                    f'Действует до: {format_datetime(subscription.end_date)}\n'
+                    f'С баланса списано: {settings.format_price(price_kopeks)}',
                     parse_mode='HTML',
                     reply_markup=keyboard(subscription_button(get_texts(target_user.language))),
                 )

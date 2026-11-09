@@ -390,20 +390,15 @@ async def send_expiry_reminders(callback: types.CallbackQuery, db_user: User, db
                     continue
 
                 days_left = local_days_until(subscription.end_date)
-                expires_when = 'сегодня' if days_left == 0 else f'через {days_left} день(а)'
+                expires_when = 'сегодня' if days_left == 0 else f'через {days_left} дн.'
 
                 tariff_label = ''
                 if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
                     tariff_label = f' «{subscription.tariff.name}»'
-                reminder_text = f"""
-⚠️ <b>Подписка{tariff_label} истекает!</b>
-
-Ваша подписка истекает {expires_when}.
-
-Не забудьте продлить подписку, чтобы не потерять доступ к серверам.
-
-💎 Продлить подписку можно в главном меню.
-"""
+                reminder_text = (
+                    f'⏰ <b>Подписка{tariff_label} заканчивается {expires_when}</b>\n\n'
+                    'Продлите, чтобы VPN не отключился.'
+                )
 
                 await callback.bot.send_message(
                     chat_id=user.telegram_id,

@@ -1170,6 +1170,9 @@ class Subscription(Base):
         AwareDateTime(), nullable=True
     )  # Дата сброса докупленного трафика (30 дней после первой докупки)
 
+    traffic_cycle_anchor_at = Column(AwareDateTime(), nullable=True)  # день сброса, если отличается от start_date
+    traffic_cycle_reset_at = Column(AwareDateTime(), nullable=True)  # последний сброс по циклу
+
     subscription_url = Column(String, nullable=True)
     subscription_crypto_link = Column(String, nullable=True)
 

@@ -1543,6 +1543,12 @@
 - `app/services/tariff_switch_policy.py` — Python-модуль
   Классы: нет
   Функции: `remaining_days_for_switch` — Сколько дней остатка оплачивать при переключении тарифа., `should_reset_used_traffic` — Обнулять ли счётчик трафика при переключении тарифа.
+- `app/services/traffic_cycle.py` — Python-модуль
+  Классы: нет
+  Функции: `begin_traffic_cycle` — Новая покупка: отсчёт начинается заново., `keep_traffic_cycle` — Запомнить день сброса перед тем, как изменится ``start_date``., `latest_cycle_date` — Последний день сброса не позже ``today``. ``None`` — первого месяца ещё не прошло., `is_cycle_due`
+- `app/services/traffic_cycle_service.py` — Python-модуль
+  Классы: `TrafficCycleService` (7 методов)
+  Функции: нет
 - `app/services/traffic_monitoring_service.py` — Python-модуль
   Классы: `TrafficViolation`, `TrafficMonitoringServiceV2` (35 методов), `TrafficMonitoringSchedulerV2` (8 методов), `TrafficMonitoringService` (1 методов), `TrafficMonitoringScheduler` (7 методов)
   Функции: нет
@@ -2804,6 +2810,9 @@
   Классы: нет
   Функции: `upgrade`, `downgrade`
 - `migrations/alembic/versions/0147_remove_landing_pages.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0148_traffic_cycle.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
 
@@ -5097,6 +5106,9 @@
 - `tests/services/test_ticket_reply_email.py` — Python-модуль
   Классы: нет
   Функции: `sent` — Перехватывает send_notification роутера., `last_message` — Подменяет чтение последнего сообщения тикета (проверка на фото)., `test_email_user_gets_ticket_reply_email`, `test_photo_reply_marked_in_context`, `test_long_reply_is_previewed`, `test_telegram_user_does_not_get_email` — Юзеру с Telegram ответ уже ушёл в бот — письмо было бы дублем., `test_disabled_toggle_blocks_email`, `test_global_notifications_switch_does_not_mute_support_replies` — ENABLE_NOTIFICATIONS не должен глушить ответ поддержки только email-юзеру., `test_user_without_verified_email_is_skipped`, `test_delivery_failure_does_not_raise`, `test_template_renders_for_supported_languages`, `test_template_escapes_html_in_preview` — Ответ поддержки вида «откройте <config>» не должен ломать вёрстку письма., `test_template_mentions_photo_when_reply_has_one`
+- `tests/services/test_traffic_cycle.py` — Python-модуль
+  Классы: нет
+  Функции: `test_latest_cycle_date`, `test_due_once_per_cycle`, `test_local_day_decides`, `test_renewal_keeps_day_and_new_purchase_replaces_it`, `test_panel_does_not_reset_by_itself`
 - `tests/services/test_traffic_daily_check_schedule.py` — Python-модуль
   Классы: нет
   Функции: `test_daily_check_runs_at_local_midnight`, `test_daily_check_today_if_local_time_is_still_ahead`

@@ -11,6 +11,7 @@ import structlog
 
 from app.config import settings
 from app.external.remnawave_api import TrafficLimitStrategy
+from app.services.traffic_cycle import MODE
 
 
 logger = structlog.get_logger(__name__)
@@ -21,6 +22,8 @@ _STRATEGY_BY_MODE = {
     'WEEK': 'WEEK',
     'MONTH': 'MONTH',
     'MONTH_ROLLING': 'MONTH_ROLLING',
+    # Панель не сбрасывает: это делает traffic_cycle_service в день покупки.
+    MODE: 'NO_RESET',
 }
 
 

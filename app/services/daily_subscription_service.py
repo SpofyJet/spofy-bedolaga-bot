@@ -415,10 +415,8 @@ class DailySubscriptionService:
         if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
             tariff_label = f'\n📦 Тариф: «{subscription.tariff.name}»'
         message = (
-            f'💳 <b>Суточное списание</b>\n\n'
-            f'Списано: {amount_rubles:.2f} ₽\n'
-            f'Остаток баланса: {balance_rubles:.2f} ₽{tariff_label}\n\n'
-            f'Следующее списание через 24 часа.'
+            f'💳 <b>Списали {amount_rubles:.2f} ₽ за сутки</b>{tariff_label}\n\n'
+            f'На балансе {balance_rubles:.2f} ₽. Следующее списание через 24 часа.'
         )
 
         texts = get_texts(user.language)
@@ -840,11 +838,8 @@ class DailySubscriptionService:
         if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
             tariff_label = f'\n📦 Тариф: «{subscription.tariff.name}»'
         message = (
-            f'ℹ️ <b>Сброс докупленного трафика</b>\n\n'
-            f'Ваш докупленный трафик ({reset_gb} ГБ) был сброшен, '
-            f'так как прошло 30 дней с момента первой докупки.{tariff_label}\n\n'
-            f'Текущий лимит трафика: {subscription.traffic_limit_gb} ГБ\n\n'
-            f'Вы можете докупить трафик снова в любое время.'
+            f'ℹ️ <b>Докупленные {reset_gb} ГБ закончились</b>{tariff_label}\n\n'
+            f'Прошло 30 дней с первой докупки. Лимит теперь {subscription.traffic_limit_gb} ГБ.'
         )
 
         context = {

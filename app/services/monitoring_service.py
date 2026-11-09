@@ -83,6 +83,7 @@ from app.utils.cache import cache
 from app.utils.formatters import format_username_link
 from app.utils.message_patch import caption_exceeds_telegram_limit
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button, build_subscription_extend_button
+from app.utils.notification_keyboards import buy_button, keyboard
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.rich_notify import try_send_rich_notification
 from app.utils.subscription_time import ends_within_days
@@ -1804,11 +1805,11 @@ class MonitoringService:
                                 await self.bot.send_message(
                                     chat_id=user.telegram_id,
                                     text=(
-                                        '⚠️ <b>Автоплатёж приостановлен</b>\n\n'
-                                        'Ваша подписка была создана до введения тарифов. '
-                                        'Для работы автоплатежа необходимо выбрать тариф.\n\n'
-                                        'Перейдите в раздел «Моя подписка» → «Продлить», чтобы выбрать тариф.'
+                                        '⚠️ <b>Автопродление приостановлено</b>\n\n'
+                                        'Подписка оформлена до введения тарифов. '
+                                        'Выберите тариф, и автопродление снова заработает.'
                                     ),
+                                    reply_markup=keyboard(buy_button(get_texts(user.language))),
                                     parse_mode='HTML',
                                 )
                             await cache.set(autopay_legacy_key, 1, expire=86400 * 7)
