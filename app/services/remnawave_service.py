@@ -1780,7 +1780,7 @@ class RemnaWaveService:
                                 await self._create_subscription_from_panel_data(db, db_user, panel_user)
 
                             stats['updated'] += 1
-                            logger.info('📧 Обновлен email-пользователь', panel_email=panel_email)
+                            logger.debug('📧 Обновлен email-пользователь', panel_email=panel_email)
                         else:
                             # Email-only пользователи не создаются автоматически при синхронизации,
                             # они должны сначала зарегистрироваться через cabinet
