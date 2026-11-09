@@ -101,35 +101,55 @@ class TrafficCycleService:
             await asyncio.sleep(_PAUSE_SECONDS)
         return stats
 
+    @staticmethod
+    async def _load(db, subscription_id: int, *, lock: bool) -> Subscription | None:
+        query = (
+            select(Subscription)
+            .where(Subscription.id == subscription_id)
+            .options(selectinload(Subscription.user), selectinload(Subscription.tariff))
+            .execution_options(populate_existing=True)
+        )
+        if lock:
+            query = query.with_for_update(of=Subscription)
+        return (await db.execute(query)).scalar_one_or_none()
+
+    @staticmethod
+    def _panel_user_id_if_due(subscription: Subscription | None, now: datetime) -> str | None:
+        """UUID в панели, если подписке сейчас положен сброс; иначе None."""
+        if subscription is None or subscription.status not in _LIVE_STATUSES or subscription.end_date <= now:
+            return None
+        anchor = subscription.traffic_cycle_anchor_at or subscription.start_date
+        if anchor is None or not is_cycle_due(anchor, subscription.traffic_cycle_reset_at, now, get_local_timezone()):
+            return None
+        if settings.is_multi_tariff_enabled():
+            return subscription.remnawave_id or None
+        return subscription.user.remnawave_id or None
+
     async def _reset_one(self, db, subscription_id: int) -> bool:
         from app.services.bypass_downgrade_service import bypass_downgrade_service
         from app.services.subscription_service import SubscriptionService
         from app.services.traffic_reset_policy import lift_panel_traffic_limit
 
-        subscription = (
-            await db.execute(
-                select(Subscription)
-                .where(Subscription.id == subscription_id)
-                .options(selectinload(Subscription.user), selectinload(Subscription.tariff))
-                .with_for_update(of=Subscription)
-                .execution_options(populate_existing=True)
-            )
-        ).scalar_one_or_none()
-        now = datetime.now(UTC)
-        if subscription is None or subscription.status not in _LIVE_STATUSES or subscription.end_date <= now:
-            return False
-        anchor = subscription.traffic_cycle_anchor_at or subscription.start_date
-        if anchor is None or not is_cycle_due(anchor, subscription.traffic_cycle_reset_at, now, get_local_timezone()):
-            return False
-
-        user = subscription.user
-        panel_user_id = subscription.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
+        # Сначала запрос в панель, потом блокировка строки: иначе строка подписки
+        # заперта на всё время сетевого вызова, и покупка или продление этого же
+        # человека ждут ответа панели.
+        subscription = await self._load(db, subscription_id, lock=False)
+        panel_user_id = self._panel_user_id_if_due(subscription, datetime.now(UTC))
         if not panel_user_id:
             return False
+        await db.rollback()
 
         service = SubscriptionService()
         async with service.get_api_client() as api:
             await api.reset_user_traffic(panel_user_id, enrich=False)
+
+        # Под блокировкой проверяем заново: второй проход или другой экземпляр мог
+        # успеть записать сброс, пока шёл запрос.
+        subscription = await self._load(db, subscription_id, lock=True)
+        now = datetime.now(UTC)
+        if not self._panel_user_id_if_due(subscription, now):
+            return False
+        user = subscription.user
 
         was_limited = subscription.status == SubscriptionStatus.LIMITED.value
         subscription.traffic_cycle_reset_at = now
