@@ -2875,6 +2875,9 @@
 - `tests/test_device_limit_resolution.py` — Python-модуль
   Классы: `DummySubscription` (1 методов), `StubSettings` (4 методов)
   Функции: `test_resolve_hwid_device_limit_disabled_mode`, `test_resolve_hwid_device_limit_enabled_mode`, `test_resolve_hwid_device_limit_enabled_ignores_non_positive`, `test_resolve_hwid_device_limit_for_payload_returns_subscription_limit`, `test_resolve_hwid_device_limit_for_payload_explicitly_removes_limit`, `test_resolve_hwid_device_limit_for_payload_prefers_forced_limit`, `test_resolve_hwid_device_limit_for_payload_handles_zero`, `test_resolve_simple_subscription_device_limit`, `test_coerce_panel_device_limit_preserves_zero_and_rejects_invalid`, `test_coerce_panel_device_limit_honors_default`, `test_device_limit_needs_heal_preserves_zero`, `test_zero_device_limit_is_not_a_warning` — Ноль = «без ограничения» (HWID выключен) — штатное состояние, не повод для warning.
+- `tests/test_entrypoint_imports.py` — Python-модуль
+  Классы: нет
+  Функции: `test_main_imports_only_existing_app_modules`
 - `tests/test_env_isolation.py` — Python-модуль
   Классы: нет
   Функции: `test_settings_do_not_leak_from_dotenv_or_process_env`, `test_real_bot_cannot_reach_telegram`, `test_renewal_admin_notification_is_swallowed_not_sent` — Даже с включёнными уведомлениями и «боевым» токеном сообщение не уходит., `test_guest_purchase_admin_notification_is_swallowed_not_sent`
