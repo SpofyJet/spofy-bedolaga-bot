@@ -214,7 +214,6 @@ async def _refresh_one(bot, key: str, used_bytes: dict[int, int], fetched_at: da
 
         keyboard = await build_main_menu_keyboard(user, db)
         rich_html = await build_main_menu_rich_html(user, texts, db)
-        language = user.language
     rich_html, keyboard = _apply_inline_buttons(rich_html, keyboard, for_edit=True)
     if await cache.redis_client.get(key) != raw:
         return None  # пока собирали, нажали кнопку на меню или пришло новое меню
@@ -225,7 +224,7 @@ async def _refresh_one(bot, key: str, used_bytes: dict[int, int], fetched_at: da
                 chat_id=chat_id,
                 message_id=state['m'],
                 parse_mode=None,
-                rich_message=_input_rich_message(html_, language),
+                rich_message=_input_rich_message(html_),
                 reply_markup=keyboard,
             )
         )

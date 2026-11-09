@@ -516,7 +516,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
 def _days_phrase(days: int, language: str) -> str:
     """«2 дня» / «2 дні» / «2 days» — a whole word, not «2 дн.», in text a friend reads."""
     lang = (language or 'ru').split('-')[0].lower()
-    if lang in {'ru', 'ua', 'uk'}:
+    if lang == 'ru':
         forms = ('день', 'дня', 'дней') if lang == 'ru' else ('день', 'дні', 'днів')
         if days % 10 == 1 and days % 100 != 11:
             return f'{days} {forms[0]}'

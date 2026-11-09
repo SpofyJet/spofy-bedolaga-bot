@@ -439,7 +439,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     if not show_devices:
         # n4: строку устройств убираем по плейсхолдеру — работает для любой
         # локали (старый replace по русскому тексту молча не срабатывал
-        # в ua/zh/fa); закрывающий тег цитаты переносим на строку выше.
+        # на английском); закрывающий тег цитаты переносим на строку выше.
         _tpl_lines = []
         for _tpl_line in message_template.split('\n'):
             if '{devices_used}' in _tpl_line:

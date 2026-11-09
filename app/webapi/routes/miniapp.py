@@ -3148,7 +3148,7 @@ async def activate_subscription_trial_endpoint(
         duration_days = settings.TRIAL_DURATION_DAYS
 
     language_code = _normalize_language_code(user)
-    if language_code in {'ru', 'fa'}:
+    if language_code == 'ru':
         if duration_days:
             message = f'Триал активирован на {duration_days} дн. Приятного пользования!'
         else:
@@ -3586,7 +3586,7 @@ def _normalize_language_code(user: User | None) -> str:
 
 def _build_renewal_status_message(user: User | None) -> str:
     language_code = _normalize_language_code(user)
-    if language_code in {'ru', 'fa'}:
+    if language_code == 'ru':
         return 'Стоимость указана с учётом ваших текущих серверов, трафика и устройств.'
     return 'Prices already include your current servers, traffic, and devices.'
 
@@ -3603,7 +3603,7 @@ def _build_promo_offer_payload(user: User | None) -> dict[str, Any] | None:
         payload['expires_at'] = expires_at
 
     language_code = _normalize_language_code(user)
-    if language_code in {'ru', 'fa'}:
+    if language_code == 'ru':
         payload['message'] = 'Дополнительная скидка применяется автоматически.'
     else:
         payload['message'] = 'Extra discount is applied automatically.'
@@ -3636,7 +3636,7 @@ def _build_renewal_success_message(
     if settings.is_multi_tariff_enabled() and subscription.tariff:
         tariff_label = f' «{subscription.tariff.name}»'
 
-    if language_code in {'ru', 'fa'}:
+    if language_code == 'ru':
         if charged_amount > 0:
             message = (
                 f'Подписка{tariff_label} продлена до {date_label}. '
@@ -3664,7 +3664,7 @@ def _build_renewal_success_message(
 
     if promo_discount_value > 0:
         discount_label = settings.format_price(promo_discount_value)
-        if language_code in {'ru', 'fa'}:
+        if language_code == 'ru':
             message += f' Применена дополнительная скидка {discount_label}.'
         else:
             message += f' Promo discount applied: {discount_label}.'
@@ -3681,7 +3681,7 @@ def _build_renewal_pending_message(
     amount_label = settings.format_price(max(0, missing_amount))
     method_title = _format_payment_method_title(method)
 
-    if language_code in {'ru', 'fa'}:
+    if language_code == 'ru':
         if method_title:
             return (
                 f'Недостаточно средств на балансе. Доплатите {amount_label} через {method_title}, '

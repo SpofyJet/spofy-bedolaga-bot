@@ -415,17 +415,10 @@ async def test_process_referral_registration_inserts_first_pending_row() -> None
     empty_row.scalar_one_or_none = lambda: None
     db.execute = AsyncMock(return_value=empty_row)
 
-    # `referral_contest_service` is imported INSIDE the function body
-    # (not at module scope), so we must patch the source module, not
-    # `app.services.referral_service.referral_contest_service`.
     with (
         patch('app.services.referral_service.get_user_by_id', AsyncMock(side_effect=[new_user, referrer])),
         patch('app.services.referral_service.get_user_campaign_id', AsyncMock(return_value=None)),
         patch('app.services.referral_service.create_referral_earning', AsyncMock()) as create_earning,
-        patch(
-            'app.services.referral_contest_service.referral_contest_service.on_referral_registration',
-            AsyncMock(),
-        ),
     ):
         await process_referral_registration(db, new_user_id=10, referrer_id=20, bot=None)
 

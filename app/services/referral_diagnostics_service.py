@@ -588,92 +588,6 @@ class ReferralDiagnosticsService:
         logger.info('🔍 Найдено потерянных рефералов', lost_count=len(lost))
         return lost
 
-    async def _add_to_active_contests(
-        self,
-        db: AsyncSession,
-        referral: User,
-        referrer: User,
-        amount_kopeks: int,
-    ) -> None:
-        """
-        Добавляет восстановленного реферала в активные конкурсы.
-
-        Проверяет все активные конкурсы и добавляет событие если:
-        - Реферал зарегистрирован в период конкурса
-        - Событие ещё не было добавлено
-        """
-        from app.database.crud.referral_contest import add_contest_event, get_contests_for_events
-
-        if not settings.is_contests_enabled():
-            return
-
-        now_utc = datetime.now(UTC)
-
-        # Проверяем конкурсы по оплаченным рефералам
-        contests = await get_contests_for_events(db, now_utc, contest_types=['referral_paid'])
-
-        for contest in contests:
-            try:
-                # Проверяем что реферал зарегистрировался В ПЕРИОД конкурса
-                user_created_at = referral.created_at
-                contest_start = contest.start_at
-                contest_end = contest.end_at
-                # Нормализация конца дня (полночь → 23:59:59) как в CRUD-слое
-                if contest_end.hour == 0 and contest_end.minute == 0 and contest_end.second == 0:
-                    contest_end = contest_end.replace(hour=23, minute=59, second=59, microsecond=999999)
-
-                if user_created_at < contest_start or user_created_at > contest_end:
-                    logger.debug(
-                        'Реферал зарегистрирован вне периода конкурса', referral_id=referral.id, contest_id=contest.id
-                    )
-                    continue
-
-                event = await add_contest_event(
-                    db,
-                    contest_id=contest.id,
-                    referrer_id=referrer.id,
-                    referral_id=referral.id,
-                    amount_kopeks=amount_kopeks,
-                    event_type='restored_referral',
-                )
-                if event:
-                    logger.info(
-                        '🏆 Восстановленный реферал добавлен в конкурс реферер реферал',
-                        contest_id=contest.id,
-                        referrer_id=referrer.id,
-                        referral_id=referral.id,
-                    )
-            except Exception as exc:
-                logger.error('Не удалось добавить в конкурс', contest_id=contest.id, error=exc)
-
-        # Также проверяем конкурсы по регистрации (если есть)
-        reg_contests = await get_contests_for_events(db, now_utc, contest_types=['referral_registered'])
-
-        for contest in reg_contests:
-            try:
-                user_created_at = referral.created_at
-                contest_start = contest.start_at
-                contest_end = contest.end_at
-                # Нормализация конца дня (полночь → 23:59:59) как в CRUD-слое
-                if contest_end.hour == 0 and contest_end.minute == 0 and contest_end.second == 0:
-                    contest_end = contest_end.replace(hour=23, minute=59, second=59, microsecond=999999)
-
-                if user_created_at < contest_start or user_created_at > contest_end:
-                    continue
-
-                event = await add_contest_event(
-                    db,
-                    contest_id=contest.id,
-                    referrer_id=referrer.id,
-                    referral_id=referral.id,
-                    amount_kopeks=0,
-                    event_type='restored_referral_registration',
-                )
-                if event:
-                    logger.info('🏆 Восстановленный реферал (регистрация) добавлен в конкурс', contest_id=contest.id)
-            except Exception as exc:
-                logger.error('Не удалось добавить в конкурс регистрации', contest_id=contest.id, error=exc)
-
     async def fix_lost_referrals(
         self, db: AsyncSession, lost_referrals: list[LostReferral], apply: bool = False
     ) -> FixReport:
@@ -839,8 +753,6 @@ class ReferralDiagnosticsService:
                                     inviter_bonus=inviter_bonus / 100,
                                 )
 
-                                # Добавляем в активные конкурсы рефералов
-                                await self._add_to_active_contests(db, user, referrer, first_topup.amount_kopeks)
                     else:
                         detail.error = 'Бонусы уже начислены ранее'
 
@@ -1096,9 +1008,6 @@ class ReferralDiagnosticsService:
                             telegram_id=referrer.telegram_id,
                             referrer_bonus_amount=missing.referrer_bonus_amount / 100,
                         )
-
-                        # Добавляем в активные конкурсы рефералов
-                        await self._add_to_active_contests(db, referral, referrer, missing.first_topup_amount_kopeks)
 
                 report.users_fixed += 1
                 report.details.append(detail)

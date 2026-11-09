@@ -13,7 +13,7 @@ from app.services.notification_delivery_service import NotificationType
 
 
 WEBHOOK_TYPES = [t for t in NotificationType if t.value.startswith('webhook_')]
-EMAIL_LANGUAGES = ('ru', 'en', 'zh', 'ua')
+EMAIL_LANGUAGES = ('ru', 'en')
 
 
 def test_every_webhook_type_has_email_template_in_every_language():
@@ -36,10 +36,10 @@ def test_webhook_email_language_fallback_to_ru():
 
 
 def test_webhook_email_localized_subjects_differ_from_ru():
-    """zh/ua — не заглушки: тема отличается от русской."""
+    """en — не заглушка: тема отличается от русской."""
     templates = EmailNotificationTemplates()
     ru = templates.get_template(NotificationType.WEBHOOK_SUB_EXPIRED, 'ru', {})
-    for language in ('en', 'zh', 'ua'):
+    for language in ('en',):
         localized = templates.get_template(NotificationType.WEBHOOK_SUB_EXPIRED, language, {})
         assert localized['subject'] != ru['subject'], language
 

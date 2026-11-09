@@ -70,7 +70,7 @@ async def create_transaction(
     commit: bool = True,
 ) -> Transaction:
     # SUBSCRIPTION_PAYMENT / GIFT_PAYMENT — always store as negative (debit from user balance)
-    # Keep original for downstream consumers (events, contests)
+    # Keep original for downstream consumers (events)
     stored_amount = (
         -amount_kopeks
         if type in (TransactionType.SUBSCRIPTION_PAYMENT, TransactionType.GIFT_PAYMENT) and amount_kopeks > 0
@@ -141,17 +141,6 @@ async def create_transaction(
         except Exception as exc:
             logger.warning('Не удалось проверить автовыдачу промогруппы для пользователя', user_id=user_id, exc=exc)
         if type == TransactionType.SUBSCRIPTION_PAYMENT and is_completed:
-            try:
-                from app.services.referral_contest_service import referral_contest_service
-
-                await referral_contest_service.on_subscription_payment(
-                    db,
-                    user_id,
-                    abs(amount_kopeks),
-                )
-            except Exception as exc:
-                logger.debug('Не удалось записать событие конкурса для пользователя', user_id=user_id, exc=exc)
-
             # Yandex.Metrika offline conversion — central chokepoint.
             # Every completed SUBSCRIPTION_PAYMENT (cabinet, bot handlers, guest,
             # stars, trial→paid conversion, autopay/recurring, IAP, webhooks)
@@ -215,17 +204,6 @@ async def emit_transaction_side_effects(
         logger.warning('Не удалось проверить автовыдачу промогруппы для пользователя', user_id=user_id, exc=exc)
 
     if type == TransactionType.SUBSCRIPTION_PAYMENT and is_completed:
-        try:
-            from app.services.referral_contest_service import referral_contest_service
-
-            await referral_contest_service.on_subscription_payment(
-                db,
-                user_id,
-                abs(amount_kopeks),
-            )
-        except Exception as exc:
-            logger.debug('Не удалось записать событие конкурса для пользователя', user_id=user_id, exc=exc)
-
         # Yandex.Metrika offline conversion — central chokepoint (deferred path
         # for create_transaction(commit=False) callers). Fires the purchase event
         # exactly once per completed SUBSCRIPTION_PAYMENT. Background task with

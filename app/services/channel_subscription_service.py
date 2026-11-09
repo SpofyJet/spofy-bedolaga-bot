@@ -234,7 +234,7 @@ class ChannelSubscriptionService:
         return result
 
     async def get_first_channel_id(self) -> str | None:
-        """Get the first active channel ID (for announcements, contest posts, etc.).
+        """Get the first active channel ID (for announcements, etc.).
 
         Channel IDs are always stored as strings in the DB.
         Telegram API accepts string channel_id in chat_id parameters.

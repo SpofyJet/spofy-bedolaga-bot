@@ -754,11 +754,6 @@ class MenuLayoutService:
             if not settings.is_referral_program_enabled():
                 return False
 
-        # contests_visible
-        if conditions.get('contests_visible') is True:
-            if not settings.CONTESTS_BUTTON_VISIBLE:
-                return False
-
         # support_enabled
         if conditions.get('support_enabled') is True:
             try:

@@ -126,12 +126,12 @@ def test_email_change_code_uses_unified_template(captured_send):
         to_email='user@test.dev',
         code='123456',
         username='Egor',
-        language='fa',
+        language='en',
     )
     assert ok
     body = captured_send['body']
     assert '123456' in body
-    assert captured_send['subject'] == 'کد تایید تغییر ایمیل'
+    assert '123456' in captured_send['subject']
     _assert_single_document(body, 'email_change_code')
 
 

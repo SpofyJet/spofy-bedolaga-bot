@@ -174,7 +174,7 @@ async def test_guard_reports_inactive_tariff_but_wrapper_keeps_contract(monkeypa
         assert stale.skip_reason == 'not_eligible'
 
 
-@pytest.mark.parametrize('lang', ['ru', 'en', 'ua', 'zh', 'fa'])
+@pytest.mark.parametrize('lang', ['ru', 'en'])
 def test_locale_has_cannot_renew_texts(lang):
     import json
     from pathlib import Path

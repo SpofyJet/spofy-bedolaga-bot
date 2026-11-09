@@ -124,13 +124,6 @@ def test_known_subscription_links_straight_to_its_renew_screen():
     assert _buttons(body)[0] == f'{CABINET}/subscriptions/42/renew'
 
 
-def test_legacy_languages_keep_their_texts():
-    body = EmailNotificationTemplates().get_template(
-        NotificationType.EMAIL_VERIFICATION, 'ua', {'verification_url': 'https://x/v?t=1'}
-    )['body_html']
-    assert 'Підтвердити email' in body
-
-
 def test_inliner_styles_default_layout_once_and_skips_foreign_documents():
     body = EmailNotificationTemplates().get_template(NotificationType.SUBSCRIPTION_EXPIRED, 'ru', {})['body_html']
     inlined = inline_email_styles(body)

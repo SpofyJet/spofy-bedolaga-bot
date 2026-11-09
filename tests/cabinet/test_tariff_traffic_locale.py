@@ -12,9 +12,6 @@ from app.database.models import Tariff
     [
         ('ru', '200 ГБ', '♾️ Безлимит'),
         ('en', '200 GB', '♾️ Unlimited'),
-        ('fa', '200 گیگ', '♾️ نامحدود'),
-        ('zh', '200 GB', '♾️ 无限'),
-        ('ua', '200 ГБ', '♾️ Безліміт'),
     ],
 )
 @pytest.mark.parametrize('traffic', [0, 200])

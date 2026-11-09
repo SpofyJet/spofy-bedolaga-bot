@@ -887,7 +887,6 @@ async def get_recent_payments(
             TransactionType.WITHDRAWAL.value: 'Вывод',
             TransactionType.REFUND.value: 'Возврат',
             TransactionType.REFERRAL_REWARD.value: 'Реферальный бонус',
-            TransactionType.POLL_REWARD.value: 'Награда за опрос',
         }
 
         payment_items = []

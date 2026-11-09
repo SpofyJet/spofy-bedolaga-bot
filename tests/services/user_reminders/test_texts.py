@@ -28,7 +28,7 @@ def _reminder(**kw):
 
 def test_language_falls_back_to_ru_and_button_to_ru_button():
     assert pick_text(TEXTS, 'en') == {'title': 'Title', 'body': 'Body', 'button': 'Открыть'}
-    assert pick_text(TEXTS, 'zh')['title'] == 'Заголовок <b>'
+    assert pick_text(TEXTS, 'de')['title'] == 'Заголовок <b>'
     assert pick_text(TEXTS, 'en-US')['title'] == 'Title'
     assert pick_text(TEXTS, None)['title'] == 'Заголовок <b>'
 

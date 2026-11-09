@@ -46,7 +46,6 @@ class ButtonConditions(BaseModel):
     is_admin: bool | None = Field(default=None, description='Пользователь - админ')
     is_moderator: bool | None = Field(default=None, description='Пользователь - модератор')
     referral_enabled: bool | None = Field(default=None, description='Реферальная программа включена')
-    contests_visible: bool | None = Field(default=None, description='Конкурсы видимы')
     support_enabled: bool | None = Field(default=None, description='Поддержка включена')
     language_selection_enabled: bool | None = Field(default=None, description='Выбор языка включен')
     happ_enabled: bool | None = Field(default=None, description='Кнопка Happ включена')

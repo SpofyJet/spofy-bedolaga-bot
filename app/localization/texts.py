@@ -19,11 +19,6 @@ _logger = structlog.get_logger(__name__)
 _cached_rules: dict[str, str] = {}
 
 
-_LANGUAGE_ALIASES = {
-    'uk': 'ua',
-}
-
-
 _DYNAMIC_LANGUAGE_CONFIGS = {
     'ru': {
         'traffic_pattern': '📊 {size} ГБ - {price}',
@@ -37,18 +32,6 @@ _DYNAMIC_LANGUAGE_CONFIGS = {
             'Старайтесь использовать тикеты — так мы быстрее поможем и ничего не потеряется.\n'
         ),
     },
-    'fa': {
-        'traffic_pattern': '📊 {size} گیگابایت - {price}',
-        'unlimited_pattern': '📊 نامحدود - {price}',
-        'support_info': (
-            '\n🛟 <b>پشتیبانی</b>\n\n'
-            'برای هرگونه سؤال به پشتیبانی پیام دهید:\n\n'
-            '👤 {support_username}\n\n'
-            '• 🎫 ایجاد تیکت\n'
-            '• 📋 تیکت‌های من\n'
-            '• 💬 تماس مستقیم\n'
-        ),
-    },
     'en': {
         'traffic_pattern': '📊 {size} GB - {price}',
         'unlimited_pattern': '📊 Unlimited - {price}',
@@ -59,36 +42,6 @@ _DYNAMIC_LANGUAGE_CONFIGS = {
             '• 📋 My tickets — status and conversation\n'
             '• 💬 Contact — message directly if needed\n\n'
             'Prefer tickets — it helps us respond faster and keep context.\n'
-        ),
-    },
-    'ua': {
-        'traffic_pattern': '📊 {size} ГБ - {price}',
-        'unlimited_pattern': '📊 Безліміт - {price}',
-        'support_info': (
-            '\n🛠️ <b>Технічна підтримка</b>\n\n'
-            'З усіх питань звертайтеся до нашої підтримки:\n\n'
-            '👤 {support_username}\n\n'
-            'Ми допоможемо з:\n'
-            '• Налаштуванням підключення\n'
-            '• Вирішенням технічних проблем\n'
-            '• Питаннями щодо оплати\n'
-            '• Іншими питаннями\n\n'
-            '⏰ Час відповіді: зазвичай протягом 1-2 годин\n'
-        ),
-    },
-    'zh': {
-        'traffic_pattern': '📊{size}GB-{price}',
-        'unlimited_pattern': '📊无限-{price}',
-        'support_info': (
-            '\n🛠️ <b>技术支持</b>\n\n'
-            '如有任何问题，请联系我们的支持团队：\n\n'
-            '👤 {support_username}\n\n'
-            '我们将帮助您：\n'
-            '• 设置连接\n'
-            '• 解决技术问题\n'
-            '• 付款问题\n'
-            '• 其他问题\n\n'
-            '⏰ 响应时间：通常在 1-2 小时内\n'
         ),
     },
 }
@@ -116,7 +69,6 @@ def _get_cached_rules_value(language: str) -> str:
 def _build_dynamic_values(language: str) -> dict[str, Any]:
     language_code = (language or DEFAULT_LANGUAGE).split('-')[0].lower()
 
-    language_code = _LANGUAGE_ALIASES.get(language_code, language_code)
     config = _DYNAMIC_LANGUAGE_CONFIGS.get(language_code)
 
     if not config:

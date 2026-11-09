@@ -123,23 +123,6 @@ class AdminStates(StatesGroup):
     editing_promo_group_period_discount = State()
     editing_promo_group_auto_assign = State()
 
-    creating_referral_contest_title = State()
-    creating_referral_contest_description = State()
-    creating_referral_contest_prize = State()
-    creating_referral_contest_mode = State()
-    creating_referral_contest_start = State()
-    creating_referral_contest_end = State()
-    creating_referral_contest_time = State()
-    editing_referral_contest_summary_times = State()
-    adding_virtual_participant_name = State()
-    adding_virtual_participant_count = State()
-    editing_virtual_participant_count = State()
-    # Массовое создание виртуальных участников (массовка)
-    adding_mass_virtual_count = State()  # Сколько призраков создать
-    adding_mass_virtual_referrals = State()  # По сколько рефералов у каждого
-    editing_daily_contest_field = State()
-    editing_daily_contest_value = State()
-
     editing_squad_price = State()
     editing_traffic_price = State()
     editing_device_price = State()
@@ -281,10 +264,6 @@ class SquadMigrationStates(StatesGroup):
 
 class RemnaWaveSyncStates(StatesGroup):
     waiting_for_schedule = State()
-
-
-class ContestStates(StatesGroup):
-    waiting_for_answer = State()
 
 
 class BlacklistStates(StatesGroup):

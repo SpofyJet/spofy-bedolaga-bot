@@ -207,11 +207,8 @@ async def test_builder_without_hints_has_no_details(monkeypatch):
 
 
 def test_input_rich_message_flags():
-    rich = rich_menu._input_rich_message('<p>x</p>', 'fa')
-    assert rich.is_rtl is True
+    rich = rich_menu._input_rich_message('<p>x</p>')
     assert rich.skip_entity_detection is True
-
-    assert rich_menu._input_rich_message('<p>x</p>', 'ru').is_rtl is None
 
 
 async def test_try_send_disabled_by_setting(monkeypatch):

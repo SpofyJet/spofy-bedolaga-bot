@@ -91,7 +91,6 @@ def test_time_left_for_lifetime():
             'en',
             'subscription {tariff_name} forever.',
         ),
-        ('{tariff_name}（{period_days} 天）', 'period_days', 'zh', '{tariff_name}（永久）'),
         # Текст без единицы (переопределён админом) не трогаем.
         ('Срок {period_days}', 'period_days', 'ru', 'Срок {period_days}'),
     ],

@@ -865,11 +865,6 @@ async def _show_diagnostics_for_period(callback: types.CallbackQuery, db: AsyncS
             ],
             [types.InlineKeyboardButton(text='📤 Загрузить лог-файл', callback_data='admin_ref_diag_upload')],
             [types.InlineKeyboardButton(text='🔍 Проверить бонусы (по БД)', callback_data='admin_ref_check_bonuses')],
-            [
-                types.InlineKeyboardButton(
-                    text='🏆 Синхронизировать с конкурсом', callback_data='admin_ref_sync_contest'
-                )
-            ],
         ]
 
         # Кнопки действий (только если есть потерянные рефералы)
@@ -1284,81 +1279,6 @@ async def apply_missing_bonuses(callback: types.CallbackQuery, db_user: User, db
 
 @admin_required
 @error_handler
-async def sync_referrals_with_contest(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
-):
-    """Синхронизирует всех рефералов с активными конкурсами."""
-    from app.database.crud.referral_contest import get_contests_for_events
-    from app.services.referral_contest_service import referral_contest_service
-
-    await callback.answer('🏆 Синхронизирую с конкурсами...')
-
-    try:
-        now_utc = datetime.now(UTC)
-
-        # Получаем активные конкурсы
-        paid_contests = await get_contests_for_events(db, now_utc, contest_types=['referral_paid'])
-        reg_contests = await get_contests_for_events(db, now_utc, contest_types=['referral_registered'])
-
-        all_contests = list(paid_contests) + list(reg_contests)
-
-        if not all_contests:
-            await callback.message.edit_text(
-                '❌ <b>Нет активных конкурсов рефералов</b>\n\n'
-                'Создайте конкурс в разделе "Конкурсы" для синхронизации.',
-                reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [types.InlineKeyboardButton(text='⬅️ К диагностике', callback_data='admin_referral_diagnostics')]
-                    ]
-                ),
-            )
-            return
-
-        # Синхронизируем каждый конкурс
-        total_created = 0
-        total_updated = 0
-        total_skipped = 0
-        contest_results = []
-
-        for contest in all_contests:
-            stats = await referral_contest_service.sync_contest(db, contest.id)
-            if 'error' not in stats:
-                total_created += stats.get('created', 0)
-                total_updated += stats.get('updated', 0)
-                total_skipped += stats.get('skipped', 0)
-                contest_results.append(f'• {html.escape(contest.title)}: +{stats.get("created", 0)} новых')
-            else:
-                contest_results.append(f'• {html.escape(contest.title)}: ошибка')
-
-        text = f"""
-🏆 <b>Синхронизация с конкурсами завершена!</b>
-
-📊 <b>Результат:</b>
-• Конкурсов обработано: {len(all_contests)}
-• Новых событий добавлено: {total_created}
-• Обновлено: {total_updated}
-• Пропущено (уже есть): {total_skipped}
-
-📋 <b>По конкурсам:</b>
-"""
-        text += '\n'.join(contest_results)
-
-        keyboard = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [types.InlineKeyboardButton(text='🔄 Синхронизировать снова', callback_data='admin_ref_sync_contest')],
-                [types.InlineKeyboardButton(text='⬅️ К диагностике', callback_data='admin_referral_diagnostics')],
-            ]
-        )
-
-        await callback.message.edit_text(text, reply_markup=keyboard)
-
-    except Exception as e:
-        logger.error('Ошибка в sync_referrals_with_contest', error=e, exc_info=True)
-        await callback.answer('Ошибка при синхронизации', show_alert=True)
-
-
-@admin_required
-@error_handler
 async def request_log_file_upload(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     """Запрашивает загрузку лог-файла для анализа."""
     await state.set_state(AdminStates.waiting_for_log_file)
@@ -1603,7 +1523,6 @@ def register_handlers(dp: Dispatcher):
     # Проверка бонусов по БД
     dp.callback_query.register(check_missing_bonuses, F.data == 'admin_ref_check_bonuses')
     dp.callback_query.register(apply_missing_bonuses, F.data == 'admin_ref_bonus_apply')
-    dp.callback_query.register(sync_referrals_with_contest, F.data == 'admin_ref_sync_contest')
 
     # Хендлеры заявок на вывод
     dp.callback_query.register(show_pending_withdrawal_requests, F.data == 'admin_withdrawal_requests')

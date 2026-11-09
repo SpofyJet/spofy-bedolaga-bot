@@ -29,9 +29,7 @@ logger = structlog.get_logger(__name__)
 # реферальных денег от админских списаний (у тех тоже тип WITHDRAWAL).
 WITHDRAWAL_TX_DESCRIPTION_PREFIX = 'Вывод реферального баланса'
 
-_OTHER_CREDIT_TYPES = frozenset(
-    {TransactionType.DEPOSIT.value, TransactionType.REFUND.value, TransactionType.POLL_REWARD.value}
-)
+_OTHER_CREDIT_TYPES = frozenset({TransactionType.DEPOSIT.value, TransactionType.REFUND.value})
 
 
 class ReferralWithdrawalService:

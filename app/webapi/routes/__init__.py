@@ -1,6 +1,5 @@
 from . import (
     config,
-    contests,
     health,
     logs,
     main_menu_buttons,
@@ -9,7 +8,6 @@ from . import (
     pages,
     partners,
     pinned_messages,
-    polls,
     promo_groups,
     promo_offers,
     remnawave,
@@ -28,7 +26,6 @@ from . import (
 
 __all__ = [
     'config',
-    'contests',
     'health',
     'logs',
     'main_menu_buttons',
@@ -37,7 +34,6 @@ __all__ = [
     'pages',
     'partners',
     'pinned_messages',
-    'polls',
     'promo_groups',
     'promo_offers',
     'remnawave',

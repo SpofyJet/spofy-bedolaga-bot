@@ -229,9 +229,6 @@ _LANGUAGE_DISPLAY_NAMES = {
     'en': '🇬🇧 English',
     'en-us': '🇺🇸 English',
     'en-gb': '🇬🇧 English',
-    'ua': '🇺🇦 Українська',
-    'uk': '🇺🇦 Українська',
-    'uk-ua': '🇺🇦 Українська',
     'kk': '🇰🇿 Қазақша',
     'kk-kz': '🇰🇿 Қазақша',
     'kz': '🇰🇿 Қазақша',
@@ -252,15 +249,8 @@ _LANGUAGE_DISPLAY_NAMES = {
     'pt': '🇵🇹 Português',
     'pt-pt': '🇵🇹 Português',
     'pt-br': '🇧🇷 Português',
-    'zh': '🇨🇳 中文',
-    'zh-cn': '🇨🇳 中文 (简体)',
-    'zh-hans': '🇨🇳 中文 (简体)',
-    'zh-tw': '🇹🇼 中文 (繁體)',
-    'zh-hant': '🇹🇼 中文 (繁體)',
     'vi': '🇻🇳 Tiếng Việt',
     'vi-vn': '🇻🇳 Tiếng Việt',
-    'fa': '🇮🇷 فارسی',
-    'fa-ir': '🇮🇷 فارسی',
 }
 
 
@@ -938,12 +928,6 @@ def get_main_menu_keyboard(
     if defer_balance and show_balance_button:
         # n6-П1: баланс после социального CTA
         keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data='menu_balance')])
-
-    # Конкурсы — отдельной строкой
-    if settings.CONTESTS_ENABLED and settings.CONTESTS_BUTTON_VISIBLE:
-        keyboard.append(
-            [InlineKeyboardButton(text=texts.t('CONTESTS_BUTTON', '🎲 Конкурсы'), callback_data='contests_menu')]
-        )
 
     # Нижний блок: «Промокод» (пока нет подписки; QR с билета применяет код сам, но можно и вручную)
     # и «Инфо» — по две кнопки в ряд. «Поддержка» в главном меню не показываем (по решению
@@ -1675,20 +1659,6 @@ def _spofy_days_label(days: int, language: str = 'ru') -> str:
     n = abs(int(days))
     if lang == 'en':
         return f'{n} day' if n == 1 else f'{n} days'
-    if lang == 'zh':
-        return f'{n} 天'
-    if lang == 'fa':
-        return f'{n} روز'
-    if lang == 'ua':
-        if 11 <= (n % 100) <= 14:
-            word = 'днів'
-        elif n % 10 == 1:
-            word = 'день'
-        elif 2 <= n % 10 <= 4:
-            word = 'дні'
-        else:
-            word = 'днів'
-        return f'{n} {word}'
     return f'{n} {_spofy_days_word(n)}'
 
 
@@ -2177,7 +2147,7 @@ def get_add_traffic_keyboard(
 
     texts = get_texts(language)
     language_code = (language or DEFAULT_LANGUAGE).split('-')[0].lower()
-    use_russian_fallback = language_code in {'ru', 'fa'}
+    use_russian_fallback = language_code == 'ru'
     back_cb = f'sm:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'menu_subscription'
 
     # Считаем по дням (как в кабинете и подтверждении)
@@ -2261,7 +2231,7 @@ def get_add_traffic_keyboard_from_tariff(
     """
     texts = get_texts(language)
     language_code = (language or DEFAULT_LANGUAGE).split('-')[0].lower()
-    use_russian_fallback = language_code in {'ru', 'fa'}
+    use_russian_fallback = language_code == 'ru'
     back_cb = f'sm:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'menu_subscription'
 
     if not packages:

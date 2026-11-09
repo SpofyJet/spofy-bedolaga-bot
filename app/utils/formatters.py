@@ -99,7 +99,7 @@ def format_days_declension(days: int, language: str = 'ru') -> str:
     if is_lifetime_period(days):
         return lifetime_label(language)
     language_code = (language or 'ru').split('-')[0].lower()
-    if language_code not in {'ru', 'fa'}:
+    if language_code != 'ru':
         return f'{days} day{"s" if days != 1 else ""}'
 
     if days % 10 == 1 and days % 100 != 11:
@@ -204,7 +204,7 @@ def format_subscription_status(is_active: bool, is_trial: bool, end_date: dateti
             end_date = datetime.now(UTC)
 
     language_code = (language or 'ru').split('-')[0].lower()
-    use_russian_fallback = language_code in {'ru', 'fa'}
+    use_russian_fallback = language_code == 'ru'
 
     if not is_active:
         return '❌ Неактивна' if use_russian_fallback else '❌ Inactive'
@@ -230,7 +230,7 @@ def format_subscription_status(is_active: bool, is_trial: bool, end_date: dateti
 
 def format_traffic_usage(used_gb: float, limit_gb: int, language: str = 'ru') -> str:
     language_code = (language or 'ru').split('-')[0].lower()
-    use_russian_fallback = language_code in {'ru', 'fa'}
+    use_russian_fallback = language_code == 'ru'
 
     if limit_gb == 0:
         if use_russian_fallback:
@@ -246,7 +246,7 @@ def format_traffic_usage(used_gb: float, limit_gb: int, language: str = 'ru') ->
 
 def format_boolean(value: bool, language: str = 'ru') -> str:
     language_code = (language or 'ru').split('-')[0].lower()
-    if language_code in {'ru', 'fa'}:
+    if language_code == 'ru':
         return '✅ Да' if value else '❌ Нет'
     return '✅ Yes' if value else '❌ No'
 
@@ -272,20 +272,6 @@ _MONTHS_HUMAN = {
         'ноября',
         'декабря',
     ),
-    'ua': (
-        'січня',
-        'лютого',
-        'березня',
-        'квітня',
-        'травня',
-        'червня',
-        'липня',
-        'серпня',
-        'вересня',
-        'жовтня',
-        'листопада',
-        'грудня',
-    ),
     'en': (
         'January',
         'February',
@@ -300,22 +286,19 @@ _MONTHS_HUMAN = {
         'November',
         'December',
     ),
-    'fa': ('ژانویه', 'فوریه', 'مارس', 'آوریل', 'مه', 'ژوئن', 'ژوئیه', 'اوت', 'سپتامبر', 'اکتبر', 'نوامبر', 'دسامبر'),
 }
 
 
 def _human_lang(language) -> str:
     lang = str(language or 'ru').split('-')[0].split('_')[0].lower()
-    return {'uk': 'ua'}.get(lang, lang)
+    return lang
 
 
 def format_human_date(dt, language: str = 'ru') -> str:
-    """«12 марта» без года. language — код локали бота (ru/ua/en/zh/fa)."""
+    """«12 марта» без года. language — код локали бота (ru/en)."""
     if dt is None:
         return ''
     lang = _human_lang(language)
-    if lang == 'zh':
-        return f'{dt.month}月{dt.day}日'
     months = _MONTHS_HUMAN.get(lang, _MONTHS_HUMAN['ru'])
     name = months[dt.month - 1]
     if lang == 'en':

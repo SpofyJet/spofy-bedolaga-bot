@@ -285,7 +285,7 @@ async def test_admins_see_the_operator_phrase_not_a_hardcoded_telegram(lab):
     assert 'только Telegram,' not in text
 
 
-@pytest.mark.parametrize('language', ['ru', 'en', 'zh', 'ua', 'fa'])
+@pytest.mark.parametrize('language', ['ru', 'en'])
 @pytest.mark.parametrize('key', ['GRACE_ACCESS_GRANTED_EXPIRED', 'GRACE_ACCESS_GRANTED_LIMITED', 'GRACE_ACCESS_ENDED'])
 def test_operator_phrase_stands_in_a_case_neutral_slot(language, key):
     """Фразу «что доступно» пишет оператор в именительном падеже, склонять её нельзя.

@@ -36,7 +36,7 @@ class ProviderSettings:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('language', ['ru', 'en', 'ua', 'fa', 'zh'])
+@pytest.mark.parametrize('language', ['ru', 'en'])
 @pytest.mark.parametrize('module_name,entry', ENTRIES, ids=[entry for _, entry in ENTRIES])
 @pytest.mark.parametrize('bound', ['low', 'high'])
 async def test_rejection_keeps_selection_and_shows_exact_enterable_range(
@@ -88,7 +88,7 @@ async def test_rejection_keeps_selection_and_shows_exact_enterable_range(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('language', ['ru', 'en', 'ua', 'fa', 'zh'])
+@pytest.mark.parametrize('language', ['ru', 'en'])
 @pytest.mark.parametrize('provider,bound', [('cryptobot', 'low'), ('cryptobot', 'high')])
 async def test_currency_rejection_offers_a_ruble_input_range(monkeypatch, language, provider, bound):
     module = import_module(f'app.handlers.balance.{provider}')

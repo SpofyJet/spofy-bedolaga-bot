@@ -34,8 +34,7 @@ async def test_outgoing_rich_images_have_referenced_media(surface, monkeypatch):
     monkeypatch.setattr(rich_menu, '_resolve_rich_logo_url', lambda: url)
     monkeypatch.setattr(rich_notify, '_resolve_rich_logo_url', lambda: url)
     if surface == 'menu':
-        message = rich_menu._input_rich_message(f'<img src="{url.replace("&", "&amp;")}"/><p>Body</p>', 'fa')
-        assert message.is_rtl is True
+        message = rich_menu._input_rich_message(f'<img src="{url.replace("&", "&amp;")}"/><p>Body</p>')
     else:
         bot = AsyncMock()
         if surface == 'startup':
@@ -124,7 +123,7 @@ def test_rich_image_attachment_deduplicates_and_avoids_existing_ids():
         '<img alt="logo" src="https://logo.example/logo.png?a=1&amp;b=2"/>'
         "<IMG src='https://logo.example/logo.png?a=1&amp;b=2'/>"
     )
-    message = rich_menu._input_rich_message(content, 'en')
+    message = rich_menu._input_rich_message(content)
     assert message.media and len(message.media) == 1
     media = message.media[0]
     assert media.id != 'photo_0'
@@ -135,7 +134,6 @@ def test_rich_image_attachment_deduplicates_and_avoids_existing_ids():
 
 def test_text_only_and_escaped_image_text_stay_unchanged():
     content = '<p>&lt;img src=&quot;https://logo.example/logo.png&quot;/&gt;</p>'
-    message = rich_menu._input_rich_message(content, 'fa')
+    message = rich_menu._input_rich_message(content)
     assert message.html == content
     assert not message.media
-    assert message.is_rtl is True

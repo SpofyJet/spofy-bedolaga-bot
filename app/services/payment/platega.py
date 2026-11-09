@@ -722,9 +722,8 @@ class PlategaPaymentMixin:
             await db.commit()
 
             # Emit deferred side-effects after the atomic commit — mirrors
-            # _finalize_platega_payment's DEPOSIT flow. Fires transaction.created,
-            # promo-group auto-assignment and referral-contest tracking; never
-            # raises (swallows its own exceptions), so no extra guarding needed.
+            # _finalize_platega_payment's DEPOSIT flow. Fires transaction.created and
+            # promo-group auto-assignment; never raises, so no extra guarding needed.
             from app.database.crud.transaction import emit_transaction_side_effects
 
             await emit_transaction_side_effects(

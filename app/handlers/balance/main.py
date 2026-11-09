@@ -34,7 +34,6 @@ CREDIT_TRANSACTION_TYPES: frozenset[str] = frozenset(
         TransactionType.DEPOSIT.value,
         TransactionType.REFERRAL_REWARD.value,
         TransactionType.REFUND.value,
-        TransactionType.POLL_REWARD.value,
     }
 )
 

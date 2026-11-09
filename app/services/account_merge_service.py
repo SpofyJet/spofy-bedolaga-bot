@@ -19,7 +19,6 @@ from app.database.models import (
     BroadcastHistory,
     ButtonClickLog,
     CabinetRefreshToken,
-    ContestAttempt,
     CryptoBotPayment,
     DiscountOffer,
     GuestPurchase,
@@ -29,15 +28,11 @@ from app.database.models import (
     Pay2328Payment,
     PinnedMessage,
     PlategaPayment,
-    Poll,
-    PollResponse,
     PromoCode,
     PromoCodeUse,
     PromoGroup,
     PromoOfferLog,
     PromoOfferTemplate,
-    ReferralContest,
-    ReferralContestEvent,
     ReferralEarning,
     SentNotification,
     Subscription,
@@ -963,17 +958,6 @@ async def execute_merge(
     )
     await db.execute(update(UserPromoGroup).where(UserPromoGroup.user_id == secondary.id).values(user_id=primary.id))
 
-    # 10c. Переназначение poll_responses (unique: poll_id + user_id)
-    # Сначала удаляем дубликаты ответов на опросы, затем переназначаем оставшиеся
-    primary_poll_ids = select(PollResponse.poll_id).where(PollResponse.user_id == primary.id)
-    await db.execute(
-        delete(PollResponse).where(
-            PollResponse.user_id == secondary.id,
-            PollResponse.poll_id.in_(primary_poll_ids),
-        )
-    )
-    await db.execute(update(PollResponse).where(PollResponse.user_id == secondary.id).values(user_id=primary.id))
-
     # 10d. Переназначение promo_offer_logs (без unique constraint — простое переназначение)
     await db.execute(update(PromoOfferLog).where(PromoOfferLog.user_id == secondary.id).values(user_id=primary.id))
 
@@ -993,51 +977,10 @@ async def execute_merge(
         .values(user_id=primary.id)
     )
 
-    # 10f. Переназначение contest_attempts (unique: round_id + user_id)
-    primary_round_ids = select(ContestAttempt.round_id).where(ContestAttempt.user_id == primary.id)
-    await db.execute(
-        delete(ContestAttempt).where(
-            ContestAttempt.user_id == secondary.id,
-            ContestAttempt.round_id.in_(primary_round_ids),
-        )
-    )
-    await db.execute(update(ContestAttempt).where(ContestAttempt.user_id == secondary.id).values(user_id=primary.id))
-
     # 10g. Удаляем роли secondary (НЕ переносим — предотвращает эскалацию привилегий через мерж)
     await db.execute(delete(UserRole).where(UserRole.user_id == secondary.id))
     # assigned_by — админский FK, обнуляем (не переносим на primary, чтобы не искажать аудит)
     await db.execute(update(UserRole).where(UserRole.assigned_by == secondary.id).values(assigned_by=None))
-
-    # 10h. Переназначение referral_contest_events (unique: contest_id + referral_id)
-    # Удаляем cross-referral события между участниками мержа
-    await db.execute(
-        delete(ReferralContestEvent).where(
-            or_(
-                and_(ReferralContestEvent.referrer_id == secondary.id, ReferralContestEvent.referral_id == primary.id),
-                and_(ReferralContestEvent.referrer_id == primary.id, ReferralContestEvent.referral_id == secondary.id),
-            )
-        )
-    )
-    # Дедупликация по (contest_id, referral_id) перед переназначением referral_id
-    primary_referral_contest_ids = select(ReferralContestEvent.contest_id).where(
-        ReferralContestEvent.referral_id == primary.id
-    )
-    await db.execute(
-        delete(ReferralContestEvent).where(
-            ReferralContestEvent.referral_id == secondary.id,
-            ReferralContestEvent.contest_id.in_(primary_referral_contest_ids),
-        )
-    )
-    await db.execute(
-        update(ReferralContestEvent)
-        .where(ReferralContestEvent.referral_id == secondary.id)
-        .values(referral_id=primary.id)
-    )
-    await db.execute(
-        update(ReferralContestEvent)
-        .where(ReferralContestEvent.referrer_id == secondary.id)
-        .values(referrer_id=primary.id)
-    )
 
     # 10i. Переназначение promocode_uses (unique constraint: user_id + promocode_id)
     primary_promo_ids = select(PromoCodeUse.promocode_id).where(PromoCodeUse.user_id == primary.id)
@@ -1104,12 +1047,10 @@ async def execute_merge(
     # 10r. Обнуление created_by / admin_id FK ссылок в админских таблицах
     # (не переносим на primary — сохраняем целостность аудита; AdminAuditLog.user_id не nullable, переназначаем)
     await db.execute(update(PromoCode).where(PromoCode.created_by == secondary.id).values(created_by=None))
-    await db.execute(update(ReferralContest).where(ReferralContest.created_by == secondary.id).values(created_by=None))
     await db.execute(
         update(PromoOfferTemplate).where(PromoOfferTemplate.created_by == secondary.id).values(created_by=None)
     )
     await db.execute(update(BroadcastHistory).where(BroadcastHistory.admin_id == secondary.id).values(admin_id=None))
-    await db.execute(update(Poll).where(Poll.created_by == secondary.id).values(created_by=None))
     await db.execute(update(UserMessage).where(UserMessage.created_by == secondary.id).values(created_by=None))
     await db.execute(update(WelcomeText).where(WelcomeText.created_by == secondary.id).values(created_by=None))
     await db.execute(update(PinnedMessage).where(PinnedMessage.created_by == secondary.id).values(created_by=None))

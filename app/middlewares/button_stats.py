@@ -29,7 +29,6 @@ BUILTIN_CALLBACKS: set[str] = {
     'return_to_saved_cart',
     'menu_promocode',
     'menu_referrals',
-    'contests_menu',
     'menu_support',
     'menu_info',
     'menu_language',

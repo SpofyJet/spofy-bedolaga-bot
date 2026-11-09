@@ -92,7 +92,7 @@
   Функции: `create_bot` — Create a Bot instance with SOCKS5 proxy and/or custom Telegram API server.
 - `app/cabinet/`
 - `app/config.py` — Python-модуль
-  Классы: `Settings` (232 методов)
+  Классы: `Settings` (230 методов)
   Функции: `transliterate_cyrillic` — Заменяет кириллические буквы латинскими, сохраняя регистр («Шмель» → «Shmel»)., `set_period_prices_from_db` — Устанавливает периоды/цены из БД., `get_db_period_prices` — Возвращает периоды/цены из БД если они загружены., `clear_db_period_prices` — Очищает кеш цен из тарифов (при переключении в classic mode)., `refresh_period_prices` — Rebuild cached period price mapping., `refresh_classic_period_prices` — Rebuild CLASSIC_PERIOD_PRICES from current settings., `get_traffic_prices`, `refresh_traffic_prices`
 - `app/database/`
 - `app/external/`
@@ -115,7 +115,7 @@
   Функции: нет
 - `app/services/`
 - `app/states.py` — Python-модуль
-  Классы: `RegistrationStates`, `SubscriptionStates`, `GiftPurchaseStates`, `GiftActivationStates`, `BalanceStates`, `PromoCodeStates`, `AdminStates`, `TicketStates`, `AdminTicketStates`, `SupportSettingsStates`, `BotConfigStates`, `PricingStates`, `SquadCreateStates`, `SquadRenameStates`, `SquadMigrationStates`, `RemnaWaveSyncStates`, `ContestStates`, `BlacklistStates`, `ReferralWithdrawalStates`
+  Классы: `RegistrationStates`, `SubscriptionStates`, `GiftPurchaseStates`, `GiftActivationStates`, `BalanceStates`, `PromoCodeStates`, `AdminStates`, `TicketStates`, `AdminTicketStates`, `SupportSettingsStates`, `BotConfigStates`, `PricingStates`, `SquadCreateStates`, `SquadRenameStates`, `SquadMigrationStates`, `RemnaWaveSyncStates`, `BlacklistStates`, `ReferralWithdrawalStates`
   Функции: нет
 - `app/tools/`
 - `app/utils/`
@@ -333,9 +333,6 @@
 - `app/cabinet/routes/branding.py` — Python-модуль
   Классы: `BrandingResponse`, `BrandingNameUpdate`, `ThemeColorsResponse`, `ThemeColorsUpdate`, `EnabledThemesResponse`, `EnabledThemesUpdate`, `AnimationEnabledResponse`, `AnimationEnabledUpdate`, `AnimationConfigResponse`, `AnimationConfigUpdate` (1 методов), `FullscreenEnabledResponse`, `FullscreenEnabledUpdate`, `EmailAuthEnabledResponse`, `EmailAuthEnabledUpdate`, `TelegramWidgetConfigResponse`, `LiteModeEnabledResponse`, `LiteModeEnabledUpdate`, `GiftEnabledResponse`, `GiftEnabledUpdate`, `OfflineConvGoal`, `AnalyticsCountersResponse`, `AnalyticsCountersUpdate`, `BotStartVideoResponse`, `YandexCidRequest`, `FooterEnabledResponse`, `FooterEnabledUpdate`
   Функции: `ensure_branding_dir` — Ensure branding directory exists., `get_setting_value` — Read a setting through the short in-process cache., `set_setting_value` — Set a setting value in database., `get_logo_path` — Get the path to the custom logo file (any supported format)., `has_custom_logo` — Check if a custom logo exists., `get_branding` — Get current branding settings., `get_logo` — Get the custom logo image., `get_favicon` — Иконка для <link rel="icon"> кабинета: логотип из админки или монограмма., `get_web_manifest` — Web app manifest кабинета: имя, цвета темы и иконки из брендинга., `get_app_icon` — Иконка приложения для манифеста: непрозрачный квадрат ``size``×``size``., `get_maskable_app_icon` — Maskable-иконка для Android: содержимое в безопасной зоне, края под маску системы., `get_bot_logo` — Get the BOT's menu logo (settings.LOGO_FILE, e.g. vpn_logo.png)., `get_bot_start_video` — Текущее видео стартового меню бота (Telegram file_id)., `upload_bot_start_video` — Загружает видео, которое бот прикрепляет к стартовому меню., `delete_bot_start_video` — Убирает видео — меню возвращается к фото-логотипу/тексту., `update_branding_name` — Update the project name. Admin only. Empty name allowed (logo only mode)., `upload_logo` — Upload a custom logo. Admin only., `delete_logo` — Delete custom logo and revert to letter. Admin only., `validate_hex_color` — Validate hex color format., `get_theme_colors` — Get current theme colors., `update_theme_colors` — Update theme colors. Admin only. Partial update supported., `reset_theme_colors` — Reset theme colors to defaults. Admin only., `get_enabled_themes` — Get which themes are enabled., `update_enabled_themes` — Update which themes are enabled. Admin only. At least one theme must be enabled., `get_animation_enabled` — Get animation enabled setting., `update_animation_enabled` — Update animation enabled setting. Admin only., `get_animation_config` — Get full animation config. Public endpoint., `update_animation_config` — Update animation config (partial update). Admin only., `get_fullscreen_enabled` — Get fullscreen enabled setting., `update_fullscreen_enabled` — Update fullscreen enabled setting. Admin only., `get_email_auth_enabled` — Get email auth enabled setting., `update_email_auth_enabled` — Update email auth enabled setting. Admin only., `get_telegram_widget_config` — Get Telegram Login Widget configuration., `get_analytics_counters` — Get analytics counter settings., `update_analytics_counters` — Update analytics counter settings. Admin only. Partial update supported., `store_yandex_cid` — Store Yandex Metrika ClientID for the authenticated cabinet user., `get_lite_mode_enabled` — Get lite mode enabled setting., `update_lite_mode_enabled` — Update lite mode enabled setting. Admin only., `get_gift_enabled` — Get gift feature enabled setting. Public endpoint., `update_gift_enabled` — Update gift feature enabled setting. Admin only., `get_footer_enabled` — Get legal footer enabled setting. Public endpoint - no authentication required., `update_footer_enabled` — Update legal footer enabled setting. Admin only.
-- `app/cabinet/routes/contests.py` — Python-модуль
-  Классы: `ContestInfo`, `ContestGameData`, `ContestAnswerRequest`, `ContestResult`, `ContestsCountResponse`
-  Функции: `get_contests_count` — Get count of contests available for the user., `get_contests` — Get list of available contests/games., `get_contest_game` — Get game data for a specific contest round., `submit_contest_answer` — Submit answer for a contest round.
 - `app/cabinet/routes/coupon.py` — Python-модуль
   Классы: нет
   Функции: `redeem_coupon_endpoint` — Redeem a one-time coupon for the current cabinet user., `coupon_status` — Public info about a still-redeemable coupon (no authentication).
@@ -366,9 +363,6 @@
 - `app/cabinet/routes/partner_application.py` — Python-модуль
   Классы: нет
   Функции: `get_partner_status` — Get partner status and latest application for current user., `get_campaign_stats` — Get detailed stats for a single campaign belonging to the current partner., `apply_for_partner` — Submit partner application.
-- `app/cabinet/routes/polls.py` — Python-модуль
-  Классы: `PollOptionResponse`, `PollQuestionResponse`, `PollInfo`, `PollStartResponse`, `AnswerRequest`, `AnswerResponse`, `PollsCountResponse`
-  Функции: `get_polls_count` — Get count of polls available for the user., `get_available_polls` — Get list of polls available for the user., `get_poll_details` — Get details of a specific poll response., `start_poll` — Start or continue a poll., `answer_question` — Submit answer for a poll question.
 - `app/cabinet/routes/promo.py` — Python-модуль
   Классы: `PromoOfferInfo`, `ActiveDiscountInfo`, `ClaimOfferRequest`, `ClaimOfferResponse`, `PromoGroupDiscounts`, `LoyaltyTierInfo`, `LoyaltyTiersResponse`
   Функции: `get_promo_offers` — Get list of available promo offers for the user., `get_active_discount` — Get user's currently active discount., `get_promo_group_discounts` — Get user's promo group discounts., `get_loyalty_tiers` — Get all loyalty tiers (promo groups with auto-assign thresholds) and user's progress., `claim_promo_offer` — Claim a promo offer., `clear_active_discount` — Clear user's active discount.
@@ -569,7 +563,7 @@
   Классы: нет
   Функции: `apply_legacy_aliases` — Возвращает копию контекста со старыми именами плейсхолдеров, если есть новые., `build_common_context` — Values for the type-independent placeholders., `substitute_context_vars` — Replace {var} placeholders in template text with context values., `get_template_override` — Get custom email template from the database., `get_all_overrides` — Get all custom template overrides from the database., `get_overrides_for_type` — Get all language overrides for a specific notification type., `save_template_override` — Save or update a custom email template in the database., `get_rendered_override` — Get a custom template override rendered with the base email template., `delete_template_override` — Delete a custom template override (revert to default).
 - `app/cabinet/services/email_templates.py` — Python-модуль
-  Классы: `EmailNotificationTemplates` (88 методов)
+  Классы: `EmailNotificationTemplates` (82 методов)
   Функции: нет
 - `app/cabinet/services/email_type_switch.py` — Python-модуль
   Классы: нет
@@ -633,7 +627,7 @@
   Классы: нет
   Функции: `run_alembic_upgrade` — Run ``alembic upgrade head``, handling fresh and legacy databases.
 - `app/database/models.py` — Python-модуль
-  Классы: `AwareDateTime` (2 методов), `UserStatus`, `SubscriptionStatus`, `TransactionType`, `PromoCodeType`, `PaymentMethod`, `MainMenuButtonActionType`, `MainMenuButtonVisibility`, `WheelPrizeType`, `WheelSpinPaymentType`, `CryptoBotPayment` (5 методов), `XRocketPayment` (5 методов), `Pay2328Payment` (5 методов), `WataPayment` (2 методов), `PlategaPayment` (2 методов), `PlategaSubscription` (1 методов), `PromoGroup` (3 методов), `UserPromoGroup` (1 методов), `Tariff` (21 методов), `PartnerStatus`, `User` (12 методов), `Subscription` (17 методов), `GraceAccessSessionModel`, `TrafficPurchase` (1 методов), `Transaction` (1 методов), `PaidTrafficResetIntent`, `SubscriptionConversion` (2 методов), `PromoCode` (2 методов), `PromoCodeUse`, `CouponStatus`, `CouponBatch` (2 методов), `Coupon` (1 методов), `ReferralRewardType`, `ReferralRewardTrigger`, `ReferralRewardMode`, `ReferralRewardLevel` (1 методов), `ReferralEarning` (1 методов), `WithdrawalRequestStatus`, `WithdrawalRequest` (1 методов), `PartnerApplication`, `ReferralContest` (1 методов), `ReferralContestEvent` (1 методов), `ReferralContestVirtualParticipant` (1 методов), `ContestTemplate`, `ContestRound`, `ContestAttempt`, `Squad` (1 методов), `ServiceRule`, `PrivacyPolicy`, `PublicOffer`, `LegalConsent`, `RecurrentPayments`, `FaqSetting`, `FaqPage`, `SystemSetting`, `EmailTemplate`, `MonitoringLog`, `SentNotification`, `SubscriptionEvent`, `DiscountOffer`, `PromoOfferTemplate`, `SubscriptionTemporaryAccess`, `PromoOfferLog`, `BroadcastHistory`, `Poll`, `PollQuestion`, `PollOption`, `PollResponse`, `PollAnswer`, `ServerSquad` (3 методов), `SubscriptionServer`, `SupportAuditLog`, `UserMessage` (1 методов), `WelcomeText`, `PinnedMessage`, `AdvertisingCampaign` (4 методов), `AdvertisingCampaignRegistration` (1 методов), `TicketStatus`, `Ticket` (8 методов), `TicketMessage` (3 методов), `WebApiToken` (1 методов), `MainMenuButton` (3 методов), `MenuLayoutHistory` (1 методов), `ButtonClickLog` (1 методов), `Webhook` (1 методов), `WebhookDelivery` (1 методов), `CabinetRefreshToken` (4 методов), `WheelConfig` (1 методов), `WheelPrize` (1 методов), `WheelSpin` (3 методов), `TicketNotification` (1 методов), `PaymentMethodConfig` (1 методов), `RequiredChannel` (1 методов), `UserChannelSubscription` (1 методов), `AdminRole` (1 методов), `UserRole` (1 методов), `AccessPolicy` (1 методов), `AdminAuditLog` (1 методов), `LandingPage` (1 методов), `GuestPurchaseStatus`, `GuestPurchase` (1 методов), `NewsArticle` (1 методов), `NewsCategory` (1 методов), `NewsTag` (1 методов), `YandexClientIdMap`, `InfoPage`, `UserDeviceAlias`, `SystemErrorEvent`, `EmailQueueItem`, `ReachabilityBatch`, `ReachabilityJob`, `ReachabilityLeg`, `ReachabilityTargetPref`, `DpiCheckerAction`, `UserReminder` (1 методов), `UserReminderState`, `MassSendJob`, `DecisionLog`
+  Классы: `AwareDateTime` (2 методов), `UserStatus`, `SubscriptionStatus`, `TransactionType`, `PromoCodeType`, `PaymentMethod`, `MainMenuButtonActionType`, `MainMenuButtonVisibility`, `WheelPrizeType`, `WheelSpinPaymentType`, `CryptoBotPayment` (5 методов), `XRocketPayment` (5 методов), `Pay2328Payment` (5 методов), `WataPayment` (2 методов), `PlategaPayment` (2 методов), `PlategaSubscription` (1 методов), `PromoGroup` (3 методов), `UserPromoGroup` (1 методов), `Tariff` (21 методов), `PartnerStatus`, `User` (12 методов), `Subscription` (17 методов), `GraceAccessSessionModel`, `TrafficPurchase` (1 методов), `Transaction` (1 методов), `PaidTrafficResetIntent`, `SubscriptionConversion` (2 методов), `PromoCode` (2 методов), `PromoCodeUse`, `CouponStatus`, `CouponBatch` (2 методов), `Coupon` (1 методов), `ReferralRewardType`, `ReferralRewardTrigger`, `ReferralRewardMode`, `ReferralRewardLevel` (1 методов), `ReferralEarning` (1 методов), `WithdrawalRequestStatus`, `WithdrawalRequest` (1 методов), `PartnerApplication`, `Squad` (1 методов), `ServiceRule`, `PrivacyPolicy`, `PublicOffer`, `LegalConsent`, `RecurrentPayments`, `FaqSetting`, `FaqPage`, `SystemSetting`, `EmailTemplate`, `MonitoringLog`, `SentNotification`, `SubscriptionEvent`, `DiscountOffer`, `PromoOfferTemplate`, `SubscriptionTemporaryAccess`, `PromoOfferLog`, `BroadcastHistory`, `ServerSquad` (3 методов), `SubscriptionServer`, `SupportAuditLog`, `UserMessage` (1 методов), `WelcomeText`, `PinnedMessage`, `AdvertisingCampaign` (4 методов), `AdvertisingCampaignRegistration` (1 методов), `TicketStatus`, `Ticket` (8 методов), `TicketMessage` (3 методов), `WebApiToken` (1 методов), `MainMenuButton` (3 методов), `MenuLayoutHistory` (1 методов), `ButtonClickLog` (1 методов), `Webhook` (1 методов), `WebhookDelivery` (1 методов), `CabinetRefreshToken` (4 методов), `WheelConfig` (1 методов), `WheelPrize` (1 методов), `WheelSpin` (3 методов), `TicketNotification` (1 методов), `PaymentMethodConfig` (1 методов), `RequiredChannel` (1 методов), `UserChannelSubscription` (1 методов), `AdminRole` (1 методов), `UserRole` (1 методов), `AccessPolicy` (1 методов), `AdminAuditLog` (1 методов), `LandingPage` (1 методов), `GuestPurchaseStatus`, `GuestPurchase` (1 методов), `NewsArticle` (1 методов), `NewsCategory` (1 методов), `NewsTag` (1 методов), `YandexClientIdMap`, `InfoPage`, `UserDeviceAlias`, `SystemErrorEvent`, `EmailQueueItem`, `ReachabilityBatch`, `ReachabilityJob`, `ReachabilityLeg`, `ReachabilityTargetPref`, `DpiCheckerAction`, `UserReminder` (1 методов), `UserReminderState`, `MassSendJob`, `DecisionLog`
   Функции: нет
 
 #### app/database/crud
@@ -641,9 +635,6 @@
 - `app/database/crud/campaign.py` — Python-модуль
   Классы: нет
   Функции: `create_campaign`, `get_campaign_by_id`, `get_campaign_by_start_parameter`, `get_campaigns_list`, `get_campaigns_count`, `update_campaign`, `delete_campaign`, `get_campaign_registration_by_user`, `record_campaign_registration` — Создаёт или возвращает запись регистрации в рекламной кампании., `get_campaign_statistics`, `get_campaigns_overview`
-- `app/database/crud/contest.py` — Python-модуль
-  Классы: нет
-  Функции: `get_template_by_id`, `get_template_by_slug`, `list_templates`, `upsert_template`, `update_template_fields`, `create_round`, `get_active_rounds`, `get_active_round_by_template`, `finish_round`, `get_attempt`, `create_attempt`, `update_attempt` — Update existing attempt with answer and winner status., `clear_attempts`
 - `app/database/crud/coupon.py` — Python-модуль
   Классы: нет
   Функции: `generate_coupon_token` — 128-bit hex token: ``coupon_`` + 32 chars fits Telegram's 64-char start param., `create_coupon_batch`, `get_coupon_batch_by_id`, `get_coupon_batches`, `get_coupon_batches_count`, `get_coupon_by_token`, `get_batch_coupon_tokens` — Plain token strings (no entity hydration) — enough for the links export., `get_batch_status_counts`, `get_status_counts_for_batches` — Status counts for many batches in one query (list views)., `revoke_batch_coupons` — Flip all still-active coupons of the batch to REVOKED. Returns how many were revoked., `count_batch_redemptions_by_user` — Сколько купонов партии уже активировал пользователь., `delete_coupon_batch` — Полностью удаляет партию вместе с купонами. Возвращает число купонов.
@@ -692,9 +683,6 @@
 - `app/database/crud/platega_subscription.py` — Python-модуль
   Классы: нет
   Функции: `create_platega_subscription`, `get_platega_subscription_by_id`, `get_platega_subscription_by_id_for_update`, `get_platega_subscription_by_platega_id`, `get_active_platega_subscription_by_subscription`, `update_platega_subscription`, `list_platega_subscriptions_by_statuses`, `list_recently_cancelled_platega_subscriptions` — Недавно отменённые локально записи с remote-идентификатором., `get_latest_platega_subscription_by_subscription` — Последняя запись привязки по подписке независимо от статуса.
-- `app/database/crud/poll.py` — Python-модуль
-  Классы: нет
-  Функции: `create_poll`, `list_polls`, `get_poll_by_id`, `delete_poll`, `get_poll_response_by_id`, `record_poll_answer`, `get_poll_statistics`, `get_poll_responses_with_answers`
 - `app/database/crud/privacy_policy.py` — Python-модуль
   Классы: нет
   Функции: `get_privacy_policy`, `upsert_privacy_policy`, `set_privacy_policy_enabled`
@@ -725,9 +713,6 @@
 - `app/database/crud/referral.py` — Python-модуль
   Классы: нет
   Функции: `not_referee_directed` — Предикат «строка описывает МОЕГО реферала»., `get_user_campaign_id` — Получить campaign_id первой регистрации пользователя., `create_referral_earning` — Строка реферального ledger'а., `get_commission_payment_count` — Подсчитать количество комиссионных начислений реферера за платежи конкретного реферала., `get_referral_earnings_by_user`, `get_referral_statistics`, `get_top_referrers_by_period` — Получает топ рефереров за период., `get_user_referral_stats`, `get_user_referral_stats_light` — Облегчённая статистика для главного меню: один запрос к Postgres.
-- `app/database/crud/referral_contest.py` — Python-модуль
-  Классы: нет
-  Функции: `create_referral_contest`, `list_referral_contests`, `get_referral_contests_count`, `get_referral_contest`, `update_referral_contest`, `toggle_referral_contest`, `get_contests_for_events`, `get_contests_for_summaries`, `add_contest_event`, `get_contest_leaderboard` — Получить лидерборд конкурса., `get_referrer_score`, `get_contest_events_count`, `mark_daily_summary_sent`, `mark_final_summary_sent`, `delete_referral_contest`, `get_contest_payment_stats` — Получить статистику оплат по конкурсу., `get_contest_transaction_breakdown` — Получить разбивку транзакций по типам для конкурса., `debug_contest_transactions` — Показать транзакции которые учитываются в конкурсе для отладки., `sync_contest_events` — Синхронизировать события конкурса с реальными данными., `cleanup_invalid_contest_events` — Удалить события конкурса для рефералов, зарегистрированных ВНЕ периода конкурса., `add_virtual_participant`, `list_virtual_participants`, `delete_virtual_participant`, `update_virtual_participant_count`, `get_contest_leaderboard_with_virtual` — Лидерборд с виртуальными участниками.
 - `app/database/crud/referral_reward_level.py` — Python-модуль
   Классы: нет
   Функции: `normalize_reward_preference` — Предпочтение награды или ``None`` — «как настроено правилом»., `normalize_mode` — Режим наград с приведением к известному значению., `normalize_trigger`, `get_all_reward_levels`, `get_reward_level`, `upsert_reward_level` — Создать или обновить правило уровня., `delete_reward_level`
@@ -856,18 +841,12 @@
 - `app/handlers/common.py` — Python-модуль
   Классы: нет
   Функции: `handle_delete_ban_notification` — Удаляет уведомление о бане при нажатии на кнопку, `handle_webhook_notification_close` — Удаляет webhook-уведомление при нажатии кнопки Закрыть., `handle_noop`, `handle_current_page`, `handle_cancel`, `handle_unknown_message` — Человек написал боту текстом или прислал фото вне сценария., `handle_unknown_to_support` — Одним нажатием превращает сообщение в обращение (или дописывает в открытое)., `show_rules`, `register_handlers`
-- `app/handlers/contests.py` — Python-модуль
-  Классы: нет
-  Функции: `open_contests_menu_message` — Send the contests menu as a fresh message — entry point for the, `cmd_contests` — `/contests` command: open the contests menu., `show_contests_menu` — Show menu with available contest games., `play_contest` — Start playing a specific contest., `handle_pick` — Handle button pick in contest games., `handle_text_answer` — Handle text answer in contest games., `register_handlers` — Register contest handlers.
 - `app/handlers/gift_activation.py` — Python-модуль
   Классы: нет
   Функции: `handle_gift_activate` — Handle gift_activate:{purchase_id} callback from Telegram notification., `register_handlers`
 - `app/handlers/menu.py` — Python-модуль
   Классы: нет
   Функции: `build_main_menu_keyboard` — Клавиатура главного меню: show_main_menu, handle_back_to_menu и живое меню (live_menu_service)., `show_main_menu`, `handle_profile_unavailable`, `show_service_rules`, `show_info_menu`, `show_legal_menu` — n3c: единый вход «Правила и документы» — подменю включённых документов., `show_promo_groups_info`, `show_faq_pages`, `show_faq_page`, `show_privacy_policy`, `show_public_offer`, `show_info_page`, `show_language_menu`, `process_language_change`, `handle_back_to_menu`, `is_new_user_with_free_trial` — Ни одной подписки и бесплатный пробный ещё доступен — тот же гейт, что у кнопки пробного в меню., `get_main_menu_text`, `handle_activate_button` — Умная кнопка активации — система сама решает что делать:, `register_handlers`
-- `app/handlers/polls.py` — Python-модуль
-  Классы: нет
-  Функции: `handle_poll_start`, `handle_poll_answer`, `register_handlers`
 - `app/handlers/promo_deeplink.py` — Python-модуль
   Классы: нет
   Функции: `is_promo_deeplink`, `promo_code_from`, `claim_promo_link` — Обработать ссылку. ``True`` — параметр был промокодом и дальше его не разбирать.
@@ -932,15 +911,9 @@
 - `app/handlers/admin/campaigns.py` — Python-модуль
   Классы: нет
   Функции: `show_campaigns_menu`, `show_campaigns_overall_stats`, `show_campaigns_list`, `show_campaign_detail`, `show_campaign_edit_menu`, `start_edit_campaign_name`, `process_edit_campaign_name`, `start_edit_campaign_start_parameter`, `process_edit_campaign_start_parameter`, `start_edit_campaign_balance_bonus`, `process_edit_campaign_balance_bonus`, `start_edit_campaign_subscription_days`, `process_edit_campaign_subscription_days`, `start_edit_campaign_subscription_traffic`, `process_edit_campaign_subscription_traffic`, `start_edit_campaign_subscription_devices`, `process_edit_campaign_subscription_devices`, `start_edit_campaign_subscription_servers`, `toggle_edit_campaign_server`, `save_edit_campaign_subscription_servers`, `toggle_campaign_status`, `show_campaign_stats`, `confirm_delete_campaign`, `delete_campaign_confirmed`, `start_campaign_creation`, `process_campaign_name`, `process_campaign_start_parameter`, `select_campaign_bonus_type`, `process_campaign_balance_value`, `process_campaign_subscription_days`, `process_campaign_subscription_traffic`, `process_campaign_subscription_devices`, `toggle_campaign_server`, `finalize_campaign_subscription`, `select_campaign_tariff` — Обработка выбора тарифа для кампании., `process_campaign_tariff_days` — Обработка ввода длительности тарифа для кампании., `start_edit_campaign_tariff` — Начало редактирования тарифа кампании., `set_campaign_tariff` — Установка тарифа для кампании., `start_edit_campaign_tariff_days` — Начало редактирования длительности тарифа., `process_edit_campaign_tariff_days` — Обработка ввода новой длительности тарифа., `register_handlers`
-- `app/handlers/admin/contests.py` — Python-модуль
-  Классы: нет
-  Функции: `show_contests_menu`, `show_referral_contests_menu`, `list_contests`, `show_contest_details`, `toggle_contest`, `prompt_edit_summary_times`, `process_edit_summary_times`, `delete_contest`, `show_leaderboard`, `start_contest_creation`, `select_contest_mode`, `process_title`, `process_description`, `process_prize`, `process_start_date`, `process_end_date`, `finalize_contest_creation`, `show_detailed_stats`, `show_detailed_stats_page`, `sync_contest` — Синхронизировать события конкурса с реальными платежами., `debug_contest_transactions` — Показать транзакции рефералов конкурса для отладки., `show_virtual_participants`, `start_add_virtual_participant`, `process_virtual_participant_name`, `process_virtual_participant_count`, `delete_virtual_participant_handler`, `start_mass_virtual_participants` — Начинает массовое создание виртуальных участников (массовка)., `process_mass_virtual_count` — Обрабатывает количество призраков для массового создания., `process_mass_virtual_referrals` — Создаёт массовку призраков с рандомными именами., `start_edit_virtual_participant`, `process_edit_virtual_participant_count`, `register_handlers`
 - `app/handlers/admin/coupons.py` — Python-модуль
   Классы: нет
   Функции: `show_coupons_menu`, `handle_coupon_list_page`, `start_coupon_batch_creation`, `select_coupon_batch_tariff`, `process_coupon_batch_days`, `process_coupon_batch_count`, `process_coupon_batch_name`, `process_coupon_batch_price`, `process_coupon_batch_expiry`, `process_coupon_batch_per_user`, `confirm_coupon_batch_creation`, `show_coupon_batch`, `export_coupon_batch`, `ask_revoke_coupon_batch`, `confirm_revoke_coupon_batch`, `ask_delete_coupon_batch`, `confirm_delete_coupon_batch`, `register_handlers`
-- `app/handlers/admin/daily_contests.py` — Python-модуль
-  Классы: нет
-  Функции: `show_daily_contests`, `show_daily_contest`, `toggle_daily_contest`, `start_round_now`, `manual_start_round`, `prompt_edit_field`, `process_edit_field`, `edit_payload`, `process_payload`, `start_all_contests`, `close_all_rounds`, `reset_all_attempts`, `reset_attempts`, `close_round`, `register_handlers`
 - `app/handlers/admin/decisions.py` — Python-модуль
   Классы: нет
   Функции: `decisions_command`, `register_handlers`
@@ -965,9 +938,6 @@
 - `app/handlers/admin/payments.py` — Python-модуль
   Классы: нет
   Функции: `show_payments_overview`, `show_payment_details`, `manual_check_payment`, `check_all_payments` — Массовая проверка всех ожидающих платежей., `export_payments` — Экспорт данных платежей в JSON файл., `register_handlers`
-- `app/handlers/admin/polls.py` — Python-модуль
-  Классы: `PollCreationStates`
-  Функции: `show_polls_panel`, `start_poll_creation`, `process_poll_title`, `process_poll_description`, `process_poll_reward`, `process_poll_question`, `show_poll_details`, `start_poll_send`, `show_custom_target_menu`, `select_poll_target`, `select_custom_poll_target`, `confirm_poll_send`, `show_poll_stats`, `confirm_poll_delete`, `delete_poll_handler`, `register_handlers`
 - `app/handlers/admin/pricing.py` — Python-модуль
   Классы: `ChoiceOption` (1 методов), `SettingEntry` (2 методов)
   Функции: `show_pricing_menu`, `show_pricing_section`, `start_price_edit`, `start_setting_edit`, `process_pricing_input`, `toggle_setting`, `select_setting_choice`, `toggle_traffic_package`, `toggle_period_option`, `register_handlers`
@@ -994,7 +964,7 @@
   Функции: `show_reward_levels`, `toggle_reward_scheme` — Переключить схему наград., `add_reward_level`, `import_legacy_settings` — Перенести действующие настройки ``REFERRAL_*`` в уровень 1., `show_reward_level`, `toggle_level_active`, `cycle_level_mode` — Перебрать активные бонусы уровня: деньги → дни → оба., `cycle_level_trigger`, `confirm_delete_level` — Спросить перед удалением., `toggle_threshold_population` — Кого считать при проверке порога: всех приглашённых или только с пополнением., `delete_level`, `choose_level_tariff`, `set_level_tariff`, `start_level_value_edit`, `process_level_value`, `toggle_levels_mode` — Переключить, что означает номер уровня: глубину цепочки или ранг партнёра., `toggle_user_choice` — Разрешить или запретить пользователю выбирать вид награды и подписку для дней., `start_depth_edit` — Правка глубины обхода цепочки., `process_depth_value`, `register_handlers`
 - `app/handlers/admin/referrals.py` — Python-модуль
   Классы: нет
-  Функции: `show_referral_statistics`, `show_top_referrers` — Показывает топ рефереров (по умолчанию: неделя, по заработку)., `show_top_referrers_filtered` — Обрабатывает выбор периода и сортировки., `show_referral_settings`, `show_pending_withdrawal_requests` — Показывает список ожидающих заявок на вывод., `view_withdrawal_request` — Показывает детали заявки на вывод., `approve_withdrawal_request` — Одобряет заявку на вывод., `reject_withdrawal_request` — Отклоняет заявку на вывод., `complete_withdrawal_request` — Отмечает заявку как выполненную (деньги переведены)., `start_test_referral_earning` — Начинает процесс тестового начисления реферального дохода., `process_test_referral_earning` — Обрабатывает ввод тестового начисления., `show_referral_diagnostics` — Показывает диагностику реферальной системы по логам., `preview_referral_fixes` — Показывает предпросмотр исправлений потерянных рефералов., `apply_referral_fixes` — Применяет исправления потерянных рефералов., `check_missing_bonuses` — Проверяет по БД — всем ли рефералам начислены бонусы., `apply_missing_bonuses` — Применяет начисление пропущенных бонусов., `sync_referrals_with_contest` — Синхронизирует всех рефералов с активными конкурсами., `request_log_file_upload` — Запрашивает загрузку лог-файла для анализа., `receive_log_file` — Получает и анализирует загруженный лог-файл., `register_handlers`
+  Функции: `show_referral_statistics`, `show_top_referrers` — Показывает топ рефереров (по умолчанию: неделя, по заработку)., `show_top_referrers_filtered` — Обрабатывает выбор периода и сортировки., `show_referral_settings`, `show_pending_withdrawal_requests` — Показывает список ожидающих заявок на вывод., `view_withdrawal_request` — Показывает детали заявки на вывод., `approve_withdrawal_request` — Одобряет заявку на вывод., `reject_withdrawal_request` — Отклоняет заявку на вывод., `complete_withdrawal_request` — Отмечает заявку как выполненную (деньги переведены)., `start_test_referral_earning` — Начинает процесс тестового начисления реферального дохода., `process_test_referral_earning` — Обрабатывает ввод тестового начисления., `show_referral_diagnostics` — Показывает диагностику реферальной системы по логам., `preview_referral_fixes` — Показывает предпросмотр исправлений потерянных рефералов., `apply_referral_fixes` — Применяет исправления потерянных рефералов., `check_missing_bonuses` — Проверяет по БД — всем ли рефералам начислены бонусы., `apply_missing_bonuses` — Применяет начисление пропущенных бонусов., `request_log_file_upload` — Запрашивает загрузку лог-файла для анализа., `receive_log_file` — Получает и анализирует загруженный лог-файл., `register_handlers`
 - `app/handlers/admin/remnawave.py` — Python-модуль
   Классы: нет
   Функции: `show_squad_migration_menu`, `paginate_migration_source`, `handle_migration_source_selection`, `paginate_migration_target`, `handle_migration_target_selection`, `change_migration_target`, `confirm_squad_migration`, `cancel_squad_migration`, `handle_migration_page_info`, `show_remnawave_menu`, `show_system_stats`, `show_traffic_stats`, `show_nodes_management`, `show_node_details`, `manage_node`, `show_node_statistics`, `show_squad_details`, `manage_squad_action`, `show_squad_edit_menu`, `show_squad_inbounds_selection`, `show_squad_rename_form`, `cancel_squad_rename`, `process_squad_new_name`, `toggle_squad_inbound`, `save_squad_inbounds`, `show_squad_edit_menu_short`, `start_squad_creation`, `process_squad_name`, `toggle_create_inbound`, `finish_squad_creation`, `cancel_squad_creation`, `restart_all_nodes`, `show_sync_options`, `show_auto_sync_settings`, `toggle_auto_sync_setting`, `prompt_auto_sync_schedule`, `cancel_auto_sync_schedule`, `run_auto_sync_now`, `save_auto_sync_schedule`, `sync_all_users` — Выполняет полную синхронизацию всех пользователей, `sync_users_to_panel`, `show_sync_recommendations`, `validate_subscriptions`, `cleanup_subscriptions`, `force_cleanup_all_orphaned_users`, `confirm_force_cleanup`, `sync_users`, `show_squads_management`, `register_handlers`
@@ -1144,7 +1114,7 @@
 
 - `app/keyboards/admin.py` — Python-модуль
   Классы: нет
-  Функции: `get_admin_main_keyboard`, `get_admin_users_submenu_keyboard`, `get_admin_promo_submenu_keyboard`, `get_admin_communications_submenu_keyboard`, `get_admin_support_submenu_keyboard`, `get_admin_settings_submenu_keyboard`, `get_admin_system_submenu_keyboard`, `get_admin_trials_keyboard`, `get_admin_reports_keyboard`, `get_admin_report_result_keyboard`, `get_admin_users_keyboard`, `get_admin_users_filters_keyboard`, `get_admin_promocodes_keyboard`, `get_admin_campaigns_keyboard`, `get_admin_contests_root_keyboard`, `get_admin_contests_keyboard`, `get_contest_mode_keyboard`, `get_daily_contest_manage_keyboard`, `get_referral_contest_manage_keyboard`, `get_campaign_management_keyboard`, `get_campaign_edit_keyboard`, `get_campaign_bonus_type_keyboard`, `get_admin_messages_keyboard`, `get_pinned_message_keyboard`, `get_pinned_broadcast_confirm_keyboard` — Клавиатура для выбора: разослать сейчас или только при /start., `get_admin_remnawave_keyboard`, `get_admin_statistics_keyboard`, `get_user_management_keyboard`, `get_user_restrictions_keyboard` — Клавиатура управления ограничениями пользователя., `get_user_promo_group_keyboard`, `get_confirmation_keyboard`, `get_promocode_type_keyboard`, `get_broadcast_target_keyboard`, `get_custom_criteria_keyboard`, `get_broadcast_history_keyboard`, `get_node_management_keyboard`, `get_squad_management_keyboard`, `get_squad_edit_keyboard`, `get_monitoring_keyboard`, `get_monitoring_logs_keyboard`, `get_admin_pagination_keyboard`, `get_maintenance_keyboard`, `get_welcome_text_keyboard`, `get_broadcast_button_config`, `get_broadcast_button_labels`, `get_message_buttons_selector_keyboard`, `get_broadcast_media_keyboard`, `get_media_confirm_keyboard`, `get_updated_message_buttons_selector_keyboard_with_media`
+  Функции: `get_admin_main_keyboard`, `get_admin_users_submenu_keyboard`, `get_admin_promo_submenu_keyboard`, `get_admin_communications_submenu_keyboard`, `get_admin_support_submenu_keyboard`, `get_admin_settings_submenu_keyboard`, `get_admin_system_submenu_keyboard`, `get_admin_trials_keyboard`, `get_admin_reports_keyboard`, `get_admin_report_result_keyboard`, `get_admin_users_keyboard`, `get_admin_users_filters_keyboard`, `get_admin_promocodes_keyboard`, `get_admin_campaigns_keyboard`, `get_campaign_management_keyboard`, `get_campaign_edit_keyboard`, `get_campaign_bonus_type_keyboard`, `get_admin_messages_keyboard`, `get_pinned_message_keyboard`, `get_pinned_broadcast_confirm_keyboard` — Клавиатура для выбора: разослать сейчас или только при /start., `get_admin_remnawave_keyboard`, `get_admin_statistics_keyboard`, `get_user_management_keyboard`, `get_user_restrictions_keyboard` — Клавиатура управления ограничениями пользователя., `get_user_promo_group_keyboard`, `get_confirmation_keyboard`, `get_promocode_type_keyboard`, `get_broadcast_target_keyboard`, `get_custom_criteria_keyboard`, `get_broadcast_history_keyboard`, `get_node_management_keyboard`, `get_squad_management_keyboard`, `get_squad_edit_keyboard`, `get_monitoring_keyboard`, `get_monitoring_logs_keyboard`, `get_admin_pagination_keyboard`, `get_maintenance_keyboard`, `get_welcome_text_keyboard`, `get_broadcast_button_config`, `get_broadcast_button_labels`, `get_message_buttons_selector_keyboard`, `get_broadcast_media_keyboard`, `get_media_confirm_keyboard`, `get_updated_message_buttons_selector_keyboard_with_media`
 - `app/keyboards/button_icons.py` — Python-модуль
   Классы: нет
   Функции: `apply_button_icons` — Ставит icon_custom_emoji_id кнопкам с известным эмодзи и чистит текст.
@@ -1189,10 +1159,7 @@
 #### app/localization/locales
 
 - `app/localization/locales/en.json` — файл
-- `app/localization/locales/fa.json` — файл
 - `app/localization/locales/ru.json` — файл
-- `app/localization/locales/ua.json` — файл
-- `app/localization/locales/zh.json` — файл
 
 ### app/middlewares
 
@@ -1310,10 +1277,6 @@
 - `app/services/connected_accounts.py` — Python-модуль
   Классы: `ConnectedAccounts` (1 методов)
   Функции: нет
-- `app/services/contest_rotation_service.py` — Python-модуль
-  Классы: `ContestRotationService` (15 методов)
-  Функции: нет
-- `app/services/contests/`
 - `app/services/coupon_service.py` — Python-модуль
   Классы: `CouponRedemptionError` (1 методов), `CouponRedemptionResult`
   Функции: `is_coupon_token` — True if ``value`` has the exact coupon-token format (no DB hit)., `build_coupon_deeplink` — The single source of truth for the coupon activation deep link., `redeem_coupon` — Atomically redeem a one-time coupon for ``user``.
@@ -1459,9 +1422,6 @@
 - `app/services/platega_service.py` — Python-модуль
   Классы: `PlategaApiError` (1 методов), `PlategaService` (17 методов)
   Функции: нет
-- `app/services/poll_service.py` — Python-модуль
-  Классы: нет
-  Функции: `build_start_keyboard`, `send_poll_to_users`, `reward_user_for_poll`, `get_next_question`, `get_question_option`
 - `app/services/pricing_engine.py` — Python-модуль
   Классы: `TariffSwitchPricingUnavailableError`, `TariffBreakdown`, `ClassicBreakdown`, `RenewalPricing` (1 методов), `TariffSwitchResult` (2 методов), `PricingEngine` (21 методов)
   Функции: нет
@@ -1502,11 +1462,8 @@
 - `app/services/recurrent_purchase_selection.py` — Python-модуль
   Классы: нет
   Функции: `resolve_recurrent_purchase_selection`
-- `app/services/referral_contest_service.py` — Python-модуль
-  Классы: `ReferralContestService` (21 методов)
-  Функции: нет
 - `app/services/referral_diagnostics_service.py` — Python-модуль
-  Классы: `ReferralClick`, `LostReferral` (2 методов), `DiagnosticReport` (2 методов), `FixDetail`, `FixReport`, `MissingBonus` (2 методов), `MissingBonusReport` (2 методов), `ReferralDiagnosticsService` (12 методов)
+  Классы: `ReferralClick`, `LostReferral` (2 методов), `DiagnosticReport` (2 методов), `FixDetail`, `FixReport`, `MissingBonus` (2 методов), `MissingBonusReport` (2 методов), `ReferralDiagnosticsService` (11 методов)
   Функции: нет
 - `app/services/referral_reward_service.py` — Python-модуль
   Классы: `RewardEvent`, `LevelConfig` (3 методов), `RewardComponent` (1 методов), `ReferralRewardLevelService` (5 методов), `DaysGrant`, `GrantOutcome` (1 методов), `LevelView`, `TierProgress`
@@ -1668,21 +1625,6 @@
 - `app/services/yandex_offline_conv_service.py` — Python-модуль
   Классы: нет
   Функции: `spawn_bg` — Spawn a background Yandex conversion task with proper reference tracking., `fire_trial_bg` — Fire trial event in background with its own DB session., `fire_purchase_bg` — Fire purchase event in background with its own DB session., `store_cid` — Store Yandex ClientID (and optional yclid) for a user. Returns True if stored., `store_cid_and_fire_purchase` — Persist a freshly-provided CID, then fire a purchase event in background., `store_cid_only` — Persist a freshly-provided CID WITHOUT firing a purchase event., `store_cid_and_fire_trial` — Same as `store_cid_and_fire_purchase` but for trial activation (#558449)., `on_registration` — Fire registration event (once per user)., `on_trial` — Fire trial-add event (once per user)., `on_purchase` — Fire ecommerce purchase event (every payment).
-
-#### app/services/contests
-
-- `app/services/contests/__init__.py` — Python-модуль
-  Классы: нет
-  Функции: нет
-- `app/services/contests/attempt_service.py` — Python-модуль
-  Классы: `AttemptResult`, `ContestAttemptService` (5 методов)
-  Функции: нет
-- `app/services/contests/enums.py` — Python-модуль
-  Классы: `GameType` (2 методов), `RoundStatus`, `PrizeType`
-  Функции: нет
-- `app/services/contests/games.py` — Python-модуль
-  Классы: `GameRenderResult`, `AnswerCheckResult`, `BaseGameStrategy` (5 методов), `QuestButtonsStrategy` (3 методов), `LockHackStrategy` (3 методов), `ServerLotteryStrategy` (3 методов), `BlitzReactionStrategy` (3 методов), `LetterCipherStrategy` (3 методов), `EmojiGuessStrategy` (3 методов), `AnagramStrategy` (3 методов)
-  Функции: `get_game_strategy` — Get game strategy by type.
 
 #### app/services/dpichecker
 
@@ -1964,7 +1906,7 @@
   Функции: `canonical_email` — Вид адреса для сравнения: тот же ящик — та же строка., `is_email_alias_of` — Оба адреса ведут в один ящик, но записаны по-разному., `email_domain` — Домен адреса с учётом слияния доменов-близнецов (ya.ru → yandex.ru)., `has_alias_forms` — У этого адреса вообще бывают алиасы — есть ли смысл искать двойников., `sibling_domains` — Домены, письма с которых попадают в тот же ящик, включая сам домен., `alias_match_clause` — SQLAlchemy-условие: колонка хранит адрес того же ящика, что и ``email``.
 - `app/utils/formatters.py` — Python-модуль
   Классы: нет
-  Функции: `format_datetime` — Момент в часовом поясе оператора (settings.TIMEZONE); без зоны — считается UTC., `format_date`, `format_time_ago`, `format_days_declension`, `format_duration`, `format_bytes`, `format_percentage`, `format_number`, `truncate_text`, `format_username`, `format_username_link` — Telegram-логин явной ссылкой., `format_subscription_status`, `format_traffic_usage`, `format_boolean`, `format_human_date` — «12 марта» без года. language — код локали бота (ru/ua/en/zh/fa)., `format_human_datetime` — «12 марта, 14:30» — человеческая дата + время суток.
+  Функции: `format_datetime` — Момент в часовом поясе оператора (settings.TIMEZONE); без зоны — считается UTC., `format_date`, `format_time_ago`, `format_days_declension`, `format_duration`, `format_bytes`, `format_percentage`, `format_number`, `truncate_text`, `format_username`, `format_username_link` — Telegram-логин явной ссылкой., `format_subscription_status`, `format_traffic_usage`, `format_boolean`, `format_human_date` — «12 марта» без года. language — код локали бота (ru/en)., `format_human_datetime` — «12 марта, 14:30» — человеческая дата + время суток.
 - `app/utils/formatting.py` — Python-модуль
   Классы: нет
   Функции: `safe_html_name` — HTML-escape a display name for Telegram HTML messages., `user_html_link` — Build an HTML-safe clickable user link for Telegram messages., `format_traffic` — Форматирует трафик., `format_price_kopeks` — Форматирует цену из копеек в рубли., `format_period` — Форматирует период. Бессрочный (ULTIMA, 2222 дня) — «Навсегда».
@@ -2181,9 +2123,6 @@
 - `app/webapi/routes/config.py` — Python-модуль
   Классы: нет
   Функции: `list_categories`, `list_settings`, `get_setting`, `update_setting`, `reset_setting`
-- `app/webapi/routes/contests.py` — Python-модуль
-  Классы: нет
-  Функции: `list_daily_templates`, `get_daily_template`, `update_daily_template`, `start_round_now`, `list_rounds`, `get_round`, `finish_round_now`, `list_attempts`, `list_referral`, `create_referral`, `get_referral`, `update_referral`, `toggle_referral`, `delete_referral`, `list_referral_events`, `get_referral_detailed_stats`
 - `app/webapi/routes/health.py` — Python-модуль
   Классы: нет
   Функции: `health_check`, `database_health` — Детальная информация о состоянии базы данных., `pool_metrics` — Метрики пула подключений к базе данных.
@@ -2211,9 +2150,6 @@
 - `app/webapi/routes/pinned_messages.py` — Python-модуль
   Классы: нет
   Функции: `list_pinned_messages` — Получить список всех закреплённых сообщений., `get_active_message` — Получить текущее активное закреплённое сообщение., `get_pinned_message` — Получить закреплённое сообщение по ID., `create_pinned_message` — Создать новое закреплённое сообщение., `update_pinned_message` — Обновить закреплённое сообщение., `update_pinned_message_settings` — Обновить только настройки закреплённого сообщения., `activate_pinned_message` — Активировать закреплённое сообщение., `broadcast_message` — Разослать закреплённое сообщение всем активным пользователям., `deactivate_active_message` — Деактивировать текущее активное закреплённое сообщение., `unpin_active_message` — Открепить сообщение у всех пользователей и деактивировать., `delete_pinned_message` — Удалить закреплённое сообщение.
-- `app/webapi/routes/polls.py` — Python-модуль
-  Классы: нет
-  Функции: `list_polls`, `get_poll`, `create_poll_endpoint`, `delete_poll`, `get_poll_stats`, `get_poll_responses`, `send_poll`
 - `app/webapi/routes/promo_groups.py` — Python-модуль
   Классы: нет
   Функции: `list_promo_groups`, `get_promo_group`, `create_promo_group_endpoint`, `update_promo_group_endpoint`, `delete_promo_group_endpoint`
@@ -2286,9 +2222,6 @@
 - `app/webapi/schemas/config.py` — Python-модуль
   Классы: `SettingCategorySummary`, `SettingCategoryRef`, `SettingChoice`, `SettingDefinition`, `SettingUpdateRequest`
   Функции: нет
-- `app/webapi/schemas/contests.py` — Python-модуль
-  Классы: `ContestTemplateResponse`, `ContestTemplateListResponse`, `ContestTemplateUpdateRequest`, `StartRoundRequest`, `ContestRoundResponse`, `ContestRoundListResponse`, `ContestAttemptUser`, `ContestAttemptResponse`, `ContestAttemptListResponse`, `ReferralContestResponse`, `ReferralContestListResponse`, `ReferralContestCreateRequest`, `ReferralContestUpdateRequest`, `ReferralContestLeaderboardItem`, `ReferralContestDetailResponse`, `ReferralContestEventUser`, `ReferralContestEventResponse`, `ReferralContestEventListResponse`, `ReferralContestParticipant`, `ReferralContestDetailedStatsResponse`
-  Функции: нет
 - `app/webapi/schemas/health.py` — Python-модуль
   Классы: `HealthFeatureFlags`, `HealthCheckResponse`
   Функции: нет
@@ -2315,9 +2248,6 @@
   Функции: нет
 - `app/webapi/schemas/pinned_messages.py` — Python-модуль
   Классы: `PinnedMessageMedia`, `PinnedMessageBase`, `PinnedMessageCreateRequest`, `PinnedMessageUpdateRequest`, `PinnedMessageSettingsRequest`, `PinnedMessageResponse`, `PinnedMessageBroadcastResponse`, `PinnedMessageUnpinResponse`, `PinnedMessageListResponse`
-  Функции: нет
-- `app/webapi/schemas/polls.py` — Python-модуль
-  Классы: `PollOptionCreate` (1 методов), `PollQuestionCreate` (2 методов), `PollCreateRequest` (3 методов), `PollQuestionOptionResponse`, `PollQuestionResponse`, `PollSummaryResponse`, `PollDetailResponse`, `PollListResponse`, `PollOptionStats`, `PollQuestionStats`, `PollStatisticsResponse`, `PollAnswerResponse`, `PollUserResponse`, `PollResponsesListResponse`, `PollSendRequest`, `PollSendResponse`
   Функции: нет
 - `app/webapi/schemas/promo_groups.py` — Python-модуль
   Классы: `PromoGroupResponse`, `PromoGroupCreateRequest`, `PromoGroupUpdateRequest`, `PromoGroupListResponse`
@@ -2414,7 +2344,6 @@
 - `docs/apple-iap-ios-requirements.md` — файл
 - `docs/autopay-concurrency.md` — файл
 - `docs/broadcast_audiences.md` — файл
-- `docs/contests-api.md` — файл
 - `docs/grace-access.md` — файл
 - `docs/handoffs/`
 - `docs/hwid-limit-reconciliation.md` — файл
@@ -2441,10 +2370,7 @@
 ## locales
 
 - `locales/en.json` — файл
-- `locales/fa.json` — файл
 - `locales/ru.json` — файл
-- `locales/ua.json` — файл
-- `locales/zh.json` — файл
 
 ## migrations
 
@@ -2895,6 +2821,9 @@
 - `migrations/alembic/versions/0145_replace_heleket_with_2328.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0146_remove_contests_and_polls.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
 
 ## scripts
 
@@ -2951,7 +2880,7 @@
   Функции: `test_postgres_18_with_new_volume_at_the_18_mount_point`, `test_guard_is_the_entrypoint_and_sees_the_old_volume_read_only`, `test_compose_files_agree_on_the_postgres_service`, `test_initdb_args_and_healthcheck_preserved`, `guard_env` — Окружение как в контейнере: PGDATA нового кластера, старый том, подставной entrypoint., `test_guard_starts_a_fresh_install`, `test_guard_refuses_empty_18_while_15_data_exists`, `test_guard_starts_after_migration_even_if_old_volume_remains`
 - `tests/test_config_languages.py` — Python-модуль
   Классы: нет
-  Функции: `test_available_languages_default_contains_fa`, `test_available_languages_normalizes_and_deduplicates`
+  Функции: `test_available_languages_default_is_russian_and_english`, `test_available_languages_normalizes_and_deduplicates`
 - `tests/test_copy_effect_stars.py` — Python-модуль
   Классы: нет
   Функции: `test_referral_screen_has_no_copy_button`, `test_stars_invoice_with_a_period_asks_telegram_for_a_recurring_charge`, `test_stars_subscription_is_off_by_default`, `test_subscription_screen_has_no_copy_link_button`
@@ -3198,9 +3127,6 @@
 - `tests/cabinet/test_admin_user_activity.py` — Python-модуль
   Классы: нет
   Функции: `test_activity_route_registered`, `test_activity_sources_shape`, `test_activity_dedup_filters_in_sql` — Транзакции, покрытые событиями/начислениями, исключаются на уровне SQL;, `test_activity_unknown_user_404`, `test_activity_unknown_type_400`, `test_activity_merges_and_sorts_desc` — Записи из разных источников сливаются и сортируются по времени убыванию., `test_activity_types_filter_limits_sources`, `test_button_click_sources_split_by_type` — Клики бота и действия кабинета — раздельные источники одной таблицы.
-- `tests/cabinet/test_admin_user_detail_sales_mode.py` — Python-модуль
-  Классы: нет
-  Функции: `test_sales_mode_fields_follow_settings`, `test_detail_response_declares_mode_fields`
 - `tests/cabinet/test_admin_user_detail_subscription_ownership.py` — Python-модуль
   Классы: нет
   Функции: `owned_subscription`, `foreign_subscription`, `ownership_boundary` — Make the authoritative lookup return only the subscription owned by OWNER_ID., `panel_service`, `test_authoritative_subscription_lookup_constrains_id_and_user_id` — Would fail if a route reverted to an id-only subscription lookup., `test_subscription_reads_and_device_delete_accept_owned_subscription` — Every BP-S route uses the selected owned subscription in either mode., `test_subscription_reads_and_device_delete_reject_foreign_and_absent_without_panel_access` — No rejected BP-S request may construct or call the panel client in either mode., `test_panel_info_validates_supplied_subscription_before_unconfigured_service_access` — Would fail if panel-info checks service configuration before ownership., `test_panel_info_does_not_fall_back_to_user_panel_id_for_selected_unlinked_subscription` — Would fail if a selected null-link subscription leaked legacy panel information., `test_selected_actions_pin_sync_to_the_selected_identity_when_legacy_mode_is_enabled` — A supplied subscription id must opt out of all single-tariff fallbacks., `test_selected_sync_uses_only_selected_panel_id_when_legacy_mode_is_enabled` — The helper itself must not substitute the user's legacy panel user id., `test_selected_sync_with_no_panel_link_does_not_substitute_legacy_identity` — A null selected link must cause no panel access, even in legacy mode., `test_selected_devices_return_selected_subscription_device_limit`, `test_subscription_actions_reject_foreign_or_absent_ids_before_mutation` — Would fail if action selection trusted an eagerly loaded subscription list., `test_subscription_actions_accept_an_owned_subscription` — An ownership guard must not reject the requested user's own subscription., `test_selected_reset_returns_unsuccessful_when_panel_deactivation_fails`, `test_selected_reset_without_link_does_not_substitute_legacy_identity`, `test_selected_reset_cancels_both_recurring_bindings` — Живая привязка автопродления воскресила бы только что сброшенную подписку.
@@ -3258,9 +3184,6 @@
 - `tests/cabinet/test_bulk_delete_subscription_lazy_user.py` — Python-модуль
   Классы: нет
   Функции: `test_known_subscriptions_falls_back_to_target` — Коллекция недоступна → берём целевую подписку, а не падаем., `test_known_subscriptions_uses_loaded_collection` — Коллекция загружена → отдаём её целиком, запасная не нужна., `test_known_subscriptions_keeps_loaded_empty_list_empty` — Загруженный пустой список — это «подписок нет», а не пробел в данных., `test_active_paid_skip_reports_target_without_collection` — Ветка «активная платная» тоже читает подписки — и тоже не должна падать., `test_execute_for_user_survives_unloaded_collection` — Досборка подписок в _execute_for_user не должна ронять действие., `test_known_subscriptions_falls_back_when_sqlalchemy_21_wraps_missing_greenlet`, `test_delete_subscription_survives_unloaded_collection` — Удаление истёкшего триала доходит до конца, а не падает на подписках.
-- `tests/cabinet/test_contest_answer_server_side.py` — Python-модуль
-  Классы: нет
-  Функции: `test_self_consistent_answer_no_longer_wins`, `test_correct_index_wins_regardless_of_client_suffix`, `test_no_prize_when_winner_limit_reached`, `test_game_data_does_not_reveal_secret`
 - `tests/cabinet/test_coupon_routes.py` — Python-модуль
   Классы: нет
   Функции: `test_coupon_routes_registered`, `test_coupons_permissions_registered`, `test_create_batch_returns_links_and_tokens`, `test_create_batch_rejects_inactive_tariff`, `test_create_batch_rejects_blank_name`, `test_get_batch_404_when_missing`, `test_links_export_counts_active_only`, `test_revoke_returns_count_and_updated_card`, `test_redeem_success_for_telegram_user_sends_no_email`, `test_redeem_notifies_email_only_user`, `test_redeem_maps_service_errors_to_structured_contract`, `test_public_status_returns_offer_for_active_coupon`, `test_public_status_is_uniform_404_for_consumed_coupon`, `test_public_status_rate_limited`, `test_public_status_rejects_malformed_token_without_db_hit`
@@ -3308,7 +3231,7 @@
   Функции: `test_style_block_content_is_stripped`, `test_script_block_content_is_stripped`, `test_style_block_stripped_case_insensitive_and_multiline`, `test_entities_unescaped_amp_last`, `test_blank_line_runs_are_collapsed`, `test_real_default_template_produces_clean_plain_text` — Регрессия на живом шаблоне: дефолтное письмо верификации собирается на, `test_unclosed_style_block_does_not_leak_css` — Битый шаблон (частый случай для кастомных писем из админки): открытый, `test_send_email_plain_part_is_clean` — End-to-end: send_email должен положить в text/plain часть очищенный текст,
 - `tests/cabinet/test_email_redesign.py` — Python-модуль
   Классы: нет
-  Функции: `test_actionable_email_has_deep_link_button`, `test_no_placeholder_or_python_artifacts_left`, `test_auth_emails_have_button_and_plain_link`, `test_email_change_code_puts_code_in_subject_and_big_block`, `test_expiring_subject_uses_russian_plural`, `test_known_subscription_links_straight_to_its_renew_screen`, `test_legacy_languages_keep_their_texts`, `test_inliner_styles_default_layout_once_and_skips_foreign_documents`, `test_inliner_keeps_explicit_styles_last`, `test_plain_text_keeps_button_link_and_drops_preheader`, `test_payment_reminder_uses_shared_layout`
+  Функции: `test_actionable_email_has_deep_link_button`, `test_no_placeholder_or_python_artifacts_left`, `test_auth_emails_have_button_and_plain_link`, `test_email_change_code_puts_code_in_subject_and_big_block`, `test_expiring_subject_uses_russian_plural`, `test_known_subscription_links_straight_to_its_renew_screen`, `test_inliner_styles_default_layout_once_and_skips_foreign_documents`, `test_inliner_keeps_explicit_styles_last`, `test_plain_text_keeps_button_link_and_drops_preheader`, `test_payment_reminder_uses_shared_layout`
 - `tests/cabinet/test_email_registration_throttle.py` — Python-модуль
   Классы: нет
   Функции: `test_windows_come_from_settings_and_are_checked_in_order`, `test_tripped_slow_window_returns_429_with_its_retry_after`, `test_zero_disables_a_window`, `test_standalone_registration_uses_the_throttle` — Боевой обработчик зовёт общий дроссель, а не свой минутный лимит.
@@ -3575,7 +3498,7 @@
   Функции: `test_windows_come_from_settings`, `test_address_key_is_a_digest_and_ignores_case` — Ключ лимита оседает в Redis и в его логах — сам адрес туда попадать не должен., `test_one_inbox_is_protected_across_addresses` — Лимит по IP не спасает чужой ящик: окно по адресу отдаёт 429 само по себе., `test_zero_disables_the_address_window`, `test_pending_address_gets_a_fresh_link`, `test_unknown_address_answers_the_same_and_sends_nothing`, `test_verified_address_answers_the_same_and_keeps_its_token`, `test_throttle_stops_the_send`
 - `tests/cabinet/test_webhook_email_templates.py` — Python-модуль
   Классы: нет
-  Функции: `test_every_webhook_type_has_email_template_in_every_language` — Новый WEBHOOK_* тип без email-шаблона — регресс к «почта молча пропущена»., `test_webhook_email_language_fallback_to_ru`, `test_webhook_email_localized_subjects_differ_from_ru` — zh/ua — не заглушки: тема отличается от русской., `test_device_name_substitution_and_placeholder_hygiene`, `test_device_name_is_html_escaped`, `test_winback_types_have_email_template_in_every_language`, `test_winback_discount_renders_percent_everywhere`, `test_winback_expired_1d_escapes_end_date`
+  Функции: `test_every_webhook_type_has_email_template_in_every_language` — Новый WEBHOOK_* тип без email-шаблона — регресс к «почта молча пропущена»., `test_webhook_email_language_fallback_to_ru`, `test_webhook_email_localized_subjects_differ_from_ru` — en — не заглушка: тема отличается от русской., `test_device_name_substitution_and_placeholder_hygiene`, `test_device_name_is_html_escaped`, `test_winback_types_have_email_template_in_every_language`, `test_winback_discount_renders_percent_everywhere`, `test_winback_expired_1d_escapes_end_date`
 - `tests/cabinet/test_websocket_client_gone_is_not_an_error.py` — Python-модуль
   Классы: нет
   Функции: `test_known_disconnects_are_recognised`, `test_real_failures_are_not_mistaken_for_a_disconnect`, `test_cabinet_socket_stays_quiet_when_client_is_gone`, `test_cabinet_socket_still_reports_a_real_failure`, `test_cabinet_socket_survives_a_disconnect_while_refusing` — Отказ неавторизованному тоже пишет в сокет — и тоже может не застать клиента., `test_webapi_socket_stays_quiet_when_client_is_gone`
@@ -5513,7 +5436,7 @@
   Функции: нет
 - `tests/utils/test_formatters_basic.py` — Python-модуль
   Классы: нет
-  Функции: `test_format_datetime_handles_iso_strings` — ISO-строка должна корректно преобразовываться в отформатированный текст., `test_format_date_uses_custom_format` — Можно задавать собственный шаблон вывода., `test_format_time_ago_returns_human_readable_text` — Разница во времени должна переводиться в человеко-понятную строку., `test_format_days_declension_handles_russian_rules` — Склонение дней в русском языке зависит от числа., `test_format_days_declension_uses_russian_fallback_for_fa` — Для fa используем fallback на русские формы до полной локализации., `test_format_duration_switches_units` — В зависимости от длины интервала выбирается подходящая единица измерения., `test_format_bytes_scales_value` — Размер должен выражаться в наиболее подходящей единице., `test_format_percentage_respects_precision` — Проценты форматируются с нужным количеством знаков., `test_format_number_inserts_separators` — Разделители тысяч должны расставляться корректно как для int, так и для float., `test_truncate_text_appends_suffix` — Строки, превышающие лимит, должны обрезаться и дополняться суффиксом., `test_format_username_prefers_full_name` — Полное имя имеет приоритет, затем username, затем ID., `test_format_subscription_status_handles_active_and_expired` — Статус подписки различается для активных/просроченных случаев., `test_format_traffic_usage_supports_unlimited` — При безлимитном тарифе в строке должна появляться бесконечность., `test_format_boolean_localises_output` — Булевые значения отображаются локализованными словами., `test_format_boolean_uses_russian_fallback_for_fa` — Для fa булевы значения пока используют базовый ru fallback., `test_format_username_link_wraps_telegram_handle_in_anchor` — Rich-сообщения идут со skip_entity_detection=True — ссылка нужна явная., `test_format_username_link_does_not_double_the_at_sign` — Логин может прийти уже с собакой — в тексте она должна остаться одна., `test_format_username_link_returns_fallback_without_username` — Пустой логин отдаётся текстом-заглушкой, без собаки и без ссылки., `test_format_username_link_keeps_non_telegram_logins_as_text` — OAuth-регистрация кладёт в users.username логин Discord/Яндекса., `test_format_username_link_escapes_html_metacharacters` — Значение попадает и в href, и в текст — экранируем оба., `test_admin_dates_are_shown_in_operator_zone` — Жалоба 4.12.0: панель и «Моя подписка» — 18.09.2026 14:17, админка бота — 11:17 (UTC).
+  Функции: `test_format_datetime_handles_iso_strings` — ISO-строка должна корректно преобразовываться в отформатированный текст., `test_format_date_uses_custom_format` — Можно задавать собственный шаблон вывода., `test_format_time_ago_returns_human_readable_text` — Разница во времени должна переводиться в человеко-понятную строку., `test_format_days_declension_handles_russian_rules` — Склонение дней в русском языке зависит от числа., `test_format_duration_switches_units` — В зависимости от длины интервала выбирается подходящая единица измерения., `test_format_bytes_scales_value` — Размер должен выражаться в наиболее подходящей единице., `test_format_percentage_respects_precision` — Проценты форматируются с нужным количеством знаков., `test_format_number_inserts_separators` — Разделители тысяч должны расставляться корректно как для int, так и для float., `test_truncate_text_appends_suffix` — Строки, превышающие лимит, должны обрезаться и дополняться суффиксом., `test_format_username_prefers_full_name` — Полное имя имеет приоритет, затем username, затем ID., `test_format_subscription_status_handles_active_and_expired` — Статус подписки различается для активных/просроченных случаев., `test_format_traffic_usage_supports_unlimited` — При безлимитном тарифе в строке должна появляться бесконечность., `test_format_boolean_localises_output` — Булевые значения отображаются локализованными словами., `test_format_username_link_wraps_telegram_handle_in_anchor` — Rich-сообщения идут со skip_entity_detection=True — ссылка нужна явная., `test_format_username_link_does_not_double_the_at_sign` — Логин может прийти уже с собакой — в тексте она должна остаться одна., `test_format_username_link_returns_fallback_without_username` — Пустой логин отдаётся текстом-заглушкой, без собаки и без ссылки., `test_format_username_link_keeps_non_telegram_logins_as_text` — OAuth-регистрация кладёт в users.username логин Discord/Яндекса., `test_format_username_link_escapes_html_metacharacters` — Значение попадает и в href, и в текст — экранируем оба., `test_admin_dates_are_shown_in_operator_zone` — Жалоба 4.12.0: панель и «Моя подписка» — 18.09.2026 14:17, админка бота — 11:17 (UTC).
 - `tests/utils/test_gift_links.py` — Python-модуль
   Классы: `TestBuildBotGiftClaimLink` (9 методов), `TestBuildCabinetGiftClaimLink` (5 методов), `TestBuildTelegramGiftShareUrl` (8 методов), `TestLandingGiftLinkIntegration` (1 методов), `TestBuildGiftPublicCode` (9 методов), `TestParseGiftClaimInput` (14 методов), `TestGiftClaimArtifacts` (6 методов)
   Функции: нет

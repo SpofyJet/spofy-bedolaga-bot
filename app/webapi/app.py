@@ -16,7 +16,6 @@ from .routes import (
     broadcasts,
     campaigns,
     config,
-    contests,
     health,
     logs,
     main_menu_buttons,
@@ -26,7 +25,6 @@ from .routes import (
     pages,
     partners,
     pinned_messages,
-    polls,
     promo_groups,
     promo_offers,
     promocodes,
@@ -107,7 +105,6 @@ def create_web_api_app(lifespan: Any = None) -> FastAPI:
     app.include_router(promo_groups.router, prefix='/promo-groups', tags=['promo-groups'])
     app.include_router(promo_offers.router, prefix='/promo-offers', tags=['promo-offers'])
     app.include_router(servers.router, prefix='/servers', tags=['servers'])
-    app.include_router(contests.router, prefix='/contests', tags=['contests'])
     app.include_router(
         main_menu_buttons.router,
         prefix='/main-menu/buttons',
@@ -138,7 +135,6 @@ def create_web_api_app(lifespan: Any = None) -> FastAPI:
     app.include_router(media.router, tags=['media'])
     app.include_router(miniapp.router, prefix='/miniapp', tags=['miniapp'])
     app.include_router(partners.router, prefix='/partners', tags=['partners'])
-    app.include_router(polls.router, prefix='/polls', tags=['polls'])
     app.include_router(logs.router, prefix='/logs', tags=['logs'])
     app.include_router(
         pinned_messages.router,

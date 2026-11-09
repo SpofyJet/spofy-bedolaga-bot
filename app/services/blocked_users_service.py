@@ -22,14 +22,11 @@ from app.database.models import (
     AdvertisingCampaignRegistration,
     ButtonClickLog,
     CabinetRefreshToken,
-    ContestAttempt,
     CryptoBotPayment,
     DiscountOffer,
     Pay2328Payment,
     PlategaPayment,
-    PollResponse,
     PromoCodeUse,
-    ReferralContestEvent,
     ReferralEarning,
     SentNotification,
     Subscription,
@@ -359,10 +356,6 @@ class BlockedUsersService:
             await db.execute(delete(PromoCodeUse).where(PromoCodeUse.user_id == user.id))
             await db.execute(delete(DiscountOffer).where(DiscountOffer.user_id == user.id))
             await db.execute(delete(SentNotification).where(SentNotification.user_id == user.id))
-            await db.execute(delete(PollResponse).where(PollResponse.user_id == user.id))
-            await db.execute(delete(ContestAttempt).where(ContestAttempt.user_id == user.id))
-            await db.execute(delete(ReferralContestEvent).where(ReferralContestEvent.referrer_id == user.id))
-            await db.execute(delete(ReferralContestEvent).where(ReferralContestEvent.referral_id == user.id))
             await db.execute(
                 delete(AdvertisingCampaignRegistration).where(AdvertisingCampaignRegistration.user_id == user.id)
             )

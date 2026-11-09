@@ -57,7 +57,7 @@ async def test_messages_with_entities_are_left_alone():
     assert sent.text == 'a\n\n\n\nb'
 
 
-@pytest.mark.parametrize('lang', ['ru', 'en', 'ua', 'zh', 'fa'])
+@pytest.mark.parametrize('lang', ['ru', 'en'])
 def test_no_locale_template_has_more_than_one_blank_line_in_a_row(lang):
     import json
     import re

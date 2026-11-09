@@ -540,12 +540,6 @@ class Settings(BaseSettings):
     # Тестовый режим для вывода (позволяет админам вручную начислять реф. доход)
     REFERRAL_WITHDRAWAL_TEST_MODE: bool = False
 
-    # Конкурсы (глобальный флаг, будет расширяться под разные типы)
-    CONTESTS_ENABLED: bool = False
-    CONTESTS_BUTTON_VISIBLE: bool = False
-    # Для обратной совместимости со старыми конфигами
-    REFERRAL_CONTESTS_ENABLED: bool = False
-
     BLACKLIST_CHECK_ENABLED: bool = False
     BLACKLIST_GITHUB_URL: str | None = None
     BLACKLIST_UPDATE_INTERVAL_HOURS: int = 24
@@ -895,7 +889,7 @@ class Settings(BaseSettings):
     SKIP_REFERRAL_CODE: bool = False
 
     DEFAULT_LANGUAGE: str = 'ru'
-    AVAILABLE_LANGUAGES: str = 'ru,en,ua,zh,fa'
+    AVAILABLE_LANGUAGES: str = 'ru,en'
     LANGUAGE_SELECTION_ENABLED: bool = True
 
     PRIVACY_POLICY_DISPLAY_MODE: str = 'both'
@@ -1888,7 +1882,7 @@ class Settings(BaseSettings):
         return bool(value)
 
     def get_available_languages(self) -> list[str]:
-        defaults = ['ru', 'en', 'ua', 'zh', 'fa']
+        defaults = ['ru', 'en']
 
         try:
             langs = self.AVAILABLE_LANGUAGES
@@ -2463,16 +2457,6 @@ class Settings(BaseSettings):
         if self.is_happ_cryptolink_mode():
             return False
         return self.HIDE_SUBSCRIPTION_LINK
-
-    def is_contests_enabled(self) -> bool:
-        if getattr(self, 'CONTESTS_ENABLED', False):
-            return True
-        # legacy fallback
-        return bool(getattr(self, 'REFERRAL_CONTESTS_ENABLED', False))
-
-    def is_referral_contests_enabled(self) -> bool:
-        # kept for backward compatibility
-        return self.is_contests_enabled()
 
     def get_happ_cryptolink_redirect_template(self) -> str | None:
         template = (self.HAPP_CRYPTOLINK_REDIRECT_TEMPLATE or '').strip()

@@ -43,7 +43,7 @@ router = APIRouter(prefix='/admin/email-templates', tags=['Admin Email Templates
 
 # ============ Template type metadata ============
 
-EDITOR_LANGUAGES = ('ru', 'en', 'zh', 'ua')
+EDITOR_LANGUAGES = ('ru', 'en')
 
 # Общая обёртка писем — псевдо-тип в том же редакторе. Не NotificationType:
 # это не письмо, а каркас, в который встают все письма (см. email_layout).
@@ -52,18 +52,12 @@ LAYOUT_TEMPLATE_META: dict[str, Any] = {
     'label': {
         'ru': 'Общая обёртка писем',
         'en': 'Email Layout (all emails)',
-        'zh': '邮件通用外框（所有邮件）',
-        'ua': 'Загальна обгортка листів',
     },
     'description': {
         'ru': 'Каркас всех писем: шапка, стили, подвал. Тело письма встаёт в {content}. '
         'Если для языка нет своей обёртки, берётся русская; без сохранённой — встроенная.',
         'en': 'The frame of every email: header, styles, footer. The email body goes into {content}. '
         'Languages without their own layout use the Russian one; without any saved layout the built-in is used.',
-        'zh': '所有邮件的外框：页眉、样式、页脚。邮件正文放入 {content}。'
-        '没有自己外框的语言使用俄语外框；未保存任何外框时使用内置外框。',
-        'ua': 'Каркас усіх листів: шапка, стилі, підвал. Тіло листа стає у {content}. '
-        'Якщо для мови немає своєї обгортки, береться російська; без збереженої — вбудована.',
     },
     'context_vars': LAYOUT_CONTEXT_VARS,
 }
@@ -71,8 +65,6 @@ LAYOUT_TEMPLATE_META: dict[str, Any] = {
 _WEBHOOK_DESCRIPTION = {
     'ru': 'Уведомление Remnawave: {subject}',
     'en': 'Remnawave notification: {subject}',
-    'zh': 'Remnawave 通知：{subject}',
-    'ua': 'Сповіщення Remnawave: {subject}',
 }
 _WEBHOOK_SAMPLE_DEVICE = 'iPhone 15'
 
@@ -117,14 +109,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Назначена промогруппа',
             'en': 'Promo group assigned',
-            'zh': '已分配促销组',
-            'ua': 'Призначено промогрупу',
         },
         'description': {
             'ru': 'Промогруппа назначена автоматически за сумму трат — какие скидки теперь действуют',
             'en': 'A promo group was assigned automatically for total spending — which discounts now apply',
-            'zh': '根据消费总额自动分配了促销组——现在适用哪些折扣',
-            'ua': 'Промогрупу призначено автоматично за суму витрат — які знижки тепер діють',
         },
         'context_vars': [
             'group_name',
@@ -140,14 +128,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Grace-доступ выдан',
             'en': 'Grace access granted',
-            'zh': '已发放宽限访问',
-            'ua': 'Grace-доступ надано',
         },
         'description': {
             'ru': 'Подписка закончилась, но на время оставлен доступ к тому, что назвал оператор ({allowed})',
             'en': 'The subscription ended, but access to what the operator named ({allowed}) is kept for a while',
-            'zh': '订阅已到期，但暂时保留对运营者指定内容（{allowed}）的访问',
-            'ua': 'Підписка закінчилась, але на час залишено доступ до того, що назвав оператор ({allowed})',
         },
         'context_vars': ['allowed', 'hours', 'traffic_gb', 'until', 'reason', 'tariff_name'],
     },
@@ -156,36 +140,28 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Grace-доступ закончился',
             'en': 'Grace access ended',
-            'zh': '宽限访问已结束',
-            'ua': 'Grace-доступ закінчився',
         },
         'description': {
             'ru': 'Временный доступ закрыт: подписку так и не продлили',
             'en': 'Temporary access is closed: the subscription was never renewed',
-            'zh': '临时访问已关闭：订阅一直未续订',
-            'ua': 'Тимчасовий доступ закрито: підписку так і не продовжили',
         },
         'context_vars': ['allowed', 'hours', 'traffic_gb', 'until', 'reason', 'tariff_name'],
     },
     {
         'type': 'balance_topup',
-        'label': {'ru': 'Пополнение баланса', 'en': 'Balance Top-up', 'zh': '余额充值', 'ua': 'Поповнення балансу'},
+        'label': {'ru': 'Пополнение баланса', 'en': 'Balance Top-up'},
         'description': {
             'ru': 'Уведомление о пополнении баланса',
             'en': 'Balance top-up notification',
-            'zh': '余额充值通知',
-            'ua': 'Сповіщення про поповнення балансу',
         },
         'context_vars': ['formatted_amount', 'formatted_balance', 'amount_rubles', 'new_balance_rubles'],
     },
     {
         'type': 'balance_change',
-        'label': {'ru': 'Изменение баланса', 'en': 'Balance Change', 'zh': '余额变动', 'ua': 'Зміна балансу'},
+        'label': {'ru': 'Изменение баланса', 'en': 'Balance Change'},
         'description': {
             'ru': 'Уведомление об изменении баланса',
             'en': 'Balance change notification',
-            'zh': '余额变动通知',
-            'ua': 'Сповіщення про зміну балансу',
         },
         'context_vars': ['formatted_amount', 'formatted_balance', 'amount_rubles', 'new_balance_rubles'],
     },
@@ -194,14 +170,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Подписка истекает',
             'en': 'Subscription Expiring',
-            'zh': '订阅即将到期',
-            'ua': 'Підписка закінчується',
         },
         'description': {
             'ru': 'Предупреждение об истечении подписки',
             'en': 'Subscription expiring warning',
-            'zh': '订阅即将到期警告',
-            'ua': 'Попередження про закінчення підписки',
         },
         'context_vars': ['days_left', 'expires_at'],
     },
@@ -210,14 +182,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Подписка истекла',
             'en': 'Subscription Expired',
-            'zh': '订阅已到期',
-            'ua': 'Підписка закінчилась',
         },
         'description': {
             'ru': 'Уведомление об истечении подписки',
             'en': 'Subscription expired notification',
-            'zh': '订阅已到期通知',
-            'ua': 'Сповіщення про закінчення підписки',
         },
         'context_vars': [],
     },
@@ -226,14 +194,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Подписка продлена',
             'en': 'Subscription Renewed',
-            'zh': '订阅已续期',
-            'ua': 'Підписка продовжена',
         },
         'description': {
             'ru': 'Уведомление о продлении подписки',
             'en': 'Subscription renewed notification',
-            'zh': '订阅已续期通知',
-            'ua': 'Сповіщення про продовження підписки',
         },
         'context_vars': ['new_expires_at', 'tariff_name', 'traffic_limit_gb', 'device_limit'],
     },
@@ -242,14 +206,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Подписка активирована',
             'en': 'Subscription Activated',
-            'zh': '订阅已激活',
-            'ua': 'Підписка активована',
         },
         'description': {
             'ru': 'Уведомление об активации подписки',
             'en': 'Subscription activated notification',
-            'zh': '订阅已激活通知',
-            'ua': 'Сповіщення про активацію підписки',
         },
         'context_vars': ['expires_at', 'tariff_name', 'traffic_limit_gb', 'device_limit'],
     },
@@ -258,14 +218,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Подписка закончилась (возврат, 1 день)',
             'en': 'Subscription Ended (Win-back, Day 1)',
-            'zh': '订阅已结束（挽回，第 1 天）',
-            'ua': 'Підписка закінчилася (повернення, 1 день)',
         },
         'description': {
             'ru': 'Письмо через день после окончания подписки',
             'en': 'Sent one day after the subscription ended',
-            'zh': '订阅结束一天后发送',
-            'ua': 'Лист через день після закінчення підписки',
         },
         'context_vars': ['end_date'],
     },
@@ -274,14 +230,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Скидка на продление (возврат)',
             'en': 'Renewal Discount (Win-back)',
-            'zh': '续订折扣（挽回）',
-            'ua': 'Знижка на продовження (повернення)',
         },
         'description': {
             'ru': 'Персональная скидка на продление после окончания подписки',
             'en': 'Personal renewal discount after the subscription ended',
-            'zh': '订阅结束后的个人续订折扣',
-            'ua': 'Персональна знижка на продовження після закінчення підписки',
         },
         'context_vars': ['percent', 'expires_at'],
     },
@@ -290,14 +242,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Пробная подписка скоро закончится',
             'en': 'Trial Ending Soon',
-            'zh': '试用即将结束',
-            'ua': 'Пробна підписка скоро закінчиться',
         },
         'description': {
             'ru': 'Напоминание за 2 часа до окончания тестовой подписки',
             'en': 'Reminder 2 hours before the trial ends',
-            'zh': '试用结束前 2 小时提醒',
-            'ua': 'Нагадування за 2 години до кінця тестової підписки',
         },
         'context_vars': [],
     },
@@ -306,14 +254,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Автоплатёж успешен',
             'en': 'Autopay Success',
-            'zh': '自动续费成功',
-            'ua': 'Автоплатіж успішний',
         },
         'description': {
             'ru': 'Уведомление об успешном автоплатеже',
             'en': 'Autopay success notification',
-            'zh': '自动续费成功通知',
-            'ua': 'Сповіщення про успішний автоплатіж',
         },
         'context_vars': ['formatted_amount', 'amount_rubles', 'new_expires_at'],
     },
@@ -322,14 +266,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Автоплатёж не удался',
             'en': 'Autopay Failed',
-            'zh': '自动续费失败',
-            'ua': 'Автоплатіж не вдався',
         },
         'description': {
             'ru': 'Уведомление о неудачном автоплатеже',
             'en': 'Autopay failed notification',
-            'zh': '自动续费失败通知',
-            'ua': 'Сповіщення про невдалий автоплатіж',
         },
         'context_vars': ['reason'],
     },
@@ -338,25 +278,19 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Недостаточно средств (автоплатёж)',
             'en': 'Insufficient Funds (Autopay)',
-            'zh': '余额不足（自动续费）',
-            'ua': 'Недостатньо коштів (автоплатіж)',
         },
         'description': {
             'ru': 'Уведомление о нехватке средств для автоплатежа',
             'en': 'Insufficient funds for autopay notification',
-            'zh': '自动续费余额不足通知',
-            'ua': 'Сповіщення про нестачу коштів для автоплатежу',
         },
         'context_vars': ['required_amount', 'current_balance'],
     },
     {
         'type': 'daily_debit',
-        'label': {'ru': 'Суточное списание', 'en': 'Daily Debit', 'zh': '每日扣费', 'ua': 'Добове списання'},
+        'label': {'ru': 'Суточное списание', 'en': 'Daily Debit'},
         'description': {
             'ru': 'Уведомление о суточном списании',
             'en': 'Daily debit notification',
-            'zh': '每日扣费通知',
-            'ua': 'Сповіщення про добове списання',
         },
         'context_vars': ['formatted_amount', 'formatted_balance', 'amount_rubles', 'new_balance_rubles'],
     },
@@ -365,25 +299,19 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Недостаточно средств (суточное)',
             'en': 'Insufficient Funds (Daily)',
-            'zh': '余额不足（每日）',
-            'ua': 'Недостатньо коштів (добове)',
         },
         'description': {
             'ru': 'Уведомление о нехватке средств для суточного списания',
             'en': 'Insufficient funds for daily debit',
-            'zh': '每日扣费余额不足通知',
-            'ua': 'Сповіщення про нестачу коштів для добового списання',
         },
         'context_vars': ['required_amount', 'current_balance'],
     },
     {
         'type': 'ban_notification',
-        'label': {'ru': 'Блокировка аккаунта', 'en': 'Account Banned', 'zh': '账户被封禁', 'ua': 'Блокування акаунту'},
+        'label': {'ru': 'Блокировка аккаунта', 'en': 'Account Banned'},
         'description': {
             'ru': 'Уведомление о блокировке аккаунта',
             'en': 'Account banned notification',
-            'zh': '账户被封禁通知',
-            'ua': 'Сповіщення про блокування акаунту',
         },
         'context_vars': ['reason'],
     },
@@ -392,36 +320,28 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Разблокировка аккаунта',
             'en': 'Account Unbanned',
-            'zh': '账户已解封',
-            'ua': 'Розблокування акаунту',
         },
         'description': {
             'ru': 'Уведомление о разблокировке аккаунта',
             'en': 'Account unbanned notification',
-            'zh': '账户已解封通知',
-            'ua': 'Сповіщення про розблокування акаунту',
         },
         'context_vars': [],
     },
     {
         'type': 'warning_notification',
-        'label': {'ru': 'Предупреждение', 'en': 'Warning', 'zh': '警告', 'ua': 'Попередження'},
+        'label': {'ru': 'Предупреждение', 'en': 'Warning'},
         'description': {
             'ru': 'Предупреждение пользователю',
             'en': 'Warning notification',
-            'zh': '警告通知',
-            'ua': 'Попередження користувачу',
         },
         'context_vars': ['message'],
     },
     {
         'type': 'referral_bonus',
-        'label': {'ru': 'Реферальный бонус', 'en': 'Referral Bonus', 'zh': '推荐奖励', 'ua': 'Реферальний бонус'},
+        'label': {'ru': 'Реферальный бонус', 'en': 'Referral Bonus'},
         'description': {
             'ru': 'Уведомление о начислении реферального бонуса',
             'en': 'Referral bonus notification',
-            'zh': '推荐奖励通知',
-            'ua': 'Сповіщення про нарахування реферального бонусу',
         },
         'context_vars': [
             'formatted_bonus',
@@ -436,12 +356,10 @@ TEMPLATE_TYPES = [
     },
     {
         'type': 'referral_registered',
-        'label': {'ru': 'Новый реферал', 'en': 'New Referral', 'zh': '新推荐用户', 'ua': 'Новий реферал'},
+        'label': {'ru': 'Новый реферал', 'en': 'New Referral'},
         'description': {
             'ru': 'Уведомление о регистрации реферала',
             'en': 'New referral registered notification',
-            'zh': '新推荐用户注册通知',
-            'ua': 'Сповіщення про реєстрацію реферала',
         },
         'context_vars': ['referral_name'],
     },
@@ -450,47 +368,37 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Приветствие приглашённого',
             'en': 'Referral Welcome',
-            'zh': '推荐用户欢迎',
-            'ua': 'Привітання запрошеного',
         },
         'description': {
             'ru': 'Письмо новому пользователю, зарегистрировавшемуся по реферальной ссылке',
             'en': 'Welcome email to a user who signed up via a referral link',
-            'zh': '通过推荐链接注册的新用户的欢迎邮件',
-            'ua': 'Лист новому користувачу, який зареєструвався за реферальним посиланням',
         },
         'context_vars': ['referrer_name', 'bonus_promise'],
     },
     {
         'type': 'traffic_reset',
-        'label': {'ru': 'Сброс трафика', 'en': 'Traffic Reset', 'zh': '流量重置', 'ua': 'Скидання трафіку'},
+        'label': {'ru': 'Сброс трафика', 'en': 'Traffic Reset'},
         'description': {
             'ru': 'Уведомление о сбросе трафика',
             'en': 'Traffic reset notification',
-            'zh': '流量重置通知',
-            'ua': 'Сповіщення про скидання трафіку',
         },
         'context_vars': ['reset_gb', 'current_limit_gb'],
     },
     {
         'type': 'payment_received',
-        'label': {'ru': 'Платёж получен', 'en': 'Payment Received', 'zh': '收到付款', 'ua': 'Платіж отримано'},
+        'label': {'ru': 'Платёж получен', 'en': 'Payment Received'},
         'description': {
             'ru': 'Уведомление о получении платежа',
             'en': 'Payment received notification',
-            'zh': '收到付款通知',
-            'ua': 'Сповіщення про отримання платежу',
         },
         'context_vars': ['formatted_amount', 'payment_method'],
     },
     {
         'type': 'ticket_reply',
-        'label': {'ru': 'Ответ поддержки', 'en': 'Support Reply', 'zh': '工单回复', 'ua': 'Відповідь підтримки'},
+        'label': {'ru': 'Ответ поддержки', 'en': 'Support Reply'},
         'description': {
             'ru': 'Ответ поддержки в тикете — уходит юзерам без Telegram',
             'en': 'Support reply in a ticket — sent to users without Telegram',
-            'zh': '工单中的支持回复 — 发送给没有 Telegram 的用户',
-            'ua': 'Відповідь підтримки в тікеті — надходить юзерам без Telegram',
         },
         'context_vars': ['ticket_id', 'reply_preview'],
     },
@@ -499,25 +407,19 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Подтверждение email',
             'en': 'Email Verification',
-            'zh': '邮箱验证',
-            'ua': 'Підтвердження email',
         },
         'description': {
             'ru': 'Письмо для подтверждения email адреса при регистрации',
             'en': 'Email address verification letter sent during registration',
-            'zh': '注册时发送的邮箱验证邮件',
-            'ua': 'Лист для підтвердження email адреси при реєстрації',
         },
         'context_vars': ['username', 'verification_url', 'expire_hours'],
     },
     {
         'type': 'password_reset',
-        'label': {'ru': 'Сброс пароля', 'en': 'Password Reset', 'zh': '重置密码', 'ua': 'Скидання пароля'},
+        'label': {'ru': 'Сброс пароля', 'en': 'Password Reset'},
         'description': {
             'ru': 'Письмо для сброса пароля',
             'en': 'Password reset email',
-            'zh': '密码重置邮件',
-            'ua': 'Лист для скидання пароля',
         },
         'context_vars': ['username', 'reset_url', 'expire_hours'],
     },
@@ -526,14 +428,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Код смены email',
             'en': 'Email Change Code',
-            'zh': '邮箱更换验证码',
-            'ua': 'Код зміни email',
         },
         'description': {
             'ru': 'Письмо с кодом подтверждения для смены email адреса',
             'en': 'Email with a confirmation code for changing the email address',
-            'zh': '包含更换邮箱确认码的邮件',
-            'ua': 'Лист з кодом підтвердження для зміни email адреси',
         },
         'context_vars': ['username', 'code', 'expire_minutes'],
     },
@@ -542,14 +440,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Партнёрство одобрено',
             'en': 'Partner Application Approved',
-            'zh': '合作伙伴申请已批准',
-            'ua': 'Партнерство схвалено',
         },
         'description': {
             'ru': 'Уведомление об одобрении заявки на партнёрство',
             'en': 'Partner application approved notification',
-            'zh': '合作伙伴申请获批通知',
-            'ua': 'Сповіщення про схвалення заявки на партнерство',
         },
         'context_vars': ['commission_percent', 'comment'],
     },
@@ -558,14 +452,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Партнёрство отклонено',
             'en': 'Partner Application Rejected',
-            'zh': '合作伙伴申请被拒绝',
-            'ua': 'Партнерство відхилено',
         },
         'description': {
             'ru': 'Уведомление об отклонении заявки на партнёрство',
             'en': 'Partner application rejected notification',
-            'zh': '合作伙伴申请被拒通知',
-            'ua': 'Сповіщення про відхилення заявки на партнерство',
         },
         'context_vars': ['comment'],
     },
@@ -574,14 +464,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Вывод средств одобрен',
             'en': 'Withdrawal Approved',
-            'zh': '提现已批准',
-            'ua': 'Виведення коштів схвалено',
         },
         'description': {
             'ru': 'Уведомление об одобрении запроса на вывод средств',
             'en': 'Withdrawal request approved notification',
-            'zh': '提现请求获批通知',
-            'ua': 'Сповіщення про схвалення запиту на виведення коштів',
         },
         'context_vars': ['formatted_amount', 'amount_rubles', 'comment'],
     },
@@ -590,14 +476,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Вывод средств отклонён',
             'en': 'Withdrawal Rejected',
-            'zh': '提现被拒绝',
-            'ua': 'Виведення коштів відхилено',
         },
         'description': {
             'ru': 'Уведомление об отклонении запроса на вывод средств',
             'en': 'Withdrawal request rejected notification',
-            'zh': '提现请求被拒通知',
-            'ua': 'Сповіщення про відхилення запиту на виведення коштів',
         },
         'context_vars': ['formatted_amount', 'amount_rubles', 'comment'],
     },
@@ -606,14 +488,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Быстрая покупка: подписка доставлена',
             'en': 'Quick Purchase: Subscription Delivered',
-            'zh': '快捷购买：订阅已交付',
-            'ua': 'Швидка покупка: підписка доставлена',
         },
         'description': {
             'ru': 'Письмо покупателю после успешной оплаты через лендинг',
             'en': 'Email to buyer after successful landing page payment',
-            'zh': '通过落地页成功付款后发送给买家的邮件',
-            'ua': 'Лист покупцю після успішної оплати через лендінг',
         },
         'context_vars': ['tariff_name', 'period_days', 'cabinet_url', 'cabinet_email', 'cabinet_password'],
     },
@@ -622,14 +500,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Быстрая покупка: требуется активация',
             'en': 'Quick Purchase: Activation Required',
-            'zh': '快捷购买：需要激活',
-            'ua': 'Швидка покупка: потрібна активація',
         },
         'description': {
             'ru': 'Письмо когда у покупателя уже есть активная подписка',
             'en': 'Email when buyer already has an active subscription',
-            'zh': '买家已有活跃订阅时发送的邮件',
-            'ua': 'Лист коли у покупця вже є активна підписка',
         },
         'context_vars': ['tariff_name', 'period_days', 'success_page_url', 'gift_message', 'is_gift'],
     },
@@ -638,14 +512,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Быстрая покупка: подарок получен',
             'en': 'Quick Purchase: Gift Received',
-            'zh': '快捷购买：收到礼物',
-            'ua': 'Швидка покупка: подарунок отримано',
         },
         'description': {
             'ru': 'Письмо получателю подарочной подписки',
             'en': 'Email to gift subscription recipient',
-            'zh': '发送给礼物订阅接收者的邮件',
-            'ua': 'Лист отримувачу подарункової підписки',
         },
         'context_vars': [
             'tariff_name',
@@ -661,14 +531,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Быстрая покупка: данные для входа',
             'en': 'Quick Purchase: Login Credentials',
-            'zh': '快捷购买：登录凭据',
-            'ua': 'Швидка покупка: дані для входу',
         },
         'description': {
             'ru': 'Письмо с логином и паролем для личного кабинета',
             'en': 'Email with login credentials for the cabinet',
-            'zh': '包含个人中心登录信息的邮件',
-            'ua': 'Лист з логіном та паролем для особистого кабінету',
         },
         'context_vars': ['tariff_name', 'period_days', 'cabinet_url', 'cabinet_email', 'cabinet_password'],
     },
@@ -677,14 +543,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Персональное предложение',
             'en': 'Personal Offer',
-            'zh': '专属优惠',
-            'ua': 'Персональна пропозиція',
         },
         'description': {
             'ru': 'Промо-предложение, отправленное пользователю из админки',
             'en': 'Promo offer sent to the user from the admin panel',
-            'zh': '从管理面板发送给用户的促销优惠',
-            'ua': 'Промопропозиція, надіслана користувачу з адмінки',
         },
         'context_vars': ['message_html', 'valid_hours', 'discount_percent'],
     },
@@ -693,14 +555,10 @@ TEMPLATE_TYPES = [
         'label': {
             'ru': 'Ссылка на подарок покупателю',
             'en': 'Gift Link for the Buyer',
-            'zh': '发给购买者的礼物链接',
-            'ua': 'Посилання на подарунок покупцю',
         },
         'description': {
             'ru': 'Письмо покупателю подарка со ссылкой на активацию, чтобы переслать получателю',
             'en': 'Sent to the gift buyer with the claim link to forward to the recipient',
-            'zh': '发送给礼物购买者，附带可转发给接收者的领取链接',
-            'ua': 'Лист покупцю подарунка з посиланням на активацію, щоб переслати отримувачу',
         },
         'context_vars': ['claim_url', 'tariff_name', 'period_days'],
     },
@@ -888,7 +746,7 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
     **_webhook_sample_contexts(),
 }
 
-AVAILABLE_LANGUAGES = ['ru', 'en', 'zh', 'ua', 'fa']
+AVAILABLE_LANGUAGES = ['ru', 'en']
 
 # Recipient-level common vars are empty until the sending code fills them —
 # in preview/test we substitute samples so the admin sees realistic values.

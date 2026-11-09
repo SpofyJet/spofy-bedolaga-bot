@@ -31,10 +31,6 @@ _LIFETIME_DISPLAY_FROM = datetime(2090, 1, 1, tzinfo=UTC)
 _LABELS = {
     'ru': 'Навсегда',
     'en': 'Forever',
-    'ua': 'Назавжди',
-    'uk': 'Назавжди',
-    'zh': '永久',
-    'fa': 'دائمی',
 }
 
 

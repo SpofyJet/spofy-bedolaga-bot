@@ -21,7 +21,6 @@ from app.database.models import (
     CabinetRefreshToken,
     Coupon,
     GuestPurchase,
-    PollResponse,
     PromoCode,
     PromoCodeUse,
     ReferralEarning,
@@ -38,7 +37,7 @@ class UserActivityItem(BaseModel):
     """Одна запись в таймлайне активности пользователя (бот + кабинет).
 
     ``type`` — источник записи (transaction, event, promocode, coupon, ticket,
-    wheel_spin, poll, gift_sent, gift_received, referral_earning, cabinet_login,
+    wheel_spin, gift_sent, gift_received, referral_earning, cabinet_login,
     withdrawal); ``subtype`` уточняет его (тип транзакции, event_type события,
     статус тикета и т.п.). ``title`` — сырой человекочитаемый текст источника
     (описание транзакции, код промокода, название тикета) — локализованный
@@ -143,14 +142,6 @@ def activity_sources(user_id: int) -> dict[str, tuple]:
             title=w.prize_display_name,
             amount_kopeks=w.prize_value_kopeks,
             timestamp=w.created_at,
-        )
-
-    def _map_poll(p: PollResponse) -> UserActivityItem:
-        return UserActivityItem(
-            type='poll',
-            source='bot',
-            amount_kopeks=p.reward_amount_kopeks if p.reward_given else None,
-            timestamp=p.completed_at,
         )
 
     def _map_gift_sent(g: GuestPurchase) -> UserActivityItem:
@@ -278,14 +269,6 @@ def activity_sources(user_id: int) -> dict[str, tuple]:
             select(func.count(WheelSpin.id)).where(WheelSpin.user_id == user_id),
             WheelSpin.created_at,
             _map_wheel,
-        ),
-        'poll': (
-            select(PollResponse).where(PollResponse.user_id == user_id, PollResponse.completed_at.is_not(None)),
-            select(func.count(PollResponse.id)).where(
-                PollResponse.user_id == user_id, PollResponse.completed_at.is_not(None)
-            ),
-            PollResponse.completed_at,
-            _map_poll,
         ),
         'gift_sent': (
             select(GuestPurchase).where(GuestPurchase.buyer_user_id == user_id, GuestPurchase.is_gift.is_(True)),

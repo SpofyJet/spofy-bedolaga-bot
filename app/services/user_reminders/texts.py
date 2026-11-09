@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from app.utils.miniapp_buttons import build_cabinet_url
 
 
-LANGUAGES = ('ru', 'en', 'ua', 'zh', 'fa')
+LANGUAGES = ('ru', 'en')
 DEFAULT_LANGUAGE = 'ru'
 BUTTON_KINDS = ('none', 'cabinet', 'url')
 

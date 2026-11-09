@@ -132,7 +132,7 @@ async def test_switch_off_sends_nothing_and_failures_never_raise(
     await notify_user_about_auto_assignment(_user(), _group(), 1)
 
 
-@pytest.mark.parametrize('language', ['ru', 'en', 'zh', 'ua', 'fa'])
+@pytest.mark.parametrize('language', ['ru', 'en'])
 def test_locale_keys_exist_and_format(language: str) -> None:
     texts = get_texts(language)
     for key in ('PROMO_GROUP_AUTO_ASSIGNED', 'PROMO_GROUP_AUTO_ASSIGNED_NO_DISCOUNTS'):
@@ -142,7 +142,7 @@ def test_locale_keys_exist_and_format(language: str) -> None:
         assert 'G' in rendered and '1 ₽' in rendered
 
 
-@pytest.mark.parametrize('language', ['ru', 'en', 'zh', 'ua'])
+@pytest.mark.parametrize('language', ['ru', 'en'])
 def test_email_template_escapes_and_lists_discounts(language: str) -> None:
     context = {
         'group_name': 'Про <script>',

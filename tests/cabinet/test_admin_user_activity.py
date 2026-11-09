@@ -33,7 +33,6 @@ def test_activity_sources_shape() -> None:
         'coupon',
         'ticket',
         'wheel_spin',
-        'poll',
         'gift_sent',
         'gift_received',
         'referral_earning',

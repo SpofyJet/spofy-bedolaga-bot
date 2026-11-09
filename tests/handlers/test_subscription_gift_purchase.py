@@ -636,9 +636,6 @@ class TestGiftReplayAndPresentation:
         [
             ('ru', '🤖 В Telegram:', '🌐 В личном кабинете:'),
             ('en', '🤖 In Telegram:', '🌐 In the cabinet:'),
-            ('ua', '🤖 У Telegram:', '🌐 В особистому кабінеті:'),
-            ('fa', '🤖 در تلگرام:', '🌐 در پنل کاربری:'),
-            ('zh', '🤖 在 Telegram 中：', '🌐 在控制台中：'),
         ],
     )
     def test_presentation_localizes_dual_claim_channels(

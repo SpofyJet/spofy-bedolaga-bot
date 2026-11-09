@@ -76,7 +76,7 @@ def test_ended_email_says_access_is_closed():
 
 
 @pytest.mark.parametrize('event', ['granted', 'ended'])
-@pytest.mark.parametrize('language', ['ru', 'en', 'zh', 'ua'])
+@pytest.mark.parametrize('language', ['ru', 'en'])
 def test_operator_phrase_stands_in_a_case_neutral_slot_in_email(event, language):
     """Фразу оператора нельзя склонять: слот после двоеточия подходит любой фразе."""
     import re

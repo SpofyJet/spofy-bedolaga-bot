@@ -876,13 +876,6 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
             )
             return True
 
-        try:
-            from app.services.referral_contest_service import referral_contest_service
-
-            await referral_contest_service.on_referral_registration(db, new_user_id)
-        except Exception as exc:
-            logger.debug('Не удалось записать конкурсную регистрацию', exc=exc)
-
         if settings.is_referral_levels_scheme():
             from app.services.referral_reward_service import RewardEvent, award_referral_rewards
 

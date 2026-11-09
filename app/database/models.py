@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 
@@ -18,7 +18,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
-    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -28,7 +27,6 @@ from sqlalchemy import (
     String,
     Table,
     Text,
-    Time,
     TypeDecorator,
     UniqueConstraint,
     text,
@@ -141,7 +139,6 @@ class TransactionType(Enum):
     REFUND = 'refund'
     FAILED_REFUND = 'failed_refund'
     REFERRAL_REWARD = 'referral_reward'
-    POLL_REWARD = 'poll_reward'
     GIFT_PAYMENT = 'gift_payment'
 
 
@@ -1023,7 +1020,6 @@ class User(Base):
     promo_group_id = Column(Integer, ForeignKey('promo_groups.id', ondelete='RESTRICT'), nullable=True, index=True)
     promo_group = relationship('PromoGroup', back_populates='users')
     user_promo_groups = relationship('UserPromoGroup', back_populates='user', cascade='all, delete-orphan')
-    poll_responses = relationship('PollResponse', back_populates='user')
     admin_roles_rel = relationship('UserRole', foreign_keys='[UserRole.user_id]', back_populates='user')
     notification_settings = Column(JSONB, nullable=True, default=dict)
     last_pinned_message_id = Column(Integer, nullable=True)
@@ -2003,150 +1999,6 @@ class PartnerApplication(Base):
     admin = relationship('User', foreign_keys=[processed_by])
 
 
-class ReferralContest(Base):
-    __tablename__ = 'referral_contests'
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(255), nullable=False)
-    description = Column(Text, nullable=True)
-    prize_text = Column(Text, nullable=True)
-    contest_type = Column(String(50), nullable=False, default='referral_paid')
-    start_at = Column(AwareDateTime(), nullable=False)
-    end_at = Column(AwareDateTime(), nullable=False)
-    daily_summary_time = Column(Time, nullable=False, default=time(hour=12, minute=0))
-    daily_summary_times = Column(String(255), nullable=True)  # CSV HH:MM
-    timezone = Column(String(64), nullable=False, default='UTC')
-    is_active = Column(Boolean, nullable=False, default=True)
-    last_daily_summary_date = Column(Date, nullable=True)
-    last_daily_summary_at = Column(AwareDateTime(), nullable=True)
-    final_summary_sent = Column(Boolean, nullable=False, default=False)
-    created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
-    created_at = Column(AwareDateTime(), default=func.now())
-    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
-
-    creator = relationship('User', backref='created_referral_contests')
-    events = relationship(
-        'ReferralContestEvent',
-        back_populates='contest',
-        cascade='all, delete-orphan',
-    )
-
-    def __repr__(self):
-        return f"<ReferralContest id={self.id} title='{self.title}'>"
-
-
-class ReferralContestEvent(Base):
-    __tablename__ = 'referral_contest_events'
-    __table_args__ = (
-        UniqueConstraint(
-            'contest_id',
-            'referral_id',
-            name='uq_referral_contest_referral',
-        ),
-        Index('idx_referral_contest_referrer', 'contest_id', 'referrer_id'),
-    )
-
-    id = Column(Integer, primary_key=True, index=True)
-    contest_id = Column(Integer, ForeignKey('referral_contests.id', ondelete='CASCADE'), nullable=False)
-    referrer_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    referral_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    event_type = Column(String(50), nullable=False)
-    amount_kopeks = Column(Integer, nullable=False, default=0)
-    occurred_at = Column(AwareDateTime(), nullable=False, default=func.now())
-
-    contest = relationship('ReferralContest', back_populates='events')
-    referrer = relationship('User', foreign_keys=[referrer_id])
-    referral = relationship('User', foreign_keys=[referral_id])
-
-    def __repr__(self):
-        return (
-            f'<ReferralContestEvent contest={self.contest_id} referrer={self.referrer_id} referral={self.referral_id}>'
-        )
-
-
-class ReferralContestVirtualParticipant(Base):
-    __tablename__ = 'referral_contest_virtual_participants'
-
-    id = Column(Integer, primary_key=True, index=True)
-    contest_id = Column(Integer, ForeignKey('referral_contests.id', ondelete='CASCADE'), nullable=False)
-    display_name = Column(String(255), nullable=False)
-    referral_count = Column(Integer, nullable=False, default=0)
-    total_amount_kopeks = Column(Integer, nullable=False, default=0)
-    created_at = Column(AwareDateTime(), default=func.now())
-
-    contest = relationship('ReferralContest')
-
-    def __repr__(self):
-        return (
-            f"<ReferralContestVirtualParticipant id={self.id} name='{self.display_name}' count={self.referral_count}>"
-        )
-
-
-class ContestTemplate(Base):
-    __tablename__ = 'contest_templates'
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), nullable=False)
-    slug = Column(String(50), nullable=False, unique=True, index=True)
-    description = Column(Text, nullable=True)
-    prize_type = Column(String(20), nullable=False, default='days')
-    prize_value = Column(String(50), nullable=False, default='1')
-    max_winners = Column(Integer, nullable=False, default=1)
-    attempts_per_user = Column(Integer, nullable=False, default=1)
-    times_per_day = Column(Integer, nullable=False, default=1)
-    schedule_times = Column(String(255), nullable=True)  # CSV of HH:MM in local TZ
-    cooldown_hours = Column(Integer, nullable=False, default=24)
-    payload = Column(JSON, nullable=True)
-    is_enabled = Column(Boolean, nullable=False, default=True)
-    created_at = Column(AwareDateTime(), default=func.now())
-    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
-
-    rounds = relationship('ContestRound', back_populates='template')
-
-
-class ContestRound(Base):
-    __tablename__ = 'contest_rounds'
-    __table_args__ = (
-        Index('idx_contest_round_status', 'status'),
-        Index('idx_contest_round_template', 'template_id'),
-    )
-
-    id = Column(Integer, primary_key=True, index=True)
-    template_id = Column(Integer, ForeignKey('contest_templates.id', ondelete='CASCADE'), nullable=False)
-    starts_at = Column(AwareDateTime(), nullable=False)
-    ends_at = Column(AwareDateTime(), nullable=False)
-    status = Column(String(20), nullable=False, default='active')  # active, finished
-    payload = Column(JSON, nullable=True)
-    winners_count = Column(Integer, nullable=False, default=0)
-    max_winners = Column(Integer, nullable=False, default=1)
-    attempts_per_user = Column(Integer, nullable=False, default=1)
-    message_id = Column(BigInteger, nullable=True)
-    chat_id = Column(BigInteger, nullable=True)
-    created_at = Column(AwareDateTime(), default=func.now())
-    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
-
-    template = relationship('ContestTemplate', back_populates='rounds')
-    attempts = relationship('ContestAttempt', back_populates='round', cascade='all, delete-orphan')
-
-
-class ContestAttempt(Base):
-    __tablename__ = 'contest_attempts'
-    __table_args__ = (
-        UniqueConstraint('round_id', 'user_id', name='uq_round_user_attempt'),
-        Index('idx_contest_attempt_round', 'round_id'),
-    )
-
-    id = Column(Integer, primary_key=True, index=True)
-    round_id = Column(Integer, ForeignKey('contest_rounds.id', ondelete='CASCADE'), nullable=False)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    answer = Column(Text, nullable=True)
-    is_winner = Column(Boolean, nullable=False, default=False)
-    created_at = Column(AwareDateTime(), default=func.now())
-
-    round = relationship('ContestRound', back_populates='attempts')
-    user = relationship('User')
-
-
 class Squad(Base):
     __tablename__ = 'squads'
 
@@ -2461,101 +2313,6 @@ class BroadcastHistory(Base):
     resume_config = Column(JSON, nullable=True)  # то, что нужно, чтобы собрать BroadcastConfig заново
 
     admin = relationship('User', back_populates='broadcasts')
-
-
-class Poll(Base):
-    __tablename__ = 'polls'
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(255), nullable=False)
-    description = Column(Text, nullable=True)
-    reward_enabled = Column(Boolean, nullable=False, default=False)
-    reward_amount_kopeks = Column(Integer, nullable=False, default=0)
-    created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
-    created_at = Column(AwareDateTime(), default=func.now(), nullable=False)
-    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now(), nullable=False)
-
-    creator = relationship('User', backref='created_polls', foreign_keys=[created_by])
-    questions = relationship(
-        'PollQuestion',
-        back_populates='poll',
-        cascade='all, delete-orphan',
-        order_by='PollQuestion.order',
-    )
-    responses = relationship(
-        'PollResponse',
-        back_populates='poll',
-        cascade='all, delete-orphan',
-    )
-
-
-class PollQuestion(Base):
-    __tablename__ = 'poll_questions'
-
-    id = Column(Integer, primary_key=True, index=True)
-    poll_id = Column(Integer, ForeignKey('polls.id', ondelete='CASCADE'), nullable=False, index=True)
-    text = Column(Text, nullable=False)
-    order = Column(Integer, nullable=False, default=0)
-
-    poll = relationship('Poll', back_populates='questions')
-    options = relationship(
-        'PollOption',
-        back_populates='question',
-        cascade='all, delete-orphan',
-        order_by='PollOption.order',
-    )
-    answers = relationship('PollAnswer', back_populates='question')
-
-
-class PollOption(Base):
-    __tablename__ = 'poll_options'
-
-    id = Column(Integer, primary_key=True, index=True)
-    question_id = Column(Integer, ForeignKey('poll_questions.id', ondelete='CASCADE'), nullable=False, index=True)
-    text = Column(Text, nullable=False)
-    order = Column(Integer, nullable=False, default=0)
-
-    question = relationship('PollQuestion', back_populates='options')
-    answers = relationship('PollAnswer', back_populates='option')
-
-
-class PollResponse(Base):
-    __tablename__ = 'poll_responses'
-
-    id = Column(Integer, primary_key=True, index=True)
-    poll_id = Column(Integer, ForeignKey('polls.id', ondelete='CASCADE'), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
-    sent_at = Column(AwareDateTime(), default=func.now(), nullable=False)
-    started_at = Column(AwareDateTime(), nullable=True)
-    completed_at = Column(AwareDateTime(), nullable=True)
-    reward_given = Column(Boolean, nullable=False, default=False)
-    reward_amount_kopeks = Column(Integer, nullable=False, default=0)
-
-    poll = relationship('Poll', back_populates='responses')
-    user = relationship('User', back_populates='poll_responses')
-    answers = relationship(
-        'PollAnswer',
-        back_populates='response',
-        cascade='all, delete-orphan',
-    )
-
-    __table_args__ = (UniqueConstraint('poll_id', 'user_id', name='uq_poll_user'),)
-
-
-class PollAnswer(Base):
-    __tablename__ = 'poll_answers'
-
-    id = Column(Integer, primary_key=True, index=True)
-    response_id = Column(Integer, ForeignKey('poll_responses.id', ondelete='CASCADE'), nullable=False, index=True)
-    question_id = Column(Integer, ForeignKey('poll_questions.id', ondelete='CASCADE'), nullable=False, index=True)
-    option_id = Column(Integer, ForeignKey('poll_options.id', ondelete='CASCADE'), nullable=False, index=True)
-    created_at = Column(AwareDateTime(), default=func.now(), nullable=False)
-
-    response = relationship('PollResponse', back_populates='answers')
-    question = relationship('PollQuestion', back_populates='answers')
-    option = relationship('PollOption', back_populates='answers')
-
-    __table_args__ = (UniqueConstraint('response_id', 'question_id', name='uq_poll_answer_unique'),)
 
 
 class ServerSquad(Base):

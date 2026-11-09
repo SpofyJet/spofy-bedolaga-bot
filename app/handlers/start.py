@@ -1315,20 +1315,6 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             return
         start_parameter = None  # Invalid token, ignore
 
-    # Handle contests deep link: /start contests — the channel announcement's
-    # "🎲 Играть" button opens the bot here (a callback button can't open a
-    # private chat / show a personal menu from a channel post).
-    if start_parameter == 'contests':
-        user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
-        if user and user.status != UserStatus.DELETED.value:
-            from app.handlers.contests import open_contests_menu_message
-
-            await open_contests_menu_message(message, user, db)
-            await _drop_leftover_input_state(state)
-            return
-        # Unregistered → fall through to normal /start (contests need a subscription anyway).
-        start_parameter = None
-
     # Spofy: /start renew | /start traffic — со страницы подписки и из уведомления
     # «обходы отключены». Без подписки или без аккаунта — обычный /start.
     if start_parameter in SUBSCRIPTION_DEEPLINKS:

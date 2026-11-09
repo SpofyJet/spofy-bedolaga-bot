@@ -22,7 +22,7 @@ These tests pin that contract:
      SUBSCRIPTION_PAYMENT is stored as a negative (debit) amount.
 
 The Yandex service (`spawn_bg` / `fire_purchase_bg`) and every other lazy
-side-effect import (`event_emitter`, promo-group assignment, referral contest)
+side-effect import (`event_emitter`, promo-group assignment)
 are mocked so no real network or DB I/O happens — assertions are on the mocks.
 """
 
@@ -70,10 +70,6 @@ def yandex_spy(monkeypatch):
     )
     monkeypatch.setattr(
         'app.services.promo_group_assignment.maybe_assign_promo_group_by_total_spent',
-        AsyncMock(return_value=None),
-    )
-    monkeypatch.setattr(
-        'app.services.referral_contest_service.referral_contest_service.on_subscription_payment',
         AsyncMock(return_value=None),
     )
     return spawn_mock, fire_mock

@@ -62,7 +62,6 @@ from app.utils.validators import sanitize_html
 
 logger = structlog.get_logger(__name__)
 
-_RTL_LANGUAGES = frozenset({'ar', 'fa', 'he'})
 _PROGRESS_BAR_LENGTH = 10
 
 # Сервер не поддерживает rich-сообщения (устаревший self-hosted bot-api).
@@ -660,10 +659,9 @@ def _strip_tg_time(rich_html: str) -> str:
     return _TG_TIME_TAG_RE.sub(r'\1', rich_html)
 
 
-def _input_rich_message(rich_html: str, language: str | None) -> InputRichMessage:
+def _input_rich_message(rich_html: str) -> InputRichMessage:
     return prepare_rich_message(
         rich_html,
-        is_rtl=True if (language or '').lower() in _RTL_LANGUAGES else None,
     )
 
 
@@ -712,7 +710,7 @@ async def _send_rich_menu(
     try:
         return await bot.send_rich_message(
             chat_id=chat_id,
-            rich_message=_input_rich_message(rich_html, language),
+            rich_message=_input_rich_message(rich_html),
             reply_markup=keyboard,
             message_effect_id=effect_id,
         )
@@ -725,7 +723,7 @@ async def _send_rich_menu(
             )
             return await bot.send_rich_message(
                 chat_id=chat_id,
-                rich_message=_input_rich_message(_strip_tg_time(rich_html), language),
+                rich_message=_input_rich_message(_strip_tg_time(rich_html)),
                 reply_markup=keyboard,
                 message_effect_id=effect_id,
             )
@@ -740,7 +738,7 @@ async def _send_rich_menu(
             )
             return await bot.send_rich_message(
                 chat_id=chat_id,
-                rich_message=_input_rich_message(rich_html, language),
+                rich_message=_input_rich_message(rich_html),
                 reply_markup=keyboard,
             )
         raise
@@ -849,7 +847,7 @@ async def try_edit_rich_main_menu(
                 EditMessageText(
                     chat_id=chat_id,
                     message_id=message.message_id,
-                    rich_message=_input_rich_message(rich_html, language),
+                    rich_message=_input_rich_message(rich_html),
                     reply_markup=keyboard,
                     parse_mode=None,
                 )
@@ -888,7 +886,7 @@ async def try_edit_rich_main_menu(
                     EditMessageText(
                         chat_id=chat_id,
                         message_id=message.message_id,
-                        rich_message=_input_rich_message(_strip_tg_time(rich_html), language),
+                        rich_message=_input_rich_message(_strip_tg_time(rich_html)),
                         reply_markup=keyboard,
                         parse_mode=None,
                     )

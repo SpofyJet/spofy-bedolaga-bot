@@ -714,7 +714,7 @@ async def claim_gift(
 async def get_landing_config(
     raw_request: Request,
     slug: str = Path(max_length=100),
-    lang: str = Query(DEFAULT_LOCALE, max_length=5, description='Locale: ru, en, zh, fa'),
+    lang: str = Query(DEFAULT_LOCALE, max_length=5, description='Locale: ru, en'),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get public landing page configuration with tariffs and payment methods.

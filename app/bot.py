@@ -7,9 +7,7 @@ from app.config import settings
 from app.handlers import (
     balance,
     common,
-    contests as user_contests,
     menu,
-    polls as user_polls,
     promocode,
     referral,
     referral_settings,
@@ -27,16 +25,13 @@ from app.handlers.admin import (
     bot_configuration as admin_bot_configuration,
     bulk_ban as admin_bulk_ban,
     campaigns as admin_campaigns,
-    contests as admin_contests,
     coupons as admin_coupons,
-    daily_contests as admin_daily_contests,
     faq as admin_faq,
     main as admin_main,
     maintenance as admin_maintenance,
     messages as admin_messages,
     monitoring as admin_monitoring,
     payments as admin_payments,
-    polls as admin_polls,
     pricing as admin_pricing,
     privacy_policy as admin_privacy_policy,
     promo_groups as admin_promo_groups,
@@ -203,12 +198,9 @@ async def setup_bot(memory: MemoryStorage | None = None) -> tuple[Bot, Dispatche
     admin_rules.register_handlers(dp)
     admin_remnawave.register_handlers(dp)
     admin_statistics.register_handlers(dp)
-    admin_polls.register_handlers(dp)
     admin_promo_groups.register_handlers(dp)
     admin_campaigns.register_handlers(dp)
     admin_coupons.register_handlers(dp)
-    admin_contests.register_handlers(dp)
-    admin_daily_contests.register_handlers(dp)
     admin_promo_offers.register_handlers(dp)
     admin_maintenance.register_handlers(dp)
     admin_user_messages.register_handlers(dp)
@@ -235,8 +227,6 @@ async def setup_bot(memory: MemoryStorage | None = None) -> tuple[Bot, Dispatche
     register_gift_activation_handlers(dp)
     common.register_handlers(dp)
     register_stars_handlers(dp)
-    user_contests.register_handlers(dp)
-    user_polls.register_handlers(dp)
     simple_subscription.register_simple_subscription_handlers(dp)
     logger.info('⭐ Зарегистрированы обработчики Telegram Stars платежей')
     logger.info('⚡ Зарегистрированы обработчики простой покупки')

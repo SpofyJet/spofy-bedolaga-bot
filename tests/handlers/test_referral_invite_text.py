@@ -17,7 +17,7 @@ def _trial(monkeypatch):
     monkeypatch.setattr(settings, 'REFERRAL_FIRST_TOPUP_BONUS_KOPEKS', 0)
 
 
-@pytest.mark.parametrize('lang', ['ru', 'en', 'ua', 'zh', 'fa'])
+@pytest.mark.parametrize('lang', ['ru', 'en'])
 def test_share_text_has_no_markup(lang):
     url = referral._build_referral_share_url('https://t.me/bot?start=ref_x', get_texts(lang))
     text = parse_qs(urlparse(url).query)['text'][0]
@@ -42,7 +42,6 @@ def test_russian_share_text_reads_naturally():
         (2, 'ru', '2 дня'),
         (5, 'ru', '5 дней'),
         (11, 'ru', '11 дней'),
-        (2, 'ua', '2 дні'),
         (1, 'en', '1 day'),
     ],
 )

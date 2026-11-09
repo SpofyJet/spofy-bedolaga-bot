@@ -23,7 +23,6 @@ from app.services.backup_service import backup_service
 from app.services.ban_notification_service import ban_notification_service
 from app.services.broadcast_service import broadcast_service
 from app.services.bypass_downgrade_service import bypass_downgrade_service
-from app.services.contest_rotation_service import contest_rotation_service
 from app.services.daily_subscription_service import daily_subscription_service
 from app.services.dpichecker.service import dpichecker_service
 from app.services.grace_access_runtime import grace_access_runtime
@@ -39,7 +38,6 @@ from app.services.payment_verification_service import (
     method_display_name,
 )
 from app.services.reachability.service import reachability_service
-from app.services.referral_contest_service import referral_contest_service
 from app.services.remnawave_sync_service import remnawave_sync_service
 from app.services.reporting_service import reporting_service
 from app.services.riopay_service import riopay_service
@@ -420,7 +418,6 @@ async def main():
             admin_notification_service = AdminNotificationService(bot)
             version_service.bot = bot
             version_service.set_notification_service(admin_notification_service)
-            referral_contest_service.set_bot(bot)
             stage.log(f'Репозиторий версий: {version_service.repo}')
             stage.log(f'Текущая версия: {version_service.current_version}')
             stage.success('Мониторинг, уведомления и рассылки подключены')
@@ -457,37 +454,6 @@ async def main():
             except Exception as e:
                 stage.warning(f'Ошибка запуска сервиса отчетов: {e}')
                 logger.error('❌ Ошибка запуска сервиса отчетов', error=e)
-
-        async with timeline.stage(
-            'Реферальные конкурсы',
-            '🏆',
-            success_message='Сервис конкурсов готов',
-        ) as stage:
-            try:
-                await referral_contest_service.start()
-                if referral_contest_service.is_running():
-                    stage.log('Автосводки по конкурсам запущены')
-                else:
-                    stage.skip('Сервис конкурсов выключен настройками')
-            except Exception as e:
-                stage.warning(f'Ошибка запуска сервиса конкурсов: {e}')
-                logger.error('❌ Ошибка запуска сервиса конкурсов', error=e)
-
-        async with timeline.stage(
-            'Ротация игр',
-            '🎲',
-            success_message='Мини-игры готовы',
-        ) as stage:
-            try:
-                contest_rotation_service.set_bot(bot)
-                await contest_rotation_service.start()
-                if contest_rotation_service.is_running():
-                    stage.log('Ротационные игры запущены')
-                else:
-                    stage.skip('Ротация игр выключена настройками')
-            except Exception as e:
-                stage.warning(f'Ошибка запуска ротации игр: {e}')
-                logger.error('❌ Ошибка запуска ротации игр', error=e)
 
         if settings.is_log_rotation_enabled():
             async with timeline.stage(
@@ -1036,10 +1002,6 @@ async def main():
             logger.error('Ошибка остановки сервиса отчетов', error=e)
 
         logger.info('ℹ️ Остановка сервиса конкурсов...')
-        try:
-            await referral_contest_service.stop()
-        except Exception as e:
-            logger.error('Ошибка остановки сервиса конкурсов', error=e)
 
         logger.info('ℹ️ Остановка сервиса grace-доступа...')
         try:
@@ -1054,10 +1016,6 @@ async def main():
             logger.error('Ошибка остановки автосинхронизации RemnaWave', error=e)
 
         logger.info('ℹ️ Остановка ротации игр...')
-        try:
-            await contest_rotation_service.stop()
-        except Exception as e:
-            logger.error('Ошибка остановки ротации игр', error=e)
 
         if settings.is_log_rotation_enabled():
             logger.info('ℹ️ Остановка сервиса ротации логов...')

@@ -59,12 +59,6 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
             'max_per_row': 2,
         },
         {
-            'id': 'contests_row',
-            'buttons': ['contests'],
-            'conditions': {'contests_visible': True},
-            'max_per_row': 2,
-        },
-        {
             'id': 'support_info_row',
             'buttons': ['support', 'info'],
             'conditions': None,
@@ -202,16 +196,6 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
             'conditions': {'referral_enabled': True},
             'dynamic_text': False,
         },
-        'contests': {
-            'type': 'builtin',
-            'builtin_id': 'contests',
-            'text': {'ru': '🎲 Конкурсы', 'en': '🎲 Contests'},
-            'action': 'contests_menu',
-            'enabled': True,
-            'visibility': 'all',
-            'conditions': None,
-            'dynamic_text': False,
-        },
         'support': {
             'type': 'builtin',
             'builtin_id': 'support',
@@ -344,13 +328,6 @@ BUILTIN_BUTTONS_INFO: list[dict[str, Any]] = [
         'default_text': {'ru': '👥 Рефералы', 'en': '👥 Referrals'},
         'callback_data': 'menu_referrals',
         'default_conditions': {'referral_enabled': True},
-        'supports_dynamic_text': False,
-    },
-    {
-        'id': 'contests',
-        'default_text': {'ru': '🎲 Конкурсы', 'en': '🎲 Contests'},
-        'callback_data': 'contests_menu',
-        'default_conditions': {'contests_visible': True},
         'supports_dynamic_text': False,
     },
     {

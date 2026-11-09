@@ -99,7 +99,7 @@ async def get_transactions(
     items = []
     for t in transactions:
         # Determine sign based on transaction type
-        # Credits (positive): DEPOSIT, REFERRAL_REWARD, REFUND, POLL_REWARD
+        # Credits (positive): DEPOSIT, REFERRAL_REWARD, REFUND
         # Debits (negative): SUBSCRIPTION_PAYMENT, WITHDRAWAL, GIFT_PAYMENT
         is_debit = t.type in ['subscription_payment', 'withdrawal', 'gift_payment']
         amount_kopeks = -abs(t.amount_kopeks) if is_debit else abs(t.amount_kopeks)

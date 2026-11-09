@@ -109,7 +109,7 @@ async def test_handler_shows_pages_and_empty_state_with_buttons(monkeypatch):
         assert [button.callback_data for row in markup.inline_keyboard for button in row] == ['menu_balance']
 
 
-@pytest.mark.parametrize('lang', ['ru', 'en', 'ua', 'zh', 'fa'])
+@pytest.mark.parametrize('lang', ['ru', 'en'])
 def test_locales_have_history_and_unknown_method_texts(lang):
     import json
     from pathlib import Path

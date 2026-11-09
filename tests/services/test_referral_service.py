@@ -481,10 +481,6 @@ async def test_registration_of_email_only_pair_never_sends_bonus_email(monkeypat
     monkeypatch.setattr(referral_service.settings, 'REFERRAL_COMMISSION_PERCENT', 25)
 
     with (
-        patch(
-            'app.services.referral_contest_service.referral_contest_service.on_referral_registration',
-            AsyncMock(),
-        ),
         patch('app.services.referral_reward_service.award_referral_rewards', AsyncMock(return_value=[])),
         patch(
             'app.services.referral_reward_service.describe_referee_bonus',

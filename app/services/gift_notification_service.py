@@ -158,7 +158,7 @@ def build_gift_result_presentation(
     and standalone internal bearer tokens. Dynamic strings are HTML escaped.
 
     Args:
-        language: User language code (e.g. 'ru', 'en', 'ua', 'fa', 'zh').
+        language: User language code ('ru' or 'en').
         purchase_result: Result of balance purchase or idempotent replay.
         bot_username: Normalized bot username (preferred deep-link channel).
         cabinet_url: Normalized cabinet base URL (fallback channel).

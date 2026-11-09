@@ -53,7 +53,6 @@ from .admin_withdrawals import router as admin_withdrawals_router
 from .auth import router as auth_router
 from .balance import router as balance_router
 from .branding import router as branding_router
-from .contests import router as contests_router
 from .coupon import router as coupon_router
 from .gift import router as gift_router
 from .info import router as info_router
@@ -64,7 +63,6 @@ from .news import router as news_router
 from .notifications import router as notifications_router
 from .oauth import router as oauth_router
 from .partner_application import router as partner_application_router
-from .polls import router as polls_router
 from .promo import router as promo_router
 from .promocode import router as promocode_router
 from .referral import router as referral_router
@@ -114,8 +112,6 @@ router.include_router(tickets_router)
 router.include_router(promocode_router)
 router.include_router(activity_router)
 router.include_router(coupon_router)
-router.include_router(contests_router)
-router.include_router(polls_router)
 router.include_router(promo_router)
 router.include_router(notifications_router)
 router.include_router(info_router)

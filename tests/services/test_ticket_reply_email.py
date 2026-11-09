@@ -198,7 +198,7 @@ async def test_delivery_failure_does_not_raise(monkeypatch: pytest.MonkeyPatch, 
 # ============ шаблон ============
 
 
-@pytest.mark.parametrize('language', ['ru', 'en', 'zh', 'fa'])
+@pytest.mark.parametrize('language', ['ru', 'en'])
 def test_template_renders_for_supported_languages(language: str) -> None:
     template = EmailNotificationTemplates().get_template(
         NotificationType.TICKET_REPLY,

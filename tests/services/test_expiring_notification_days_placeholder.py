@@ -27,7 +27,7 @@ class _LegacyTexts:
 
 
 def _user() -> SimpleNamespace:
-    return SimpleNamespace(telegram_id=12345, language='fa', balance_kopeks=0)
+    return SimpleNamespace(telegram_id=12345, language='ru', balance_kopeks=0)
 
 
 def _subscription() -> SimpleNamespace:

@@ -525,7 +525,7 @@ async def fulfill_purchase(
         except Exception:
             logger.debug('Failed to save CID from Redis')
 
-        # Create transaction so promo group auto-assignment and contest tracking work.
+        # Create transaction so promo group auto-assignment works.
         # Skip for gift recipients — they didn't pay, so their spending shouldn't be inflated.
         if not purchase.is_gift:
             try:
@@ -1456,7 +1456,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
         await db.commit()
         await db.refresh(purchase, attribute_names=['landing', 'user', 'buyer'])
 
-        # Create transaction so promo group auto-assignment and contest tracking work.
+        # Create transaction so promo group auto-assignment works.
         # Skip for gift recipients — they didn't pay, so their spending shouldn't be inflated.
         if not purchase.is_gift:
             try:

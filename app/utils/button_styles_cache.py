@@ -26,7 +26,7 @@ DEFAULT_BUTTON_STYLES: dict[str, dict] = {
     'language': {'style': 'primary', 'icon_custom_emoji_id': '', 'enabled': True, 'labels': {}},
 }
 
-BOT_LOCALES = ('ru', 'en', 'ua', 'zh', 'fa')
+BOT_LOCALES = ('ru', 'en')
 
 SECTIONS = list(DEFAULT_BUTTON_STYLES.keys())
 

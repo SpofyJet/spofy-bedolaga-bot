@@ -27,7 +27,7 @@ def _data(lang):
     return json.loads(Path(f'app/localization/locales/{lang}.json').read_text(encoding='utf-8'))
 
 
-@pytest.mark.parametrize('lang', ['ru', 'en', 'ua', 'zh', 'fa'])
+@pytest.mark.parametrize('lang', ['ru', 'en'])
 def test_payment_names_have_no_emoji(lang):
     data = _data(lang)
     offenders = {
