@@ -7,9 +7,9 @@ from app.services.wata_service import WataService
 
 
 def test_header_dump_of_an_exception_is_masked():
-    text = "ContentTypeError(headers=<CIMultiDictProxy('Host': 'pay.crypt.bot', 'Crypto-Pay-API-Token': '605182:AAoc0dqrHLTqfkGx5I0TG9EOI2Q8yxekeNR'>)"
+    text = "ContentTypeError(headers=<CIMultiDictProxy('Host': 'pay.crypt.bot', 'Crypto-Pay-API-Token': '000000:FakeCryptoPayTokenForRedactionTest000000'>)"
     cleaned = redact_secrets(text)
-    assert 'AAoc0dqrHLTqf' not in cleaned
+    assert 'FakeCryptoPayToken' not in cleaned
     assert "'Crypto-Pay-API-Token': '***'" in cleaned
     assert 'pay.crypt.bot' in cleaned
 
