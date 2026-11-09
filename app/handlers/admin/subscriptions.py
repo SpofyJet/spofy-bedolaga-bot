@@ -17,9 +17,10 @@ from app.database.models import (
     SubscriptionStatus,
     User,
 )
-from app.localization.texts import Texts
+from app.localization.texts import Texts, get_texts
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime
+from app.utils.notification_keyboards import buy_button, keyboard, subscription_button
 from app.utils.subscription_time import local_days_until
 
 
@@ -404,7 +405,13 @@ async def send_expiry_reminders(callback: types.CallbackQuery, db_user: User, db
 💎 Продлить подписку можно в главном меню.
 """
 
-                await callback.bot.send_message(chat_id=user.telegram_id, text=reminder_text)
+                await callback.bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=reminder_text,
+                    reply_markup=keyboard(
+                        buy_button(get_texts(user.language)), subscription_button(get_texts(user.language))
+                    ),
+                )
                 sent_count += 1
 
             except Exception as e:

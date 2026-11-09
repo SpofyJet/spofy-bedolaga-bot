@@ -20,7 +20,9 @@ import structlog
 
 from app.config import settings
 from app.database.models import PromoGroup, User
+from app.localization.texts import get_texts
 from app.services.notification_types import NotificationType
+from app.utils.notification_keyboards import buy_button
 
 
 logger = structlog.get_logger(__name__)
@@ -107,7 +109,6 @@ async def _deliver(user: User, group: PromoGroup, total_spent_kopeks: int) -> No
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
     from app.bot_factory import create_bot
-    from app.localization.texts import get_texts
     from app.services.notification_delivery_service import notification_delivery_service
 
     language = user.language or settings.DEFAULT_LANGUAGE
@@ -136,7 +137,7 @@ async def _deliver(user: User, group: PromoGroup, total_spent_kopeks: int) -> No
         'device_discount': discounts.device_percent,
     }
     close = InlineKeyboardButton(text=texts.get('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'), callback_data='webhook:close')
-    markup = InlineKeyboardMarkup(inline_keyboard=[[close]])
+    markup = InlineKeyboardMarkup(inline_keyboard=[[buy_button(texts)], [close]])
 
     bot = create_bot(token=settings.BOT_TOKEN) if user.telegram_id and settings.BOT_TOKEN else None
     try:

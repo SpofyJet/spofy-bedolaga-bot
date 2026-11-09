@@ -175,8 +175,8 @@ CORE_PRICING_ENTRIES: tuple[SettingEntry, ...] = (
         label_ru='🗓 Стратегия сброса трафика',
         label_en='🗓 Traffic reset strategy',
         action='input',
-        description_ru='Доступные значения: DAY, WEEK, MONTH, NEVER.',
-        description_en='Available values: DAY, WEEK, MONTH, NEVER.',
+        description_ru='Доступные значения: DAY, WEEK, MONTH, MONTH_ROLLING, NO_RESET.',
+        description_en='Available values: DAY, WEEK, MONTH, MONTH_ROLLING, NO_RESET.',
     ),
     SettingEntry(
         key='TRAFFIC_SELECTION_MODE',

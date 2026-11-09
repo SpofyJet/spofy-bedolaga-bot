@@ -1931,6 +1931,9 @@
 - `app/utils/miniapp_buttons.py` — Python-модуль
   Классы: нет
   Функции: `strip_leading_emoji` — Удалить ведущий юникод-emoji + следующий пробел. Безопасно для текста без emoji., `tg_emoji_to_unicode` — Развернуть <tg-emoji emoji-id='...'>X</tg-emoji> в обычный юникод-эмодзи X., `build_main_menu_button` — Always-callback button for "Main Menu" / "Главное меню" navigation., `build_cabinet_url` — Join ``MINIAPP_CUSTOM_URL`` with an optional *path* segment., `build_miniapp_or_callback_button` — Create a button that opens the cabinet miniapp or falls back to a callback., `build_subscription_extend_button` — Кнопка «Продлить подписку» для уведомлений — единая точка на весь бот., `build_miniapp_startapp_url` — Собрать t.me Mini App deep link, открывающий кабинет в ЛЮБОМ типе чата., `build_admin_ticket_cabinet_button` — Кнопка «открыть тикет в админ-кабинете» для уведомления о тикете.
+- `app/utils/notification_keyboards.py` — Python-модуль
+  Классы: нет
+  Функции: `subscription_button`, `buy_button`, `topup_button`, `buy_traffic_button`, `referral_button`, `support_button`, `keyboard` — Одна кнопка в ряд; пропущенные (``None``) не показываются., `admin_url`, `admin_user_card_keyboard` — Кнопка на карточку пользователя под уведомлением в админ-чате., `admin_startup_keyboard` — Разделы админки, которые открывают чаще всего.
 - `app/utils/notification_prefs.py` — Python-модуль
   Классы: нет
   Функции: `get_user_notification_pref` — Get a single notification preference for user., `is_subscription_expiry_enabled` — Check if subscription expiry notifications are enabled for user., `get_subscription_expiry_days` — Get the number of days before expiry to notify., `is_traffic_warning_enabled` — Check if traffic warning notifications are enabled for user., `get_traffic_warning_percent` — Get the traffic usage percentage threshold for warning., `is_balance_low_enabled` — Check if low balance notifications are enabled for user., `get_balance_low_threshold` — Get the low balance threshold in kopeks., `is_news_enabled` — Check if news notifications are enabled for user., `is_promo_offers_enabled` — Check if promo offer notifications are enabled for user., `filter_users_by_broadcast_category` — Отсеивает отписавшихся от рассылки этой категории.
@@ -5431,6 +5434,9 @@
 - `tests/utils/test_min_device_limit.py` — Python-модуль
   Классы: нет
   Функции: `test_default_floor_is_tariff_device_limit`, `test_opt_in_restores_previous_behaviour` — Флаг возвращает прежний минимум 1 — для тех, кому нужно самоограничение., `test_without_usable_tariff_limit_floor_is_one` — Классический режим и битые значения не должны блокировать уменьшение., `test_no_tariff_at_all_floor_is_one`, `test_keyboard_hides_values_below_tariff_limit` — Кнопки с запрещёнными значениями не должны показываться вовсе., `test_keyboard_offers_lower_values_when_opted_in`
+- `tests/utils/test_notification_keyboards.py` — Python-модуль
+  Классы: нет
+  Функции: `test_keyboard_skips_missing_buttons`, `test_keyboard_without_buttons_is_none`, `test_admin_links_need_cabinet_url`, `test_admin_links_point_to_cabinet`, `test_admin_card_skips_missing_user`, `test_brand_in_footer`
 - `tests/utils/test_panel_node_usage.py` — Python-модуль
   Классы: нет
   Функции: `test_normalizes_the_production_shape` — ЕДИНСТВЕННАЯ форма, которая реально сюда приходит: {userId, nodeUuid, total}., `test_also_tolerates_the_raw_3_0_0_keys` — Сырые ключи панели {id, totalBytes} — запас на случай, если сюда однажды, `test_accepts_the_already_normalised_shape`, `test_falls_back_to_the_requested_node_uuid`, `test_skips_non_dict_entries_and_tolerates_missing_fields`, `test_non_numeric_totals_do_not_raise`, `test_empty_input`

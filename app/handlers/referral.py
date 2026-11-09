@@ -715,6 +715,7 @@ async def show_withdrawal_info(callback: types.CallbackQuery, db_user: User, db:
                 types.InlineKeyboardButton(
                     text=texts.t('REFERRAL_WITHDRAWAL_REQUEST_BUTTON', '📝 Оформить заявку'),
                     callback_data='referral_withdrawal_start',
+                    style='success',
                 )
             ]
         )

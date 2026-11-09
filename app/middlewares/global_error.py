@@ -295,7 +295,7 @@ async def send_error_to_admin_chat(
         )
 
         message_text = (
-            f'<b>Remnawave Bedolaga Bot</b>\n\n'
+            f'<b>Spofy Bedolaga Bot</b>\n\n'
             f'⚠️ Ошибка во время работы\n\n'
             f'<b>Тип:</b> <code>{html.escape(error_type)}</code>\n'
             f'<b>Ошибок в отчёте:</b> {errors_count}\n'

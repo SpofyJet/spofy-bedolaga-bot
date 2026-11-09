@@ -1552,6 +1552,7 @@ def get_subscription_keyboard(
                         InlineKeyboardButton(
                             text=texts.t('SUB_ADD_DEVICES_BUTTON', '➕ Докупить устройства'),
                             callback_data='subscription_change_devices',
+                            style='success',
                         )
                     ]
                 )
@@ -2431,6 +2432,7 @@ def get_reset_traffic_confirm_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('TOPUP_BALANCE_BUTTON', '💳 Пополнить баланс'),
                     callback_data='balance_topup',
+                    style='success',
                 )
             ]
         )
@@ -2824,7 +2826,11 @@ def get_cryptobot_payment_keyboard(
     texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=texts.t('PAY_WITH_COINS_BUTTON', 'Оплатить'), url=bot_invoice_url)],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAY_WITH_COINS_BUTTON', 'Оплатить'), url=bot_invoice_url, style='success'
+                )
+            ],
             [
                 InlineKeyboardButton(
                     text=strip_leading_emoji(texts.t('CHECK_STATUS_BUTTON', 'Проверить статус')),

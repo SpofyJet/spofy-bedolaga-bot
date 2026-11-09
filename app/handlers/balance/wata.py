@@ -168,8 +168,7 @@ async def process_wata_payment_amount(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('WATA_PAY_BUTTON', 'Оплатить через WATA'),
-                    url=payment_url,
+                    text=texts.t('WATA_PAY_BUTTON', 'Оплатить через WATA'), url=payment_url, style='success'
                 )
             ],
             [

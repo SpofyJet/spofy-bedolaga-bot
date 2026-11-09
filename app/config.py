@@ -856,8 +856,8 @@ class Settings(BaseSettings):
     MEDIA_IMAGE_MAX_DIMENSION: int = 2048
     MEDIA_JPEG_QUALITY: int = 85
     MINIAPP_PURCHASE_URL: str = ''
-    MINIAPP_SERVICE_NAME_EN: str = 'Bedolaga VPN'
-    MINIAPP_SERVICE_NAME_RU: str = 'Bedolaga VPN'
+    MINIAPP_SERVICE_NAME_EN: str = 'Spofy VPN'
+    MINIAPP_SERVICE_NAME_RU: str = 'Spofy VPN'
     MINIAPP_SERVICE_DESCRIPTION_EN: str = 'Secure & Fast Connection'
     MINIAPP_SERVICE_DESCRIPTION_RU: str = 'Безопасное и быстрое подключение'
     CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED: bool = False
@@ -952,7 +952,7 @@ class Settings(BaseSettings):
     WEB_API_WORKERS: int = 1
     WEB_API_ALLOWED_ORIGINS: str = '*'
     WEB_API_DOCS_ENABLED: bool = False
-    WEB_API_TITLE: str = 'Remnawave Bot Admin API'
+    WEB_API_TITLE: str = 'Spofy Bedolaga Bot Admin API'
     WEB_API_VERSION: str = '1.0.0'
     WEB_API_DEFAULT_TOKEN: str | None = None
     WEB_API_DEFAULT_TOKEN_NAME: str = 'Bootstrap Token'
@@ -969,7 +969,7 @@ class Settings(BaseSettings):
     APP_CONFIG_CACHE_TTL: int = 3600
 
     VERSION_CHECK_ENABLED: bool = True
-    VERSION_CHECK_REPO: str = 'fr1ngg/remnawave-bedolaga-telegram-bot'
+    VERSION_CHECK_REPO: str = 'SpofyJet/spofy-bedolaga-bot'
     VERSION_CHECK_INTERVAL_HOURS: int = 1
 
     # === Антиабуз триалов (n20) ===
@@ -1083,8 +1083,6 @@ class Settings(BaseSettings):
     EMAIL_UNSUBSCRIBE_BASE_URL: str = ''
     # Необязательный mailto-вариант в List-Unsubscribe для клиентов без HTTP one-click.
     EMAIL_UNSUBSCRIBE_MAILTO: str = ''
-
-    # Ban System Integration (BedolagaBan monitoring)
 
     # bschekbot — BSCHEKER: проверка хостов глазами мобильных операторов
     BSCHEK_ENABLED: bool = False
@@ -1933,7 +1931,7 @@ class Settings(BaseSettings):
             raise ValueError('referral_code must not be empty or None')
         return _url_quote(referral_code, safe='')
 
-    def _normalized_cabinet_url(self) -> str | None:
+    def normalized_cabinet_url(self) -> str | None:
         """Return normalized cabinet URL, or None if not configured."""
         cabinet_url = (self.CABINET_URL or '').strip().rstrip('/')
         if not cabinet_url or cabinet_url == self._CABINET_URL_DEFAULT:
@@ -1958,7 +1956,7 @@ class Settings(BaseSettings):
 
     def get_cabinet_referral_link(self, referral_code: str) -> str | None:
         """Return the cabinet referral link, or None if cabinet is not configured."""
-        cabinet_url = self._normalized_cabinet_url()
+        cabinet_url = self.normalized_cabinet_url()
         if not cabinet_url:
             return None
         safe_code = self._encode_referral_code(referral_code)

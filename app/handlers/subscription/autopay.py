@@ -464,6 +464,7 @@ async def handle_sbp_recurring_menu(
         action_button = types.InlineKeyboardButton(
             text=texts.t('SBP_RECURRING_ENABLE_BUTTON', '✅ Подключить'),
             callback_data='sbp_recurring_enable',
+            style='success',
         )
         action_rows = [[action_button]]
 
@@ -805,6 +806,7 @@ async def handle_sbp_recurring_cancel(
                 types.InlineKeyboardButton(
                     text=texts.t('SBP_RECURRING_KEEP_BUTTON', '✅ Оставить автопродление'),
                     callback_data='sbp_recurring_menu',
+                    style='success',
                 )
             ],
             [

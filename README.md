@@ -2,7 +2,7 @@
 
 <img src=".github/assets/logo.png" alt="Bedolaga Bot" width="800" />
 
-# Bedolaga Bot
+# Spofy Bedolaga Bot
 
 **Telegram-бот для автоматизации VPN-бизнеса на базе [Remnawave](https://github.com/remnawave/backend)**
 

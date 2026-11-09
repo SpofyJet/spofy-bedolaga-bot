@@ -49,6 +49,7 @@ from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
 from app.utils.formatting import user_html_link
+from app.utils.notification_keyboards import keyboard, subscription_button
 from app.utils.photo_message import safe_edit_or_resend
 from app.utils.subscription_time import format_time_left, local_days_until
 from app.utils.timezone import format_local_datetime
@@ -5277,6 +5278,7 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                     f'📅 Подписка действительна до: {format_datetime(subscription.end_date)}'
                     f'{tariff_line}',
                     parse_mode='HTML',
+                    reply_markup=keyboard(subscription_button(get_texts(target_user.language))),
                 )
         except Exception as e:
             user_id_display = target_user.telegram_id or target_user.email or f'#{target_user.id}'
@@ -5705,6 +5707,7 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
                     f'💰 Списано с баланса: {settings.format_price(price_kopeks)}\n'
                     f'📅 Действует до: {format_datetime(subscription.end_date)}',
                     parse_mode='HTML',
+                    reply_markup=keyboard(subscription_button(get_texts(target_user.language))),
                 )
         except Exception as e:
             logger.error('Ошибка отправки уведомления пользователю', error=e)

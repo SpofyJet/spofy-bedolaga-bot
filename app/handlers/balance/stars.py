@@ -100,7 +100,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
             payload=f'balance_{db_user.id}_{amount_kopeks}',
         )
 
-        buttons = [[types.InlineKeyboardButton(text='Оплатить', url=invoice_link)]]
+        buttons = [[types.InlineKeyboardButton(text='Оплатить', url=invoice_link, style='success')]]
         recurring_note = ''
         if settings.TELEGRAM_STARS_SUBSCRIPTION_ENABLED:
             recurring_link = await payment_service.create_stars_invoice(

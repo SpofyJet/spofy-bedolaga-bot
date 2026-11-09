@@ -234,6 +234,7 @@ async def start_simple_subscription_purchase(
                     types.InlineKeyboardButton(
                         text='✅ Оплатить с баланса',
                         callback_data='simple_subscription_pay_with_balance',
+                        style='success',
                     )
                 ]
             )
@@ -827,7 +828,7 @@ async def handle_simple_subscription_other_payment_methods(
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='✅ Оплатить с баланса', callback_data='simple_subscription_pay_with_balance'
+                    text='✅ Оплатить с баланса', callback_data='simple_subscription_pay_with_balance', style='success'
                 )
             ]
         )
@@ -1013,12 +1014,7 @@ async def handle_simple_subscription_payment_method(
 
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text='🪙 Оплатить через CryptoBot',
-                            url=payment_url,
-                        )
-                    ],
+                    [types.InlineKeyboardButton(text='🪙 Оплатить через CryptoBot', url=payment_url, style='success')],
                     [
                         types.InlineKeyboardButton(
                             text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
@@ -1107,12 +1103,7 @@ async def handle_simple_subscription_payment_method(
 
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text='🪙 Оплатить через 2328.io',
-                            url=payment_url,
-                        )
-                    ],
+                    [types.InlineKeyboardButton(text='🪙 Оплатить через 2328.io', url=payment_url, style='success')],
                     [
                         types.InlineKeyboardButton(
                             text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
@@ -1212,8 +1203,7 @@ async def handle_simple_subscription_payment_method(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('WATA_PAY_BUTTON', '💳 Оплатить через WATA'),
-                            url=payment_url,
+                            text=texts.t('WATA_PAY_BUTTON', '💳 Оплатить через WATA'), url=payment_url, style='success'
                         )
                     ],
                     [

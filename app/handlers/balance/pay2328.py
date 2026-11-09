@@ -221,7 +221,11 @@ async def process_pay2328_payment_amount(
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [types.InlineKeyboardButton(text=texts.t('PAY_WITH_COINS_BUTTON', 'Оплатить'), url=payment_url)],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('PAY_WITH_COINS_BUTTON', 'Оплатить'), url=payment_url, style='success'
+                )
+            ],
             [
                 types.InlineKeyboardButton(
                     text=strip_leading_emoji(texts.t('CHECK_STATUS_BUTTON', 'Проверить статус')),

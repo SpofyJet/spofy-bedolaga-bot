@@ -25,6 +25,7 @@ from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.channel_subscription_service import channel_subscription_service
 from app.services.subscription_service import SubscriptionService
+from app.utils.notification_keyboards import keyboard, subscription_button
 
 
 logger = structlog.get_logger(__name__)
@@ -123,7 +124,7 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
                     'SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE',
                     'Your subscription has been restored! Thank you for subscribing to the channels.',
                 )
-                await bot.send_message(user.id, notification_text)
+                await bot.send_message(user.id, notification_text, reply_markup=keyboard(subscription_button(texts)))
             except Exception as notify_error:
                 logger.warning('Failed to send notification', telegram_id=user.id, error=notify_error)
 

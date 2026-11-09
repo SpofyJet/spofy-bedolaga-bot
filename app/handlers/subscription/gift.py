@@ -130,6 +130,7 @@ def _render_tariff_catalog(db_user: User, offers: list[GiftTariffOffer]) -> tupl
             InlineKeyboardButton(
                 text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
                 callback_data='gift_enter_code',
+                style='success',
             )
         ]
     )
@@ -156,6 +157,7 @@ def _render_history_list(
                 InlineKeyboardButton(
                     text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
                     callback_data='gift_enter_code',
+                    style='success',
                 )
             ],
             [
@@ -392,6 +394,7 @@ async def handle_gift_catalog(
                         InlineKeyboardButton(
                             text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
                             callback_data='gift_enter_code',
+                            style='success',
                         )
                     ],
                     [
@@ -418,6 +421,7 @@ async def handle_gift_catalog(
                     InlineKeyboardButton(
                         text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
                         callback_data='gift_enter_code',
+                        style='success',
                     )
                 ],
                 [
@@ -451,6 +455,7 @@ async def handle_gift_catalog(
                     InlineKeyboardButton(
                         text=texts.t('GIFT_ENTER_CODE_BUTTON', '🎁 Активировать код'),
                         callback_data='gift_enter_code',
+                        style='success',
                     )
                 ],
                 [

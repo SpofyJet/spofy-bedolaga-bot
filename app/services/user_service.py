@@ -51,6 +51,7 @@ from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
 )
+from app.utils.notification_keyboards import buy_button
 
 
 logger = structlog.get_logger(__name__)
@@ -99,11 +100,15 @@ class UserService:
                     types.InlineKeyboardButton(
                         text=get_texts(user.language).t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
                         callback_data=extend_callback,
+                        style='success',
                     )
                 ]
             )
 
-        reply_markup = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows) if keyboard_rows else None
+        else:
+            keyboard_rows.append([buy_button(get_texts(user.language))])
+
+        reply_markup = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
         # Use unified notification delivery service
         context = {

@@ -9,8 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.models import UserStatus
+from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.user_service import UserService
+from app.utils.notification_keyboards import keyboard, support_button
 
 
 logger = structlog.get_logger(__name__)
@@ -87,6 +89,7 @@ class BulkBanService:
                                     f'обратитесь в поддержку.'
                                 ),
                                 parse_mode='HTML',
+                                reply_markup=keyboard(support_button(get_texts())),
                             )
                         except Exception as e:
                             logger.warning(

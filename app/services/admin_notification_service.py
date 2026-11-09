@@ -38,6 +38,7 @@ from app.database.models import (
 from app.keyboards.group_callbacks import strip_group_unsafe_buttons
 from app.utils.formatters import format_username_link
 from app.utils.message_patch import caption_exceeds_telegram_limit
+from app.utils.notification_keyboards import admin_user_card_keyboard
 from app.utils.rich_admin import classic_admin_html_to_rich, try_send_rich_admin_message
 from app.utils.timezone import format_local_datetime
 
@@ -560,7 +561,11 @@ class AdminNotificationService:
             message_lines.append('')
             message_lines.append(f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
 
-            return await self._send_message('\n'.join(message_lines), category=NotificationCategory.TRIALS)
+            return await self._send_message(
+                '\n'.join(message_lines),
+                category=NotificationCategory.TRIALS,
+                reply_markup=admin_user_card_keyboard(user),
+            )
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о триале', error=e)
@@ -759,7 +764,9 @@ class AdminNotificationService:
             else:
                 cat = NotificationCategory.PURCHASES
 
-            return await self._send_message('\n'.join(message_lines), category=cat)
+            return await self._send_message(
+                '\n'.join(message_lines), category=cat, reply_markup=admin_user_card_keyboard(user)
+            )
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о покупке', error=e)
@@ -1135,7 +1142,9 @@ class AdminNotificationService:
                 if message is None:
                     return False
                 try:
-                    return await self._send_message(message, category=NotificationCategory.BALANCE)
+                    return await self._send_message(
+                        message, category=NotificationCategory.BALANCE, reply_markup=admin_user_card_keyboard(user)
+                    )
                 except Exception as e:
                     logger.error('Ошибка отправки уведомления о пополнении', error=e, exc_info=True)
                     return False
@@ -1161,7 +1170,9 @@ class AdminNotificationService:
                 return False
 
         try:
-            return await self._send_message(message, category=NotificationCategory.BALANCE)
+            return await self._send_message(
+                message, category=NotificationCategory.BALANCE, reply_markup=admin_user_card_keyboard(user)
+            )
         except Exception as e:
             logger.error('Ошибка отправки уведомления о пополнении', error=e, exc_info=True)
             return False
@@ -1238,7 +1249,9 @@ class AdminNotificationService:
 
 ⏰ <i>{format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
 
-            return await self._send_message(message, category=NotificationCategory.RENEWALS)
+            return await self._send_message(
+                message, category=NotificationCategory.RENEWALS, reply_markup=admin_user_card_keyboard(user)
+            )
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о продлении', error=e)
@@ -1367,7 +1380,11 @@ class AdminNotificationService:
                 ]
             )
 
-            return await self._send_message('\n'.join(message_lines), category=NotificationCategory.PROMO)
+            return await self._send_message(
+                '\n'.join(message_lines),
+                category=NotificationCategory.PROMO,
+                reply_markup=admin_user_card_keyboard(user),
+            )
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления об активации промокода', error=e)
@@ -1485,7 +1502,11 @@ class AdminNotificationService:
                 ]
             )
 
-            return await self._send_message('\n'.join(message_lines), category=NotificationCategory.PROMO)
+            return await self._send_message(
+                '\n'.join(message_lines),
+                category=NotificationCategory.PROMO,
+                reply_markup=admin_user_card_keyboard(user),
+            )
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о переходе по кампании', error=e)
@@ -1568,7 +1589,11 @@ class AdminNotificationService:
                 ]
             )
 
-            return await self._send_message('\n'.join(message_lines), category=NotificationCategory.PROMO)
+            return await self._send_message(
+                '\n'.join(message_lines),
+                category=NotificationCategory.PROMO,
+                reply_markup=admin_user_card_keyboard(user),
+            )
 
         except Exception as e:
             logger.error(
@@ -1675,7 +1700,11 @@ class AdminNotificationService:
                 ]
             )
 
-            return await self._send_message('\n'.join(message_lines), category=NotificationCategory.PROMO)
+            return await self._send_message(
+                '\n'.join(message_lines),
+                category=NotificationCategory.PROMO,
+                reply_markup=admin_user_card_keyboard(user),
+            )
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о смене промогруппы', error=e)
@@ -2080,7 +2109,9 @@ class AdminNotificationService:
 
 ⏰ <i>{format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
 
-            return await self._send_message(message, category=NotificationCategory.RENEWALS)
+            return await self._send_message(
+                message, category=NotificationCategory.RENEWALS, reply_markup=admin_user_card_keyboard(user)
+            )
         except Exception as error:
             logger.error('Ошибка отправки уведомления о grace-доступе', error=error)
             return False
@@ -2311,7 +2342,11 @@ class AdminNotificationService:
                 ]
             )
 
-            return await self._send_message('\n'.join(message_lines), category=NotificationCategory.ADDONS)
+            return await self._send_message(
+                '\n'.join(message_lines),
+                category=NotificationCategory.ADDONS,
+                reply_markup=admin_user_card_keyboard(user),
+            )
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления об изменении подписки', error=e)
@@ -2395,7 +2430,11 @@ class AdminNotificationService:
                 ]
             )
 
-            return await self._send_message('\n'.join(message_lines), category=NotificationCategory.PARTNERS)
+            return await self._send_message(
+                '\n'.join(message_lines),
+                category=NotificationCategory.PARTNERS,
+                reply_markup=admin_user_card_keyboard(user),
+            )
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о заявке на партнёрку', error=e)

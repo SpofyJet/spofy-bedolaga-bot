@@ -16,7 +16,7 @@ import structlog
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramAPIError
-from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import BufferedInputFile
 from sqlalchemy import func, select
 
 from app.config import settings
@@ -32,6 +32,7 @@ from app.database.models import (
     UserStatus,
 )
 from app.external.remnawave_api import RemnaWaveAPI, test_api_connection
+from app.utils.notification_keyboards import admin_startup_keyboard
 from app.utils.timezone import format_local_datetime
 
 
@@ -57,9 +58,6 @@ RECENT_WINDOW: Final[timedelta] = timedelta(hours=24)
 NO_VALUE: Final[str] = '—'
 
 # URL-ы
-GITHUB_BOT_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot'
-GITHUB_CABINET_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/bedolaga-cabinet'
-COMMUNITY_URL: Final[str] = 'https://t.me/+wTdMtSWq8YdmZmVi'
 
 # Ключевые слова для определения типа ошибки
 PERMISSION_ERROR_KEYWORDS: Final[tuple[str, ...]] = ('permission denied', 'errno 13')
@@ -143,7 +141,7 @@ def _mode_label(stats: _StartupStats) -> str:
 def render_startup_message(stats: _StartupStats, *, timestamp: str) -> str:
     """Классический вид (HTML): разделы деревом, внимание — отдельным блоком."""
     lines = [
-        f'🚀 <b>Remnawave Bedolaga Bot</b> · <code>v{html.escape(stats.version)}</code>',
+        f'🚀 <b>Spofy Bedolaga Bot</b> · <code>v{html.escape(stats.version)}</code>',
         '<i>Запущен и готов к работе</i>',
     ]
     for title, rows in _sections(stats):
@@ -180,7 +178,7 @@ def render_startup_rich(stats: _StartupStats) -> str:
     if logo_url:
         blocks.append(f'<img src="{html.escape(logo_url, quote=True)}"/>')
     blocks += [
-        f'<h5>🚀 Remnawave Bedolaga Bot · v{html.escape(stats.version)}</h5>',
+        f'<h5>🚀 Spofy Bedolaga Bot · v{html.escape(stats.version)}</h5>',
         '<p>Запущен и готов к работе</p>',
     ]
     attention = _attention(stats)
@@ -354,15 +352,7 @@ class StartupNotificationService:
 
         try:
             stats = await self._collect_stats()
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(text='⭐ Звезда на GitHub', url=GITHUB_BOT_URL),
-                        InlineKeyboardButton(text='🖥 Кабинет', url=GITHUB_CABINET_URL),
-                    ],
-                    [InlineKeyboardButton(text='💬 Сообщество', url=COMMUNITY_URL)],
-                ]
-            )
+            keyboard = admin_startup_keyboard()
 
             # Rich-вид (Bot API 10.1): логотип, заголовок, таблица показателей,
             # footer с tg-time. При недоступности — классический вид ниже.
@@ -612,7 +602,7 @@ def render_shutdown_message(
     """Классический HTML: причина, аптайм, что делать дальше."""
     header_icon, header_text = ('🔴', 'Бот остановился из-за ошибки') if reason.is_failure else ('🛑', 'Бот остановлен')
     lines = [
-        f'{header_icon} <b>Remnawave Bedolaga Bot</b> · <code>v{html.escape(version)}</code>',
+        f'{header_icon} <b>Spofy Bedolaga Bot</b> · <code>v{html.escape(version)}</code>',
         f'<i>{header_text}</i>',
         '',
     ]
@@ -745,7 +735,7 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
 
         # Текст сообщения (escape HTML в error_type/message — они могут содержать <class ...>)
         message_text = (
-            f'<b>Remnawave Bedolaga Bot</b>\n\n'
+            f'<b>Spofy Bedolaga Bot</b>\n\n'
             f'❌ Бот упал с ошибкой\n\n'
             f'<b>Тип:</b> <code>{html.escape(error_type)}</code>\n'
             f'<b>Сообщение:</b> <code>{html.escape(error_message[:CRASH_ERROR_PREVIEW_LENGTH])}</code>\n'

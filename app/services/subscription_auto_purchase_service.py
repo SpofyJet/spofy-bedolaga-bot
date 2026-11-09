@@ -63,6 +63,7 @@ from app.services.traffic_reset_policy import (
 )
 from app.services.user_cart_service import user_cart_service
 from app.utils.lifetime import for_period_ru
+from app.utils.notification_keyboards import buy_button, keyboard, support_button, topup_button
 from app.utils.pricing_utils import format_period_description
 from app.utils.subscription_utils import resolve_tariff_cart_traffic, resolve_tariff_purchase_device_limit
 from app.utils.timezone import format_local_datetime
@@ -561,6 +562,9 @@ async def _reject_unavailable_saved_squads(user: User, squads, bot: Bot | None) 
                 await bot.send_message(
                     chat_id=user.telegram_id,
                     text=get_texts(user.language).t('TARIFF_SERVERS_UNAVAILABLE', error.message),
+                    reply_markup=keyboard(
+                        buy_button(get_texts(user.language)), support_button(get_texts(user.language))
+                    ),
                 )
             except Exception as notification_error:
                 logger.warning(
@@ -3419,7 +3423,11 @@ async def _auto_purchase_gift(
                     'GIFT_AUTO_PURCHASE_FAILED',
                     '❌ Не удалось автоматически оформить подарок: выбранный тариф или услуга более недоступны.',
                 )
-                await bot.send_message(chat_id=user.telegram_id, text=err_msg)
+                await bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=err_msg,
+                    reply_markup=keyboard(topup_button(texts), support_button(texts)),
+                )
             except Exception as notify_err:
                 logger.warning('Не удалось уведомить пользователя о сбое автопокупки подарка', error=str(notify_err))
         return False

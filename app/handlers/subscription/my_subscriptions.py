@@ -401,7 +401,11 @@ async def handle_subscription_devices(
     keyboard = []
     if can_buy_devices:
         keyboard.append(
-            [types.InlineKeyboardButton(text='➕ Докупить устройства', callback_data=f'change_devices_menu:{sub_id}')]
+            [
+                types.InlineKeyboardButton(
+                    text='➕ Докупить устройства', callback_data=f'change_devices_menu:{sub_id}', style='success'
+                )
+            ]
         )
     keyboard.append(
         [types.InlineKeyboardButton(text='📱 Управление устройствами', callback_data=f'device_management:{sub_id}')]

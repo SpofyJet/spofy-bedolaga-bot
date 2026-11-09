@@ -32,6 +32,7 @@ from app.services.notification_delivery_service import (
     notification_delivery_service,
 )
 from app.services.traffic_reset_policy import should_reset_traffic_on_daily_charge
+from app.utils.notification_keyboards import buy_traffic_button, keyboard, subscription_button, topup_button
 
 
 logger = structlog.get_logger(__name__)
@@ -420,7 +421,7 @@ class DailySubscriptionService:
             f'Следующее списание через 24 часа.'
         )
 
-        # Use unified notification delivery service
+        texts = get_texts(user.language)
         try:
             await notification_delivery_service.notify_daily_debit(
                 user=user,
@@ -428,6 +429,7 @@ class DailySubscriptionService:
                 new_balance_kopeks=user.balance_kopeks,
                 bot=self._bot,
                 telegram_message=message,
+                telegram_markup=keyboard(topup_button(texts), subscription_button(texts)),
             )
         except Exception as e:
             logger.warning('Не удалось отправить уведомление о списании', error=e)
@@ -850,7 +852,7 @@ class DailySubscriptionService:
             'current_limit_gb': subscription.traffic_limit_gb,
         }
 
-        # Use unified notification delivery service
+        texts = get_texts(user.language)
         try:
             await notification_delivery_service.send_notification(
                 user=user,
@@ -858,6 +860,7 @@ class DailySubscriptionService:
                 context=context,
                 bot=self._bot,
                 telegram_message=message,
+                telegram_markup=keyboard(buy_traffic_button(texts), subscription_button(texts)),
             )
         except Exception as e:
             logger.warning('Не удалось отправить уведомление о сбросе трафика', error=e)

@@ -47,8 +47,10 @@ from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import Subscription, User
 from app.external.remnawave_api import RemnaWaveUser, UserStatus
+from app.localization.texts import get_texts
 from app.services.decision_log import KIND_ABUSE_TRIAL_REMOVED, record_decision
 from app.services.remnawave_service import remnawave_service
+from app.utils.notification_keyboards import buy_button, keyboard, support_button
 
 
 logger = structlog.get_logger(__name__)
@@ -769,7 +771,12 @@ class TrialAbuseService:
         if not self.bot:
             return False
         try:
-            await self.bot.send_message(chat_id=telegram_id, text=self.get_warning_text())
+            texts = get_texts()
+            await self.bot.send_message(
+                chat_id=telegram_id,
+                text=self.get_warning_text(),
+                reply_markup=keyboard(buy_button(texts), support_button(texts)),
+            )
             return True
         except Exception as error:
             logger.warning(f'Антиабуз триалов: не удалось отправить предупреждение tg={telegram_id}: {error}')

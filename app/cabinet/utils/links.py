@@ -17,7 +17,7 @@ def get_campaign_web_link(start_parameter: str) -> str | None:
     Prefers CABINET_URL (where the auth flow captures ?campaign= param),
     falls back to MINIAPP_CUSTOM_URL for backwards compatibility.
     """
-    cabinet_url = settings._normalized_cabinet_url()
+    cabinet_url = settings.normalized_cabinet_url()
     if cabinet_url:
         sep = '&' if '?' in cabinet_url else '?'
         return f'{cabinet_url}{sep}campaign={start_parameter}'

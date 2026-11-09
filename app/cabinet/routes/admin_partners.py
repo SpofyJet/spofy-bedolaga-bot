@@ -26,10 +26,12 @@ from app.database.models import (
     Tariff,
     User,
 )
+from app.localization.texts import get_texts
 from app.referral_levels import LEVELS_MODE_CHAIN, LEVELS_MODE_TIERS, MAX_SUPPORTED_LEVEL
 from app.services.partner_application_service import partner_application_service
 from app.services.partner_stats_service import PartnerStatsService
 from app.services.system_settings_service import bot_configuration_service
+from app.utils.notification_keyboards import keyboard, referral_button, support_button
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.partners import (
@@ -253,6 +255,7 @@ async def approve_application(
                         comment=request.comment,
                         bot=bot,
                         telegram_message=tg_message,
+                        telegram_markup=keyboard(referral_button(get_texts(user.language))),
                     )
                 finally:
                     await bot.session.close()
@@ -302,6 +305,7 @@ async def reject_application(
                         comment=request.comment,
                         bot=bot,
                         telegram_message=tg_message,
+                        telegram_markup=keyboard(support_button(get_texts(user.language))),
                     )
                 finally:
                     await bot.session.close()

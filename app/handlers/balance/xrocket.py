@@ -233,7 +233,7 @@ async def _create_xrocket_invoice(
 
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='Оплатить', url=payment_url)],
+                [types.InlineKeyboardButton(text='Оплатить', url=payment_url, style='success')],
                 [
                     types.InlineKeyboardButton(
                         text='Проверить статус',

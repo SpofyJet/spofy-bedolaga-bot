@@ -626,7 +626,11 @@ def get_tariff_insufficient_balance_keyboard(
         inline_keyboard=[
             *trim_rows,
             *sbp_rows,
-            [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup', style='success'
+                )
+            ],
             [back_button],
         ]
     )
@@ -685,7 +689,11 @@ def get_tariff_extend_insufficient_balance_keyboard(
     return InlineKeyboardMarkup(
         inline_keyboard=[
             *sbp_rows,
-            [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup', style='success'
+                )
+            ],
             [back_button],
         ]
     )
@@ -717,6 +725,7 @@ def _sbp_purchase_rows(tariff_id: int, texts, period_days: int | None = None) ->
                     callback_data=(
                         f'tariff_sbp:{tariff_id}:{period_days}' if period_days else f'tariff_sbp:{tariff_id}'
                     ),
+                    style='success',
                 )
             ]
         )
@@ -765,6 +774,7 @@ async def _append_sbp_recurring_offer(db, subscription, tariff, texts, rows: lis
         InlineKeyboardButton(
             text=texts.t('SBP_RECURRING_OFFER_BUTTON', '⚡ Включить автопродление (СБП)'),
             callback_data=f'sbp_recurring_enable_for:{subscription.id}',
+            style='success',
         )
     ]
     if not rows:
@@ -820,6 +830,7 @@ def get_daily_tariff_confirm_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оплатить с автопродлением (СБП)'),
                     callback_data=f'tariff_sbp:{tariff_id}',
+                    style='success',
                 )
             ]
         )
@@ -852,7 +863,11 @@ def get_daily_tariff_insufficient_balance_keyboard(
     return InlineKeyboardMarkup(
         inline_keyboard=[
             *sbp_rows,
-            [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup', style='success'
+                )
+            ],
             [InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)],
         ]
     )
@@ -2758,6 +2773,7 @@ async def show_tariff_extend(
                                     name=tariff_name, days=days_left
                                 ),
                                 callback_data=f'se:{sub.id}',
+                                style='success',
                             )
                         ]
                     )
@@ -3338,6 +3354,7 @@ async def confirm_tariff_extend(
                             InlineKeyboardButton(
                                 text=texts.t('CONNECT_BUTTON', '📱 Подключить устройство'),
                                 callback_data='subscription_connect',
+                                style='success',
                             )
                         ],
                         [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
@@ -3522,7 +3539,11 @@ def get_tariff_switch_insufficient_balance_keyboard(
     texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup', style='success'
+                )
+            ],
             [InlineKeyboardButton(text=texts.BACK, callback_data=f'tariff_sw_select:{tariff_id}')],
         ]
     )
@@ -3800,7 +3821,9 @@ async def select_tariff_switch(
                     inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup'
+                                text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'),
+                                callback_data='balance_topup',
+                                style='success',
                             )
                         ],
                         [InlineKeyboardButton(text=texts.BACK, callback_data='tariff_switch')],
@@ -4288,6 +4311,7 @@ async def confirm_tariff_switch(
                             InlineKeyboardButton(
                                 text=texts.t('CONNECT_BUTTON', '📱 Подключить устройство'),
                                 callback_data='subscription_connect',
+                                style='success',
                             )
                         ],
                         [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
@@ -4610,6 +4634,7 @@ async def confirm_daily_tariff_switch(
                             InlineKeyboardButton(
                                 text=texts.t('CONNECT_BUTTON', '📱 Подключить устройство'),
                                 callback_data='subscription_connect',
+                                style='success',
                             )
                         ],
                         [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
@@ -4831,7 +4856,11 @@ def get_instant_switch_insufficient_balance_keyboard(
     texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup', style='success'
+                )
+            ],
             [InlineKeyboardButton(text=texts.BACK, callback_data='instant_switch')],
         ]
     )
@@ -5628,6 +5657,7 @@ async def confirm_instant_switch(
                             InlineKeyboardButton(
                                 text=texts.t('CONNECT_BUTTON', '📱 Подключить устройство'),
                                 callback_data='subscription_connect',
+                                style='success',
                             )
                         ],
                         [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
@@ -5665,6 +5695,7 @@ async def confirm_instant_switch(
                             InlineKeyboardButton(
                                 text=texts.t('CONNECT_BUTTON', '📱 Подключить устройство'),
                                 callback_data='subscription_connect',
+                                style='success',
                             )
                         ],
                         [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
@@ -5975,6 +6006,7 @@ async def return_to_saved_tariff_cart(
                         InlineKeyboardButton(
                             text=texts.t('TARIFF_RENEW_CONFIRM_BUTTON', '✅ Подтвердить продление'),
                             callback_data=f'tariff_ext_confirm:{_extend_sub_id}:{tariff_id}:{period}',
+                            style='success',
                         )
                     ],
                     [

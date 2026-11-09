@@ -2141,12 +2141,16 @@ class MonitoringService:
                     inline_keyboard=[
                         [
                             build_subscription_extend_button(
-                                texts.t('MENU_EXTEND_SUBSCRIPTION', '⏰ Продлить подписку'), subscription.id
+                                texts.t('MENU_EXTEND_SUBSCRIPTION', '⏰ Продлить подписку'),
+                                subscription.id,
+                                style='success',
                             )
                         ],
                         [
                             build_miniapp_or_callback_button(
-                                text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup'
+                                text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'),
+                                callback_data='balance_topup',
+                                style='success',
                             )
                         ],
                     ]
@@ -2300,14 +2304,14 @@ class MonitoringService:
                 inline_keyboard=[
                     [
                         build_subscription_extend_button(
-                            texts.t('BTN_RENEW_SUBSCRIPTION', '⏰ Продлить подписку'),
-                            subscription.id,
+                            texts.t('BTN_RENEW_SUBSCRIPTION', '⏰ Продлить подписку'), subscription.id, style='success'
                         )
                     ],
                     [
                         build_miniapp_or_callback_button(
                             text=texts.t('BTN_TOPUP_BALANCE', '💳 Пополнить баланс'),
                             callback_data='balance_topup',
+                            style='success',
                         )
                     ],
                     [build_miniapp_or_callback_button(text=sub_btn_text, callback_data='menu_subscription')],
@@ -2527,14 +2531,14 @@ class MonitoringService:
                 inline_keyboard=[
                     [
                         build_subscription_extend_button(
-                            texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
-                            subscription.id,
+                            texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'), subscription.id, style='success'
                         )
                     ],
                     [
                         build_miniapp_or_callback_button(
                             text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'),
                             callback_data='balance_topup',
+                            style='success',
                         )
                     ],
                     [
@@ -2637,6 +2641,7 @@ class MonitoringService:
                                 percent=percent
                             ),
                             callback_data=f'claim_discount_{offer_id}',
+                            style='success',
                         )
                     ],
                     [
@@ -2758,7 +2763,9 @@ class MonitoringService:
                     inline_keyboard=[
                         [
                             build_subscription_extend_button(
-                                texts.t('BTN_RENEW_SUBSCRIPTION', '⏰ Продлить подписку'), subscription.id
+                                texts.t('BTN_RENEW_SUBSCRIPTION', '⏰ Продлить подписку'),
+                                subscription.id,
+                                style='success',
                             )
                         ]
                     ]

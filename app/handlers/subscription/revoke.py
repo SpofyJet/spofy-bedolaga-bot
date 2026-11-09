@@ -70,6 +70,7 @@ def _build_revoke_success_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('SUBSCRIPTION_REVOKE_CONNECT_BTN', '🔗 Подключиться'),
                     callback_data='subscription_connect',
+                    style='success',
                 ),
             ],
             [

@@ -57,7 +57,7 @@ ENV PYTHONPATH=/app \
 
 EXPOSE 8080
 
-LABEL org.opencontainers.image.title="Bedolaga RemnaWave Bot" \
+LABEL org.opencontainers.image.title="Spofy Bedolaga Bot" \
       org.opencontainers.image.description="Telegram bot for RemnaWave VPN service" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \

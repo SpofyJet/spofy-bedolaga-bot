@@ -23,6 +23,7 @@ from app.services.channel_subscription_service import channel_subscription_servi
 from app.services.subscription_service import SubscriptionService
 from app.utils.cache import cache
 from app.utils.check_reg_process import is_registration_process
+from app.utils.notification_keyboards import keyboard, subscription_button
 from app.utils.support_access import is_payment_support_handler
 from app.utils.telegram_delivery import is_user_unreachable
 
@@ -643,7 +644,9 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                             'SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE',
                             '✅ Ваша подписка восстановлена!\n\nСпасибо, что подписались на канал. VPN снова работает.',
                         )
-                    await bot.send_message(telegram_id, notification_text)
+                    await bot.send_message(
+                        telegram_id, notification_text, reply_markup=keyboard(subscription_button(texts))
+                    )
                 except Exception as notify_error:
                     logger.warning(
                         'Failed to send reactivation notification to user',

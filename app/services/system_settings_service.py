@@ -548,6 +548,7 @@ class BotConfigurationService:
             ChoiceOption('DAY', '📅 Ежедневно'),
             ChoiceOption('WEEK', '🗓 Еженедельно'),
             ChoiceOption('MONTH', '📆 Ежемесячно'),
+            ChoiceOption('MONTH_ROLLING', '🔄 От даты подключения'),
         ],
         'SUPPORT_SYSTEM_MODE': [
             ChoiceOption('tickets', '🎫 Только тикеты'),
