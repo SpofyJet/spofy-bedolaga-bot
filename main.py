@@ -45,6 +45,7 @@ from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
 from app.services.trial_abuse_service import trial_abuse_service
 from app.services.version_service import version_service
 from app.services.web_api_token_service import ensure_default_web_api_token
+from app.utils.background import spawn_background_task
 from app.utils.log_handlers import ExcludePaymentFilter, LevelFilterHandler
 from app.utils.payment_logger import configure_payment_logger
 from app.utils.startup_timeline import StartupTimeline
@@ -374,8 +375,8 @@ async def main():
 
         mass_send_service.set_bot(bot)
         # Отправки, которые оборвал перезапуск, продолжаются с сохранённой позиции (в фоне, старт не ждёт)
-        asyncio.create_task(mass_send_service.resume_unfinished(), name='mass-send-resume')
-        asyncio.create_task(broadcast_service.resume_interrupted(), name='broadcast-resume')
+        spawn_background_task(mass_send_service.resume_unfinished(), name='mass-send-resume')
+        spawn_background_task(broadcast_service.resume_interrupted(), name='broadcast-resume')
         traffic_monitoring_scheduler.set_bot(bot)
         trial_abuse_service.set_bot(bot)
         trial_abuse_service.start_task()
@@ -514,7 +515,7 @@ async def main():
         try:
             from app.services.subscription_dedup_service import dedupe_expired_tariff_subscriptions
 
-            asyncio.create_task(dedupe_expired_tariff_subscriptions())
+            spawn_background_task(dedupe_expired_tariff_subscriptions(), name='dedupe-expired-subscriptions')
         except Exception as e:
             logger.warning('Не удалось запустить чистку дублей подписок', error=e)
 

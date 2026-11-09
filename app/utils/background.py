@@ -18,9 +18,9 @@ def _on_task_done(task: asyncio.Task[Any]) -> None:
         logger.error('Фоновая задача завершилась ошибкой', task=task.get_name(), error=task.exception())
 
 
-def spawn_background_task(coroutine: Coroutine[Any, Any, Any]) -> asyncio.Task[Any]:
+def spawn_background_task(coroutine: Coroutine[Any, Any, Any], *, name: str | None = None) -> asyncio.Task[Any]:
     """Как ``asyncio.create_task``, но цикл событий не потеряет задачу при сборке мусора."""
-    task = asyncio.create_task(coroutine)
+    task = asyncio.create_task(coroutine, name=name)
     _running_tasks.add(task)
     task.add_done_callback(_on_task_done)
     return task
