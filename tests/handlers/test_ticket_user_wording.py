@@ -90,5 +90,5 @@ async def test_ticket_card_says_obrashchenie(monkeypatch):
     assert 'Обращение #12' in text
     assert 'Тикет' not in text
     assert 'Тема: Оплата' in text
-    assert '🛠️ Поддержка' in text and '👤 Вы' in text
+    assert '🛟 Поддержка' in text and '👤 Вы' in text
     assert '📎 Вложение: фото' in text
