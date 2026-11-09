@@ -852,7 +852,7 @@ async def test_checkout_binds_the_cart_to_its_payment(monkeypatch, auto_on, owne
 
 def test_cart_ttls_cover_payment_link_lifetime():
     """Метка намерения не должна умирать раньше корзины, а корзина — раньше реальной
-    жизни платёжных ссылок (инвойсы Platega/CryptoBot/Heleket/XRocket живут сутки+)."""
+    жизни платёжных ссылок (инвойсы Platega/CryptoBot/2328.io/XRocket живут сутки+)."""
     assert settings.CART_AUTOPURCHASE_INTENT_TTL_SECONDS >= settings.CART_TTL_SECONDS
     assert settings.CART_TTL_SECONDS >= 24 * 3600
 

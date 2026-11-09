@@ -25,7 +25,7 @@ from app.database.models import (
     ContestAttempt,
     CryptoBotPayment,
     DiscountOffer,
-    HeleketPayment,
+    Pay2328Payment,
     PlategaPayment,
     PollResponse,
     PromoCodeUse,
@@ -333,7 +333,7 @@ class BlockedUsersService:
             # Удаляем связанные записи (порядок важен из-за foreign keys)
 
             await db.execute(delete(CryptoBotPayment).where(CryptoBotPayment.user_id == user.id))
-            await db.execute(delete(HeleketPayment).where(HeleketPayment.user_id == user.id))
+            await db.execute(delete(Pay2328Payment).where(Pay2328Payment.user_id == user.id))
             await db.execute(delete(WataPayment).where(WataPayment.user_id == user.id))
             await db.execute(delete(PlategaPayment).where(PlategaPayment.user_id == user.id))
 

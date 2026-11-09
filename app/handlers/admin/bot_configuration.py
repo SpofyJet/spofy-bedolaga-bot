@@ -64,13 +64,13 @@ CATEGORY_GROUP_METADATA: dict[str, dict[str, object]] = {
     },
     'payments': {
         'title': '💳 Платежные системы',
-        'description': 'CryptoBot, xRocket, Heleket, Wata, Platega и Telegram Stars.',
+        'description': 'CryptoBot, xRocket, 2328.io, Wata, Platega и Telegram Stars.',
         'icon': '💳',
         'categories': (
             'PAYMENT',
             'PAYMENT_VERIFICATION',
             'CRYPTOBOT',
-            'HELEKET',
+            'PAY2328',
             'WATA',
             'PLATEGA',
             'TELEGRAM',

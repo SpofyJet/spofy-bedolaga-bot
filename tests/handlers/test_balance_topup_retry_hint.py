@@ -170,7 +170,7 @@ async def test_retry_at_exact_fractional_minimum_does_not_lose_a_kopeck(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('method', ['platega', 'heleket_card', 'wata_sbp', 'cryptobot'])
+@pytest.mark.parametrize('method', ['platega', 'pay2328_card', 'wata_sbp', 'cryptobot'])
 async def test_manual_amount_reaches_other_payment_routes_without_float_truncation(state, user, monkeypatch, method):
     route = AsyncMock(return_value=True)
     monkeypatch.setattr(balance_main, 'route_payment_by_method', route)

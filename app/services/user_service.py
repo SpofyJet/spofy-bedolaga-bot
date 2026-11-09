@@ -28,7 +28,7 @@ from app.database.models import (
     AdvertisingCampaignRegistration,
     BroadcastHistory,
     CryptoBotPayment,
-    HeleketPayment,
+    Pay2328Payment,
     PaymentMethod,
     PlategaPayment,
     PromoCode,
@@ -974,19 +974,19 @@ class UserService:
 
             try:
                 async with db.begin_nested():
-                    heleket_result = await db.execute(select(HeleketPayment).where(HeleketPayment.user_id == user_id))
-                    heleket_payments = heleket_result.scalars().all()
+                    pay2328_result = await db.execute(select(Pay2328Payment).where(Pay2328Payment.user_id == user_id))
+                    pay2328_payments = pay2328_result.scalars().all()
 
-                    if heleket_payments:
-                        logger.info('🔄 Удаляем Heleket платежей', heleket_payments_count=len(heleket_payments))
+                    if pay2328_payments:
+                        logger.info('🔄 Удаляем 2328.io платежей', pay2328_payments_count=len(pay2328_payments))
                         await db.execute(
-                            update(HeleketPayment).where(HeleketPayment.user_id == user_id).values(transaction_id=None)
+                            update(Pay2328Payment).where(Pay2328Payment.user_id == user_id).values(transaction_id=None)
                         )
                         await db.flush()
-                        await db.execute(delete(HeleketPayment).where(HeleketPayment.user_id == user_id))
+                        await db.execute(delete(Pay2328Payment).where(Pay2328Payment.user_id == user_id))
                         await db.flush()
             except Exception as e:
-                logger.error('❌ Ошибка удаления Heleket платежей', error=e)
+                logger.error('❌ Ошибка удаления 2328.io платежей', error=e)
 
             # Удаляем Wata платежи (до транзакций, т.к. wata_payments.transaction_id -> transactions.id)
             try:

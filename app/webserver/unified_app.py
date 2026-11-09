@@ -217,7 +217,7 @@ def create_unified_app(
         'cryptobot': settings.is_cryptobot_enabled(),
         'xrocket': settings.is_xrocket_enabled(),
         'wata': settings.is_wata_enabled(),
-        'heleket': settings.is_heleket_enabled(),
+        'pay2328': settings.is_pay2328_enabled(),
         'platega': settings.is_platega_enabled(),
         'stars': bool(settings.TELEGRAM_STARS_ENABLED),
     }

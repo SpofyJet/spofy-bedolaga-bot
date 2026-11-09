@@ -25,7 +25,7 @@ from app.config import Settings, settings
 # Ровно те провайдеры, чьи вебхуки монтирует create_payment_router.
 PROVIDERS = [
     'cryptobot',
-    'heleket',
+    'pay2328',
     'platega',
     'wata',
 ]

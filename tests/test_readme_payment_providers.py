@@ -30,6 +30,7 @@ NOT_A_GATEWAY = frozenset({'balance', 'manual', 'platega_recurrent'})
 
 # Как провайдер называется в таблице, если это не сам код метода.
 DISPLAY_NAMES = {
+    'pay2328': '2328.io',
     'telegram_stars': 'Telegram Stars',
 }
 

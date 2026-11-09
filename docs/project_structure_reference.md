@@ -633,7 +633,7 @@
   Классы: нет
   Функции: `run_alembic_upgrade` — Run ``alembic upgrade head``, handling fresh and legacy databases.
 - `app/database/models.py` — Python-модуль
-  Классы: `AwareDateTime` (2 методов), `UserStatus`, `SubscriptionStatus`, `TransactionType`, `PromoCodeType`, `PaymentMethod`, `MainMenuButtonActionType`, `MainMenuButtonVisibility`, `WheelPrizeType`, `WheelSpinPaymentType`, `CryptoBotPayment` (5 методов), `XRocketPayment` (5 методов), `HeleketPayment` (5 методов), `WataPayment` (2 методов), `PlategaPayment` (2 методов), `PlategaSubscription` (1 методов), `PromoGroup` (3 методов), `UserPromoGroup` (1 методов), `Tariff` (21 методов), `PartnerStatus`, `User` (12 методов), `Subscription` (17 методов), `GraceAccessSessionModel`, `TrafficPurchase` (1 методов), `Transaction` (1 методов), `PaidTrafficResetIntent`, `SubscriptionConversion` (2 методов), `PromoCode` (2 методов), `PromoCodeUse`, `CouponStatus`, `CouponBatch` (2 методов), `Coupon` (1 методов), `ReferralRewardType`, `ReferralRewardTrigger`, `ReferralRewardMode`, `ReferralRewardLevel` (1 методов), `ReferralEarning` (1 методов), `WithdrawalRequestStatus`, `WithdrawalRequest` (1 методов), `PartnerApplication`, `ReferralContest` (1 методов), `ReferralContestEvent` (1 методов), `ReferralContestVirtualParticipant` (1 методов), `ContestTemplate`, `ContestRound`, `ContestAttempt`, `Squad` (1 методов), `ServiceRule`, `PrivacyPolicy`, `PublicOffer`, `LegalConsent`, `RecurrentPayments`, `FaqSetting`, `FaqPage`, `SystemSetting`, `EmailTemplate`, `MonitoringLog`, `SentNotification`, `SubscriptionEvent`, `DiscountOffer`, `PromoOfferTemplate`, `SubscriptionTemporaryAccess`, `PromoOfferLog`, `BroadcastHistory`, `Poll`, `PollQuestion`, `PollOption`, `PollResponse`, `PollAnswer`, `ServerSquad` (3 методов), `SubscriptionServer`, `SupportAuditLog`, `UserMessage` (1 методов), `WelcomeText`, `PinnedMessage`, `AdvertisingCampaign` (4 методов), `AdvertisingCampaignRegistration` (1 методов), `TicketStatus`, `Ticket` (8 методов), `TicketMessage` (3 методов), `WebApiToken` (1 методов), `MainMenuButton` (3 методов), `MenuLayoutHistory` (1 методов), `ButtonClickLog` (1 методов), `Webhook` (1 методов), `WebhookDelivery` (1 методов), `CabinetRefreshToken` (4 методов), `WheelConfig` (1 методов), `WheelPrize` (1 методов), `WheelSpin` (3 методов), `TicketNotification` (1 методов), `PaymentMethodConfig` (1 методов), `RequiredChannel` (1 методов), `UserChannelSubscription` (1 методов), `AdminRole` (1 методов), `UserRole` (1 методов), `AccessPolicy` (1 методов), `AdminAuditLog` (1 методов), `LandingPage` (1 методов), `GuestPurchaseStatus`, `GuestPurchase` (1 методов), `NewsArticle` (1 методов), `NewsCategory` (1 методов), `NewsTag` (1 методов), `YandexClientIdMap`, `InfoPage`, `UserDeviceAlias`, `SystemErrorEvent`, `EmailQueueItem`, `ReachabilityBatch`, `ReachabilityJob`, `ReachabilityLeg`, `ReachabilityTargetPref`, `DpiCheckerAction`, `UserReminder` (1 методов), `UserReminderState`, `MassSendJob`, `DecisionLog`
+  Классы: `AwareDateTime` (2 методов), `UserStatus`, `SubscriptionStatus`, `TransactionType`, `PromoCodeType`, `PaymentMethod`, `MainMenuButtonActionType`, `MainMenuButtonVisibility`, `WheelPrizeType`, `WheelSpinPaymentType`, `CryptoBotPayment` (5 методов), `XRocketPayment` (5 методов), `Pay2328Payment` (5 методов), `WataPayment` (2 методов), `PlategaPayment` (2 методов), `PlategaSubscription` (1 методов), `PromoGroup` (3 методов), `UserPromoGroup` (1 методов), `Tariff` (21 методов), `PartnerStatus`, `User` (12 методов), `Subscription` (17 методов), `GraceAccessSessionModel`, `TrafficPurchase` (1 методов), `Transaction` (1 методов), `PaidTrafficResetIntent`, `SubscriptionConversion` (2 методов), `PromoCode` (2 методов), `PromoCodeUse`, `CouponStatus`, `CouponBatch` (2 методов), `Coupon` (1 методов), `ReferralRewardType`, `ReferralRewardTrigger`, `ReferralRewardMode`, `ReferralRewardLevel` (1 методов), `ReferralEarning` (1 методов), `WithdrawalRequestStatus`, `WithdrawalRequest` (1 методов), `PartnerApplication`, `ReferralContest` (1 методов), `ReferralContestEvent` (1 методов), `ReferralContestVirtualParticipant` (1 методов), `ContestTemplate`, `ContestRound`, `ContestAttempt`, `Squad` (1 методов), `ServiceRule`, `PrivacyPolicy`, `PublicOffer`, `LegalConsent`, `RecurrentPayments`, `FaqSetting`, `FaqPage`, `SystemSetting`, `EmailTemplate`, `MonitoringLog`, `SentNotification`, `SubscriptionEvent`, `DiscountOffer`, `PromoOfferTemplate`, `SubscriptionTemporaryAccess`, `PromoOfferLog`, `BroadcastHistory`, `Poll`, `PollQuestion`, `PollOption`, `PollResponse`, `PollAnswer`, `ServerSquad` (3 методов), `SubscriptionServer`, `SupportAuditLog`, `UserMessage` (1 методов), `WelcomeText`, `PinnedMessage`, `AdvertisingCampaign` (4 методов), `AdvertisingCampaignRegistration` (1 методов), `TicketStatus`, `Ticket` (8 методов), `TicketMessage` (3 методов), `WebApiToken` (1 методов), `MainMenuButton` (3 методов), `MenuLayoutHistory` (1 методов), `ButtonClickLog` (1 методов), `Webhook` (1 методов), `WebhookDelivery` (1 методов), `CabinetRefreshToken` (4 методов), `WheelConfig` (1 методов), `WheelPrize` (1 методов), `WheelSpin` (3 методов), `TicketNotification` (1 методов), `PaymentMethodConfig` (1 методов), `RequiredChannel` (1 методов), `UserChannelSubscription` (1 методов), `AdminRole` (1 методов), `UserRole` (1 методов), `AccessPolicy` (1 методов), `AdminAuditLog` (1 методов), `LandingPage` (1 методов), `GuestPurchaseStatus`, `GuestPurchase` (1 методов), `NewsArticle` (1 методов), `NewsCategory` (1 методов), `NewsTag` (1 методов), `YandexClientIdMap`, `InfoPage`, `UserDeviceAlias`, `SystemErrorEvent`, `EmailQueueItem`, `ReachabilityBatch`, `ReachabilityJob`, `ReachabilityLeg`, `ReachabilityTargetPref`, `DpiCheckerAction`, `UserReminder` (1 методов), `UserReminderState`, `MassSendJob`, `DecisionLog`
   Функции: нет
 
 #### app/database/crud
@@ -659,9 +659,6 @@
 - `app/database/crud/faq.py` — Python-модуль
   Классы: нет
   Функции: `get_faq_setting`, `set_faq_enabled`, `get_faq_pages`, `get_faq_page_by_id`, `create_faq_page`, `update_faq_page`, `delete_faq_page`, `bulk_update_order`
-- `app/database/crud/heleket.py` — Python-модуль
-  Классы: нет
-  Функции: `create_heleket_payment`, `get_heleket_payment_by_uuid`, `get_heleket_payment_by_order_id`, `get_heleket_payment_by_id`, `get_heleket_payment_by_id_for_update`, `update_heleket_payment`, `link_heleket_payment_to_transaction`
 - `app/database/crud/info_pages.py` — Python-модуль
   Классы: нет
   Функции: `create_info_page` — Create a new info page., `get_info_page_by_id` — Get an info page by ID., `get_info_page_by_slug` — Get an info page by slug., `get_all_info_pages` — Get all info pages, ordered by sort_order ascending., `update_info_page` — Update an info page. Only whitelisted fields are applied., `delete_info_page` — Delete an info page., `get_tab_replacements` — Return a mapping of tab name to info page slug for active pages with replaces_tab set., `clear_replaces_tab` — Clear replaces_tab for all pages that currently replace the given tab., `reorder_info_pages` — Bulk update sort_order for info pages.
@@ -683,6 +680,9 @@
 - `app/database/crud/notification.py` — Python-модуль
   Классы: нет
   Функции: `notification_sent`, `list_sent_notification_keys` — Все отметки «уже отправлено» одного типа для пачки подписок одним запросом., `record_notification`, `clear_notifications`, `clear_notification_by_type`
+- `app/database/crud/pay2328.py` — Python-модуль
+  Классы: нет
+  Функции: `create_pay2328_payment`, `get_pay2328_payment_by_uuid`, `get_pay2328_payment_by_order_id`, `get_pay2328_payment_by_id`, `get_pay2328_payment_by_id_for_update`, `update_pay2328_payment`, `link_pay2328_payment_to_transaction`
 - `app/database/crud/payment_gateway_stats.py` — Python-модуль
   Классы: нет
   Функции: `get_gateway_success_rates` — Per-gateway {method, total, paid, success_rate} for gateways with activity.
@@ -824,11 +824,8 @@
 - `app/external/dpichecker_api.py` — Python-модуль
   Классы: `DpiCheckerAPIError` (1 методов), `DpiCheckerGatewayError`, `DpiCheckerAPI` (40 методов)
   Функции: нет
-- `app/external/heleket.py` — Python-модуль
-  Классы: `HeleketService` (9 методов)
-  Функции: нет
-- `app/external/heleket_webhook.py` — Python-модуль
-  Классы: `HeleketWebhookHandler` (4 методов)
+- `app/external/pay2328.py` — Python-модуль
+  Классы: `Pay2328Service` (8 методов)
   Функции: нет
 - `app/external/remnawave_api.py` — Python-модуль
   Классы: `UserStatus`, `TrafficLimitStrategy`, `UserTraffic`, `RemnaWaveUser` (4 методов), `RemnaWaveInbound`, `RemnaWaveInternalSquad`, `RemnaWaveAccessibleNode`, `RemnaWaveHost`, `RemnaWaveNode` (2 методов), `SubscriptionInfo`, `SubscriptionPageConfig`, `RemnaWaveExternalSquad`, `RemnaWaveTransientError`, `RemnaWaveAPI` (93 методов)
@@ -888,7 +885,7 @@
   Функции: `show_server_status`, `change_server_status_page`, `register_handlers`
 - `app/handlers/simple_subscription.py` — Python-модуль
   Классы: нет
-  Функции: `start_simple_subscription_purchase` — Начинает процесс простой покупки подписки., `handle_simple_subscription_pay_with_balance` — Обрабатывает оплату простой подписки с баланса., `handle_simple_subscription_pay_with_balance_disabled` — Показывает уведомление, если баланса недостаточно для прямой оплаты., `handle_simple_subscription_other_payment_methods` — Обрабатывает выбор других способов оплаты., `handle_simple_subscription_payment_method` — Обрабатывает выбор метода оплаты для простой подписки., `check_simple_cryptobot_payment_status`, `check_simple_heleket_payment_status`, `check_simple_wata_payment_status`, `confirm_simple_subscription_purchase` — Обрабатывает подтверждение простой покупки подписки при наличии активной платной подписки., `register_simple_subscription_handlers` — Регистрирует обработчики простой покупки подписки.
+  Функции: `start_simple_subscription_purchase` — Начинает процесс простой покупки подписки., `handle_simple_subscription_pay_with_balance` — Обрабатывает оплату простой подписки с баланса., `handle_simple_subscription_pay_with_balance_disabled` — Показывает уведомление, если баланса недостаточно для прямой оплаты., `handle_simple_subscription_other_payment_methods` — Обрабатывает выбор других способов оплаты., `handle_simple_subscription_payment_method` — Обрабатывает выбор метода оплаты для простой подписки., `check_simple_cryptobot_payment_status`, `check_simple_pay2328_payment_status`, `check_simple_wata_payment_status`, `confirm_simple_subscription_purchase` — Обрабатывает подтверждение простой покупки подписки при наличии активной платной подписки., `register_simple_subscription_handlers` — Регистрирует обработчики простой покупки подписки.
 - `app/handlers/stars_payments.py` — Python-модуль
   Классы: нет
   Функции: `handle_pre_checkout_query`, `handle_successful_payment`, `register_stars_handlers`
@@ -1070,12 +1067,12 @@
 - `app/handlers/balance/cryptobot.py` — Python-модуль
   Классы: нет
   Функции: `start_cryptobot_payment`, `process_cryptobot_payment_amount`, `check_cryptobot_payment_status`
-- `app/handlers/balance/heleket.py` — Python-модуль
-  Классы: нет
-  Функции: `start_heleket_payment`, `process_heleket_payment_amount`, `check_heleket_payment_status`
 - `app/handlers/balance/main.py` — Python-модуль
   Классы: нет
   Функции: `route_payment_by_method` — Роутер платежей по методу оплаты., `show_balance_menu`, `show_balance_history`, `handle_balance_history_pagination`, `show_payment_methods`, `show_payment_methods_other_amount` — «Другая сумма»: способы оплаты без предзаполненной суммы корзины —, `handle_payment_methods_unavailable`, `handle_successful_topup_with_cart`, `request_support_topup`, `process_topup_amount`, `handle_topup_amount_callback`, `register_balance_handlers`
+- `app/handlers/balance/pay2328.py` — Python-модуль
+  Классы: нет
+  Функции: `start_pay2328_payment`, `process_pay2328_payment_amount`, `check_pay2328_payment_status`
 - `app/handlers/balance/platega.py` — Python-модуль
   Классы: нет
   Функции: `start_platega_payment`, `handle_platega_method_selection`, `start_platega_direct_method` — Handle direct Platega method selection from the main payment screen (inline mode)., `process_platega_payment_amount`, `check_platega_payment_status`
@@ -1446,7 +1443,7 @@
   Функции: `search_payments` — Search payments across all (or filtered) providers., `search_payments_stats` — Compute aggregated statistics for the given search filters.
 - `app/services/payment_service.py` — Python-модуль
   Классы: `PaymentService` (2 методов)
-  Функции: `create_transaction`, `get_transaction_by_external_id`, `add_user_balance`, `get_user_by_id`, `get_user_by_telegram_id`, `create_wata_payment`, `get_wata_payment_by_link_id`, `get_wata_payment_by_id`, `get_wata_payment_by_local_id`, `get_wata_payment_by_order_id`, `update_wata_payment_status`, `link_wata_payment_to_transaction`, `create_platega_payment`, `get_platega_payment_by_id`, `get_platega_payment_by_id_for_update`, `get_platega_payment_by_transaction_id`, `get_platega_payment_by_correlation_id`, `update_platega_payment`, `link_platega_payment_to_transaction`, `create_cryptobot_payment`, `get_cryptobot_payment_by_invoice_id`, `update_cryptobot_payment_status`, `link_cryptobot_payment_to_transaction`, `create_xrocket_payment`, `get_xrocket_payment_by_invoice_id`, `update_xrocket_payment_status`, `link_xrocket_payment_to_transaction`, `create_heleket_payment`, `get_heleket_payment_by_uuid`, `get_heleket_payment_by_id`, `update_heleket_payment`, `link_heleket_payment_to_transaction`
+  Функции: `create_transaction`, `get_transaction_by_external_id`, `add_user_balance`, `get_user_by_id`, `get_user_by_telegram_id`, `create_wata_payment`, `get_wata_payment_by_link_id`, `get_wata_payment_by_id`, `get_wata_payment_by_local_id`, `get_wata_payment_by_order_id`, `update_wata_payment_status`, `link_wata_payment_to_transaction`, `create_platega_payment`, `get_platega_payment_by_id`, `get_platega_payment_by_id_for_update`, `get_platega_payment_by_transaction_id`, `get_platega_payment_by_correlation_id`, `update_platega_payment`, `link_platega_payment_to_transaction`, `create_cryptobot_payment`, `get_cryptobot_payment_by_invoice_id`, `update_cryptobot_payment_status`, `link_cryptobot_payment_to_transaction`, `create_xrocket_payment`, `get_xrocket_payment_by_invoice_id`, `update_xrocket_payment_status`, `link_xrocket_payment_to_transaction`, `create_pay2328_payment`, `get_pay2328_payment_by_uuid`, `get_pay2328_payment_by_id`, `update_pay2328_payment`, `link_pay2328_payment_to_transaction`
 - `app/services/payment_verification_service.py` — Python-модуль
   Классы: `PendingPayment` (1 методов), `AutoPaymentVerificationService` (9 методов)
   Функции: `method_display_name`, `get_enabled_auto_methods`, `list_recent_pending_payments` — Return pending payments (top-ups) from supported providers within the age window., `get_payment_record` — Load single payment record and normalize it to :class:`PendingPayment`., `run_manual_check` — Trigger provider specific status refresh and return the updated record.
@@ -1800,8 +1797,8 @@
 - `app/services/payment/cryptobot.py` — Python-модуль
   Классы: `CryptoBotPaymentMixin` (6 методов)
   Функции: нет
-- `app/services/payment/heleket.py` — Python-модуль
-  Классы: `HeleketPaymentMixin` (5 методов)
+- `app/services/payment/pay2328.py` — Python-модуль
+  Классы: `Pay2328PaymentMixin` (4 методов)
   Функции: нет
 - `app/services/payment/payer_identity.py` — Python-модуль
   Классы: `PayerIdentity` (1 методов), `PayerRecord`
@@ -2899,6 +2896,9 @@
   Классы: нет
   Функции: `upgrade`, `downgrade`
 - `migrations/alembic/versions/0144_remove_nalogo_receipt_columns.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0145_replace_heleket_with_2328.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
 
@@ -4922,12 +4922,12 @@
 - `tests/services/test_payment_service_cryptobot.py` — Python-модуль
   Классы: `StubCryptoBotService` (2 методов), `DummySession` (4 методов), `DummyLocalPayment` (1 методов), `StubCryptoBotService` (2 методов)
   Функции: `anyio_backend`, `test_create_cryptobot_payment_success`, `test_create_cryptobot_payment_returns_none_when_service_missing`, `test_create_cryptobot_payment_handles_empty_response`
-- `tests/services/test_payment_service_heleket.py` — Python-модуль
-  Классы: `StubHeleketService` (4 методов), `DummySession` (4 методов), `DummyLocalPayment` (1 методов), `StubHeleketService` (4 методов)
-  Функции: `anyio_backend`, `test_create_heleket_payment_success`, `test_create_heleket_payment_returns_none_without_service`, `test_create_heleket_payment_handles_empty_response`, `test_sync_heleket_payment_status_success`, `test_sync_heleket_payment_status_without_response`, `test_sync_heleket_payment_status_history_fallback`
 - `tests/services/test_payment_service_modularity.py` — Python-модуль
   Классы: нет
   Функции: `test_payment_service_exposes_provider_methods` — Каждый mixin обязан добавить публичный метод в PaymentService., `test_payment_service_mro_contains_all_mixins` — Убеждаемся, что сервис действительно включает все mixin-классы.
+- `tests/services/test_payment_service_pay2328.py` — Python-модуль
+  Классы: `StubPay2328Service` (4 методов), `DummySession` (4 методов), `DummyLocalPayment` (1 методов), `StubPay2328Service` (4 методов)
+  Функции: `anyio_backend`, `test_create_pay2328_payment_success`, `test_create_pay2328_payment_returns_none_without_service`, `test_create_pay2328_payment_handles_empty_response`, `test_sync_pay2328_payment_status_success`, `test_sync_pay2328_payment_status_without_response`, `test_sync_pay2328_payment_status_history_fallback`
 - `tests/services/test_payment_service_platega.py` — Python-модуль
   Классы: `DummySession` (2 методов), `DummyLocalPayment` (1 методов), `StubPlategaService` (3 методов)
   Функции: `anyio_backend`, `test_create_platega_payment_success`, `test_create_platega_payment_respects_limits_and_configuration`, `test_create_platega_payment_handles_service_errors`, `test_get_platega_active_methods_parses_and_filters`, `test_get_platega_active_methods_returns_default`, `test_platega_method_display_helpers`
@@ -4939,7 +4939,7 @@
   Функции: `anyio_backend`, `test_wata_service_format_datetime_accepts_utc`, `test_wata_service_parse_datetime_returns_naive_utc`, `test_create_wata_payment_success`, `test_create_wata_payment_respects_amount_limits`, `test_create_wata_payment_returns_none_without_service`, `test_process_wata_webhook_updates_status`, `test_declined_other_attempt_keeps_paid_status_without_alert`, `test_real_reversal_of_paid_payment_still_alerts`, `test_decline_alerts_when_paid_transaction_is_unknown`, `test_process_wata_webhook_finalizes_paid`, `test_process_wata_webhook_returns_false_when_payment_missing`
 - `tests/services/test_payment_service_webhooks.py` — Python-модуль
   Классы: `DummyBot` (2 методов), `FakeScalarResult` (6 методов), `FakeResult` (9 методов), `FakeSession` (8 методов)
-  Функции: `anyio_backend`, `test_process_cryptobot_webhook_success`, `test_process_heleket_webhook_success`
+  Функции: `anyio_backend`, `test_process_cryptobot_webhook_success`, `test_process_pay2328_webhook_success`
 - `tests/services/test_platega_callback_casing.py` — Python-модуль
   Классы: `TestIsSubscriptionCallback` (6 методов), `TestReadCallbackFields` (6 методов)
   Функции: нет

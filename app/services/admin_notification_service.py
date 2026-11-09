@@ -2113,7 +2113,7 @@ class AdminNotificationService:
         method_names: dict[str, str] = {
             'telegram_stars': '⭐ Telegram Stars',
             'cryptobot': f'🪙 {settings.get_cryptobot_display_name()} (крипто)',
-            'heleket': f'🪙 {settings.get_heleket_display_name()} (крипто)',
+            'pay2328': f'🪙 {settings.get_pay2328_display_name()} (крипто)',
             'wata': f'💳 {settings.get_wata_display_name()}',
             'platega': f'💳 {settings.get_platega_display_name()}',
             'manual': '🛠️ Вручную (админ)',

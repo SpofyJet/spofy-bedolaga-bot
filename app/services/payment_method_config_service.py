@@ -81,9 +81,9 @@ def _get_method_defaults() -> dict:
             'default_max': 10000000,
             'available_sub_options': _get_xrocket_sub_options(),
         },
-        'heleket': {
-            'default_display_name': settings.get_heleket_display_name(),
-            'is_configured': settings.is_heleket_enabled(),
+        'pay2328': {
+            'default_display_name': settings.get_pay2328_display_name(),
+            'is_configured': settings.is_pay2328_enabled(),
             'default_min': 1000,
             'default_max': 10000000,
             'available_sub_options': None,
@@ -142,7 +142,7 @@ DEFAULT_METHOD_ORDER = [
     'telegram_stars',
     'cryptobot',
     'xrocket',
-    'heleket',
+    'pay2328',
     'platega',
     'wata',
 ]

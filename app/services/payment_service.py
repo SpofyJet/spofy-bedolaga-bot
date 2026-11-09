@@ -12,12 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.external.cryptobot import CryptoBotService
-from app.external.heleket import HeleketService
+from app.external.pay2328 import Pay2328Service
 from app.external.telegram_stars import TelegramStarsService
 from app.external.xrocket import XRocketService
 from app.services.payment import (
     CryptoBotPaymentMixin,
-    HeleketPaymentMixin,
+    Pay2328PaymentMixin,
     PaymentCommonMixin,
     PlategaPaymentMixin,
     TelegramStarsMixin,
@@ -171,29 +171,29 @@ async def link_xrocket_payment_to_transaction(*args, **kwargs):
     return await xr_crud.link_xrocket_payment_to_transaction(*args, **kwargs)
 
 
-async def create_heleket_payment(*args, **kwargs):
-    heleket_crud = import_module('app.database.crud.heleket')
-    return await heleket_crud.create_heleket_payment(*args, **kwargs)
+async def create_pay2328_payment(*args, **kwargs):
+    pay2328_crud = import_module('app.database.crud.pay2328')
+    return await pay2328_crud.create_pay2328_payment(*args, **kwargs)
 
 
-async def get_heleket_payment_by_uuid(*args, **kwargs):
-    heleket_crud = import_module('app.database.crud.heleket')
-    return await heleket_crud.get_heleket_payment_by_uuid(*args, **kwargs)
+async def get_pay2328_payment_by_uuid(*args, **kwargs):
+    pay2328_crud = import_module('app.database.crud.pay2328')
+    return await pay2328_crud.get_pay2328_payment_by_uuid(*args, **kwargs)
 
 
-async def get_heleket_payment_by_id(*args, **kwargs):
-    heleket_crud = import_module('app.database.crud.heleket')
-    return await heleket_crud.get_heleket_payment_by_id(*args, **kwargs)
+async def get_pay2328_payment_by_id(*args, **kwargs):
+    pay2328_crud = import_module('app.database.crud.pay2328')
+    return await pay2328_crud.get_pay2328_payment_by_id(*args, **kwargs)
 
 
-async def update_heleket_payment(*args, **kwargs):
-    heleket_crud = import_module('app.database.crud.heleket')
-    return await heleket_crud.update_heleket_payment(*args, **kwargs)
+async def update_pay2328_payment(*args, **kwargs):
+    pay2328_crud = import_module('app.database.crud.pay2328')
+    return await pay2328_crud.update_pay2328_payment(*args, **kwargs)
 
 
-async def link_heleket_payment_to_transaction(*args, **kwargs):
-    heleket_crud = import_module('app.database.crud.heleket')
-    return await heleket_crud.link_heleket_payment_to_transaction(*args, **kwargs)
+async def link_pay2328_payment_to_transaction(*args, **kwargs):
+    pay2328_crud = import_module('app.database.crud.pay2328')
+    return await pay2328_crud.link_pay2328_payment_to_transaction(*args, **kwargs)
 
 
 class PaymentService(
@@ -201,7 +201,7 @@ class PaymentService(
     TelegramStarsMixin,
     CryptoBotPaymentMixin,
     XRocketPaymentMixin,
-    HeleketPaymentMixin,
+    Pay2328PaymentMixin,
     PlategaPaymentMixin,
     WataPaymentMixin,
 ):
@@ -213,7 +213,7 @@ class PaymentService(
         self.stars_service = TelegramStarsService(bot) if bot else None
         self.cryptobot_service = CryptoBotService() if settings.is_cryptobot_enabled() else None
         self.xrocket_service = XRocketService() if settings.is_xrocket_enabled() else None
-        self.heleket_service = HeleketService() if settings.is_heleket_enabled() else None
+        self.pay2328_service = Pay2328Service() if settings.is_pay2328_enabled() else None
         self.platega_service = PlategaService() if settings.is_platega_enabled() else None
         self.wata_service = WataService() if settings.is_wata_enabled() else None
 
@@ -222,7 +222,7 @@ class PaymentService(
     # ------------------------------------------------------------------
     # Supported providers for guest payments (to be extended per-provider):
     #   - cryptobot
-    #   - heleket
+    #   - pay2328
     #   - platega
     #   - wata
     #   - telegram_stars
@@ -316,13 +316,13 @@ class PaymentService(
                 }
             return None
 
-        # --- Heleket ----------------------------------------------------------
-        if payment_method == 'heleket':
-            if self.heleket_service is None:
-                logger.warning('Heleket is not enabled, cannot create guest payment')
+        # --- 2328.io ----------------------------------------------------------
+        if payment_method == 'pay2328':
+            if self.pay2328_service is None:
+                logger.warning('2328.io is not enabled, cannot create guest payment')
                 return None
 
-            result = await self.create_heleket_payment(
+            result = await self.create_pay2328_payment(
                 db=db,
                 user_id=None,
                 amount_kopeks=amount_kopeks,
@@ -330,11 +330,11 @@ class PaymentService(
                 return_url=return_url,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'heleket')
+                await _patch_guest_metadata(result['local_payment_id'], 'pay2328')
                 return {
                     'payment_url': result.get('payment_url'),
                     'payment_id': result.get('uuid'),
-                    'provider': 'heleket',
+                    'provider': 'pay2328',
                 }
             return None
 

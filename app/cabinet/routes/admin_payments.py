@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot_factory import create_bot
-from app.database.models import PaymentMethod, User
+from app.database.models import PAY2328_CLOSED_STATUSES, PAY2328_PAID_STATUSES, PaymentMethod, User
 from app.services.payment_search_service import (
     MAX_ALL_TIME_DAYS,
     PeriodPreset,
@@ -140,10 +140,10 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
         }
         return mapping.get(status_str, ('❓', 'Неизвестно'))
 
-    if record.method == PaymentMethod.HELEKET:
-        if status_str in {'pending', 'created', 'waiting', 'check', 'processing'}:
+    if record.method == PaymentMethod.PAY2328:
+        if status_str in {'pending', 'check', 'awaiting_confirmation', 'underpaid_check'}:
             return '⏳', 'Ожидает оплаты'
-        if status_str in {'paid', 'paid_over'}:
+        if status_str in PAY2328_PAID_STATUSES:
             return '✅', 'Оплачено'
         if status_str in {'cancel', 'canceled', 'fail', 'failed', 'expired'}:
             return '❌', 'Отменено'
@@ -171,8 +171,8 @@ def _is_checkable(record: PendingPayment) -> bool:
         return status_str in {'opened', 'pending', 'processing', 'inprogress', 'in_progress'}
     if record.method == PaymentMethod.PLATEGA:
         return status_str in {'pending', 'inprogress', 'in_progress'}
-    if record.method == PaymentMethod.HELEKET:
-        return status_str not in {'paid', 'paid_over', 'cancel', 'canceled', 'fail', 'failed', 'expired'}
+    if record.method == PaymentMethod.PAY2328:
+        return status_str not in PAY2328_CLOSED_STATUSES
     if record.method == PaymentMethod.CRYPTOBOT:
         return status_str == 'active'
     return False

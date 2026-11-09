@@ -156,7 +156,7 @@ Bedolaga поддерживает полный кросс-канальный ж�
 | ⭐ | **Telegram Stars** | Звёзды Telegram | XTR |
 | 🪙 | **CryptoBot** | USDT, TON, BTC, ETH | Crypto |
 | 🚀 | **xRocket** | USDT, TON, BTC, ETH (Rocket Pay) | Crypto |
-| 🪙 | **Heleket** | USDT, мульти-сеть | Crypto |
+| 🪙 | **2328.io** | USDT, мульти-сеть | Crypto |
 | 🤝 | **[Platega](https://t.me/ArstanPlatega)** 🔸 | Карты, СБП, крипто | RUB |
 | 💳 | **WATA** | СБП, Карты | RUB |
 

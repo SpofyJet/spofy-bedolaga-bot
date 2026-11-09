@@ -61,14 +61,14 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             }
         )
 
-    if settings.is_heleket_enabled():
+    if settings.is_pay2328_enabled():
         methods.append(
             {
-                'id': 'heleket',
+                'id': 'pay2328',
                 'name': 'Криптовалюта',
                 'icon': '🪙',
-                'description': 'через Heleket',
-                'callback': 'topup_heleket',
+                'description': 'через 2328.io',
+                'callback': 'topup_pay2328',
             }
         )
 
@@ -170,8 +170,8 @@ def is_payment_method_available(method_id: str) -> bool:
         return settings.is_cryptobot_enabled()
     if method_id == 'xrocket':
         return settings.is_xrocket_enabled()
-    if method_id == 'heleket':
-        return settings.is_heleket_enabled()
+    if method_id == 'pay2328':
+        return settings.is_pay2328_enabled()
     if method_id == 'platega':
         return settings.is_platega_enabled() and bool(settings.get_platega_active_methods())
     if method_id.startswith('platega_m'):

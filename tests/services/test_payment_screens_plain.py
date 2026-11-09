@@ -16,7 +16,7 @@ from app.localization.texts import get_texts
 
 EMOJI = '[\U0001f000-\U0001faff☀-➿⬀-⯿️]'
 NAME_KEYS = re.compile(
-    r'^PAYMENT_(METHOD_[A-Z0-9_]+|CARD_[A-Z0-9_]+|PLATEGA(_M\d+)?|CRYPTOBOT|HELEKET|XROCKET|TELEGRAM_STARS|RIOPAY|'
+    r'^PAYMENT_(METHOD_[A-Z0-9_]+|CARD_[A-Z0-9_]+|PLATEGA(_M\d+)?|CRYPTOBOT|PAY2328|XROCKET|TELEGRAM_STARS|RIOPAY|'
     r'CLOUDPAYMENTS|FREEKASSA|SBP_YOOKASSA|VIA_SUPPORT|METHODS_TITLE)$'
 )
 NOT_A_NAME = re.compile(r'ERROR|FAILED|RETURN|CHARGE|SUCCESS|PROMPT_|HEADER|DESCRIPTION|TEXT|INFO|HINT')
@@ -46,7 +46,7 @@ def test_methods_keyboard_has_no_emoji_except_back(monkeypatch):
         'is_wata_enabled',
         'is_cryptobot_enabled',
         'is_xrocket_enabled',
-        'is_heleket_enabled',
+        'is_pay2328_enabled',
     ):
         monkeypatch.setattr(Settings, name, lambda self: True)
     monkeypatch.setattr(Settings, 'get_platega_active_methods', lambda self: [2, 12])
@@ -68,7 +68,7 @@ def test_crypto_payment_keyboard_has_no_emoji_in_its_buttons():
             assert not re.search(EMOJI, button.text), button.text
 
 
-@pytest.mark.parametrize('name', ['cryptobot', 'xrocket', 'heleket', 'platega', 'wata', 'stars'])
+@pytest.mark.parametrize('name', ['cryptobot', 'xrocket', 'pay2328', 'platega', 'wata', 'stars'])
 def test_screen_titles_have_no_leading_emoji(name):
     source = Path(f'app/handlers/balance/{name}.py').read_text(encoding='utf-8')
     assert not re.search(

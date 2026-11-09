@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import (
     CryptoBotPayment,
-    HeleketPayment,
+    Pay2328Payment,
     PaymentMethod,
     PlategaPayment,
     Transaction,
@@ -148,6 +148,7 @@ _PAID_STATUSES: frozenset[str] = frozenset(
         'confirmed',
         'paid',
         'paid_over',
+        'overpaid',
         'succeeded',
         'success',
     }
@@ -259,28 +260,28 @@ async def _search_cryptobot(db: AsyncSession, params: SearchParams) -> list[Pend
     return records
 
 
-async def _search_heleket(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
-    stmt = select(HeleketPayment).options(selectinload(HeleketPayment.user)).order_by(desc(HeleketPayment.created_at))
-    stmt = _apply_date_filter(stmt, HeleketPayment.created_at, params.cutoff, params.upper_bound)
+async def _search_pay2328(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
+    stmt = select(Pay2328Payment).options(selectinload(Pay2328Payment.user)).order_by(desc(Pay2328Payment.created_at))
+    stmt = _apply_date_filter(stmt, Pay2328Payment.created_at, params.cutoff, params.upper_bound)
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             stmt = stmt.where(
                 or_(
-                    HeleketPayment.uuid.ilike(f'%{_escape_like(params.search)}%'),
-                    HeleketPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
+                    Pay2328Payment.uuid.ilike(f'%{_escape_like(params.search)}%'),
+                    Pay2328Payment.order_id.ilike(f'%{_escape_like(params.search)}%'),
                 )
             )
         else:
-            stmt = _apply_user_join_filter(stmt, HeleketPayment, kind, params.search)
+            stmt = _apply_user_join_filter(stmt, Pay2328Payment, kind, params.search)
 
     stmt = stmt.limit(MAX_RECORDS_PER_PROVIDER)
     result = await db.execute(stmt)
     records: list[PendingPayment] = []
     for payment in result.scalars().all():
         record = _build_record(
-            PaymentMethod.HELEKET,
+            PaymentMethod.PAY2328,
             payment,
             identifier=payment.uuid,
             amount_kopeks=payment.amount_kopeks,
@@ -444,7 +445,7 @@ async def _search_platega_recurring(db: AsyncSession, params: SearchParams) -> l
 
 _PROVIDER_SEARCH_MAP: dict[PaymentMethod, Any] = {
     PaymentMethod.CRYPTOBOT: _search_cryptobot,
-    PaymentMethod.HELEKET: _search_heleket,
+    PaymentMethod.PAY2328: _search_pay2328,
     PaymentMethod.WATA: _search_wata,
     PaymentMethod.PLATEGA: _search_platega,
     PaymentMethod.TELEGRAM_STARS: _search_stars,

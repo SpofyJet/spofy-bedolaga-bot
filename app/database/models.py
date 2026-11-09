@@ -159,7 +159,7 @@ class PaymentMethod(Enum):
     TELEGRAM_STARS = 'telegram_stars'
     CRYPTOBOT = 'cryptobot'
     XROCKET = 'xrocket'
-    HELEKET = 'heleket'
+    PAY2328 = 'pay2328'
     WATA = 'wata'
     PLATEGA = 'platega'
     # СБП-автопродление Platega. В базу НЕ пишется: сами списания хранятся
@@ -312,8 +312,20 @@ class XRocketPayment(Base):
         return f'<XRocketPayment(id={self.id}, invoice_id={self.invoice_id}, amount={self.amount} {self.asset}, status={self.status})>'
 
 
-class HeleketPayment(Base):
-    __tablename__ = 'heleket_payments'
+# paid_over встречается только в старых строках, созданных до перехода на 2328.io.
+PAY2328_PAID_STATUSES = frozenset({'paid', 'overpaid', 'paid_over'})
+PAY2328_REFUND_STATUSES = frozenset({'refund_process', 'refund_fail', 'refund_paid'})
+PAY2328_MANUAL_REVIEW_STATUSES = frozenset({'underpaid', 'aml_lock'})
+PAY2328_CLOSED_STATUSES = (
+    PAY2328_PAID_STATUSES
+    | PAY2328_REFUND_STATUSES
+    | PAY2328_MANUAL_REVIEW_STATUSES
+    | {'cancel', 'canceled', 'fail', 'failed', 'expired'}
+)
+
+
+class Pay2328Payment(Base):
+    __tablename__ = 'pay2328_payments'
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
@@ -339,8 +351,8 @@ class HeleketPayment(Base):
     created_at = Column(AwareDateTime(), default=func.now())
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
-    user = relationship('User', backref='heleket_payments')
-    transaction = relationship('Transaction', backref='heleket_payment')
+    user = relationship('User', backref='pay2328_payments')
+    transaction = relationship('Transaction', backref='pay2328_payment')
 
     @property
     def amount_float(self) -> float:
@@ -362,11 +374,11 @@ class HeleketPayment(Base):
 
     @property
     def is_paid(self) -> bool:
-        return self.status in {'paid', 'paid_over'}
+        return self.status in PAY2328_PAID_STATUSES
 
     def __repr__(self):
         return (
-            f'<HeleketPayment(id={self.id}, uuid={self.uuid}, order_id={self.order_id}, amount={self.amount}'
+            f'<Pay2328Payment(id={self.id}, uuid={self.uuid}, order_id={self.order_id}, amount={self.amount}'
             f' {self.currency}, status={self.status})>'
         )
 

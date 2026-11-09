@@ -874,11 +874,11 @@ def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = Fals
             ]
         )
 
-    if settings.is_heleket_enabled():
+    if settings.is_pay2328_enabled():
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('PAYMENT_HELEKET', 'Криптовалюта (Heleket)'), callback_data='trial_payment_heleket'
+                    text=texts.t('PAYMENT_PAY2328', 'Криптовалюта (2328.io)'), callback_data='trial_payment_pay2328'
                 )
             ]
         )
@@ -4104,9 +4104,9 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
                 parse_mode='HTML',
             )
 
-        elif payment_method == 'heleket':
-            # Оплата через Heleket
-            payment_result = await payment_service.create_heleket_payment(
+        elif payment_method == 'pay2328':
+            # Оплата через 2328.io
+            payment_result = await payment_service.create_pay2328_payment(
                 db=db,
                 user_id=db_user.id,
                 amount_kopeks=trial_price_kopeks,
@@ -4122,8 +4122,8 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
 
             await callback.message.edit_text(
                 texts.t(
-                    'PAID_TRIAL_HELEKET',
-                    '🪙 <b>Оплата криптовалютой (Heleket)</b>\n\n'
+                    'PAID_TRIAL_PAY2328',
+                    '🪙 <b>Оплата криптовалютой (2328.io)</b>\n\n'
                     'Нажмите кнопку ниже для перехода к оплате.\n\n'
                     '💰 Сумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
@@ -4133,7 +4133,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
                         [
                             InlineKeyboardButton(
                                 text=texts.t('CHECK_PAYMENT', '🔄 Проверить оплату'),
-                                callback_data=f'check_trial_heleket_{pending_subscription.id}',
+                                callback_data=f'check_trial_pay2328_{pending_subscription.id}',
                             )
                         ],
                         [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],

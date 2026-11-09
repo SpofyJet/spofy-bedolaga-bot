@@ -108,9 +108,8 @@ IGNORED_LOGGER_PREFIXES: Final[tuple[str, ...]] = (
     'app.services.platega_service',
     'app.services.wata_service',
     'app.external.cryptobot',
-    'app.external.heleket',
+    'app.external.pay2328',
     'app.external.wata_webhook',
-    'app.external.heleket_webhook',
     'app.external.telegram_stars',
     'app.webserver.payments',
 )

@@ -18,8 +18,9 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import (
+    PAY2328_CLOSED_STATUSES,
     CryptoBotPayment,
-    HeleketPayment,
+    Pay2328Payment,
     PaymentMethod,
     PlategaPayment,
     Transaction,
@@ -59,7 +60,7 @@ class PendingPayment:
 SUPPORTED_MANUAL_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
     {
         PaymentMethod.WATA,
-        PaymentMethod.HELEKET,
+        PaymentMethod.PAY2328,
         PaymentMethod.CRYPTOBOT,
         PaymentMethod.XROCKET,
         PaymentMethod.PLATEGA,
@@ -74,7 +75,7 @@ SUPPORTED_AUTO_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         # путём вебхука (идемпотентно), если вебхук потерялся.
         PaymentMethod.XROCKET,
         PaymentMethod.PLATEGA,
-        PaymentMethod.HELEKET,
+        PaymentMethod.PAY2328,
     }
 )
 
@@ -90,8 +91,8 @@ def method_display_name(method: PaymentMethod) -> str:
         return f'{settings.get_platega_display_name()} СБП'
     if method == PaymentMethod.CRYPTOBOT:
         return 'CryptoBot'
-    if method == PaymentMethod.HELEKET:
-        return 'Heleket'
+    if method == PaymentMethod.PAY2328:
+        return '2328.io'
     if method == PaymentMethod.TELEGRAM_STARS:
         return 'Telegram Stars'
     return method.value
@@ -106,8 +107,8 @@ def _method_is_enabled(method: PaymentMethod) -> bool:
         return settings.is_cryptobot_enabled()
     if method == PaymentMethod.XROCKET:
         return settings.is_xrocket_enabled()
-    if method == PaymentMethod.HELEKET:
-        return settings.is_heleket_enabled()
+    if method == PaymentMethod.PAY2328:
+        return settings.is_pay2328_enabled()
     return False
 
 
@@ -181,8 +182,8 @@ class AutoPaymentVerificationService:
             records: list[PendingPayment] = []
             if PaymentMethod.CRYPTOBOT in get_enabled_auto_methods():
                 records += await _fetch_cryptobot_payments(session, cutoff)
-            if PaymentMethod.HELEKET in get_enabled_auto_methods():
-                records += await _fetch_heleket_payments(session, cutoff)
+            if PaymentMethod.PAY2328 in get_enabled_auto_methods():
+                records += await _fetch_pay2328_payments(session, cutoff)
             for record in records:
                 if record.is_paid:
                     continue
@@ -349,11 +350,11 @@ def _is_platega_pending(payment: PlategaPayment) -> bool:
     return status in {'pending', 'inprogress', 'in_progress'}
 
 
-def _is_heleket_pending(payment: HeleketPayment) -> bool:
+def _is_pay2328_pending(payment: Pay2328Payment) -> bool:
     if payment.is_paid:
         return False
     status = (payment.status or '').lower()
-    return status not in {'paid', 'paid_over', 'cancel', 'canceled', 'failed', 'fail', 'expired'}
+    return status not in PAY2328_CLOSED_STATUSES
 
 
 def _is_cryptobot_pending(payment: CryptoBotPayment) -> bool:
@@ -484,20 +485,20 @@ async def _fetch_platega_payments(db: AsyncSession, cutoff: datetime) -> list[Pe
     return records
 
 
-async def _fetch_heleket_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
+async def _fetch_pay2328_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
-        select(HeleketPayment)
-        .options(selectinload(HeleketPayment.user))
-        .where(HeleketPayment.created_at >= cutoff)
-        .order_by(desc(HeleketPayment.created_at))
+        select(Pay2328Payment)
+        .options(selectinload(Pay2328Payment.user))
+        .where(Pay2328Payment.created_at >= cutoff)
+        .order_by(desc(Pay2328Payment.created_at))
     )
     result = await db.execute(stmt)
     records: list[PendingPayment] = []
     for payment in result.scalars().all():
-        if not _is_heleket_pending(payment):
+        if not _is_pay2328_pending(payment):
             continue
         record = _build_record(
-            PaymentMethod.HELEKET,
+            PaymentMethod.PAY2328,
             payment,
             identifier=payment.uuid,
             amount_kopeks=payment.amount_kopeks,
@@ -642,7 +643,7 @@ async def list_recent_pending_payments(
     tasks: Iterable[list[PendingPayment]] = (
         await _fetch_wata_payments(db, cutoff),
         await _fetch_platega_payments(db, cutoff),
-        await _fetch_heleket_payments(db, cutoff),
+        await _fetch_pay2328_payments(db, cutoff),
         await _fetch_cryptobot_payments(db, cutoff),
         await _fetch_xrocket_payments(db, cutoff),
         await _fetch_stars_transactions(db, cutoff),
@@ -708,8 +709,8 @@ async def get_payment_record(
             expires_at=getattr(payment, 'expires_at', None),
         )
 
-    if method == PaymentMethod.HELEKET:
-        payment = await db.get(HeleketPayment, local_payment_id)
+    if method == PaymentMethod.PAY2328:
+        payment = await db.get(Pay2328Payment, local_payment_id)
         if not payment:
             return None
         await db.refresh(payment, attribute_names=['user'])
@@ -809,8 +810,8 @@ async def run_manual_check(
         elif method == PaymentMethod.PLATEGA:
             result = await payment_service.get_platega_payment_status(db, local_payment_id)
             payment = result.get('payment') if result else None
-        elif method == PaymentMethod.HELEKET:
-            payment = await payment_service.sync_heleket_payment_status(db, local_payment_id=local_payment_id)
+        elif method == PaymentMethod.PAY2328:
+            payment = await payment_service.sync_pay2328_payment_status(db, local_payment_id=local_payment_id)
         elif method == PaymentMethod.CRYPTOBOT:
             result = await payment_service.get_cryptobot_payment_status(db, local_payment_id)
             payment = result.get('payment') if result else None

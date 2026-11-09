@@ -12,7 +12,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from app.services.payment import (
     CryptoBotPaymentMixin,
-    HeleketPaymentMixin,
+    Pay2328PaymentMixin,
     PaymentCommonMixin,
     TelegramStarsMixin,
     WataPaymentMixin,
@@ -27,7 +27,7 @@ from app.services.payment_service import PaymentService
         'build_topup_success_keyboard',
         'create_stars_invoice',
         'create_cryptobot_payment',
-        'create_heleket_payment',
+        'create_pay2328_payment',
         'create_wata_payment',
     ],
 )
@@ -43,7 +43,7 @@ def test_payment_service_mro_contains_all_mixins() -> None:
         TelegramStarsMixin,
         PlategaPaymentMixin,
         CryptoBotPaymentMixin,
-        HeleketPaymentMixin,
+        Pay2328PaymentMixin,
         WataPaymentMixin,
     }
     service_mro = set(PaymentService.__mro__)

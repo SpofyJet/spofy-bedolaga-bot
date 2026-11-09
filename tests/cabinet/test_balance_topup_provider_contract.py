@@ -32,7 +32,7 @@ def anyio_backend():
 @pytest.fixture
 async def checkout(monkeypatch):
     user = SimpleNamespace(id=42, telegram_id=None, username=None, email='user@example.com', language='ru')
-    service = SimpleNamespace(create_platega_payment=AsyncMock(), create_heleket_payment=AsyncMock())
+    service = SimpleNamespace(create_platega_payment=AsyncMock(), create_pay2328_payment=AsyncMock())
     methods = []
 
     async def get_methods(**kwargs):
@@ -49,7 +49,7 @@ async def checkout(monkeypatch):
         yield client, methods, service
 
 
-@pytest.mark.parametrize('provider', ['platega', 'wata', 'heleket', 'cryptobot'])
+@pytest.mark.parametrize('provider', ['platega', 'wata', 'pay2328', 'cryptobot'])
 async def test_lower_schema_bound_does_not_bypass_provider_minimum(checkout, provider):
     client, methods, service = checkout
     methods.append(_method(provider, minimum=2000))
@@ -57,7 +57,7 @@ async def test_lower_schema_bound_does_not_bypass_provider_minimum(checkout, pro
     assert response.status_code == 400
     assert response.json()['detail'] == 'Minimum amount is 20.00 RUB'
     assert not service.create_platega_payment.called
-    assert not service.create_heleket_payment.called
+    assert not service.create_pay2328_payment.called
 
 
 @pytest.mark.parametrize('amount', [0, -1])

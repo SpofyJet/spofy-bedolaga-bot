@@ -6,7 +6,7 @@
 
 from .common import PaymentCommonMixin
 from .cryptobot import CryptoBotPaymentMixin
-from .heleket import HeleketPaymentMixin
+from .pay2328 import Pay2328PaymentMixin
 from .platega import PlategaPaymentMixin
 from .stars import TelegramStarsMixin
 from .wata import WataPaymentMixin
@@ -15,7 +15,7 @@ from .xrocket import XRocketPaymentMixin
 
 __all__ = [
     'CryptoBotPaymentMixin',
-    'HeleketPaymentMixin',
+    'Pay2328PaymentMixin',
     'PaymentCommonMixin',
     'PlategaPaymentMixin',
     'TelegramStarsMixin',

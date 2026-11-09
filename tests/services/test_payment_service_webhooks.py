@@ -26,7 +26,7 @@ def _make_service(bot: DummyBot) -> PaymentService:
     service.bot = bot
     service.stars_service = None
     service.cryptobot_service = None
-    service.heleket_service = None
+    service.pay2328_service = None
     return service
 
 
@@ -314,15 +314,15 @@ async def test_process_cryptobot_webhook_success(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.anyio('asyncio')
-async def test_process_heleket_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_process_pay2328_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = DummyBot()
     service = _make_service(bot)
     fake_session = FakeSession()
 
     payment = SimpleNamespace(
         id=5001,
-        uuid='heleket-uuid',
-        order_id='heleket-order',
+        uuid='pay2328-uuid',
+        order_id='pay2328-order',
         user_id=77,
         amount='150.00',
         amount_float=150.0,
@@ -379,13 +379,13 @@ async def test_process_heleket_webhook_success(monkeypatch: pytest.MonkeyPatch) 
     async def fake_get_by_id_for_update(db, payment_id):
         return payment if payment_id == payment.id else None
 
-    heleket_module = ModuleType('app.database.crud.heleket')
-    heleket_module.get_heleket_payment_by_uuid = fake_get_by_uuid
-    heleket_module.get_heleket_payment_by_order_id = fake_get_by_order
-    heleket_module.get_heleket_payment_by_id_for_update = fake_get_by_id_for_update
-    heleket_module.update_heleket_payment = fake_update
-    heleket_module.link_heleket_payment_to_transaction = fake_link
-    monkeypatch.setitem(sys.modules, 'app.database.crud.heleket', heleket_module)
+    pay2328_module = ModuleType('app.database.crud.pay2328')
+    pay2328_module.get_pay2328_payment_by_uuid = fake_get_by_uuid
+    pay2328_module.get_pay2328_payment_by_order_id = fake_get_by_order
+    pay2328_module.get_pay2328_payment_by_id_for_update = fake_get_by_id_for_update
+    pay2328_module.update_pay2328_payment = fake_update
+    pay2328_module.link_pay2328_payment_to_transaction = fake_link
+    monkeypatch.setitem(sys.modules, 'app.database.crud.pay2328', pay2328_module)
 
     transactions: list[dict[str, Any]] = []
 
@@ -412,7 +412,7 @@ async def test_process_heleket_webhook_success(monkeypatch: pytest.MonkeyPatch) 
         return user if user_id == user.id else None
 
     monkeypatch.setattr('app.services.payment_service.get_user_by_id', fake_get_user)
-    monkeypatch.setattr('app.services.payment.heleket.format_referrer_info', lambda u: '')
+    monkeypatch.setattr('app.services.payment.pay2328.format_referrer_info', lambda u: '')
 
     monkeypatch.setattr('app.database.crud.user.lock_user_for_update', AsyncMock(side_effect=lambda db, u: u))
     monkeypatch.setattr('app.database.crud.transaction.emit_transaction_side_effects', AsyncMock())
@@ -440,7 +440,7 @@ async def test_process_heleket_webhook_success(monkeypatch: pytest.MonkeyPatch) 
     service.build_topup_success_keyboard = AsyncMock(return_value=None)
 
     payload = {
-        'uuid': 'heleket-uuid',
+        'uuid': 'pay2328-uuid',
         'status': 'paid',
         'payer_amount': '2.50',
         'payer_currency': 'USDT',
@@ -450,10 +450,10 @@ async def test_process_heleket_webhook_success(monkeypatch: pytest.MonkeyPatch) 
         'url': 'https://pay.example',
     }
 
-    result = await service.process_heleket_webhook(fake_session, payload)
+    result = await service.process_pay2328_webhook(fake_session, payload)
 
     assert result is True
-    assert transactions and transactions[0]['payment_method'] == PaymentMethod.HELEKET
+    assert transactions and transactions[0]['payment_method'] == PaymentMethod.PAY2328
     assert payment.transaction_id == 321
     assert user.balance_kopeks == 15000
     assert user.has_made_first_topup is True

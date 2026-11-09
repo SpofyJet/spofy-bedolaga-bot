@@ -24,7 +24,7 @@ logger = structlog.get_logger(__name__)
 
 
 @error_handler
-async def start_heleket_payment(
+async def start_pay2328_payment(
     callback: types.CallbackQuery,
     db_user: User,
     state: FSMContext,
@@ -48,23 +48,23 @@ async def start_heleket_payment(
         await callback.answer()
         return
 
-    if not settings.is_heleket_enabled():
-        await callback.answer('❌ Оплата через Heleket недоступна', show_alert=True)
+    if not settings.is_pay2328_enabled():
+        await callback.answer('❌ Оплата через 2328.io недоступна', show_alert=True)
         return
 
-    markup = settings.get_heleket_markup_percent()
+    markup = settings.get_pay2328_markup_percent()
     markup_text: str | None
     if markup > 0:
-        label = texts.t('PAYMENT_HELEKET_MARKUP_LABEL', 'Наценка провайдера')
+        label = texts.t('PAYMENT_PAY2328_MARKUP_LABEL', 'Наценка провайдера')
         markup_text = f'{label}: {markup:.0f}%'
     elif markup < 0:
-        label = texts.t('PAYMENT_HELEKET_DISCOUNT_LABEL', 'Скидка провайдера')
+        label = texts.t('PAYMENT_PAY2328_DISCOUNT_LABEL', 'Скидка провайдера')
         markup_text = f'{label}: {abs(markup):.0f}%'
     else:
         markup_text = None
 
     message_lines = [
-        '<b>Криптовалюта (Heleket)</b>',
+        '<b>Криптовалюта (2328.io)</b>',
         '\n',
         'Выберите сумму или введите свою от 100 до 100,000 ₽:',
         '',
@@ -75,7 +75,7 @@ async def start_heleket_payment(
     if markup_text:
         message_lines.extend(['', markup_text])
 
-    keyboard = await get_topup_amount_keyboard('heleket', db_user.language, back_callback='back_to_menu')
+    keyboard = await get_topup_amount_keyboard('pay2328', db_user.language, back_callback='back_to_menu')
 
     await callback.message.edit_text(
         '\n'.join(filter(None, message_lines)),
@@ -85,15 +85,15 @@ async def start_heleket_payment(
 
     await state.set_state(BalanceStates.waiting_for_amount)
     await state.update_data(
-        payment_method='heleket',
-        heleket_prompt_message_id=callback.message.message_id,
-        heleket_prompt_chat_id=callback.message.chat.id,
+        payment_method='pay2328',
+        pay2328_prompt_message_id=callback.message.message_id,
+        pay2328_prompt_chat_id=callback.message.chat.id,
     )
     await callback.answer()
 
 
 @error_handler
-async def process_heleket_payment_amount(
+async def process_pay2328_payment_amount(
     message: types.Message,
     db_user: User,
     db: AsyncSession,
@@ -120,8 +120,8 @@ async def process_heleket_payment_amount(
         await state.clear()
         return
 
-    if not settings.is_heleket_enabled():
-        await message.answer('❌ Оплата через Heleket недоступна')
+    if not settings.is_pay2328_enabled():
+        await message.answer('❌ Оплата через 2328.io недоступна')
         return
 
     amount_rubles = amount_kopeks / 100
@@ -142,7 +142,7 @@ async def process_heleket_payment_amount(
 
     payment_service = PaymentService(message.bot)
 
-    result = await payment_service.create_heleket_payment(
+    result = await payment_service.create_pay2328_payment(
         db=db,
         user_id=db_user.id,
         amount_kopeks=amount_kopeks,
@@ -155,8 +155,8 @@ async def process_heleket_payment_amount(
             message,
             db_user.language,
             amount_kopeks,
-            'heleket',
-            '❌ Не удалось создать счёт в Heleket. Попробуйте позже или обратитесь в поддержку.',
+            'pay2328',
+            '❌ Не удалось создать счёт в 2328.io. Попробуйте позже или обратитесь в поддержку.',
             exact=False,
         )
         await state.clear()
@@ -164,7 +164,7 @@ async def process_heleket_payment_amount(
 
     payment_url = result.get('payment_url')
     if not payment_url:
-        await message.answer('❌ Не удалось получить ссылку для оплаты Heleket')
+        await message.answer('❌ Не удалось получить ссылку для оплаты 2328.io')
         await state.clear()
         return
 
@@ -174,7 +174,7 @@ async def process_heleket_payment_amount(
     discount_percent = result.get('discount_percent')
 
     details = [
-        '<b>Криптовалюта (Heleket)</b>',
+        '<b>Криптовалюта (2328.io)</b>',
         '',
         f'💰 Сумма к зачислению: {amount_rubles:.0f} ₽',
     ]
@@ -191,8 +191,8 @@ async def process_heleket_payment_amount(
             markup_percent = None
 
     if markup_percent:
-        label_markup = texts.t('PAYMENT_HELEKET_MARKUP_LABEL', 'Наценка провайдера')
-        label_discount = texts.t('PAYMENT_HELEKET_DISCOUNT_LABEL', 'Скидка провайдера')
+        label_markup = texts.t('PAYMENT_PAY2328_MARKUP_LABEL', 'Наценка провайдера')
+        label_discount = texts.t('PAYMENT_PAY2328_DISCOUNT_LABEL', 'Скидка провайдера')
         absolute = abs(markup_percent)
         if markup_percent > 0:
             details.append(f'📈 {label_markup}: +{absolute}%')
@@ -213,7 +213,7 @@ async def process_heleket_payment_amount(
             '',
             '📱 Инструкция:',
             "1. Нажмите кнопку 'Оплатить'",
-            '2. Перейдите на страницу Heleket',
+            '2. Перейдите на страницу 2328.io',
             '3. Оплатите указанную сумму',
             '4. Баланс пополнится автоматически',
         ]
@@ -225,7 +225,7 @@ async def process_heleket_payment_amount(
             [
                 types.InlineKeyboardButton(
                     text=strip_leading_emoji(texts.t('CHECK_STATUS_BUTTON', 'Проверить статус')),
-                    callback_data=f'check_heleket_{result["local_payment_id"]}',
+                    callback_data=f'check_pay2328_{result["local_payment_id"]}',
                 )
             ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
@@ -233,26 +233,26 @@ async def process_heleket_payment_amount(
     )
 
     state_data = await state.get_data()
-    prompt_message_id = state_data.get('heleket_prompt_message_id')
-    prompt_chat_id = state_data.get('heleket_prompt_chat_id', message.chat.id)
+    prompt_message_id = state_data.get('pay2328_prompt_message_id')
+    prompt_chat_id = state_data.get('pay2328_prompt_chat_id', message.chat.id)
 
     try:
         await message.delete()
     except Exception as delete_error:  # pragma: no cover - depends on bot rights
-        logger.warning('Не удалось удалить сообщение с суммой Heleket', delete_error=delete_error)
+        logger.warning('Не удалось удалить сообщение с суммой 2328.io', delete_error=delete_error)
 
     if prompt_message_id:
         try:
             await message.bot.delete_message(prompt_chat_id, prompt_message_id)
         except Exception as delete_error:  # pragma: no cover - diagnostic
-            logger.warning('Не удалось удалить сообщение с запросом суммы Heleket', delete_error=delete_error)
+            logger.warning('Не удалось удалить сообщение с запросом суммы 2328.io', delete_error=delete_error)
 
     invoice_message = await message.answer('\n'.join(details), parse_mode='HTML', reply_markup=keyboard)
 
     try:
         from app.services import payment_service as payment_module
 
-        payment = await payment_module.get_heleket_payment_by_id(db, result['local_payment_id'])
+        payment = await payment_module.get_pay2328_payment_by_id(db, result['local_payment_id'])
         if payment:
             metadata = dict(getattr(payment, 'metadata_json', {}) or {})
             metadata['invoice_message'] = {
@@ -266,18 +266,18 @@ async def process_heleket_payment_amount(
             )
             await db.commit()
     except Exception as error:  # pragma: no cover - diagnostics
-        logger.warning('Не удалось сохранить сообщение Heleket', error=error)
+        logger.warning('Не удалось сохранить сообщение 2328.io', error=error)
 
     await state.update_data(
-        heleket_invoice_message_id=invoice_message.message_id,
-        heleket_invoice_chat_id=invoice_message.chat.id,
+        pay2328_invoice_message_id=invoice_message.message_id,
+        pay2328_invoice_chat_id=invoice_message.chat.id,
     )
 
     await state.clear()
 
 
 @error_handler
-async def check_heleket_payment_status(
+async def check_pay2328_payment_status(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
@@ -288,9 +288,9 @@ async def check_heleket_payment_status(
         await callback.answer('Некорректный идентификатор платежа', show_alert=True)
         return
 
-    from app.database.crud.heleket import get_heleket_payment_by_id
+    from app.database.crud.pay2328 import get_pay2328_payment_by_id
 
-    payment = await get_heleket_payment_by_id(db, local_payment_id)
+    payment = await get_pay2328_payment_by_id(db, local_payment_id)
     if not payment or payment.user_id != db_user.id:
         await callback.answer('Платёж не найден', show_alert=True)
         return
@@ -299,12 +299,12 @@ async def check_heleket_payment_status(
     texts = get_texts(language)
 
     if payment.is_paid:
-        message = texts.t('HELEKET_PAYMENT_ALREADY_PAID', '✅ Платёж уже зачислен')
+        message = texts.t('PAY2328_PAYMENT_ALREADY_PAID', '✅ Платёж уже зачислен')
         await callback.answer(message, show_alert=True)
         return
 
     payment_service = PaymentService(callback.bot)
-    updated_payment = await payment_service.sync_heleket_payment_status(
+    updated_payment = await payment_service.sync_pay2328_payment_status(
         db,
         local_payment_id=local_payment_id,
     )
@@ -313,34 +313,30 @@ async def check_heleket_payment_status(
         payment = updated_payment
 
     if payment.is_paid:
-        message = texts.t('HELEKET_PAYMENT_SUCCESS', '✅ Платёж зачислен на баланс')
+        message = texts.t('PAY2328_PAYMENT_SUCCESS', '✅ Платёж зачислен на баланс')
         await callback.answer(message, show_alert=True)
         return
 
     status_normalized = (payment.status or '').lower()
     status_messages = {
-        'check': texts.t('HELEKET_STATUS_CHECK', '⏳ Ожидание оплаты'),
-        'process': texts.t('HELEKET_STATUS_PROCESS', '⚙️ Платёж обрабатывается'),
-        'confirm_check': texts.t('HELEKET_STATUS_CONFIRM_CHECK', '⛓ Ожидание подтверждений сети'),
-        'wrong_amount': texts.t('HELEKET_STATUS_WRONG_AMOUNT', '❗️ Оплачена неверная сумма'),
-        'wrong_amount_waiting': texts.t(
-            'HELEKET_STATUS_WRONG_AMOUNT_WAITING',
-            '❗️ Недостаточная сумма, ожидаем доплату',
-        ),
-        'paid_over': texts.t('HELEKET_STATUS_PAID_OVER', '✅ Платёж зачислен (с переплатой)'),
-        'paid': texts.t('HELEKET_STATUS_PAID', '✅ Платёж зачислен'),
-        'cancel': texts.t('HELEKET_STATUS_CANCEL', '🚫 Платёж отменён'),
-        'fail': texts.t('HELEKET_STATUS_FAIL', '❌ Ошибка при оплате'),
-        'system_fail': texts.t('HELEKET_STATUS_SYSTEM_FAIL', '❌ Системная ошибка Heleket'),
-        'refund_process': texts.t('HELEKET_STATUS_REFUND_PROCESS', '↩️ Возврат обрабатывается'),
-        'refund_fail': texts.t('HELEKET_STATUS_REFUND_FAIL', '⚠️ Ошибка возврата'),
-        'refund_paid': texts.t('HELEKET_STATUS_REFUND_PAID', '✅ Возврат выполнен'),
-        'locked': texts.t('HELEKET_STATUS_LOCKED', '🔒 Средства заблокированы'),
+        'check': texts.t('PAY2328_STATUS_CHECK', '⏳ Ожидание оплаты'),
+        'pending': texts.t('PAY2328_STATUS_CHECK', '⏳ Ожидание оплаты'),
+        'awaiting_confirmation': texts.t('PAY2328_STATUS_CONFIRM_CHECK', '⛓ Ожидание подтверждений сети'),
+        'underpaid_check': texts.t('PAY2328_STATUS_WRONG_AMOUNT_WAITING', '❗️ Недостаточная сумма, ожидаем доплату'),
+        'underpaid': texts.t('PAY2328_STATUS_WRONG_AMOUNT', '❗️ Оплачена неверная сумма'),
+        'overpaid': texts.t('PAY2328_STATUS_PAID_OVER', '✅ Платёж зачислен (с переплатой)'),
+        'aml_lock': texts.t('PAY2328_STATUS_LOCKED', '🔒 Средства заблокированы'),
+        'paid_over': texts.t('PAY2328_STATUS_PAID_OVER', '✅ Платёж зачислен (с переплатой)'),
+        'paid': texts.t('PAY2328_STATUS_PAID', '✅ Платёж зачислен'),
+        'cancel': texts.t('PAY2328_STATUS_CANCEL', '🚫 Платёж отменён'),
+        'refund_process': texts.t('PAY2328_STATUS_REFUND_PROCESS', '↩️ Возврат обрабатывается'),
+        'refund_fail': texts.t('PAY2328_STATUS_REFUND_FAIL', '⚠️ Ошибка возврата'),
+        'refund_paid': texts.t('PAY2328_STATUS_REFUND_PAID', '✅ Возврат выполнен'),
     }
 
     message = status_messages.get(status_normalized)
     if message is None:
-        template = texts.t('HELEKET_STATUS_UNKNOWN', 'ℹ️ Статус платежа: {status}')
+        template = texts.t('PAY2328_STATUS_UNKNOWN', 'ℹ️ Статус платежа: {status}')
         status_value = payment.status or status_normalized or '—'
         try:
             message = template.format(status=status_value)

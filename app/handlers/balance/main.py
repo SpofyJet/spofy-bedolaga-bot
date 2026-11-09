@@ -92,11 +92,11 @@ async def route_payment_by_method(
             await process_xrocket_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
-    if payment_method == 'heleket':
-        from .heleket import process_heleket_payment_amount
+    if payment_method == 'pay2328':
+        from .pay2328 import process_pay2328_payment_amount
 
         async with AsyncSessionLocal() as db:
-            await process_heleket_payment_amount(message, db_user, db, amount_kopeks, state)
+            await process_pay2328_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
     return False
@@ -598,10 +598,10 @@ def register_balance_handlers(dp: Dispatcher):
 
     dp.callback_query.register(select_xrocket_asset, F.data.startswith('xrocket_asset_'))
 
-    from .heleket import check_heleket_payment_status, start_heleket_payment
+    from .pay2328 import check_pay2328_payment_status, start_pay2328_payment
 
-    dp.callback_query.register(start_heleket_payment, F.data == 'topup_heleket')
-    dp.callback_query.register(check_heleket_payment_status, F.data.startswith('check_heleket_'))
+    dp.callback_query.register(start_pay2328_payment, F.data == 'topup_pay2328')
+    dp.callback_query.register(check_pay2328_payment_status, F.data.startswith('check_pay2328_'))
 
     from .wata import check_wata_payment_status
 

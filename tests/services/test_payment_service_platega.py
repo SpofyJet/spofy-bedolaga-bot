@@ -24,7 +24,7 @@ def _make_service(stub: StubPlategaService | None) -> PaymentService:
     service.bot = None
     service.platega_service = stub
     service.cryptobot_service = None
-    service.heleket_service = None
+    service.pay2328_service = None
     service.stars_service = None
     service.wata_service = None
     return service

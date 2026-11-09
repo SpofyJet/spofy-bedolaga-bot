@@ -6,13 +6,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import HeleketPayment
+from app.database.models import Pay2328Payment
 
 
 logger = structlog.get_logger(__name__)
 
 
-async def create_heleket_payment(
+async def create_pay2328_payment(
     db: AsyncSession,
     *,
     user_id: int | None,
@@ -28,8 +28,8 @@ async def create_heleket_payment(
     payment_url: str | None = None,
     expires_at: datetime | None = None,
     metadata: dict[str, Any] | None = None,
-) -> HeleketPayment:
-    payment = HeleketPayment(
+) -> Pay2328Payment:
+    payment = Pay2328Payment(
         user_id=user_id,
         uuid=uuid,
         order_id=order_id,
@@ -50,7 +50,7 @@ async def create_heleket_payment(
     await db.refresh(payment)
 
     logger.info(
-        'Создан Heleket платеж',
+        'Создан 2328.io платеж',
         uuid=uuid,
         order_id=order_id,
         amount=amount,
@@ -61,49 +61,49 @@ async def create_heleket_payment(
     return payment
 
 
-async def get_heleket_payment_by_uuid(
+async def get_pay2328_payment_by_uuid(
     db: AsyncSession,
     uuid: str,
-) -> HeleketPayment | None:
+) -> Pay2328Payment | None:
     result = await db.execute(
-        select(HeleketPayment).options(selectinload(HeleketPayment.user)).where(HeleketPayment.uuid == uuid)
+        select(Pay2328Payment).options(selectinload(Pay2328Payment.user)).where(Pay2328Payment.uuid == uuid)
     )
     return result.scalar_one_or_none()
 
 
-async def get_heleket_payment_by_order_id(
+async def get_pay2328_payment_by_order_id(
     db: AsyncSession,
     order_id: str,
-) -> HeleketPayment | None:
+) -> Pay2328Payment | None:
     result = await db.execute(
-        select(HeleketPayment).options(selectinload(HeleketPayment.user)).where(HeleketPayment.order_id == order_id)
+        select(Pay2328Payment).options(selectinload(Pay2328Payment.user)).where(Pay2328Payment.order_id == order_id)
     )
     return result.scalar_one_or_none()
 
 
-async def get_heleket_payment_by_id(
+async def get_pay2328_payment_by_id(
     db: AsyncSession,
     payment_id: int,
-) -> HeleketPayment | None:
+) -> Pay2328Payment | None:
     result = await db.execute(
-        select(HeleketPayment).options(selectinload(HeleketPayment.user)).where(HeleketPayment.id == payment_id)
+        select(Pay2328Payment).options(selectinload(Pay2328Payment.user)).where(Pay2328Payment.id == payment_id)
     )
     return result.scalar_one_or_none()
 
 
-async def get_heleket_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> HeleketPayment | None:
+async def get_pay2328_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> Pay2328Payment | None:
     # populate_existing: иначе FOR UPDATE вернёт уже загруженный в сессию объект со
     # статусом до блокировки, и вебхук с опросом увидят устаревший transaction_id.
     result = await db.execute(
-        select(HeleketPayment)
-        .where(HeleketPayment.id == payment_id)
+        select(Pay2328Payment)
+        .where(Pay2328Payment.id == payment_id)
         .with_for_update()
         .execution_options(populate_existing=True)
     )
     return result.scalar_one_or_none()
 
 
-async def update_heleket_payment(
+async def update_pay2328_payment(
     db: AsyncSession,
     uuid: str,
     *,
@@ -115,11 +115,11 @@ async def update_heleket_payment(
     paid_at: datetime | None = None,
     payment_url: str | None = None,
     metadata: dict[str, Any] | None = None,
-) -> HeleketPayment | None:
-    payment = await get_heleket_payment_by_uuid(db, uuid)
+) -> Pay2328Payment | None:
+    payment = await get_pay2328_payment_by_uuid(db, uuid)
 
     if not payment:
-        logger.error('Heleket платеж с uuid= не найден', uuid=uuid)
+        logger.error('2328.io платеж с uuid= не найден', uuid=uuid)
         return None
 
     if status is not None:
@@ -147,7 +147,7 @@ async def update_heleket_payment(
     await db.refresh(payment)
 
     logger.info(
-        'Обновлен Heleket платеж',
+        'Обновлен 2328.io платеж',
         uuid=uuid,
         payment_status=payment.status,
         payer_amount=payment.payer_amount,
@@ -157,15 +157,15 @@ async def update_heleket_payment(
     return payment
 
 
-async def link_heleket_payment_to_transaction(
+async def link_pay2328_payment_to_transaction(
     db: AsyncSession,
     uuid: str,
     transaction_id: int,
-) -> HeleketPayment | None:
-    payment = await get_heleket_payment_by_uuid(db, uuid)
+) -> Pay2328Payment | None:
+    payment = await get_pay2328_payment_by_uuid(db, uuid)
 
     if not payment:
-        logger.error('Не найден Heleket платеж для связи с транзакцией', uuid=uuid)
+        logger.error('Не найден 2328.io платеж для связи с транзакцией', uuid=uuid)
         return None
 
     payment.transaction_id = transaction_id
@@ -174,6 +174,6 @@ async def link_heleket_payment_to_transaction(
     await db.flush()
     await db.refresh(payment)
 
-    logger.info('Heleket платеж связан с транзакцией', uuid=uuid, transaction_id=transaction_id)
+    logger.info('2328.io платеж связан с транзакцией', uuid=uuid, transaction_id=transaction_id)
 
     return payment

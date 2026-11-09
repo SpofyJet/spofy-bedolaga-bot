@@ -17,7 +17,7 @@ from app.states import BalanceStates
 
 PROVIDERS = [
     'cryptobot',
-    'heleket',
+    'pay2328',
     'platega',
     'wata',
 ]
@@ -60,7 +60,7 @@ async def test_rejection_keeps_selection_and_shows_exact_enterable_range(
     message.answer = AsyncMock()
     message.delete = AsyncMock()
     user = SimpleNamespace(id=1, telegram_id=1, language=language, restriction_topup=False)
-    fixed_limits = module_name in {'cryptobot', 'heleket'}
+    fixed_limits = module_name in {'cryptobot', 'pay2328'}
     amount = (4000 if bound == 'low' else 10000001) if fixed_limits else (4000 if bound == 'low' else 5100)
     message.text = f'{amount // 100}.{amount % 100:02d}'
     values = {

@@ -18,7 +18,7 @@ async def test_fast_lane_checks_only_fresh_unpaid_crypto_invoices(monkeypatch):
     svc = AutoPaymentVerificationService()
     svc._payment_service = object()
     monkeypatch.setattr(
-        pvs, 'get_enabled_auto_methods', lambda: [pvs.PaymentMethod.CRYPTOBOT, pvs.PaymentMethod.HELEKET]
+        pvs, 'get_enabled_auto_methods', lambda: [pvs.PaymentMethod.CRYPTOBOT, pvs.PaymentMethod.PAY2328]
     )
     monkeypatch.setattr(
         pvs,
@@ -31,7 +31,7 @@ async def test_fast_lane_checks_only_fresh_unpaid_crypto_invoices(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        pvs, '_fetch_heleket_payments', AsyncMock(return_value=[_record(pvs.PaymentMethod.HELEKET, identifier='c')])
+        pvs, '_fetch_pay2328_payments', AsyncMock(return_value=[_record(pvs.PaymentMethod.PAY2328, identifier='c')])
     )
     checked = []
 
@@ -49,7 +49,7 @@ async def test_fast_lane_checks_only_fresh_unpaid_crypto_invoices(monkeypatch):
 
     await svc._run_fast_crypto_checks()
 
-    assert checked == [pvs.PaymentMethod.CRYPTOBOT, pvs.PaymentMethod.HELEKET]  # оплаченный пропущен
+    assert checked == [pvs.PaymentMethod.CRYPTOBOT, pvs.PaymentMethod.PAY2328]  # оплаченный пропущен
 
 
 async def test_fast_lane_off_by_default_switch(monkeypatch):
@@ -63,7 +63,7 @@ def test_crypto_screens_have_no_emoji_before_the_method_title():
     for path in (
         'app/handlers/balance/cryptobot.py',
         'app/handlers/balance/xrocket.py',
-        'app/handlers/balance/heleket.py',
+        'app/handlers/balance/pay2328.py',
     ):
         source = Path(path).read_text(encoding='utf-8')
         titles = re.findall(r"['\"]([^'\"\n]*<b>Криптовалюта \([^)]*\)</b>)", source)

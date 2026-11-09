@@ -44,7 +44,6 @@ from app.database.models import (
     FaqPage,
     FaqSetting,
     GuestPurchase,
-    HeleketPayment,
     InfoPage,
     LandingPage,
     MainMenuButton,
@@ -54,6 +53,7 @@ from app.database.models import (
     NewsCategory,
     NewsTag,
     PartnerApplication,
+    Pay2328Payment,
     PaymentMethodConfig,
     PinnedMessage,
     PlategaPayment,
@@ -225,7 +225,7 @@ class BackupService:
             SupportAuditLog,
             WebApiToken,
             # --- Payment providers (FK: users, transactions) ---
-            HeleketPayment,
+            Pay2328Payment,
             WataPayment,
             PlategaPayment,
             PaymentMethodConfig,
@@ -1640,7 +1640,7 @@ class BackupService:
             'ticket_notifications',
             'button_click_logs',
             # --- Payment providers ---
-            'heleket_payments',
+            'pay2328_payments',
             'wata_payments',
             'platega_payments',
             'pinned_messages',

@@ -298,12 +298,12 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
             ]
         )
 
-    if settings.is_heleket_enabled():
+    if settings.is_pay2328_enabled():
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('PAYMENT_HELEKET', 'Криптовалюта (Heleket)'),
-                    callback_data='simple_subscription_heleket',
+                    text=texts.t('PAYMENT_PAY2328', 'Криптовалюта (2328.io)'),
+                    callback_data='simple_subscription_pay2328',
                 )
             ]
         )
@@ -1056,20 +1056,20 @@ async def handle_simple_subscription_payment_method(
             await callback.answer()
             return
 
-        elif payment_method == 'heleket':
-            if not settings.is_heleket_enabled():
-                await callback.answer('❌ Оплата через Heleket временно недоступна', show_alert=True)
+        elif payment_method == 'pay2328':
+            if not settings.is_pay2328_enabled():
+                await callback.answer('❌ Оплата через 2328.io временно недоступна', show_alert=True)
                 return
 
             amount_rubles = price_kopeks / 100
             if amount_rubles < 100 or amount_rubles > 100000:
                 await callback.answer(
-                    '❌ Сумма должна быть от 100 до 100 000 ₽ для оплаты через Heleket',
+                    '❌ Сумма должна быть от 100 до 100 000 ₽ для оплаты через 2328.io',
                     show_alert=True,
                 )
                 return
 
-            heleket_result = await payment_service.create_heleket_payment(
+            pay2328_result = await payment_service.create_pay2328_payment(
                 db=db,
                 user_id=db_user.id,
                 amount_kopeks=price_kopeks,
@@ -1080,25 +1080,25 @@ async def handle_simple_subscription_payment_method(
                 language=db_user.language,
             )
 
-            if not heleket_result:
+            if not pay2328_result:
                 await callback.answer(
-                    '❌ Ошибка создания платежа Heleket. Попробуйте позже или обратитесь в поддержку.',
+                    '❌ Ошибка создания платежа 2328.io. Попробуйте позже или обратитесь в поддержку.',
                     show_alert=True,
                 )
                 return
 
-            payment_url = heleket_result.get('payment_url')
+            payment_url = pay2328_result.get('payment_url')
             if not payment_url:
                 await callback.answer(
-                    '❌ Не удалось получить ссылку для оплаты Heleket. Обратитесь в поддержку.',
+                    '❌ Не удалось получить ссылку для оплаты 2328.io. Обратитесь в поддержку.',
                     show_alert=True,
                 )
                 return
 
-            local_payment_id = heleket_result.get('local_payment_id')
-            payer_amount = heleket_result.get('payer_amount')
-            payer_currency = heleket_result.get('payer_currency')
-            discount_percent = heleket_result.get('discount_percent')
+            local_payment_id = pay2328_result.get('local_payment_id')
+            payer_amount = pay2328_result.get('payer_amount')
+            payer_currency = pay2328_result.get('payer_currency')
+            discount_percent = pay2328_result.get('discount_percent')
 
             markup_percent = None
             if discount_percent is not None:
@@ -1111,14 +1111,14 @@ async def handle_simple_subscription_payment_method(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text='🪙 Оплатить через Heleket',
+                            text='🪙 Оплатить через 2328.io',
                             url=payment_url,
                         )
                     ],
                     [
                         types.InlineKeyboardButton(
                             text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
-                            callback_data=f'check_simple_heleket_{local_payment_id}',
+                            callback_data=f'check_simple_pay2328_{local_payment_id}',
                         )
                     ],
                     [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
@@ -1126,7 +1126,7 @@ async def handle_simple_subscription_payment_method(
             )
 
             message_lines = [
-                '🪙 <b>Оплата через Heleket</b>',
+                '🪙 <b>Оплата через 2328.io</b>',
                 '',
                 f'💰 Сумма: {settings.format_price(price_kopeks)}',
             ]
@@ -1149,7 +1149,7 @@ async def handle_simple_subscription_payment_method(
                 [
                     '',
                     '📱 <b>Инструкция:</b>',
-                    "1. Нажмите кнопку 'Оплатить через Heleket'",
+                    "1. Нажмите кнопку 'Оплатить через 2328.io'",
                     '2. Следуйте подсказкам на странице оплаты',
                     '3. Подтвердите перевод',
                     '4. Средства зачислятся автоматически',
@@ -1340,7 +1340,7 @@ async def check_simple_cryptobot_payment_status(
 
 
 @error_handler
-async def check_simple_heleket_payment_status(
+async def check_simple_pay2328_payment_status(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
@@ -1351,9 +1351,9 @@ async def check_simple_heleket_payment_status(
         await callback.answer('❌ Некорректный идентификатор платежа', show_alert=True)
         return
 
-    from app.database.crud.heleket import get_heleket_payment_by_id
+    from app.database.crud.pay2328 import get_pay2328_payment_by_id
 
-    payment = await get_heleket_payment_by_id(db, local_payment_id)
+    payment = await get_pay2328_payment_by_id(db, local_payment_id)
     if not payment or payment.user_id != db_user.id:
         await callback.answer('❌ Платеж не найден', show_alert=True)
         return
@@ -1362,11 +1362,12 @@ async def check_simple_heleket_payment_status(
         'check': ('⏳', 'Ожидает оплаты'),
         'paid': ('✅', 'Оплачен'),
         'paid_over': ('✅', 'Оплачен (переплата)'),
-        'wrong_amount': ('⚠️', 'Неверная сумма'),
+        'overpaid': ('✅', 'Оплачен (переплата)'),
+        'underpaid': ('⚠️', 'Неверная сумма'),
+        'underpaid_check': ('⌛', 'Недостаточная сумма, ожидаем доплату'),
         'cancel': ('❌', 'Отменен'),
-        'fail': ('❌', 'Ошибка'),
-        'process': ('⌛', 'Обрабатывается'),
-        'confirm_check': ('⌛', 'Ожидает подтверждения'),
+        'awaiting_confirmation': ('⌛', 'Ожидает подтверждения'),
+        'aml_lock': ('⚠️', 'Проверяется'),
     }
 
     emoji, status_text = status_labels.get(payment.status, ('❓', 'Неизвестно'))
@@ -1379,12 +1380,12 @@ async def check_simple_heleket_payment_status(
         if user and getattr(user, 'language', None):
             language = user.language
     except Exception as error:
-        logger.debug('Не удалось получить пользователя для Heleket статуса', error=error)
+        logger.debug('Не удалось получить пользователя для 2328.io статуса', error=error)
 
     texts = get_texts(language)
 
     message_lines = [
-        'Статус платежа Heleket:',
+        'Статус платежа 2328.io:',
         '',
         f'🆔 UUID: {payment.uuid[:8]}...',
         f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}',
@@ -1397,11 +1398,11 @@ async def check_simple_heleket_payment_status(
 
     if payment.is_paid:
         message_lines.append('\n✅ Платеж успешно завершен! Средства уже зачислены.')
-    elif payment.status in {'check', 'process', 'confirm_check'}:
+    elif payment.status in {'pending', 'check', 'awaiting_confirmation', 'underpaid_check'}:
         message_lines.append('\n⏳ Платеж еще обрабатывается. Завершите оплату и проверьте статус позже.')
         if payment.payment_url:
             message_lines.append(f'\n🔗 Ссылка на оплату: {payment.payment_url}')
-    elif payment.status in {'fail', 'cancel', 'wrong_amount'}:
+    elif payment.status in {'cancel', 'underpaid'}:
         message_lines.append(
             f'\n❌ Платеж не завершен корректно. Обратитесь в {settings.get_support_contact_display()}'
         )
@@ -1411,7 +1412,7 @@ async def check_simple_heleket_payment_status(
             [
                 types.InlineKeyboardButton(
                     text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
-                    callback_data=f'check_simple_heleket_{local_payment_id}',
+                    callback_data=f'check_simple_pay2328_{local_payment_id}',
                 )
             ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
@@ -1853,6 +1854,6 @@ def register_simple_subscription_handlers(dp):
 
     dp.callback_query.register(check_simple_cryptobot_payment_status, F.data.startswith('check_simple_cryptobot_'))
 
-    dp.callback_query.register(check_simple_heleket_payment_status, F.data.startswith('check_simple_heleket_'))
+    dp.callback_query.register(check_simple_pay2328_payment_status, F.data.startswith('check_simple_pay2328_'))
 
     dp.callback_query.register(check_simple_wata_payment_status, F.data.startswith('check_simple_wata_'))

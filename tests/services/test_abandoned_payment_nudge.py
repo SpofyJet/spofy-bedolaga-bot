@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.database.models import (
     Base,
     CryptoBotPayment,
-    HeleketPayment,
+    Pay2328Payment,
     PlategaPayment,
     SubscriptionEvent,
     Transaction,
@@ -51,7 +51,7 @@ async def _session(monkeypatch):
             PlategaPayment,
             WataPayment,
             XRocketPayment,
-            HeleketPayment,
+            Pay2328Payment,
             Transaction,
             SubscriptionEvent,
         )

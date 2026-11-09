@@ -84,7 +84,7 @@ async def test_block_is_not_silenced_by_a_recent_failure_alert(send):
 
 
 async def test_providers_are_counted_separately(send):
-    for provider in ('WATA', 'Heleket', 'Platega'):
+    for provider in ('WATA', '2328.io', 'Platega'):
         await alerts.alert_invoice_failed(None, provider=provider, reason='timeout')
 
     send.assert_not_awaited()

@@ -599,7 +599,7 @@ class ActivationFunnelService:
 
     async def _abandoned_payments(self, db: AsyncSession, since: datetime, until: datetime):
         """Неоплаченные платежи за окно: ``(user, amount_kopeks, created_at)`` по всем способам с суммой."""
-        from app.database.models import CryptoBotPayment, HeleketPayment, PlategaPayment, WataPayment, XRocketPayment
+        from app.database.models import CryptoBotPayment, Pay2328Payment, PlategaPayment, WataPayment, XRocketPayment
 
         rows: list[tuple[User, int, datetime]] = []
         # Telegram или подтверждённая почта (кабинет без Telegram получает письмо).
@@ -667,19 +667,19 @@ class ActivationFunnelService:
             if kopeks:
                 rows.append((user, kopeks, payment.created_at))
 
-        heleket = await db.execute(
-            select(HeleketPayment, User)
-            .join(User, User.id == HeleketPayment.user_id)
+        pay2328 = await db.execute(
+            select(Pay2328Payment, User)
+            .join(User, User.id == Pay2328Payment.user_id)
             .where(
-                HeleketPayment.status.in_(('check', 'cancel')),
-                HeleketPayment.currency == 'RUB',
-                HeleketPayment.created_at >= since,
-                HeleketPayment.created_at <= until,
+                Pay2328Payment.status.in_(('check', 'cancel')),
+                Pay2328Payment.currency == 'RUB',
+                Pay2328Payment.created_at >= since,
+                Pay2328Payment.created_at <= until,
                 user_ok,
             )
             .limit(BATCH_LIMIT)
         )
-        for payment, user in heleket.all():
+        for payment, user in pay2328.all():
             try:
                 rows.append((user, round(float(payment.amount) * 100), payment.created_at))
             except (TypeError, ValueError):

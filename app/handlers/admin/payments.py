@@ -10,7 +10,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.models import PaymentMethod, User
+from app.database.models import PAY2328_CLOSED_STATUSES, PAY2328_PAID_STATUSES, PaymentMethod, User
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.services.payment_verification_service import (
@@ -32,8 +32,8 @@ PAGE_SIZE = 6
 def _method_display(method: PaymentMethod) -> str:
     if method == PaymentMethod.WATA:
         return 'WATA'
-    if method == PaymentMethod.HELEKET:
-        return 'Heleket'
+    if method == PaymentMethod.PAY2328:
+        return '2328.io'
     if method == PaymentMethod.PLATEGA:
         return settings.get_platega_display_name()
     if method == PaymentMethod.PLATEGA_RECURRENT:
@@ -80,10 +80,10 @@ def _status_info(
         }
         return mapping.get(status, ('❓', texts.t('ADMIN_PAYMENT_STATUS_UNKNOWN', '❓ Unknown')))
 
-    if record.method == PaymentMethod.HELEKET:
+    if record.method == PaymentMethod.PAY2328:
         if status in {'pending', 'created', 'waiting', 'check', 'processing'}:
             return '⏳', texts.t('ADMIN_PAYMENT_STATUS_PENDING', '⏳ Pending')
-        if status in {'paid', 'paid_over'}:
+        if status in PAY2328_PAID_STATUSES:
             return '✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')
         if status in {'cancel', 'canceled', 'fail', 'failed', 'expired'}:
             return '❌', texts.t('ADMIN_PAYMENT_STATUS_CANCELED', '❌ Cancelled')
@@ -115,8 +115,8 @@ def _is_checkable(record: PendingPayment) -> bool:
         return status in {'opened', 'pending', 'processing', 'inprogress', 'in_progress'}
     if record.method == PaymentMethod.PLATEGA:
         return status in {'pending', 'inprogress', 'in_progress'}
-    if record.method == PaymentMethod.HELEKET:
-        return status not in {'paid', 'paid_over', 'cancel', 'canceled', 'fail', 'failed', 'expired'}
+    if record.method == PaymentMethod.PAY2328:
+        return status not in PAY2328_CLOSED_STATUSES
     if record.method == PaymentMethod.CRYPTOBOT:
         return status == 'active'
     return False
@@ -338,7 +338,7 @@ def _build_payment_details_text(record: PendingPayment, *, texts, language: str)
         if getattr(payment, 'terminal_public_id', None):
             lines.append(f'🏦 Terminal: {html.escape(str(payment.terminal_public_id))}')
 
-    if record.method == PaymentMethod.HELEKET:
+    if record.method == PaymentMethod.PAY2328:
         if getattr(payment, 'order_id', None):
             lines.append(
                 f'🧾 {texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.order_id))}'

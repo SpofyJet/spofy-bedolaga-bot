@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.database import get_db
-from app.external.heleket_webhook import HeleketWebhookHandler
+from app.external.pay2328 import Pay2328Service
 from app.external.wata_webhook import WataWebhookHandler
 from app.services.payment_service import PaymentService
 from app.utils.webhook_client_ip import resolve_webhook_client_ip
@@ -337,11 +337,11 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
-    if settings.is_heleket_configured():
-        heleket_handler = HeleketWebhookHandler(payment_service)
+    if settings.is_pay2328_configured():
+        pay2328_service = Pay2328Service()
 
-        @router.options(settings.HELEKET_WEBHOOK_PATH)
-        async def heleket_options() -> Response:
+        @router.options(settings.PAY2328_WEBHOOK_PATH)
+        async def pay2328_options() -> Response:
             return Response(
                 status_code=status.HTTP_200_OK,
                 headers={
@@ -351,18 +351,18 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 },
             )
 
-        @router.get(settings.HELEKET_WEBHOOK_PATH)
-        async def heleket_health() -> JSONResponse:
+        @router.get(settings.PAY2328_WEBHOOK_PATH)
+        async def pay2328_health() -> JSONResponse:
             return JSONResponse(
                 {
                     'status': 'ok',
-                    'service': 'heleket_webhook',
-                    'enabled': settings.is_heleket_enabled(),
+                    'service': 'pay2328_webhook',
+                    'enabled': settings.is_pay2328_enabled(),
                 }
             )
 
-        @router.post(settings.HELEKET_WEBHOOK_PATH)
-        async def heleket_webhook(request: Request) -> JSONResponse:
+        @router.post(settings.PAY2328_WEBHOOK_PATH)
+        async def pay2328_webhook(request: Request) -> JSONResponse:
             try:
                 payload = await request.json()
             except json.JSONDecodeError:
@@ -371,7 +371,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
 
-            if not heleket_handler.service.verify_webhook_signature(payload):
+            if not pay2328_service.verify_webhook_signature(payload):
                 return JSONResponse(
                     {'status': 'error', 'reason': 'invalid_signature'},
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -381,19 +381,19 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 success = await _process_payment_service_callback(
                     payment_service,
                     payload,
-                    'process_heleket_webhook',
+                    'process_pay2328_webhook',
                 )
                 if success:
                     return JSONResponse({'status': 'ok'})
 
                 uuid_val = payload.get('uuid', 'unknown')
-                logger.error('Heleket webhook processing failed', uuid_val=uuid_val)
+                logger.error('2328.io webhook processing failed', uuid_val=uuid_val)
                 return JSONResponse(
                     {'status': 'error', 'reason': 'not_processed'},
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
             except Exception as e:
-                logger.exception('Heleket webhook processing error', e=e)
+                logger.exception('2328.io webhook processing error', e=e)
                 return JSONResponse(
                     {'status': 'error', 'reason': 'not_processed'},
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -502,7 +502,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'cryptobot_enabled': settings.is_cryptobot_enabled(),
                     'xrocket_enabled': settings.is_xrocket_enabled(),
                     'wata_enabled': settings.is_wata_enabled(),
-                    'heleket_enabled': settings.is_heleket_enabled(),
+                    'pay2328_enabled': settings.is_pay2328_enabled(),
                     'platega_enabled': settings.is_platega_enabled(),
                 }
             )

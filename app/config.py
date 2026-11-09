@@ -208,7 +208,7 @@ class Settings(BaseSettings):
     # вернуть ошибку. Всплеск переживается ожиданием, а не падением апдейта.
     REDIS_POOL_TIMEOUT: float = 10.0
     # Корзина и метка намерения живут не короче реальной жизни платёжных ссылок
-    # (инвойсы CryptoBot/Heleket/XRocket живут сутки и дольше): оплата,
+    # (инвойсы CryptoBot/2328.io/XRocket живут сутки и дольше): оплата,
     # пришедшая через час после оформления, должна ещё застать и корзину, и метку.
     CART_TTL_SECONDS: int = 86400  # Время жизни корзины пользователя в Redis (24 часа)
     # «Свежее намерение» пополнить ради сохранённой корзины. Тихая авто-покупка из
@@ -679,7 +679,7 @@ class Settings(BaseSettings):
     SUPPORT_TOPUP_ENABLED: bool = True
     PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED: bool = False
     PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES: int = 10
-    # Spofy: крипто-счета (CryptoBot, Heleket) бот узнаёт оплаченными только опросом — вебхук
+    # Spofy: крипто-счета (CryptoBot, 2328.io) бот узнаёт оплаченными только опросом — вебхук
     # провайдера не доходит, и зачисление ждало до интервала автопроверки (медиана 73 с,
     # до 3 мин). Свежие счета (до PAYMENT_VERIFICATION_FAST_WINDOW_MINUTES) опрашиваются
     # каждые PAYMENT_VERIFICATION_FAST_SECONDS секунд; 0 — выключить быструю полосу.
@@ -723,21 +723,20 @@ class Settings(BaseSettings):
     XROCKET_ASSETS: str = 'USDT,TONCOIN,BTC,ETH'
     XROCKET_INVOICE_EXPIRES_HOURS: int = 24
 
-    HELEKET_ENABLED: bool = False
-    HELEKET_DISPLAY_NAME: str = 'Heleket Crypto'
-    HELEKET_MERCHANT_ID: str | None = None
-    HELEKET_API_KEY: str | None = None
-    HELEKET_BASE_URL: str = 'https://api.heleket.com/v1'
-    HELEKET_DEFAULT_CURRENCY: str = 'USDT'
-    HELEKET_DEFAULT_NETWORK: str | None = None
-    HELEKET_INVOICE_LIFETIME: int = 3600
-    HELEKET_MARKUP_PERCENT: float = 0.0
-    HELEKET_WEBHOOK_PATH: str = '/heleket-webhook'
-    HELEKET_WEBHOOK_HOST: str = '0.0.0.0'
-    HELEKET_WEBHOOK_PORT: int = 8086
-    HELEKET_CALLBACK_URL: str | None = None
-    HELEKET_RETURN_URL: str | None = None
-    HELEKET_SUCCESS_URL: str | None = None
+    PAY2328_ENABLED: bool = False
+    PAY2328_DISPLAY_NAME: str = '2328.io'
+    # UUID проекта из кабинета 2328.io (заголовок project).
+    PAY2328_MERCHANT_ID: str | None = None
+    PAY2328_API_KEY: str | None = None
+    PAY2328_BASE_URL: str = 'https://api.2328.io/api/v1'
+    PAY2328_DEFAULT_CURRENCY: str | None = None
+    PAY2328_DEFAULT_NETWORK: str | None = None
+    PAY2328_INVOICE_LIFETIME: int = 3600
+    PAY2328_MARKUP_PERCENT: float = 0.0
+    PAY2328_WEBHOOK_PATH: str = '/pay2328-webhook'
+    PAY2328_CALLBACK_URL: str | None = None
+    PAY2328_RETURN_URL: str | None = None
+    PAY2328_SUCCESS_URL: str | None = None
 
     DISPLAY_NAME_RESTRICTION_ENABLED: bool = True
     DISPLAY_NAME_BANNED_KEYWORDS: str = '\n'.join(DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS)
@@ -2305,16 +2304,16 @@ class Settings(BaseSettings):
         name = (self.XROCKET_DISPLAY_NAME or '').strip()
         return name or 'xRocket'
 
-    def is_heleket_configured(self) -> bool:
+    def is_pay2328_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""
-        return self.HELEKET_MERCHANT_ID is not None and self.HELEKET_API_KEY is not None
+        return self.PAY2328_MERCHANT_ID is not None and self.PAY2328_API_KEY is not None
 
-    def is_heleket_enabled(self) -> bool:
-        return self.HELEKET_ENABLED and self.HELEKET_MERCHANT_ID is not None and self.HELEKET_API_KEY is not None
+    def is_pay2328_enabled(self) -> bool:
+        return self.PAY2328_ENABLED and self.PAY2328_MERCHANT_ID is not None and self.PAY2328_API_KEY is not None
 
-    def get_heleket_display_name(self) -> str:
-        name = (self.HELEKET_DISPLAY_NAME or '').strip()
-        return name or 'Heleket Crypto'
+    def get_pay2328_display_name(self) -> str:
+        name = (self.PAY2328_DISPLAY_NAME or '').strip()
+        return name or '2328.io'
 
     def is_platega_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""
@@ -2470,24 +2469,24 @@ class Settings(BaseSettings):
     def get_xrocket_invoice_expires_seconds(self) -> int:
         return min(self.XROCKET_INVOICE_EXPIRES_HOURS * 3600, 86400)
 
-    def get_heleket_markup_percent(self) -> float:
+    def get_pay2328_markup_percent(self) -> float:
         try:
-            return float(self.HELEKET_MARKUP_PERCENT)
+            return float(self.PAY2328_MARKUP_PERCENT)
         except (TypeError, ValueError):
             return 0.0
 
-    def get_heleket_lifetime(self) -> int:
+    def get_pay2328_lifetime(self) -> int:
         try:
-            value = int(self.HELEKET_INVOICE_LIFETIME)
+            value = int(self.PAY2328_INVOICE_LIFETIME)
         except (TypeError, ValueError):
             value = 3600
-        return max(300, min(43200, value))
+        return max(300, min(86400, value))
 
-    def get_heleket_callback_url(self) -> str | None:
-        if self.HELEKET_CALLBACK_URL:
-            return self.HELEKET_CALLBACK_URL
+    def get_pay2328_callback_url(self) -> str | None:
+        if self.PAY2328_CALLBACK_URL:
+            return self.PAY2328_CALLBACK_URL
         if self.WEBHOOK_URL:
-            return f'{self.WEBHOOK_URL}{self.HELEKET_WEBHOOK_PATH}'
+            return f'{self.WEBHOOK_URL}{self.PAY2328_WEBHOOK_PATH}'
         return None
 
     def is_happ_cryptolink_mode(self) -> bool:

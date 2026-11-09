@@ -23,10 +23,10 @@ from app.database.models import (
     CryptoBotPayment,
     DiscountOffer,
     GuestPurchase,
-    HeleketPayment,
     NewsArticle,
     PartnerApplication,
     PartnerStatus,
+    Pay2328Payment,
     PinnedMessage,
     PlategaPayment,
     Poll,
@@ -71,7 +71,7 @@ _OAUTH_FIELDS: tuple[str, ...] = tuple(OAUTH_PROVIDER_COLUMNS.values())
 # Все платёжные таблицы с колонкой user_id
 _PAYMENT_MODELS: tuple[type, ...] = (
     CryptoBotPayment,
-    HeleketPayment,
+    Pay2328Payment,
     PlategaPayment,
     WataPayment,
 )

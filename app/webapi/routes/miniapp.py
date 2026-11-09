@@ -745,10 +745,10 @@ async def get_payment_methods(
             )
         )
 
-    if settings.is_heleket_enabled():
+    if settings.is_pay2328_enabled():
         methods.append(
             MiniAppPaymentMethod(
-                id='heleket',
+                id='pay2328',
                 icon='🪙',
                 requires_amount=True,
                 currency='RUB',
@@ -763,7 +763,7 @@ async def get_payment_methods(
         'platega': 8,
         'wata': 9,
         'cryptobot': 10,
-        'heleket': 11,
+        'pay2328': 11,
     }
     methods.sort(key=lambda item: order_map.get(item.id, 99))
 
@@ -998,8 +998,8 @@ async def create_payment_link(
             },
         )
 
-    if method == 'heleket':
-        if not settings.is_heleket_enabled():
+    if method == 'pay2328':
+        if not settings.is_pay2328_enabled():
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if amount_kopeks is None or amount_kopeks <= 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
@@ -1018,7 +1018,7 @@ async def create_payment_link(
             )
 
         payment_service = PaymentService()
-        result = await payment_service.create_heleket_payment(
+        result = await payment_service.create_pay2328_payment(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
@@ -1101,8 +1101,8 @@ async def _resolve_payment_status_entry(
         return await _resolve_wata_payment_status(payment_service, db, user, query)
     if method == 'cryptobot':
         return await _resolve_cryptobot_payment_status(db, user, query)
-    if method == 'heleket':
-        return await _resolve_heleket_payment_status(db, user, query)
+    if method == 'pay2328':
+        return await _resolve_pay2328_payment_status(db, user, query)
     if method == 'stars':
         return await _resolve_stars_payment_status(db, user, query)
 
@@ -1361,30 +1361,30 @@ async def _resolve_cryptobot_payment_status(
     )
 
 
-async def _resolve_heleket_payment_status(
+async def _resolve_pay2328_payment_status(
     db: AsyncSession,
     user: User,
     query: MiniAppPaymentStatusQuery,
 ) -> MiniAppPaymentStatusResult:
-    from app.database.crud.heleket import (
-        get_heleket_payment_by_id,
-        get_heleket_payment_by_order_id,
-        get_heleket_payment_by_uuid,
+    from app.database.crud.pay2328 import (
+        get_pay2328_payment_by_id,
+        get_pay2328_payment_by_order_id,
+        get_pay2328_payment_by_uuid,
     )
 
     payment = None
     if query.local_payment_id:
-        payment = await get_heleket_payment_by_id(db, query.local_payment_id)
+        payment = await get_pay2328_payment_by_id(db, query.local_payment_id)
     if not payment and query.payment_id:
-        payment = await get_heleket_payment_by_uuid(db, query.payment_id)
+        payment = await get_pay2328_payment_by_uuid(db, query.payment_id)
     if not payment and query.invoice_id:
-        payment = await get_heleket_payment_by_uuid(db, query.invoice_id)
+        payment = await get_pay2328_payment_by_uuid(db, query.invoice_id)
     if not payment and query.bill_id:
-        payment = await get_heleket_payment_by_order_id(db, query.bill_id)
+        payment = await get_pay2328_payment_by_order_id(db, query.bill_id)
 
     if not payment or payment.user_id != user.id:
         return MiniAppPaymentStatusResult(
-            method='heleket',
+            method='pay2328',
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
@@ -1404,7 +1404,7 @@ async def _resolve_heleket_payment_status(
     completed_at = payment.paid_at or payment.updated_at or payment.created_at
 
     return MiniAppPaymentStatusResult(
-        method='heleket',
+        method='pay2328',
         status=status,
         is_paid=status == 'paid',
         amount_kopeks=payment.amount_kopeks,
@@ -3739,7 +3739,7 @@ def _format_payment_method_title(method: str) -> str:
     mapping = {
         'cryptobot': 'CryptoBot',
         'wata': 'WataPay',
-        'heleket': 'Heleket',
+        'pay2328': '2328.io',
         'stars': 'Telegram Stars',
     }
     key = (method or '').lower()

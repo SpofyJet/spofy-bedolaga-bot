@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.bot_factory import create_bot
 from app.config import settings
 from app.database.crud.user import get_user_by_id
-from app.database.models import PaymentMethod, Transaction, User
+from app.database.models import PAY2328_CLOSED_STATUSES, PAY2328_PAID_STATUSES, PaymentMethod, Transaction, User
 from app.services.payment_method_config_service import get_enabled_methods_for_user
 from app.services.payment_service import PaymentService
 from app.services.payment_verification_service import (
@@ -535,15 +535,15 @@ async def create_topup(
                     detail='Platega is temporarily unavailable, please choose another payment method',
                 )
 
-        elif request.payment_method == 'heleket':
-            if not settings.is_heleket_enabled():
+        elif request.payment_method == 'pay2328':
+            if not settings.is_pay2328_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Heleket payment method is unavailable',
+                    detail='2328.io payment method is unavailable',
                 )
 
             payment_service = PaymentService()
-            result = await payment_service.create_heleket_payment(
+            result = await payment_service.create_pay2328_payment(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
@@ -561,7 +561,7 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create Heleket payment',
+                    detail='Failed to create 2328.io payment',
                 )
 
         elif request.payment_method == 'wata':
@@ -657,10 +657,10 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
         }
         return mapping.get(status, ('❓', 'Неизвестно'))
 
-    if record.method == PaymentMethod.HELEKET:
+    if record.method == PaymentMethod.PAY2328:
         if status in {'pending', 'created', 'waiting', 'check', 'processing'}:
             return '⏳', 'Ожидает оплаты'
-        if status in {'paid', 'paid_over'}:
+        if status in PAY2328_PAID_STATUSES:
             return '✅', 'Оплачено'
         if status in {'cancel', 'canceled', 'fail', 'failed', 'expired'}:
             return '❌', 'Отменено'
@@ -688,8 +688,8 @@ def _is_checkable(record: PendingPayment) -> bool:
         return status in {'opened', 'pending', 'processing', 'inprogress', 'in_progress'}
     if record.method == PaymentMethod.PLATEGA:
         return status in {'pending', 'inprogress', 'in_progress'}
-    if record.method == PaymentMethod.HELEKET:
-        return status not in {'paid', 'paid_over', 'cancel', 'canceled', 'fail', 'failed', 'expired'}
+    if record.method == PaymentMethod.PAY2328:
+        return status not in PAY2328_CLOSED_STATUSES
     if record.method == PaymentMethod.CRYPTOBOT:
         return status == 'active'
     return False
@@ -789,11 +789,11 @@ async def get_latest_payment_by_method(
 
     from sqlalchemy.orm import selectinload
 
-    from app.database.models import CryptoBotPayment, HeleketPayment, PlategaPayment, WataPayment
+    from app.database.models import CryptoBotPayment, Pay2328Payment, PlategaPayment, WataPayment
 
     model_map: dict[PaymentMethod, type] = {
         PaymentMethod.CRYPTOBOT: CryptoBotPayment,
-        PaymentMethod.HELEKET: HeleketPayment,
+        PaymentMethod.PAY2328: Pay2328Payment,
         PaymentMethod.WATA: WataPayment,
         PaymentMethod.PLATEGA: PlategaPayment,
     }

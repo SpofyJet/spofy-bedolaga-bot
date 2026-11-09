@@ -1674,7 +1674,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
             from app.database.models import (
                 CryptoBotPayment,
-                HeleketPayment,
+                Pay2328Payment,
                 PlategaPayment,
                 PromoCodeUse,
                 ReferralEarning,
@@ -1711,7 +1711,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             # Обнуляем transaction_id во всех таблицах платежей перед удалением транзакций
             payment_models = [
                 CryptoBotPayment,
-                HeleketPayment,
+                Pay2328Payment,
                 WataPayment,
                 PlategaPayment,
             ]

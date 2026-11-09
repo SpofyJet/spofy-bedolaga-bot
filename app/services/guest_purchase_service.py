@@ -34,6 +34,7 @@ from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import _get_or_create_default_promo_group, create_unique_referral_code
 from app.database.models import (
+    PAY2328_PAID_STATUSES,
     GuestPurchase,
     GuestPurchaseStatus,
     LandingPage,
@@ -1778,7 +1779,7 @@ async def recover_stuck_pending_purchases(
 ) -> int:
     """Recover purchases stuck in PENDING by checking provider payment status.
 
-    Queries all payment provider tables (Heleket, CryptoBot, etc.)
+    Queries all payment provider tables (2328.io, CryptoBot, etc.)
     for succeeded payments matching the purchase_token. If a provider payment
     is confirmed but the GuestPurchase is still PENDING (webhook was lost or
     processing failed), marks the purchase as PAID so retry_stuck_paid_purchases
@@ -1834,7 +1835,7 @@ async def _find_succeeded_provider_payment(
     from sqlalchemy import case, cast
     from sqlalchemy.types import JSON as SA_JSON
 
-    from app.database.models import CryptoBotPayment, HeleketPayment, PlategaPayment, WataPayment
+    from app.database.models import CryptoBotPayment, Pay2328Payment, PlategaPayment, WataPayment
 
     # --- CryptoBot: special case — payload field (text JSON), skip amount check ---
     if base_method == 'cryptobot':
@@ -1865,10 +1866,10 @@ async def _find_succeeded_provider_payment(
     payment_id_attr: str = ''
     extra_conditions: list = []
 
-    if base_method == 'heleket':
-        model = HeleketPayment
+    if base_method == 'pay2328':
+        model = Pay2328Payment
         payment_id_attr = 'uuid'
-        extra_conditions = [HeleketPayment.status.in_(['paid', 'paid_over'])]
+        extra_conditions = [Pay2328Payment.status.in_(PAY2328_PAID_STATUSES)]
     elif base_method == 'wata':
         model = WataPayment
         payment_id_attr = 'payment_link_id'
@@ -1892,7 +1893,7 @@ async def _find_succeeded_provider_payment(
         return None
 
     payment_id = str(getattr(p, payment_id_attr))
-    # amount_kopeks: Integer column for most providers, @property for Heleket
+    # amount_kopeks: Integer column for most providers, @property for 2328.io
     amount = getattr(p, 'amount_kopeks', None)
     return (payment_id, amount)
 

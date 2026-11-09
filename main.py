@@ -565,8 +565,8 @@ async def main():
             for method in SUPPORTED_MANUAL_CHECK_METHODS:
                 if method == PaymentMethod.WATA and settings.is_wata_enabled():
                     verification_providers.append('WATA')
-                elif method == PaymentMethod.HELEKET and settings.is_heleket_enabled():
-                    verification_providers.append('Heleket')
+                elif method == PaymentMethod.PAY2328 and settings.is_pay2328_enabled():
+                    verification_providers.append('2328.io')
                 elif method == PaymentMethod.CRYPTOBOT and settings.is_cryptobot_enabled():
                     verification_providers.append('CryptoBot')
                 elif method == PaymentMethod.XROCKET and settings.is_xrocket_enabled():
@@ -601,7 +601,7 @@ async def main():
                 settings.is_cryptobot_enabled(),
                 settings.is_xrocket_enabled(),
                 settings.is_wata_enabled(),
-                settings.is_heleket_enabled(),
+                settings.is_pay2328_enabled(),
                 settings.is_platega_enabled(),
             ]
         )
@@ -813,8 +813,8 @@ async def main():
             webhook_lines.append(f'xRocket: {_fmt(settings.XROCKET_WEBHOOK_PATH)}')
         if settings.is_wata_enabled():
             webhook_lines.append(f'WATA: {_fmt(settings.WATA_WEBHOOK_PATH)}')
-        if settings.is_heleket_enabled():
-            webhook_lines.append(f'Heleket: {_fmt(settings.HELEKET_WEBHOOK_PATH)}')
+        if settings.is_pay2328_enabled():
+            webhook_lines.append(f'2328.io: {_fmt(settings.PAY2328_WEBHOOK_PATH)}')
         if settings.is_platega_enabled():
             webhook_lines.append(f'Platega: {_fmt(settings.PLATEGA_WEBHOOK_PATH)}')
         if settings.is_remnawave_webhook_enabled():
