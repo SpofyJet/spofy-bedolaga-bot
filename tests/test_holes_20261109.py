@@ -181,3 +181,97 @@ def test_bot_refuses_package_switch_on_tariff_and_trial():
     assert _traffic_switch_blocked(_subscription(now, tariff_id=3, days=30, limit=100))
     assert _traffic_switch_blocked(_subscription(now, tariff_id=None, days=3, limit=10, trial=True))
     assert not _traffic_switch_blocked(_subscription(now, tariff_id=None, days=30, limit=100))
+
+
+# ───────────── подарок: остаток по стоимости в обе стороны ─────────────
+
+
+def test_gift_carry_keeps_value_downwards() -> None:
+    # 20 дней «С Обходами» (270 ₽ за 30) = 34 дня «Стандартного» (159 ₽ за 30).
+    carried = carried_seconds_by_value(20 * DAY, (27000, 30), (15900, 30), both_ways=True)
+    assert carried / DAY == pytest.approx(20 * 270 / 159, abs=1e-6)
+    # Покупка (не подарок) вниз — как раньше, день в день.
+    assert carried_seconds_by_value(20 * DAY, (27000, 30), (15900, 30)) == 20 * DAY
+
+
+def test_gift_carry_upwards_and_equal_match_purchase() -> None:
+    up = carried_seconds_by_value(365 * DAY, (129000, 365), (180000, 365), both_ways=True)
+    assert up == carried_seconds_by_value(365 * DAY, (129000, 365), (180000, 365))
+    assert carried_seconds_by_value(40 * DAY, (15900, 30), (15900, 30), both_ways=True) == 40 * DAY
+
+
+def test_gift_carry_never_turns_into_forever() -> None:
+    # Копеечный тариф подарка: пересчёт дал бы десятки лет → остаётся день в день.
+    assert carried_seconds_by_value(300 * DAY, (180000, 365), (100, 365), both_ways=True) == 300 * DAY
+
+
+def test_gift_carry_with_broken_rates_is_day_for_day() -> None:
+    assert carried_seconds_by_value(20 * DAY, (0, 30), (15900, 30), both_ways=True) == 20 * DAY
+    assert carried_seconds_by_value(20 * DAY, (27000, 30), (15900, 0), both_ways=True) == 20 * DAY
+
+
+async def _extend_as_gift(
+    monkeypatch, now, *, source: int, target: int, left: int, gift_days: int, trial: bool = False, **kw
+):
+    async with memory_session(monkeypatch, TABLES) as db:
+        db.add(User(id=1, telegram_id=1001, first_name='U', language='ru', status='active', balance_kopeks=0))
+        for tariff in _tariffs():
+            db.add(tariff)
+        await db.flush()
+        subscription = _subscription(now, tariff_id=source, days=left, limit=0, trial=trial)
+        db.add(subscription)
+        await db.commit()
+        await extend_subscription(db, subscription, gift_days, tariff_id=target, commit=False, **kw)
+        return _days_left(subscription, now)
+
+
+async def test_gift_of_cheaper_tariff_keeps_the_value_of_the_rest(monkeypatch) -> None:
+    now = datetime.now(UTC)
+    as_gift = await _extend_as_gift(
+        monkeypatch, now, source=3, target=2, left=20, gift_days=30, carry_value_both_ways=True
+    )
+    as_purchase = await _extend_as_gift(monkeypatch, now, source=3, target=2, left=20, gift_days=30)
+
+    assert as_gift == pytest.approx(30 + 20 * 270 / 159, abs=0.01)  # 63,96 дня
+    assert as_purchase == pytest.approx(50, abs=0.01)
+
+
+async def test_gift_of_pricier_tariff_is_not_day_for_day(monkeypatch) -> None:
+    now = datetime.now(UTC)
+    days = await _extend_as_gift(
+        monkeypatch, now, source=2, target=3, left=365, gift_days=30, carry_value_both_ways=True
+    )
+    assert days == pytest.approx(30 + 365 * 1290 / 1800, abs=0.01)  # 291,6, а не 395
+
+
+async def test_gift_of_the_same_tariff_just_adds_days(monkeypatch) -> None:
+    now = datetime.now(UTC)
+    days = await _extend_as_gift(
+        monkeypatch, now, source=2, target=2, left=40, gift_days=30, carry_value_both_ways=True
+    )
+    assert days == pytest.approx(70, abs=0.01)
+
+
+async def test_gift_over_a_trial_is_not_recalculated(monkeypatch) -> None:
+    # Пробный остаток по стоимости не пересчитывается: результат тот же, что у покупки.
+    now = datetime.now(UTC)
+    kwargs = dict(source=3, target=2, left=3, gift_days=30, trial=True)
+    as_gift = await _extend_as_gift(monkeypatch, now, carry_value_both_ways=True, **kwargs)
+    as_purchase = await _extend_as_gift(monkeypatch, now, **kwargs)
+
+    assert as_gift == pytest.approx(as_purchase, abs=0.01)
+    assert as_gift <= 33.01
+
+
+async def test_gift_carry_failure_falls_back_to_day_for_day(monkeypatch) -> None:
+    from app.services.pricing_engine import PricingEngine
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError('rates unavailable')
+
+    monkeypatch.setattr(PricingEngine, 'get_comparable_daily_rates', staticmethod(_boom))
+    now = datetime.now(UTC)
+    days = await _extend_as_gift(
+        monkeypatch, now, source=3, target=2, left=20, gift_days=30, carry_value_both_ways=True
+    )
+    assert days == pytest.approx(50, abs=0.01)

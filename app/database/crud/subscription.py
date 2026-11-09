@@ -25,6 +25,7 @@ from app.database.models import (
     UserStatus,
 )
 from app.services.traffic_cycle import begin_traffic_cycle, keep_traffic_cycle
+from app.utils.lifetime import LIFETIME_MIN_DAYS
 from app.utils.subscription_time import ends_within_days
 from app.utils.timezone import format_local_datetime, local_day_start
 
@@ -1345,8 +1346,17 @@ async def _is_free_source_tariff(db: AsyncSession, tariff_id: int) -> bool:
         return False
 
 
+# Запас на срок самого подарка: остаток, пересчитанный вниз, плюс период подарка
+# не должны дотянуться до порога, после которого дата становится «Навсегда».
+_LONGEST_GIFT_DAYS = 366
+
+
 def carried_seconds_by_value(
-    remaining_seconds: float, source_rate: tuple[int, int], target_rate: tuple[int, int]
+    remaining_seconds: float,
+    source_rate: tuple[int, int],
+    target_rate: tuple[int, int],
+    *,
+    both_ways: bool = False,
 ) -> float:
     """Остаток срока при переходе на тариф дороже — по стоимости, а не день в день.
 
@@ -1355,19 +1365,33 @@ def carried_seconds_by_value(
     весь остаток: год дешёвого тарифа плюс 30 дней дорогого давали 395 дней
     дорогого. Переносим столько секунд, сколько остаток стоит по ставке нового
     тарифа. На тариф дешевле или равный — день в день, как раньше.
+
+    ``both_ways=True`` — активация подарка. Тариф подарка человек не выбирал,
+    поэтому и на тариф дешевле остаток идёт по стоимости: 20 дней по 270 ₽ за 30
+    становятся 34 днями по 159 ₽ за 30, а не теми же 20. Если пересчёт вниз дал
+    бы срок, который модель примет за «Навсегда», остаётся день в день.
     """
     source_price, source_period = source_rate
     target_price, target_period = target_rate
     if remaining_seconds <= 0 or min(source_price, source_period, target_price, target_period) <= 0:
         return max(0.0, remaining_seconds)
     # source_price/source_period < target_price/target_period, целыми
-    if source_price * target_period >= target_price * source_period:
+    cheaper_or_equal = source_price * target_period >= target_price * source_period
+    if cheaper_or_equal and not both_ways:
         return remaining_seconds
-    return remaining_seconds * (source_price * target_period) / (target_price * source_period)
+    carried = remaining_seconds * (source_price * target_period) / (target_price * source_period)
+    if cheaper_or_equal and carried / 86400 + _LONGEST_GIFT_DAYS >= LIFETIME_MIN_DAYS:
+        return remaining_seconds
+    return carried
 
 
 async def _carried_seconds_on_tariff_change(
-    db: AsyncSession, source_tariff_id: int | None, target_tariff_id: int, remaining_seconds: float
+    db: AsyncSession,
+    source_tariff_id: int | None,
+    target_tariff_id: int,
+    remaining_seconds: float,
+    *,
+    both_ways: bool = False,
 ) -> float:
     """Пересчёт остатка при покупке другого тарифа. Любая ошибка — день в день."""
     if not source_tariff_id or remaining_seconds <= 0:
@@ -1382,7 +1406,7 @@ async def _carried_seconds_on_tariff_change(
             return remaining_seconds
         remaining_days = max(1, math.ceil(remaining_seconds / 86400))
         source_rate, target_rate = PricingEngine.get_comparable_daily_rates(source, target, remaining_days)
-        return carried_seconds_by_value(remaining_seconds, source_rate, target_rate)
+        return carried_seconds_by_value(remaining_seconds, source_rate, target_rate, both_ways=both_ways)
     except Exception as e:
         logger.warning(
             'Не удалось пересчитать остаток по стоимости, переносим день в день',
@@ -1404,6 +1428,7 @@ async def extend_subscription(
     connected_squads: list[str] | None = None,
     convert_trial: bool = True,
     reset_used_traffic: bool | None = None,
+    carry_value_both_ways: bool = False,
     commit: bool = True,
 ) -> Subscription:
     """Продлевает подписку на указанное количество дней.
@@ -1426,6 +1451,9 @@ async def extend_subscription(
             сбрасывает (или нет) счётчик в панели — иначе бот показывает расход 0,
             а панель настоящий. ``None`` — прежнее правило: при смене тарифа по
             ``RESET_TRAFFIC_ON_TARIFF_SWITCH``, при продлении всегда.
+        carry_value_both_ways: активация подарка — остаток при смене тарифа
+            переносится по стоимости и на тариф дешевле (см.
+            ``carried_seconds_by_value``). Для покупки не передавать.
     """
     current_time = datetime.now(UTC)
 
@@ -1498,7 +1526,7 @@ async def extend_subscription(
                     # Покупка периода ДРУГОГО тарифа поверх оплаченного остатка:
                     # остаток переносится по стоимости (см. carried_seconds_by_value).
                     remaining_seconds = await _carried_seconds_on_tariff_change(
-                        db, subscription.tariff_id, tariff_id, remaining_seconds
+                        db, subscription.tariff_id, tariff_id, remaining_seconds, both_ways=carry_value_both_ways
                     )
                 logger.info(
                     '🎁 Обнаружен остаток подписки, будет добавлен к новому сроку',
