@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 import structlog
 from aiogram import Dispatcher, F, types
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import BaseFilter, StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy import select
@@ -1644,7 +1645,7 @@ async def show_simple_subscription_squad_selector(
             try:
                 label_parts.append(f'— {settings.format_price(server.price_kopeks)}')
             except Exception:
-                pass
+                logger.debug('Ignored error in show_simple_subscription_squad_selector', exc_info=True)
         label = ' '.join(label_parts)
 
         keyboard_rows.append(
@@ -1812,7 +1813,7 @@ async def test_remnawave_connection(
         )
         try:
             await callback.message.edit_reply_markup(reply_markup=keyboard)
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             # ignore inability to refresh markup, main result shown in alert
             pass
 
@@ -1859,7 +1860,7 @@ async def test_payment_provider(
             )
             try:
                 await callback.message.edit_reply_markup(reply_markup=keyboard)
-            except Exception:
+            except (TelegramAPIError, AttributeError):
                 pass
 
     if method == 'stars':

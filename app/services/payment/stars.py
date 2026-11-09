@@ -201,7 +201,7 @@ class TelegramStarsMixin:
             try:
                 await db.rollback()
             except Exception:
-                pass
+                logger.warning('Ignored error in process_stars_payment', exc_info=True)
             return False
 
     @staticmethod
@@ -473,7 +473,7 @@ class TelegramStarsMixin:
                         if _t:
                             tariff_line = f'\n📦 Тариф: «{_t.name}»'
                     except Exception:
-                        pass
+                        logger.warning('Ignored error in _finalize_simple_subscription_stars_payment', exc_info=True)
                 success_message = (
                     '✅ <b>Подписка успешно активирована!</b>\n\n'
                     f'📅 Период: {period_display} дней\n'

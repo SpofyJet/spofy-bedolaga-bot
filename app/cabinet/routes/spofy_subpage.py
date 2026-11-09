@@ -422,7 +422,7 @@ async def _record_subpage_open(db: AsyncSession, user: User, subscription: Subsc
         try:
             await db.rollback()
         except Exception:
-            pass
+            logger.debug('Ignored error in _record_subpage_open', exc_info=True)
 
 
 async def _offer(short_uuid: str, db: AsyncSession) -> dict[str, Any]:

@@ -215,7 +215,7 @@ class DailySubscriptionService:
                     try:
                         await cache.set(cache_key, '1', expire=21600)  # 6 hours
                     except Exception:
-                        pass
+                        logger.warning('Ignored error in _process_single_charge', exc_info=True)
 
             logger.info(
                 'Подписка приостановлена: недостаточно средств',

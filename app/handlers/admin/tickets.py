@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Bot, Dispatcher, F, types
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -110,7 +110,7 @@ async def show_admin_tickets(callback: types.CallbackQuery, db_user: User, db: A
         if not settings.is_admin(callback.from_user.id) and SupportSettingsService.is_moderator(callback.from_user.id):
             back_cb = 'moderator_panel'
     except Exception:
-        pass
+        logger.debug('Ignored error in show_admin_tickets', exc_info=True)
 
     keyboard = get_admin_tickets_keyboard(
         ticket_data,
@@ -266,7 +266,7 @@ async def view_admin_ticket(
             )
             keyboard.inline_keyboard.insert(0, [admin_profile_btn])
     except Exception:
-        pass
+        logger.debug('Ignored error in view_admin_ticket', exc_info=True)
 
     # Кнопки ЛС и профиль
     try:
@@ -280,7 +280,7 @@ async def view_admin_ticket(
             if buttons_row:
                 keyboard.inline_keyboard.insert(0, buttons_row)
     except Exception:
-        pass
+        logger.debug('Ignored error in view_admin_ticket', exc_info=True)
 
     # Кнопка вложений
     if has_attachments:
@@ -295,7 +295,7 @@ async def view_admin_ticket(
                 ],
             )
         except Exception:
-            pass
+            logger.debug('Ignored error in view_admin_ticket', exc_info=True)
 
     # Пагинация
     if total_pages > 1:
@@ -322,7 +322,7 @@ async def view_admin_ticket(
         try:
             await state.update_data(ticket_id=ticket_id)
         except Exception:
-            pass
+            logger.debug('Ignored error in view_admin_ticket', exc_info=True)
     await callback.answer()
 
 
@@ -374,7 +374,7 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
         if limited:
             return
     except Exception:
-        pass
+        logger.debug('Ignored error in handle_admin_ticket_reply', exc_info=True)
     try:
         data_rl = await state.get_data()
         last_ts = data_rl.get('admin_rl_ts_reply')
@@ -383,7 +383,7 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
             return
         await state.update_data(admin_rl_ts_reply=now_ts)
     except Exception:
-        pass
+        logger.debug('Ignored error in handle_admin_ticket_reply', exc_info=True)
 
     """Обработать ответ админа на тикет"""
     # Фото и видео в ответе админа сохраняются даже без подписи.
@@ -565,7 +565,7 @@ async def close_all_open_admin_tickets(callback: types.CallbackQuery, db_user: U
         # Если не удалось отправить отдельное сообщение, пробуем ответить алертом
         try:
             await callback.answer(success_text, show_alert=True)
-        except Exception:
+        except TelegramAPIError:
             pass
 
 
@@ -598,7 +598,7 @@ async def close_admin_ticket(callback: types.CallbackQuery, db_user: User, db: A
                             }
                         )
                 except Exception:
-                    pass
+                    logger.debug('Ignored error in close_admin_ticket', exc_info=True)
                 await TicketCRUD.add_support_audit(
                     db,
                     actor_user_id=db_user.id if db_user else None,
@@ -610,7 +610,7 @@ async def close_admin_ticket(callback: types.CallbackQuery, db_user: User, db: A
                     details=details,
                 )
             except Exception:
-                pass
+                logger.debug('Ignored error in close_admin_ticket', exc_info=True)
             texts = get_texts(db_user.language)
             # Notify with deletable inline message
             try:
@@ -768,7 +768,7 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
                 details={'minutes': minutes},
             )
         except Exception:
-            pass
+            logger.debug('Ignored error in handle_admin_block_duration_input', exc_info=True)
         # Refresh original ticket card (caption/text and buttons) in place
         try:
             updated = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=True, load_user=True)
@@ -833,7 +833,7 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
                     )
                     kb.inline_keyboard.insert(0, [admin_profile_btn])
             except Exception:
-                pass
+                logger.debug('Ignored error in handle_admin_block_duration_input', exc_info=True)
             # Кнопки ЛС и профиль при обновлении карточки
             try:
                 if updated.user and updated.user.telegram_id and updated.user.username:
@@ -846,7 +846,7 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
                     if buttons_row:
                         kb.inline_keyboard.insert(0, buttons_row)
             except Exception:
-                pass
+                logger.debug('Ignored error in handle_admin_block_duration_input', exc_info=True)
             has_attachments = any(
                 getattr(m, 'has_media', False) and getattr(m, 'media_type', None) in {'photo', 'video'}
                 for m in updated.messages or []
@@ -863,7 +863,7 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
                         ],
                     )
                 except Exception:
-                    pass
+                    logger.debug('Ignored error in handle_admin_block_duration_input', exc_info=True)
             if origin_chat_id and origin_message_id:
                 try:
                     await message.bot.edit_message_caption(
@@ -932,7 +932,7 @@ async def unblock_user_in_ticket(callback: types.CallbackQuery, db_user: User, d
                         }
                     )
             except Exception:
-                pass
+                logger.debug('Ignored error in unblock_user_in_ticket', exc_info=True)
             await TicketCRUD.add_support_audit(
                 db,
                 actor_user_id=db_user.id if db_user else None,
@@ -944,7 +944,7 @@ async def unblock_user_in_ticket(callback: types.CallbackQuery, db_user: User, d
                 details=details,
             )
         except Exception:
-            pass
+            logger.debug('Ignored error in unblock_user_in_ticket', exc_info=True)
         if _card_in_group(callback):
             await _refresh_group_ticket_card(callback, db, ticket_id)
         else:
@@ -988,7 +988,7 @@ async def block_user_permanently(callback: types.CallbackQuery, db_user: User, d
                         }
                     )
             except Exception:
-                pass
+                logger.debug('Ignored error in block_user_permanently', exc_info=True)
             await TicketCRUD.add_support_audit(
                 db,
                 actor_user_id=db_user.id if db_user else None,
@@ -1000,7 +1000,7 @@ async def block_user_permanently(callback: types.CallbackQuery, db_user: User, d
                 details=details,
             )
         except Exception:
-            pass
+            logger.debug('Ignored error in block_user_permanently', exc_info=True)
         if _card_in_group(callback):
             await _refresh_group_ticket_card(callback, db, ticket_id)
         else:
@@ -1051,7 +1051,7 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
             if not SupportSettingsService.get_user_ticket_notifications_enabled():
                 return
         except Exception:
-            pass
+            logger.debug('Ignored error in notify_user_about_ticket_reply', exc_info=True)
         from app.localization.texts import get_texts
 
         # Обеспечим наличие данных пользователя в объекте тикета
@@ -1212,7 +1212,7 @@ def register_handlers(dp: Dispatcher):
                 if messages:
                     last_group_message = messages[-1]
             except Exception:
-                pass
+                logger.debug('Ignored error in send_admin_ticket_attachments', exc_info=True)
         # После отправки добавим кнопку удалить под последним сообщением группы
         if last_group_message:
             try:
@@ -1247,7 +1247,7 @@ def register_handlers(dp: Dispatcher):
         try:
             await callback.message.bot.delete_message(chat_id=callback.from_user.id, message_id=msg_id)
             await callback.message.delete()
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass
         await callback.answer('✅')
 

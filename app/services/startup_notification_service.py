@@ -15,6 +15,7 @@ from typing import Final
 import structlog
 from aiogram import Bot
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import func, select
 
@@ -233,7 +234,7 @@ class StartupNotificationService:
                         if ver:
                             return ver
         except Exception:
-            pass
+            logger.debug('Ignored error in _get_version', exc_info=True)
 
         return DEFAULT_VERSION
 
@@ -441,7 +442,7 @@ class StartupNotificationService:
 
             try:
                 await self.bot.delete_message(chat_id=target, message_id=msg.message_id)
-            except Exception:
+            except TelegramAPIError:
                 pass  # удаление best-effort — file_id уже пойман
 
             logger.info('Логотип прогрет на старте: file_id закеширован', chat_id=target)

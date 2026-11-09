@@ -7,6 +7,7 @@ import re
 import time
 
 import structlog
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import BufferedInputFile
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from pydantic import BaseModel
@@ -257,7 +258,7 @@ async def upload_media(
         # Delete the staging message immediately — file_id persists after deletion
         try:
             await bot.delete_message(chat_id=target_chat_id, message_id=message.message_id)
-        except Exception:
+        except TelegramAPIError:
             pass  # Best-effort cleanup — file_id is already captured
 
         media_url = _build_media_url(request, media.file_id)

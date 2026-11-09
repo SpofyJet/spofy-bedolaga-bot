@@ -104,7 +104,7 @@ async def activate_promocode(
                 finally:
                     await bot.session.close()
             except Exception:
-                pass
+                logger.debug('Ignored error in activate_promocode', exc_info=True)
 
         return PromocodeActivateResponse(
             success=True,

@@ -439,7 +439,7 @@ class RemnaWaveWebhookService:
             try:
                 await db.rollback()
             except Exception:
-                pass
+                logger.debug('Ignored error in _process_user_event', exc_info=True)
             return True
         except Exception:
             logger.exception(
@@ -1523,7 +1523,7 @@ class RemnaWaveWebhookService:
                 try:
                     await db.rollback()
                 except Exception:
-                    pass
+                    logger.debug('Ignored error in _handle_user_deleted', exc_info=True)
 
                 try:
                     user = await get_user_by_id(db, user_id)
@@ -2029,7 +2029,7 @@ class RemnaWaveWebhookService:
                     return
                 await cache.set(warn_key, '1', expire=TRAFFIC_WARNING_TTL_SECONDS)
             except Exception:
-                pass
+                logger.debug('Ignored error in _handle_bandwidth_threshold', exc_info=True)
 
         await self._notify_user(
             user,

@@ -1431,7 +1431,7 @@ async def store_yandex_cid(
         try:
             await db.rollback()
         except Exception:
-            pass
+            logger.debug('Ignored error in store_yandex_cid', exc_info=True)
 
 
 # ============ Lite Mode Routes ============

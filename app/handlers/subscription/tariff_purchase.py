@@ -1,3 +1,5 @@
+from aiogram.exceptions import TelegramAPIError
+
 from app.services.pricing_engine import TariffSwitchPricingUnavailableError
 
 
@@ -155,7 +157,7 @@ async def _resolve_switch_subscription(callback, db_user, db, state=None):
                 if sub:
                     return sub, fsm_sub_id
         except Exception:
-            pass
+            logger.warning('Ignored error in _resolve_switch_subscription', exc_info=True)
 
     active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
     if len(active_subs) == 1:
@@ -2332,7 +2334,7 @@ async def confirm_daily_tariff_purchase(
     # иначе Telegram инвалидирует query через 30 сек → TelegramBadRequest
     try:
         await callback.answer()
-    except Exception:
+    except TelegramAPIError:
         pass
 
     purchase_user_id = db_user.id
@@ -3185,7 +3187,7 @@ async def confirm_tariff_extend(
     # иначе Telegram инвалидирует query через 30 сек → TelegramBadRequest
     try:
         await callback.answer()
-    except Exception:
+    except TelegramAPIError:
         pass
 
     try:
@@ -3207,7 +3209,7 @@ async def confirm_tariff_extend(
                         texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса'),
                         reply_markup=_purchase_error_keyboard(texts),
                     )
-                except Exception:
+                except (TelegramAPIError, AttributeError):
                     pass
                 return
 
@@ -3353,7 +3355,7 @@ async def confirm_tariff_extend(
                 texts.t('TARIFF_RENEW_ERROR', '❌ Произошла ошибка при продлении подписки'),
                 reply_markup=_purchase_error_keyboard(texts),
             )
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass
 
 
@@ -4075,7 +4077,7 @@ async def confirm_tariff_switch(
     # иначе Telegram инвалидирует query через 30 сек → TelegramBadRequest
     try:
         await callback.answer()
-    except Exception:
+    except TelegramAPIError:
         pass
 
     try:
@@ -4097,7 +4099,7 @@ async def confirm_tariff_switch(
                         texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса'),
                         reply_markup=_purchase_error_keyboard(texts),
                     )
-                except Exception:
+                except (TelegramAPIError, AttributeError):
                     pass
                 return
 
@@ -4304,7 +4306,7 @@ async def confirm_tariff_switch(
             await callback.message.edit_text(
                 texts.t('TARIFF_SWITCH_ERROR', '❌ Произошла ошибка при переключении тарифа')
             )
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass
 
 
@@ -4415,7 +4417,7 @@ async def confirm_daily_tariff_switch(
     # иначе Telegram инвалидирует query через 30 сек → TelegramBadRequest
     try:
         await callback.answer()
-    except Exception:
+    except TelegramAPIError:
         pass
 
     try:
@@ -4434,7 +4436,7 @@ async def confirm_daily_tariff_switch(
                     texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса'),
                     reply_markup=_purchase_error_keyboard(texts),
                 )
-            except Exception:
+            except (TelegramAPIError, AttributeError):
                 pass
             return
 
@@ -4655,7 +4657,7 @@ async def confirm_daily_tariff_switch(
             await callback.message.edit_text(
                 texts.t('TARIFF_SWITCH_ERROR', '❌ Произошла ошибка при переключении тарифа')
             )
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass
 
 
@@ -5380,7 +5382,7 @@ async def confirm_instant_switch(
     # иначе Telegram инвалидирует query через 30 сек → TelegramBadRequest
     try:
         await callback.answer()
-    except Exception:
+    except TelegramAPIError:
         pass
 
     try:
@@ -5401,7 +5403,7 @@ async def confirm_instant_switch(
                         texts.t('TARIFF_PURCHASE_CHARGE_ERROR', '❌ Ошибка списания баланса'),
                         reply_markup=_purchase_error_keyboard(texts),
                     )
-                except Exception:
+                except (TelegramAPIError, AttributeError):
                     pass
                 return
 
@@ -5474,7 +5476,7 @@ async def confirm_instant_switch(
                             await callback.message.edit_text(
                                 texts.t('TARIFF_PURCHASE_INSUFFICIENT_FUNDS', '❌ Недостаточно средств')
                             )
-                        except Exception:
+                        except (TelegramAPIError, AttributeError):
                             pass
                         return
                     await create_transaction(
@@ -5680,7 +5682,7 @@ async def confirm_instant_switch(
             await callback.message.edit_text(
                 texts.t('TARIFF_SWITCH_ERROR', '❌ Произошла ошибка при переключении тарифа')
             )
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass
 
 
@@ -6083,7 +6085,7 @@ async def purchase_tariff_with_sbp(
             if _warning:
                 await callback.answer(_warning, show_alert=True)
     except Exception:
-        pass
+        logger.warning('Ignored error in purchase_tariff_with_sbp', exc_info=True)
 
     from app.services.payment.platega import purchase_tariff_with_sbp_recurring
 

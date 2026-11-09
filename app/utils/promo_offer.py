@@ -5,12 +5,16 @@ import math
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.crud.discount_offer import get_latest_claimed_offer_for_user
 from app.database.models import ServerSquad, SubscriptionTemporaryAccess, User
+
+
+logger = structlog.get_logger(__name__)
 
 
 def _escape_format_braces(text: str) -> str:
@@ -100,7 +104,7 @@ async def consume_user_promo_offer(db: AsyncSession, user_id: int) -> bool:
             discount_percent=current_percent,
         )
     except Exception:
-        pass  # Non-critical logging
+        logger.debug('Не удалось записать действие промо-оффера', user_id=user_id, offer_id=offer_id, exc_info=True)
 
     return True
 

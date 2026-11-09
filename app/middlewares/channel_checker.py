@@ -68,7 +68,7 @@ async def delete_pending_payload_from_redis(telegram_id: int) -> None:
         key = f'{REDIS_PAYLOAD_KEY_PREFIX}{telegram_id}'
         await cache.delete(key)
     except Exception:
-        pass
+        logger.debug('Ignored error in delete_pending_payload_from_redis', exc_info=True)
 
 
 class ChannelCheckerMiddleware(BaseMiddleware):

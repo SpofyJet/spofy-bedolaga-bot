@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from aiogram import types
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -391,7 +392,7 @@ async def handle_promo_offer_close(
     except Exception:
         try:
             await callback.message.edit_reply_markup()
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass
 
     await callback.answer()

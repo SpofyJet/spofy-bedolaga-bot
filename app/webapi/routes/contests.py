@@ -163,7 +163,7 @@ def _parse_times_str(times_str: str | None) -> list[time]:
             continue
         try:
             parsed.append(datetime.strptime(part, '%H:%M').time())
-        except Exception:
+        except ValueError:
             continue
     return parsed
 

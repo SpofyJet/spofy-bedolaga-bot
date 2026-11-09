@@ -418,7 +418,7 @@ class TicketMessageCRUD:
                     if hasattr(ticket, 'last_sla_reminder_at'):
                         ticket.last_sla_reminder_at = None
                 except Exception:
-                    pass
+                    logger.debug('Ignored error in add_message', exc_info=True)
 
             ticket.updated_at = datetime.now(UTC)
 

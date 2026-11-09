@@ -2,6 +2,7 @@ import html
 
 import structlog
 from aiogram import types
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -181,7 +182,7 @@ async def select_xrocket_asset(callback: types.CallbackQuery, db_user: User, db:
     await callback.answer('⏳ Создаю счёт...')
     try:
         await callback.message.delete()
-    except Exception:
+    except (TelegramAPIError, AttributeError):
         pass
 
     await _create_xrocket_invoice(callback.message, db_user, db, amount_kopeks, asset, state)

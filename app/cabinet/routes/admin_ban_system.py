@@ -155,7 +155,7 @@ async def get_stats(
             start_time = datetime.fromisoformat(intake_started.replace('Z', '+00:00'))
             uptime_seconds = int((datetime.now(start_time.tzinfo) - start_time).total_seconds())
         except Exception:
-            pass
+            logger.debug('Ignored error in get_stats', exc_info=True)
 
     return BanSystemStatsResponse(
         total_users=data.get('total_users', 0),

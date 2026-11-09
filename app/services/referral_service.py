@@ -104,7 +104,7 @@ async def clear_pending_referral(telegram_id: int) -> None:
     try:
         await client.delete(f'pending_referral:{telegram_id}')
     except Exception:
-        pass
+        logger.debug('Ignored error in clear_pending_referral', exc_info=True)
 
 
 def _normalize_percent(percent: int | None, fallback: int) -> int:
@@ -307,7 +307,7 @@ async def attach_referrer_if_missing(
         try:
             await db.rollback()
         except Exception:
-            pass
+            logger.warning('Ignored error in attach_referrer_if_missing', exc_info=True)
         return None
 
     # rowcount == 0 means another session beat us to the attach —
@@ -324,7 +324,7 @@ async def attach_referrer_if_missing(
         try:
             await db.refresh(user)
         except Exception:
-            pass
+            logger.warning('Ignored error in attach_referrer_if_missing', exc_info=True)
         return None
 
     # We won. Mirror the write onto the in-memory ORM attribute so the
@@ -338,7 +338,7 @@ async def attach_referrer_if_missing(
         # Refresh failures are non-fatal — the write committed. Worst
         # case the caller's ORM-attached user shows a stale value
         # until next refetch.
-        pass
+        logger.warning('Ignored error in attach_referrer_if_missing', exc_info=True)
 
     logger.info(
         'Referrer attached',
@@ -487,7 +487,7 @@ async def clear_pending_campaign(telegram_id: int) -> None:
     try:
         await client.delete(f'pending_campaign:{telegram_id}')
     except Exception:
-        pass
+        logger.debug('Ignored error in clear_pending_campaign', exc_info=True)
 
 
 async def _is_commission_limit_reached(db: AsyncSession, referrer_id: int, referral_id: int) -> bool:

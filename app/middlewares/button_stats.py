@@ -254,7 +254,7 @@ class ButtonStatsMiddleware(BaseMiddleware):
                         if hasattr(button, 'text'):
                             return button.text
         except Exception:
-            pass
+            logger.debug('Ignored error in _extract_button_text', exc_info=True)
         return None
 
     async def _log_button_click_async(

@@ -477,7 +477,7 @@ async def on_purchase(db: AsyncSession, user_id: int, amount_kopeks: int) -> Non
         try:
             await _post_collect(_pageview_payload(row.yandex_cid), 'pageview', row.yandex_cid)
         except Exception:
-            pass
+            logger.debug('Ignored error in on_purchase', exc_info=True)
 
         amount_rubles = amount_kopeks / 100
         payload = _ecommerce_purchase_payload(row.yandex_cid, amount_rubles)

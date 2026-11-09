@@ -376,7 +376,7 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
         if caption_exceeds_telegram_limit(text):
             return await _text_answer(self, text, **kwargs)
     except Exception:
-        pass
+        logger.debug('Ignored error in _answer_with_photo', exc_info=True)
     language = _get_language(self)
 
     if LOGO_PATH.exists():  # noqa: ASYNC240 — stat локального файла, один системный вызов
@@ -454,10 +454,10 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
                 try:
                     await self.delete()
                 except Exception:
-                    pass
+                    logger.debug('Ignored error in _edit_with_photo', exc_info=True)
                 return await _text_answer(self, text, **kwargs)
         except Exception:
-            pass
+            logger.debug('Ignored error in _edit_with_photo', exc_info=True)
         if LOGO_PATH.exists():  # noqa: ASYNC240 — stat локального файла, один системный вызов
             media = get_logo_media()
         else:
@@ -480,7 +480,7 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
                 try:
                     await self.delete()
                 except Exception:
-                    pass
+                    logger.debug('Ignored error in _edit_with_photo', exc_info=True)
                 try:
                     return await _text_answer(self, fallback_text, **safe_kwargs)
                 except TelegramBadRequest as inner_error:
@@ -491,7 +491,7 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
             try:
                 await self.delete()
             except Exception:
-                pass
+                logger.debug('Ignored error in _edit_with_photo', exc_info=True)
             try:
                 return await _text_answer(self, text, **kwargs)
             except TelegramBadRequest as inner_error:

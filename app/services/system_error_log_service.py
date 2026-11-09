@@ -172,7 +172,7 @@ class SystemErrorLogService:
             # Намеренно молча: это последний рубеж жалобы самого журнала ошибок.
             # Пожаловаться на сбой предупреждения больше некому и нечем — любая
             # попытка снова придёт сюда же.
-            pass
+            logger.debug('Ignored error in _warn', exc_info=True)
 
     def _put_nowait(self, op: str, payload: dict[str, Any]) -> bool:
         queue = self._queue
@@ -254,6 +254,7 @@ class SystemErrorLogService:
             try:
                 context[str(key)[:64]] = _redact(str(value))[:500]
             except Exception:
+                logger.debug('Ignored error in _build_payload', exc_info=True)
                 continue
 
         raw_user_id = event_dict.get('user_id')

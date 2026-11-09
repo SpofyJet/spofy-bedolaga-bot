@@ -10,12 +10,16 @@ from __future__ import annotations
 
 from typing import Any
 
+import structlog
 from aiogram import Bot
 from aiogram.client.session.middlewares.base import BaseRequestMiddleware, NextRequestMiddlewareType
 from aiogram.methods import TelegramMethod
 from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 from app.keyboards.button_icons import apply_button_icons
+
+
+logger = structlog.get_logger(__name__)
 
 
 class ButtonIconsMiddleware(BaseRequestMiddleware):
@@ -30,5 +34,5 @@ class ButtonIconsMiddleware(BaseRequestMiddleware):
             if isinstance(markup, (InlineKeyboardMarkup, ReplyKeyboardMarkup)):
                 apply_button_icons(markup)
         except Exception:  # иконка не должна мешать отправке
-            pass
+            logger.debug('Не удалось применить иконки кнопок', exc_info=True)
         return await make_request(bot, method)

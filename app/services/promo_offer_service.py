@@ -148,7 +148,7 @@ class PromoOfferService:
             try:
                 await db.refresh(sub)
             except Exception:
-                pass
+                logger.debug('Ignored error in grant_test_access', exc_info=True)
 
         return True, all_newly_added, expires_at, 'ok'
 

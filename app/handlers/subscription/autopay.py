@@ -172,7 +172,7 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
         try:
             await db.refresh(subscription, ['tariff'])
         except Exception:
-            pass
+            logger.warning('Ignored error in toggle_autopay', exc_info=True)
         if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
             texts = get_texts(db_user.language)
             await callback.answer(
@@ -196,7 +196,7 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
             _warning = recurrent_engines_warning(get_texts(db_user.language), _engines, enabling='balance')
             engines_warning = _warning or None
         except Exception:
-            pass
+            logger.warning('Ignored error in toggle_autopay', exc_info=True)
 
     await update_subscription_autopay(db, subscription, enable)
 
@@ -314,7 +314,7 @@ async def set_autopay_period(callback: types.CallbackQuery, db_user: User, db: A
         try:
             await db.refresh(subscription, ['tariff'])
         except Exception:
-            pass
+            logger.warning('Ignored error in set_autopay_period', exc_info=True)
 
         available = _get_subscription_renewal_periods(subscription)
         if days not in available:
@@ -414,7 +414,7 @@ async def handle_sbp_recurring_menu(
         except Exception:
             # refresh может упасть на detached/уже загруженном объекте — тогда
             # читаем то, что есть (паритет с enable-хендлером).
-            pass
+            logger.warning('Ignored error in handle_sbp_recurring_menu', exc_info=True)
         _menu_tariff = getattr(subscription, 'tariff', None)
         try:
             from app.services.autopay_period import resolve_autopay_period_candidate
@@ -562,7 +562,7 @@ async def handle_sbp_recurring_enable(
     except Exception:
         # refresh может упасть на detached/уже загруженном объекте — тогда
         # просто читаем то, что есть: None-guard ниже отработает.
-        pass
+        logger.warning('Ignored error in handle_sbp_recurring_enable', exc_info=True)
 
     tariff = getattr(subscription, 'tariff', None)
     if tariff is None:
@@ -588,7 +588,7 @@ async def handle_sbp_recurring_enable(
         if _warning:
             await reply.alert(_warning)
     except Exception:
-        pass
+        logger.warning('Ignored error in handle_sbp_recurring_enable', exc_info=True)
 
     from app.services.payment.platega import enable_platega_sbp_recurring
 
@@ -710,7 +710,7 @@ async def handle_sbp_recurring_enable_for(
     try:
         await db.refresh(subscription, ['tariff'])
     except Exception:
-        pass
+        logger.warning('Ignored error in handle_sbp_recurring_enable_for', exc_info=True)
 
     tariff = getattr(subscription, 'tariff', None)
     if tariff is None:
@@ -736,7 +736,7 @@ async def handle_sbp_recurring_enable_for(
         if _warning:
             await reply.alert(_warning)
     except Exception:
-        pass
+        logger.warning('Ignored error in handle_sbp_recurring_enable_for', exc_info=True)
 
     from app.services.payment.platega import enable_platega_sbp_recurring
 

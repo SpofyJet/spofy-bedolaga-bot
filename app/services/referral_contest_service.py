@@ -400,7 +400,7 @@ class ReferralContestService:
                 continue
             try:
                 parsed.append(datetime.strptime(part, '%H:%M').time())
-            except Exception:
+            except ValueError:
                 continue
         return parsed
 

@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Dispatcher, F, types
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import InterfaceError
@@ -65,7 +65,7 @@ async def safe_edit_or_send_text(callback: types.CallbackQuery, text: str, reply
             # Сообщение - медиа без текста, удаляем и отправляем новое
             try:
                 await callback.message.delete()
-            except Exception:
+            except (TelegramAPIError, AttributeError):
                 pass
             await callback.bot.send_message(
                 chat_id=callback.message.chat.id, text=text, reply_markup=reply_markup, parse_mode=parse_mode
@@ -853,7 +853,7 @@ async def handle_media_selection(callback: types.CallbackQuery, db_user: User, s
         # Удаляем медиа-сообщение и отправляем новое текстовое
         try:
             await callback.message.delete()
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass
         await callback.message.answer(instruction_text, reply_markup=instruction_keyboard, parse_mode='HTML')
     else:
@@ -1002,7 +1002,7 @@ async def show_button_selector_callback(callback: types.CallbackQuery, db_user: 
         # Удаляем медиа-сообщение и отправляем новое текстовое
         try:
             await callback.message.delete()
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass  # Игнорируем ошибки удаления
         await callback.message.answer(text, reply_markup=keyboard, parse_mode='HTML')
     else:
@@ -1134,7 +1134,7 @@ async def confirm_button_selection(callback: types.CallbackQuery, db_user: User,
             # Удаляем текущее сообщение и отправляем новое с фото
             try:
                 await callback.message.delete()
-            except Exception:
+            except (TelegramAPIError, AttributeError):
                 pass
             # Telegram ограничивает caption до 1024 символов
             if len(preview_text) <= 1024:
@@ -1422,9 +1422,9 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
                     text=text,
                     parse_mode='HTML',
                 )
-            except Exception:
+            except (TelegramAPIError, AttributeError):
                 pass
-        except Exception:
+        except TelegramAPIError:
             pass  # Не ломаем рассылку из-за ошибок обновления прогресса
 
     # Первое обновление прогресса

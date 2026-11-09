@@ -232,7 +232,8 @@ class SubscriptionService:
             try:
                 await db.refresh(subscription, ['tariff'])
             except Exception:
-                pass  # tariff может быть None или уже загружен
+                logger.warning('Ignored error in create_remnawave_user', exc_info=True)
+                # tariff может быть None или уже загружен
 
             user_tag = self._resolve_user_tag(subscription)
 
@@ -622,7 +623,8 @@ class SubscriptionService:
             try:
                 await db.refresh(subscription, ['tariff'])
             except Exception:
-                pass  # tariff может быть None или уже загружен
+                logger.warning('Ignored error in update_remnawave_user', exc_info=True)
+                # tariff может быть None или уже загружен
 
             # Снапшот traffic_limit_gb — источник истины для панели; если тариф
             # редактировали после покупки, снапшот протух и панель режет по

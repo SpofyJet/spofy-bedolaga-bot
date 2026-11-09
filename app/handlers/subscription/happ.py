@@ -1,4 +1,5 @@
 from aiogram import types
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import InaccessibleMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,7 +62,7 @@ async def handle_happ_download_platform_choice(callback: types.CallbackQuery, db
 async def handle_happ_download_close(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     try:
         await callback.message.delete()
-    except Exception:
+    except (TelegramAPIError, AttributeError):
         pass
 
     await callback.answer()

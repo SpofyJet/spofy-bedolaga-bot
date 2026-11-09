@@ -325,7 +325,7 @@ async def get_current_cabinet_user(
     try:
         await db.commit()
     except Exception:
-        pass
+        logger.debug('Ignored error in get_current_cabinet_user', exc_info=True)
 
     # Лог действий юзера в кабинете (мутации) для таймлайна «Активность».
     # Fire-and-forget: гейты (флаг, метод, исключения путей) внутри хелпера.
@@ -504,7 +504,7 @@ def require_permission(*permissions: str):
                         json.loads(body), request_path=str(request.url.path)
                     )
             except Exception:
-                pass
+                logger.debug('Ignored error in dependency', exc_info=True)
 
         # Log successful access with all requested permissions
         await PermissionService.log_action(

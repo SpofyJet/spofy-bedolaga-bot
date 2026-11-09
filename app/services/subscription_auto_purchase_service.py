@@ -3783,7 +3783,7 @@ async def _process_legacy_generic_cart(
                         if _t:
                             auto_message += f'\n📦 Тариф: «{_t.name}»'
                     except Exception:
-                        pass
+                        logger.warning('Ignored error in _process_legacy_generic_cart', exc_info=True)
 
                 hint_message = texts.t(
                     'AUTO_PURCHASE_SUBSCRIPTION_HINT',

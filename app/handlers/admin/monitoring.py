@@ -1401,7 +1401,8 @@ async def process_traffic_setting_input(message: Message, state: FSMContext):
                     chat_id=chat_id, message_id=message_id, text=text, parse_mode='HTML', reply_markup=keyboard
                 )
             except Exception:
-                pass  # Игнорируем если сообщение уже удалено
+                logger.debug('Ignored error in process_traffic_setting_input', exc_info=True)
+                # Игнорируем если сообщение уже удалено
 
     except Exception as e:
         logger.error('Ошибка сохранения настройки трафика', error=e)

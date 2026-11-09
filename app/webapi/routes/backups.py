@@ -270,7 +270,7 @@ async def upload_and_restore_backup(
         if temp_path.exists():
             try:
                 temp_path.unlink()
-            except Exception:
+            except OSError:
                 pass
 
 

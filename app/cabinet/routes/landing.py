@@ -982,21 +982,21 @@ async def create_landing_purchase(
         try:
             await cache.set(f'yacid:purchase:{purchase.token}', body.yandex_cid, expire=86400)
         except Exception:
-            pass
+            logger.debug('Ignored error in create_landing_purchase', exc_info=True)
 
     # Persist yclid in cache for the yclid-keyed offline conversion upload
     if body.yclid and settings.YANDEX_OFFLINE_CONV_ENABLED:
         try:
             await cache.set(f'yclid:purchase:{purchase.token}', body.yclid, expire=86400)
         except Exception:
-            pass
+            logger.debug('Ignored error in create_landing_purchase', exc_info=True)
 
     # Persist subid in cache for S2S postback
     if body.subid:
         try:
             await cache.set(f'subid:purchase:{purchase.token}', body.subid, expire=86400)
         except Exception:
-            pass
+            logger.debug('Ignored error in create_landing_purchase', exc_info=True)
 
     return PurchaseResponse(
         purchase_token=purchase.token,

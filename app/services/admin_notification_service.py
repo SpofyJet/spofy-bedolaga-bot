@@ -195,7 +195,7 @@ class AdminNotificationService:
             await db.refresh(user, attribute_names=['promo_group'])
         except Exception:
             # relationship might not be available — fallback to direct fetch
-            pass
+            logger.debug('Ignored error in _get_user_promo_group', exc_info=True)
 
         promo_group = _loaded_relationship(user, 'promo_group')
         if promo_group:
@@ -302,7 +302,7 @@ class AdminNotificationService:
             try:
                 await db.rollback()
             except Exception:
-                pass
+                logger.debug('Ignored error in _record_subscription_event', exc_info=True)
 
         # Сессия вызывающего сломана (у xRocket и CryptoBot — почти всегда): пишем событие в новой.
         if user_id is not None:
@@ -578,7 +578,7 @@ class AdminNotificationService:
             if tariff:
                 return html.escape(tariff.name)
         except Exception:
-            pass
+            logger.debug('Ignored error in _get_tariff_name', exc_info=True)
         return None
 
     async def send_subscription_purchase_notification(
@@ -658,7 +658,7 @@ class AdminNotificationService:
                             if _a0:
                                 _trial_days = max(0, (datetime.now(UTC) - _a0).days)
                         except Exception:
-                            pass
+                            logger.debug('Ignored error in send_subscription_purchase_notification', exc_info=True)
                         await create_subscription_conversion(
                             db=db,
                             user_id=user.id,
@@ -1036,7 +1036,7 @@ class AdminNotificationService:
                 try:
                     await db.rollback()
                 except Exception:
-                    pass
+                    logger.debug('Ignored error in _send_balance_topup_notification', exc_info=True)
                 try:
                     _uid = user.id
                 except Exception:
@@ -1288,7 +1288,7 @@ class AdminNotificationService:
             try:
                 await db.rollback()
             except Exception:
-                pass
+                logger.debug('Ignored error in send_promocode_activation_notification', exc_info=True)
             try:
                 _uid = user.id
             except Exception:
@@ -1423,7 +1423,7 @@ class AdminNotificationService:
                 try:
                     await db.rollback()
                 except Exception:
-                    pass
+                    logger.debug('Ignored error in send_campaign_link_visit_notification', exc_info=True)
                 try:
                     _uid = user.id
                 except Exception:
@@ -1472,7 +1472,7 @@ class AdminNotificationService:
                     if tariff:
                         tariff_name = html.escape(tariff.name)
                 except Exception:
-                    pass
+                    logger.debug('Ignored error in send_campaign_link_visit_notification', exc_info=True)
 
             # Бонус кампании
             bonus_lines = self._format_campaign_bonus(campaign, tariff_name=tariff_name)
@@ -1616,7 +1616,7 @@ class AdminNotificationService:
             try:
                 await db.rollback()
             except Exception:
-                pass
+                logger.debug('Ignored error in send_user_promo_group_change_notification', exc_info=True)
             try:
                 _uid = user.id
             except Exception:

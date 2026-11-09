@@ -154,7 +154,7 @@ async def get_active_recurrent_engines(db: AsyncSession, subscription) -> set[st
         if await get_active_platega_subscription_by_subscription(db, subscription.id):
             engines.add('platega')
     except Exception:
-        pass
+        logger.debug('Ignored error in get_active_recurrent_engines', exc_info=True)
     return engines
 
 
@@ -195,5 +195,5 @@ async def list_provider_recurrent_subscription_ids(db: AsyncSession) -> set[int]
             if record.subscription_id is not None:
                 ids.add(record.subscription_id)
     except Exception:
-        pass
+        logger.debug('Ignored error in list_provider_recurrent_subscription_ids', exc_info=True)
     return ids

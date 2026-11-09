@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 import structlog
 from aiogram import Bot, Dispatcher, F, types
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InaccessibleMessage
@@ -86,7 +86,7 @@ async def show_ticket_priority_selection(
         # Предыдущее сообщение — фото (нет текста для edit_text), удаляем и шлём новое
         try:
             await callback.message.delete()
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass
         prompt_msg = await callback.message.answer(prompt_text, reply_markup=cancel_kb)
     # Запоминаем исходное сообщение бота, чтобы далее редактировать его, а не слать новые
@@ -590,7 +590,7 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             ticket_id = int(tid)
             page = max(1, int(p))
         except Exception:
-            pass
+            logger.debug('Ignored error in view_ticket', exc_info=True)
     if ticket_id is None:
         ticket_id = int(data_str.replace('view_ticket_', ''))
 
@@ -666,7 +666,7 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
                 ],
             )
         except Exception:
-            pass
+            logger.debug('Ignored error in view_ticket', exc_info=True)
     # Пагинация
     if total_pages > 1:
         nav_row = []
@@ -692,7 +692,7 @@ async def send_ticket_attachments(callback: types.CallbackQuery, db_user: User, 
     texts = get_texts(db_user.language)
     try:
         await callback.answer(texts.t('SENDING_ATTACHMENTS', '📎 Отправляю вложения...'))
-    except Exception:
+    except TelegramAPIError:
         pass
     try:
         ticket_id = int(callback.data.replace('ticket_attachments_', ''))
@@ -732,7 +732,7 @@ async def send_ticket_attachments(callback: types.CallbackQuery, db_user: User, 
             if messages:
                 last_group_message = messages[-1]
         except Exception:
-            pass
+            logger.debug('Ignored error in send_ticket_attachments', exc_info=True)
     if last_group_message:
         try:
             kb = types.InlineKeyboardMarkup(
@@ -748,12 +748,12 @@ async def send_ticket_attachments(callback: types.CallbackQuery, db_user: User, 
             await callback.message.bot.send_message(
                 chat_id=callback.from_user.id, text=texts.t('ATTACHMENTS_SENT', 'Вложения отправлены.'), reply_markup=kb
             )
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass
     else:
         try:
             await callback.answer(texts.t('ATTACHMENTS_SENT', 'Вложения отправлены.'))
-        except Exception:
+        except TelegramAPIError:
             pass
 
 
@@ -766,7 +766,7 @@ async def user_delete_message(callback: types.CallbackQuery):
     try:
         await callback.message.bot.delete_message(chat_id=callback.from_user.id, message_id=msg_id)
         await callback.message.delete()
-    except Exception:
+    except (TelegramAPIError, AttributeError):
         pass
     await callback.answer('✅')
 
@@ -799,7 +799,7 @@ async def _try_delete_message_later(bot: Bot, chat_id: int, message_id: int, del
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
     except Exception:
         # В приватных чатах удаление сообщений пользователя может быть недоступно — игнорируем ошибки
-        pass
+        logger.debug('Ignored error in _try_delete_message_later', exc_info=True)
 
 
 def _ticket_reply_unavailable_view(texts, ticket: Ticket) -> tuple[str, types.InlineKeyboardMarkup]:
@@ -864,7 +864,7 @@ async def reply_to_ticket(callback: types.CallbackQuery, state: FSMContext, db_u
     except TelegramBadRequest:
         try:
             await callback.message.delete()
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass
         await callback.message.answer(
             texts.t('TICKET_REPLY_INPUT', 'Введите ваш ответ:'),

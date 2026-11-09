@@ -470,7 +470,7 @@ async def _process_campaign_bonus(
 
                 await clear_pending_campaign(telegram_id)
             except Exception:
-                pass
+                logger.debug('Ignored error in _process_campaign_bonus', exc_info=True)
 
 
 async def _process_referral_code(
@@ -901,7 +901,7 @@ async def auth_telegram(
 
             await clear_pending_referral(telegram_id)
         except Exception:
-            pass
+            logger.debug('Ignored error in auth_telegram', exc_info=True)
 
     # Process campaign bonus.
     # Pass telegram_id so the function can fall back to Redis pending_campaign
@@ -1071,7 +1071,7 @@ async def auth_telegram_widget(
 
             await clear_pending_referral(request.id)
         except Exception:
-            pass
+            logger.debug('Ignored error in auth_telegram_widget', exc_info=True)
 
     # Process campaign bonus (pending_campaign Redis fallback for Telegram Login Widget)
     response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug, telegram_id=request.id)
@@ -1258,7 +1258,7 @@ async def auth_telegram_oidc(
 
             await clear_pending_referral(telegram_id)
         except Exception:
-            pass
+            logger.debug('Ignored error in auth_telegram_oidc', exc_info=True)
 
     # Process campaign bonus (pending_campaign Redis fallback for Telegram OIDC)
     response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug, telegram_id=telegram_id)

@@ -410,7 +410,8 @@ async def _do_add_traffic(
             subscription_service = SubscriptionService()
             await subscription_service.enable_remnawave_user(_enable_panel_user_id)
         except Exception:
-            pass  # "User already enabled" is expected for active subscriptions
+            logger.debug('Ignored error in _do_add_traffic', exc_info=True)
+            # "User already enabled" is expected for active subscriptions
 
     return BulkUserResult(
         user_id=user.id,
@@ -908,7 +909,7 @@ async def _execute_for_user(
         try:
             await db.rollback()
         except Exception:
-            pass
+            logger.debug('Ignored error in _execute_for_user', exc_info=True)
         return BulkUserResult(user_id=uid, success=False, message='Action failed: internal error')
 
 
@@ -965,7 +966,7 @@ async def _execute_for_subscription(
         try:
             await db.rollback()
         except Exception:
-            pass
+            logger.debug('Ignored error in _execute_for_subscription', exc_info=True)
         return BulkUserResult(user_id=0, subscription_id=sub_id, success=False, message='Action failed: internal error')
 
 

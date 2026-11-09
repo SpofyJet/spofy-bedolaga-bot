@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import structlog
 from aiogram import Dispatcher, F, types
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -222,7 +223,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
 
         try:
             await callback.message.edit_text(text, reply_markup=keyboard)
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass
         await callback.answer('Произошла ошибка при загрузке статистики')
 

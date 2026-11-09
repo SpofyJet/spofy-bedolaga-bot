@@ -85,7 +85,7 @@ async def resolve_subscription_from_context(
                 if sub:
                     return sub, fsm_sub_id
         except Exception:
-            pass
+            logger.warning('Ignored error in resolve_subscription_from_context', exc_info=True)
 
     # 3. Auto-select if only one active subscription
     active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)

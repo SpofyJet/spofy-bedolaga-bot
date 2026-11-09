@@ -1244,7 +1244,7 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
         if origin_ticket_id:
             await state.update_data(origin_ticket_id=origin_ticket_id, origin_ticket_user_id=user_id)
     except Exception:
-        pass
+        logger.debug('Ignored error in show_user_management', exc_info=True)
     # Если не пришло в колбэке — попробуем достать из состояния
     if origin_ticket_id is None:
         try:
@@ -1252,7 +1252,7 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
             if data_state.get('origin_ticket_user_id') == user_id:
                 origin_ticket_id = data_state.get('origin_ticket_id')
         except Exception:
-            pass
+            logger.debug('Ignored error in show_user_management', exc_info=True)
 
     # Проверяем, откуда пришел пользователь
     back_callback = 'admin_users_list'
@@ -1403,7 +1403,7 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
             )
             kb.inline_keyboard.insert(0, [back_to_ticket_btn])
     except Exception:
-        pass
+        logger.debug('Ignored error in show_user_management', exc_info=True)
 
     message = callback.message
     if not isinstance(message, types.Message):
@@ -5223,7 +5223,7 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                 try:
                     await db.refresh(subscription, ['tariff'])
                 except Exception:
-                    pass
+                    logger.debug('Ignored error in admin_buy_subscription_execute', exc_info=True)
 
                 async with remnawave_service.get_api_client() as api:
                     from app.services.grace_access_runtime import (
@@ -6150,7 +6150,7 @@ async def show_admin_user_autopay(callback: types.CallbackQuery, db_user: User, 
     try:
         await db.refresh(subscription, ['tariff'])
     except Exception:
-        pass
+        logger.debug('Ignored error in show_admin_user_autopay', exc_info=True)
 
     _sid = f'_s{subscription.id}' if subscription_id and settings.is_multi_tariff_enabled() else ''
     status_text = '✅ Включён' if subscription.autopay_enabled else '❌ Выключен'
@@ -6279,7 +6279,7 @@ async def show_admin_user_autopay_period(callback: types.CallbackQuery, db_user:
     try:
         await db.refresh(subscription, ['tariff'])
     except Exception:
-        pass
+        logger.debug('Ignored error in show_admin_user_autopay_period', exc_info=True)
 
     _sid = f'_s{subscription_id}' if subscription_id and settings.is_multi_tariff_enabled() else ''
     current = getattr(subscription, 'autopay_period_days', None)
@@ -6346,7 +6346,7 @@ async def set_admin_user_autopay_period(callback: types.CallbackQuery, db_user: 
         try:
             await db.refresh(subscription, ['tariff'])
         except Exception:
-            pass
+            logger.debug('Ignored error in set_admin_user_autopay_period', exc_info=True)
 
         available = _admin_autopay_available_periods(subscription)
         if days not in available:

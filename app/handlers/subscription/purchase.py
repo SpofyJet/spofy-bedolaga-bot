@@ -3780,7 +3780,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
         try:
             await db.rollback()
         except Exception:
-            pass
+            logger.warning('Ignored error in handle_trial_pay_with_balance', exc_info=True)
 
         # Пытаемся вернуть деньги
         try:

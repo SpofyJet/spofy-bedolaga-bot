@@ -2915,7 +2915,7 @@ async def update_subscription_autopay_endpoint(
         try:
             await db.refresh(subscription, ['tariff'])
         except Exception:
-            pass
+            logger.debug('Ignored error in update_subscription_autopay_endpoint', exc_info=True)
         if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -4861,7 +4861,7 @@ async def subscription_purchase_endpoint(
         try:
             await db.refresh(subscription)
         except Exception:  # pragma: no cover - defensive refresh safeguard
-            pass
+            logger.debug('Ignored error in subscription_purchase_endpoint', exc_info=True)
 
     if subscription and transaction and period_days:
         _purchase_type = 'renewal' if context.subscription else 'first_purchase'
@@ -5124,7 +5124,7 @@ async def update_subscription_servers_endpoint(
     try:
         await db.refresh(user)
     except Exception:  # pragma: no cover - defensive refresh safeguard
-        pass
+        logger.debug('Ignored error in update_subscription_servers_endpoint', exc_info=True)
 
     service = SubscriptionService()
     await service.update_remnawave_user(db, subscription, sync_squads=True)
@@ -5281,7 +5281,7 @@ async def update_subscription_traffic_endpoint(
     try:
         await db.refresh(user)
     except Exception:  # pragma: no cover - defensive refresh safeguard
-        pass
+        logger.debug('Ignored error in update_subscription_traffic_endpoint', exc_info=True)
 
     service = SubscriptionService()
     await service.update_remnawave_user(db, subscription)
@@ -5515,7 +5515,7 @@ async def update_subscription_devices_endpoint(
     try:
         await db.refresh(user)
     except Exception:  # pragma: no cover - defensive refresh safeguard
-        pass
+        logger.debug('Ignored error in update_subscription_devices_endpoint', exc_info=True)
 
     service = SubscriptionService()
     await service.update_remnawave_user(db, subscription)

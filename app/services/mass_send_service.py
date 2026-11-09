@@ -249,7 +249,7 @@ class MassSendService:
                     ]
                 )
         except Exception:
-            pass
+            logger.debug('Ignored error in _notify_admin', exc_info=True)
         rows.append(
             [
                 InlineKeyboardButton(

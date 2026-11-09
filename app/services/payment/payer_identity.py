@@ -70,7 +70,7 @@ def _synthetic_email_domain() -> str:
             # sub.example.ru / lk.example.ru → example.ru: адрес покупателя, а не поддомена.
             return '.'.join(host.split('.')[-2:])
     except Exception:
-        pass
+        logger.warning('Ignored error in _synthetic_email_domain', exc_info=True)
     return _FALLBACK_EMAIL_DOMAIN
 
 

@@ -83,7 +83,7 @@ class VersionService:
                         if ver:
                             return ver
         except Exception:
-            pass
+            logger.debug('Ignored error in _get_current_version', exc_info=True)
 
         return 'UNKNOW'
 

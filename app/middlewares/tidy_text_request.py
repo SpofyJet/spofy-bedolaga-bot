@@ -8,11 +8,15 @@ from __future__ import annotations
 
 from typing import Any
 
+import structlog
 from aiogram import Bot
 from aiogram.client.session.middlewares.base import BaseRequestMiddleware, NextRequestMiddlewareType
 from aiogram.methods import AnswerCallbackQuery, TelegramMethod
 
 from app.utils.text_tidy import plain_alert_text, tidy_text
+
+
+logger = structlog.get_logger(__name__)
 
 
 class TidyTextRequestMiddleware(BaseRequestMiddleware):
@@ -25,7 +29,7 @@ class TidyTextRequestMiddleware(BaseRequestMiddleware):
         try:
             self._tidy(method)
         except Exception:  # причёска не должна мешать отправке
-            pass
+            logger.debug('Не удалось причесать текст запроса', exc_info=True)
         return await make_request(bot, method)
 
     @staticmethod

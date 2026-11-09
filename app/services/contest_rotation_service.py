@@ -194,6 +194,7 @@ class ContestRotationService:
                 hh, mm = part.split(':')
                 times.append(time(int(hh), int(mm)))
             except Exception:
+                logger.debug('Ignored error in _parse_times', exc_info=True)
                 continue
         return times
 

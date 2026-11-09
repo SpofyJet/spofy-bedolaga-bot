@@ -13,6 +13,7 @@ from typing import Any
 import structlog
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -350,7 +351,7 @@ async def start_scan(
                     ),
                     parse_mode=ParseMode.HTML,
                 )
-            except Exception:
+            except (TelegramAPIError, AttributeError):
                 pass  # Игнорируем ошибки обновления сообщения
 
     # Выполняем сканирование
@@ -619,7 +620,7 @@ async def handle_confirm_action(
                     ),
                     parse_mode=ParseMode.HTML,
                 )
-            except Exception:
+            except (TelegramAPIError, AttributeError):
                 pass
 
     # Выполняем очистку

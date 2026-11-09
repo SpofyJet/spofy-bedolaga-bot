@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import BufferedInputFile
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import desc, func, select
@@ -1093,7 +1094,7 @@ async def _upload_to_telegram(upload: UploadTransfer) -> dict[str, Any]:
             media = message.document
         try:
             await bot.delete_message(chat_id=target_chat_id, message_id=message.message_id)
-        except Exception:
+        except TelegramAPIError:
             pass
         return {
             'mediaId': str(media.file_id),

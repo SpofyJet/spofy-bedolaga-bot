@@ -500,7 +500,7 @@ async def fulfill_purchase(
 
                 await upsert_subid(db, user.id, purchase.subid, source='landing')
         except Exception:
-            pass
+            logger.warning('Ignored error in fulfill_purchase', exc_info=True)
 
         if recipient_type == 'email' and not purchase.is_gift and is_new_account:
             purchase.auto_login_token = create_auto_login_token(user.id)
@@ -548,7 +548,7 @@ async def fulfill_purchase(
                 try:
                     await db.rollback()
                 except Exception:
-                    pass
+                    logger.warning('Ignored error in fulfill_purchase', exc_info=True)
 
         # Registration event (new accounts only) + S2S postback
         if is_new_account:
@@ -1479,7 +1479,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
                 try:
                     await db.rollback()
                 except Exception:
-                    pass
+                    logger.warning('Ignored error in activate_purchase', exc_info=True)
 
         if not skip_notification:
             try:

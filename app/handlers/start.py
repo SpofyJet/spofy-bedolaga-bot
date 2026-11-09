@@ -7,7 +7,7 @@ from typing import Any
 import structlog
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -525,7 +525,7 @@ async def _activate_pending_gift_after_registration(
                 parse_mode=ParseMode.HTML,
             )
         except Exception:
-            pass
+            logger.debug('Ignored error in _activate_pending_gift_after_registration', exc_info=True)
 
 
 _COUPON_ERROR_TEXTS = {
@@ -570,7 +570,7 @@ async def _redeem_pending_coupon(
         try:
             await answer_func(_COUPON_ERROR_TEXTS['internal'], parse_mode=ParseMode.HTML)
         except Exception:
-            pass
+            logger.debug('Ignored error in _redeem_pending_coupon', exc_info=True)
         return
 
     # Redemption is committed at this point — a failed confirmation send must
@@ -870,7 +870,7 @@ async def _apply_campaign_bonus_if_needed(
         if getattr(user, 'telegram_id', None):
             await clear_pending_campaign(user.telegram_id)
     except Exception:
-        pass
+        logger.debug('Ignored error in _apply_campaign_bonus_if_needed', exc_info=True)
 
     # Отправить админу уведомление о РЕГИСТРАЦИИ ровно один раз — когда запись в
     # advertising_campaign_registrations реально создана (is_new_registration=True).
@@ -1568,7 +1568,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             try:
                 await db.refresh(user)
             except Exception:
-                pass
+                logger.debug('Ignored error in cmd_start', exc_info=True)
             logger.warning(
                 '⚠️ Пропущено сохранение профиля в /start (строка пользователя заблокирована)',
                 telegram_id=user.telegram_id,
@@ -2055,7 +2055,7 @@ async def process_rules_accept(callback: types.CallbackQuery, state: FSMContext,
             )
             await state.set_state(RegistrationStates.waiting_for_rules_accept)
         except Exception:
-            pass
+            logger.debug('Ignored error in process_rules_accept', exc_info=True)
 
 
 async def process_privacy_policy_accept(callback: types.CallbackQuery, state: FSMContext, db: AsyncSession):
@@ -2092,7 +2092,7 @@ async def process_privacy_policy_accept(callback: types.CallbackQuery, state: FS
                         ),
                         reply_markup=None,
                     )
-                except Exception:
+                except (TelegramAPIError, AttributeError):
                     pass
 
             if data.get('referral_code'):
@@ -2166,7 +2166,7 @@ async def process_privacy_policy_accept(callback: types.CallbackQuery, state: FS
             )
             await state.set_state(RegistrationStates.waiting_for_privacy_policy_accept)
         except Exception:
-            pass
+            logger.debug('Ignored error in process_privacy_policy_accept', exc_info=True)
 
 
 async def process_referral_code_input(message: types.Message, state: FSMContext, db: AsyncSession):
@@ -2255,7 +2255,7 @@ async def process_referral_code_skip(callback: types.CallbackQuery, state: FSMCo
             await callback.message.edit_text(
                 texts.t('REGISTRATION_COMPLETING', '✅ Завершаем регистрацию...'), reply_markup=None
             )
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass
 
     await complete_registration_from_callback(callback, state, db)
@@ -3315,13 +3315,13 @@ async def required_sub_channel_check(
             logger.error('Ошибка Telegram API в required_sub_channel_check', error=e)
             try:
                 await query.answer(f'{texts.ERROR}!', show_alert=True)
-            except Exception:
+            except TelegramAPIError:
                 pass
     except Exception as e:
         logger.error('Ошибка в required_sub_channel_check', error=e)
         try:
             await query.answer(f'{texts.ERROR}!', show_alert=True)
-        except Exception:
+        except TelegramAPIError:
             pass
 
 

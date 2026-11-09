@@ -216,13 +216,13 @@ class ReportingService:
                 try:
                     clauses.append(Transaction.description.ilike(pattern))
                 except Exception:
-                    pass
+                    logger.debug('Ignored error in _referral_markers', exc_info=True)
         if hasattr(Transaction, 'comment'):
             for pattern in like_patterns:
                 try:
                     clauses.append(Transaction.comment.ilike(pattern))
                 except Exception:
-                    pass
+                    logger.debug('Ignored error in _referral_markers', exc_info=True)
 
         return [clause for clause in clauses if clause is not None]
 

@@ -778,7 +778,7 @@ async def main():
                     try:
                         log_memory('bot')
                     except Exception:
-                        pass
+                        logger.debug('Ignored error in _rss_monitor', exc_info=True)
 
             rss_monitor_task = asyncio.create_task(_rss_monitor())
             stage.log(f'Интервал проверки RSS: {RSS_CHECK_INTERVAL_SEC} сек')
@@ -1162,6 +1162,6 @@ if __name__ == '__main__':
         # Пытаемся отправить уведомление о падении
         try:
             asyncio.run(_send_crash_notification_on_error(e))
-        except Exception:
-            pass
+        except Exception as notify_error:
+            print(f'⚠️ Не удалось отправить уведомление о падении: {notify_error}')
         sys.exit(1)

@@ -2963,7 +2963,7 @@ class Settings(BaseSettings):
                 if packages:
                     return packages
         except Exception:
-            pass
+            logger.debug('Ignored error in _get_fallback_traffic_packages', exc_info=True)
 
         return [
             {'gb': 5, 'price': self.PRICE_TRAFFIC_5GB, 'enabled': True},

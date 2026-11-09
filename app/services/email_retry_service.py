@@ -220,6 +220,7 @@ class EmailRetryService:
                     )
                 )
             except Exception:
+                logger.debug('Ignored error in _decode_attachments', exc_info=True)
                 continue
         return decoded or None
 

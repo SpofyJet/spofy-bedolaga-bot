@@ -436,7 +436,7 @@ class MonitoringService:
             if self._sla_task and not self._sla_task.done():
                 self._sla_task.cancel()
         except Exception:
-            pass
+            logger.debug('Ignored error in stop_monitoring', exc_info=True)
         if self._withdrawal_reminder_task and not self._withdrawal_reminder_task.done():
             self._withdrawal_reminder_task.cancel()
         if self._abandoned_payment_task and not self._abandoned_payment_task.done():
@@ -517,7 +517,7 @@ class MonitoringService:
                         is_success=False,
                     )
                 except Exception:
-                    pass
+                    logger.debug('Ignored error in _monitoring_cycle', exc_info=True)
                 await db.rollback()
 
     async def _expire_wheel_bonus_devices(self) -> None:
@@ -579,7 +579,7 @@ class MonitoringService:
         try:
             await cache.set(key, '1', expire=ttl_seconds)
         except Exception:
-            pass
+            logger.debug('Ignored error in _set_mark', exc_info=True)
 
     async def _remember_if_unreachable(self, user: User, error: Exception) -> bool:
         """Бот заблокирован / чат удалён — запомнить, чтобы не стучаться каждый цикл."""
@@ -875,7 +875,7 @@ class MonitoringService:
             try:
                 await db.refresh(subscription, ['tariff'])
             except Exception:
-                pass
+                logger.debug('Ignored error in update_remnawave_user', exc_info=True)
 
             # Re-check guard after refresh (webhook could have committed between first check and refresh)
             if is_recently_updated_by_webhook(subscription):
@@ -3150,7 +3150,7 @@ class MonitoringService:
             try:
                 await db.rollback()
             except Exception:
-                pass
+                logger.debug('Ignored error in _cleanup_expired_refresh_tokens', exc_info=True)
 
     async def _cleanup_button_click_logs(self, db: AsyncSession):
         """Чистит старые записи лога действий юзеров (USER_ACTION_LOG_RETENTION_DAYS)."""
@@ -3178,7 +3178,7 @@ class MonitoringService:
             try:
                 await db.rollback()
             except Exception:
-                pass
+                logger.debug('Ignored error in _cleanup_button_click_logs', exc_info=True)
 
     async def _cleanup_inactive_users(self, db: AsyncSession):
         try:

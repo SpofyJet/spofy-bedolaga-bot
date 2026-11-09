@@ -165,7 +165,7 @@ class LogRotationService:
                 try:
                     handler.flush()
                 except Exception:
-                    pass
+                    logger.debug('Ignored error in rotate_logs', exc_info=True)
 
             # Собираем файлы для архивации
             files_to_archive: list[tuple[Path, str]] = []

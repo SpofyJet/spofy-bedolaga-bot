@@ -58,7 +58,7 @@ async def _notify_admins_about_auto_assignment(
         try:
             await bot.session.close()
         except Exception:
-            pass
+            logger.debug('Ignored error in _notify_admins_about_auto_assignment', exc_info=True)
 
 
 async def _get_best_group_for_spending(

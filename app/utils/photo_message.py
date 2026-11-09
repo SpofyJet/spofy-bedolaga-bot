@@ -142,7 +142,7 @@ async def edit_or_answer_photo(
                     reply_markup=keyboard,
                     parse_mode=resolved_parse_mode,
                 )
-            except Exception:
+            except (TelegramAPIError, AttributeError):
                 pass
         return
 
@@ -163,7 +163,7 @@ async def edit_or_answer_photo(
         except TelegramBadRequest as error:
             try:
                 await callback.message.delete()
-            except Exception:
+            except (TelegramAPIError, AttributeError):
                 pass
             await _answer_text(callback, caption, keyboard, resolved_parse_mode, error)
         return
@@ -187,7 +187,7 @@ async def edit_or_answer_photo(
     if media is None:
         try:
             await callback.message.delete()
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass
         await _answer_text(callback, caption, keyboard, resolved_parse_mode)
         return
@@ -214,7 +214,7 @@ async def edit_or_answer_photo(
             # После всех попыток — фоллбек на текст
             try:
                 await callback.message.delete()
-            except Exception:
+            except (TelegramAPIError, AttributeError):
                 pass
             await _answer_text(callback, caption, keyboard, resolved_parse_mode)
             return
@@ -227,7 +227,7 @@ async def edit_or_answer_photo(
             )
             try:
                 await callback.message.delete()
-            except Exception:
+            except (TelegramAPIError, AttributeError):
                 pass
             await _answer_text(callback, caption, keyboard, resolved_parse_mode)
             return
@@ -239,14 +239,14 @@ async def edit_or_answer_photo(
             if is_privacy_restricted_error(error):
                 try:
                     await callback.message.delete()
-                except Exception:
+                except (TelegramAPIError, AttributeError):
                     pass
                 await _answer_text(callback, caption, keyboard, resolved_parse_mode, error)
                 return
             # Фоллбек: если не удалось обновить фото — отправим текст
             try:
                 await callback.message.delete()
-            except Exception:
+            except (TelegramAPIError, AttributeError):
                 pass
             logo_media = get_logo_media()
             if logo_media is None:

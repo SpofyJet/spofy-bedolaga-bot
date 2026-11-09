@@ -1,5 +1,6 @@
 import structlog
 from aiogram import Dispatcher, F, types
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +31,7 @@ async def handle_webhook_notification_close(
     """Удаляет webhook-уведомление при нажатии кнопки Закрыть."""
     try:
         await callback.answer()
-    except Exception:
+    except TelegramAPIError:
         pass
     try:
         await callback.message.delete()
@@ -38,21 +39,21 @@ async def handle_webhook_notification_close(
         logger.warning('Не удалось удалить webhook-уведомление', e=e)
         try:
             await callback.message.edit_reply_markup(reply_markup=None)
-        except Exception:
+        except (TelegramAPIError, AttributeError):
             pass
 
 
 async def handle_noop(callback: types.CallbackQuery, db_user: User):
     try:
         await callback.answer()
-    except Exception:
+    except TelegramAPIError:
         pass
 
 
 async def handle_current_page(callback: types.CallbackQuery, db_user: User):
     try:
         await callback.answer()
-    except Exception:
+    except TelegramAPIError:
         pass
 
 

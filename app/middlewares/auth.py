@@ -280,7 +280,7 @@ class AuthMiddleware(BaseMiddleware):
                     try:
                         await db.rollback()
                     except Exception:
-                        pass
+                        logger.debug('Ignored error in __call__', exc_info=True)
                 return result
 
             except (InterfaceError, OperationalError) as conn_err:

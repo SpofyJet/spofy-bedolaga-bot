@@ -1668,7 +1668,7 @@ class RemnaWaveService:
                     try:
                         await db.rollback()  # Выполняем rollback при ошибке
                     except Exception:
-                        pass
+                        logger.debug('Ignored error in sync_users_from_panel', exc_info=True)
                     # After rollback all ORM objects in the session are expired.
                     # Accessing their attributes triggers a lazy load which fails
                     # in async context (greenlet_spawn error).  Break the loop to
@@ -1991,7 +1991,7 @@ class RemnaWaveService:
                         try:
                             await hwid_api_cm.__aexit__(None, None, None)
                         except Exception:
-                            pass
+                            logger.debug('Ignored error in sync_users_from_panel', exc_info=True)
 
             logger.info(
                 '🎯 Синхронизация завершена',

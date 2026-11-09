@@ -439,7 +439,7 @@ async def _sync_subscription_to_panel(
         try:
             await db.refresh(subscription, ['tariff'])
         except Exception:
-            pass
+            logger.debug('Ignored error in _sync_subscription_to_panel', exc_info=True)
 
         changes: dict = {}
         async with service.get_api_client() as api:
@@ -3603,7 +3603,7 @@ async def get_user_sync_status(
             if active_sub.tariff:
                 sub_tariff_name = active_sub.tariff.name
         except Exception:
-            pass
+            logger.debug('Ignored error in get_user_sync_status', exc_info=True)
 
     return PanelSyncStatusResponse(
         user_id=user.id,
@@ -3981,7 +3981,7 @@ async def sync_user_to_panel(
         try:
             await db.refresh(push_sub, ['tariff'])
         except Exception:
-            pass
+            logger.debug('Ignored error in sync_user_to_panel', exc_info=True)
 
         changes: dict = {}
         errors: list[str] = []

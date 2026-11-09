@@ -227,7 +227,7 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
             if missing > 0:
                 amount_kopeks = missing
     except Exception:
-        pass
+        logger.warning('Ignored error in show_payment_methods', exc_info=True)
 
     full_text = payment_text
     if amount_kopeks > 0:

@@ -1,5 +1,7 @@
 from datetime import UTC, datetime, time, timedelta
 
+import structlog
+
 
 def _aware(dt: datetime | None) -> datetime | None:
     """Ensure datetime is timezone-aware (handles pre-TIMESTAMPTZ databases)."""
@@ -35,6 +37,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Mapped, backref, mapped_column, relationship, validates
 from sqlalchemy.sql import func
+
+
+logger = structlog.get_logger(__name__)
 
 
 class AwareDateTime(TypeDecorator):
@@ -1076,7 +1081,7 @@ class User(Base):
                 return sorted_groups[0].promo_group
         except Exception:
             # Если возникла ошибка (например, ленивая загрузка в async), fallback на старую связь
-            pass
+            logger.debug('Ignored error in get_primary_promo_group', exc_info=True)
 
         # Fallback на старую связь если новая пустая или возникла ошибка
         return getattr(self, 'promo_group', None)
