@@ -15,7 +15,6 @@ from app.external.cryptobot import CryptoBotService
 from app.external.heleket import HeleketService
 from app.external.telegram_stars import TelegramStarsService
 from app.external.xrocket import XRocketService
-from app.services.nalogo_service import NaloGoService
 from app.services.payment import (
     CryptoBotPaymentMixin,
     HeleketPaymentMixin,
@@ -217,7 +216,6 @@ class PaymentService(
         self.heleket_service = HeleketService() if settings.is_heleket_enabled() else None
         self.platega_service = PlategaService() if settings.is_platega_enabled() else None
         self.wata_service = WataService() if settings.is_wata_enabled() else None
-        self.nalogo_service = NaloGoService() if settings.is_nalogo_enabled() else None
 
     # ------------------------------------------------------------------
     # Guest (landing page) payments

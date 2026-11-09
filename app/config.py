@@ -134,7 +134,6 @@ class Settings(BaseSettings):
     ADMIN_NOTIFICATIONS_CHAT_ID: str | None = None
     ADMIN_NOTIFICATIONS_TOPIC_ID: int | None = None
     ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID: int | None = None
-    ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID: int | None = None
 
     # Раздельные топики для уведомлений (если не задано — fallback на ADMIN_NOTIFICATIONS_TOPIC_ID)
     ADMIN_NOTIFICATIONS_PURCHASES_TOPIC_ID: int | None = None  # Покупки подписок
@@ -162,11 +161,6 @@ class Settings(BaseSettings):
     ADMIN_NOTIFICATIONS_PROMO_ENABLED: bool = True
     ADMIN_NOTIFICATIONS_PARTNERS_ENABLED: bool = True
     ADMIN_NOTIFICATIONS_TICKETS_ENABLED: bool = True
-
-    # Настройки очереди чеков NaloGO
-    NALOGO_QUEUE_CHECK_INTERVAL: int = 600  # Интервал проверки очереди (секунды, 10 мин)
-    NALOGO_QUEUE_RECEIPT_DELAY: int = 3  # Задержка между отправкой чеков (секунды)
-    NALOGO_QUEUE_MAX_ATTEMPTS: int = 72  # Максимум попыток отправки чека (72 × 10мин = 12 часов)
 
     ADMIN_REPORTS_ENABLED: bool = False
     ADMIN_REPORTS_CHAT_ID: str | None = None
@@ -699,14 +693,6 @@ class Settings(BaseSettings):
     PAYMENT_VERIFICATION_FAST_SECONDS: int = 15
     PAYMENT_VERIFICATION_FAST_WINDOW_MINUTES: int = 15
 
-    NALOGO_ENABLED: bool = False
-    NALOGO_INN: str | None = None
-    NALOGO_PASSWORD: str | None = None
-    NALOGO_DEVICE_ID: str | None = None
-    NALOGO_STORAGE_PATH: str = './data/nalogo_tokens.json'
-    NALOGO_PROXY_URL: str | None = None  # SOCKS proxy for nalog.ru; falls back to PROXY_URL if not set
-    # Имя файла чека (без расширения) во вложении письма и в Telegram; {uuid} — id чека
-    NALOGO_RECEIPT_FILENAME: str = 'receipt_{uuid}'
     # Типы писем, которые не отправлять (через запятую). Управляется переключателем
     # в редакторе email-шаблонов; см. app/cabinet/services/email_type_switch.py
     EMAIL_DISABLED_TYPES: str = ''
@@ -1275,7 +1261,7 @@ class Settings(BaseSettings):
     # Examples: Cloudflare Worker proxy, self-hosted telegram-bot-api (tdlib), nginx reverse proxy
     TELEGRAM_API_URL: str | None = None
 
-    @field_validator('PROXY_URL', 'NALOGO_PROXY_URL', mode='before')
+    @field_validator('PROXY_URL', mode='before')
     @classmethod
     def validate_proxy_url(cls, value: str | None) -> str | None:
         if not value:
@@ -1515,13 +1501,6 @@ class Settings(BaseSettings):
     def get_telegram_api_url(self) -> str | None:
         """Return custom Telegram Bot API server URL or None."""
         return self.TELEGRAM_API_URL or None
-
-    def get_nalogo_proxy_url(self) -> str | None:
-        """Return SOCKS proxy URL for nalogo or None.
-
-        Uses NALOGO_PROXY_URL if set, otherwise falls back to PROXY_URL.
-        """
-        return self.NALOGO_PROXY_URL or self.PROXY_URL
 
     def is_admin(self, telegram_id: int | None = None, email: str | None = None) -> bool:
         """
@@ -2307,9 +2286,6 @@ class Settings(BaseSettings):
             return 0
 
         return value
-
-    def is_nalogo_enabled(self) -> bool:
-        return self.NALOGO_ENABLED and self.NALOGO_INN is not None and self.NALOGO_PASSWORD is not None
 
     def is_support_topup_enabled(self) -> bool:
         return bool(self.SUPPORT_TOPUP_ENABLED)

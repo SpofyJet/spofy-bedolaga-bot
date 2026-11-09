@@ -67,9 +67,11 @@ async def list_legacy_faq(
         .scalars()
         .all()
     )
-    settings = {item.language: item.is_enabled for item in (await db.execute(select(FaqSetting))).scalars()}
+    enabled_by_language = {item.language: item.is_enabled for item in (await db.execute(select(FaqSetting))).scalars()}
     return [
-        LegacyFaqResponse.model_validate(page).model_copy(update={'is_enabled': settings.get(page.language, True)})
+        LegacyFaqResponse.model_validate(page).model_copy(
+            update={'is_enabled': enabled_by_language.get(page.language, True)}
+        )
         for page in pages
     ]
 

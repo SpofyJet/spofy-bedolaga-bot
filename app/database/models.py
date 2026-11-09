@@ -1569,10 +1569,6 @@ class Transaction(Base):
 
     is_completed = Column(Boolean, default=True)
 
-    # NaloGO чек
-    receipt_uuid = Column(String(255), nullable=True, index=True)
-    receipt_created_at = Column(AwareDateTime(), nullable=True)
-
     created_at = Column(AwareDateTime(), default=func.now())
     completed_at = Column(AwareDateTime(), nullable=True)
 
@@ -3569,8 +3565,6 @@ class GuestPurchase(Base):
     auto_login_token = Column(Text, nullable=True)
     recipient_warning = Column(String(50), nullable=True)
     retry_count = Column(Integer, nullable=False, default=0, server_default='0')
-    receipt_uuid = Column(String(255), nullable=True, index=True)
-    receipt_created_at = Column(AwareDateTime(), nullable=True)
     # Yandex Metrika offline conversions: client identifier + traffic source tags
     yandex_cid = Column(String(128), nullable=True)
     subid = Column(String(255), nullable=True)

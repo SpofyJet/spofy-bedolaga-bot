@@ -83,7 +83,6 @@ class EmailNotificationTemplates:
             NotificationType.WITHDRAWAL_REJECTED: self._withdrawal_rejected_template,
             NotificationType.TRAFFIC_RESET: self._traffic_reset_template,
             NotificationType.PAYMENT_RECEIVED: self._payment_received_template,
-            NotificationType.NALOGO_RECEIPT: self._nalogo_receipt_template,
             NotificationType.PROMO_OFFER: self._promo_offer_template,
             NotificationType.TICKET_REPLY: self._ticket_reply_template,
             NotificationType.PROMO_GROUP_AUTO_ASSIGNED: self._promo_group_auto_assigned_template,
@@ -835,35 +834,6 @@ class EmailNotificationTemplates:
             preheader='Subscribe and your VPN keeps working.',
             unsubscribe_url=unsubscribe_url,
         )
-
-    def _nalogo_receipt_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Email: чек NaloGO («Мой налог») по платежу — файл во вложении, ссылка запасная."""
-        amount = html.escape(str(context.get('amount', '')))
-        receipt_url = html.escape(str(context.get('receipt_url', '')), quote=True)
-        has_attachment = bool(context.get('has_attachment'))
-        subjects = {
-            'ru': 'Чек по вашему платежу',
-            'en': 'Receipt for your payment',
-            'zh': '您的付款收据',
-            'ua': 'Чек за вашим платежем',
-        }
-        attachment_lines = {
-            'ru': '<p>Файл чека — во вложении к этому письму.</p>',
-            'en': '<p>The receipt file is attached to this email.</p>',
-            'zh': '<p>收据文件已附在本邮件中。</p>',
-            'ua': '<p>Файл чека — у вкладенні до цього листа.</p>',
-        }
-        attachment = {lang: line if has_attachment else '' for lang, line in attachment_lines.items()}
-        bodies = {
-            'ru': f'<h2>🧾 Чек по вашему платежу сформирован</h2><div class="highlight"><p>💰 Сумма: <strong>{amount}</strong></p><p>Чек зарегистрирован в ФНС через сервис «Мой налог».</p>{attachment["ru"]}</div><p><a href="{receipt_url}">Открыть чек на сайте ФНС</a> (ссылка может не открываться при включённом VPN или из-за рубежа).</p>',
-            'en': f'<h2>🧾 Your payment receipt is ready</h2><div class="highlight"><p>💰 Amount: <strong>{amount}</strong></p><p>The receipt is registered with the Russian tax service (“Moy Nalog”).</p>{attachment["en"]}</div><p><a href="{receipt_url}">Open the receipt on the tax service website</a> (the link may not open with VPN on or from abroad).</p>',
-            'zh': f'<h2>🧾 您的付款收据已生成</h2><div class="highlight"><p>💰 金额：<strong>{amount}</strong></p><p>收据已通过“Мой налог”服务在俄罗斯税务局登记。</p>{attachment["zh"]}</div><p><a href="{receipt_url}">在税务局网站打开收据</a>（开启 VPN 或在境外时链接可能无法打开）。</p>',
-            'ua': f'<h2>🧾 Чек за вашим платежем сформовано</h2><div class="highlight"><p>💰 Сума: <strong>{amount}</strong></p><p>Чек зареєстровано у ФНС через сервіс «Мой налог».</p>{attachment["ua"]}</div><p><a href="{receipt_url}">Відкрити чек на сайті ФНС</a> (посилання може не відкриватися з увімкненим VPN або з-за кордону).</p>',
-        }
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
-        }
 
     def _guest_gift_link_buyer_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Email покупателю подарка: ссылка на активацию, чтобы переслать получателю."""

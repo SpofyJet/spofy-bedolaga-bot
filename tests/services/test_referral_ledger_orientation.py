@@ -34,10 +34,7 @@ _ALLOWED = {
 
 
 def _iter_python_files():
-    for path in sorted(APP_ROOT.rglob('*.py')):
-        if 'lib/nalogo' in str(path):
-            continue
-        yield path
+    yield from sorted(APP_ROOT.rglob('*.py'))
 
 
 def _uses_referral_id_as_grouping(node: ast.AST) -> bool:

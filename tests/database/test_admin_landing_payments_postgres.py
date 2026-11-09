@@ -310,7 +310,6 @@ async def test_landing_deduplicates_provider_and_transaction_but_preserves_other
 
 async def test_confirmed_gift_replay_and_http_details_keep_source_identity(postgres_database, monkeypatch):
     monkeypatch.setattr('app.services.guest_purchase_service.notify_gift_claim_available', AsyncMock())
-    monkeypatch.setattr('app.services.guest_purchase_service._create_nalogo_receipt_for_purchase', AsyncMock())
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
         admin = User(id=1, telegram_id=1001, language='ru', status='active', balance_kopeks=50000)
         db.add(admin)

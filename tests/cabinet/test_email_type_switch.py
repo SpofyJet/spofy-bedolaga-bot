@@ -104,22 +104,6 @@ async def test_promo_email_is_skipped_when_disabled(monkeypatch):
     email_service.send_email.assert_not_called()
 
 
-@pytest.mark.asyncio
-async def test_receipt_email_is_skipped_when_disabled(monkeypatch):
-    import importlib
-
-    from app.services.nalogo_service import _send_receipt_email
-
-    email_service_module = importlib.import_module('app.cabinet.services.email_service')
-    send_mock = MagicMock(return_value=True)
-    monkeypatch.setattr(email_service_module.email_service, 'send_email', send_mock)
-    monkeypatch.setattr(email_service_module.email_service, 'is_configured', lambda: True)
-    monkeypatch.setattr(settings, 'EMAIL_DISABLED_TYPES', 'nalogo_receipt', raising=False)
-
-    assert await _send_receipt_email('a@b.c', '100 ₽', 'https://x/print', None) is False
-    send_mock.assert_not_called()
-
-
 def test_switch_module_is_free_of_side_effects_on_import():
     assert email_type_switch.EMAIL_DISABLED_TYPES_KEY == 'EMAIL_DISABLED_TYPES'
     _ = AsyncMock

@@ -92,7 +92,7 @@
   Функции: `create_bot` — Create a Bot instance with SOCKS5 proxy and/or custom Telegram API server.
 - `app/cabinet/`
 - `app/config.py` — Python-модуль
-  Классы: `Settings` (239 методов)
+  Классы: `Settings` (237 методов)
   Функции: `transliterate_cyrillic` — Заменяет кириллические буквы латинскими, сохраняя регистр («Шмель» → «Shmel»)., `set_period_prices_from_db` — Устанавливает периоды/цены из БД., `get_db_period_prices` — Возвращает периоды/цены из БД если они загружены., `clear_db_period_prices` — Очищает кеш цен из тарифов (при переключении в classic mode)., `refresh_period_prices` — Rebuild cached period price mapping., `refresh_classic_period_prices` — Rebuild CLASSIC_PERIOD_PRICES from current settings., `get_traffic_prices`, `refresh_traffic_prices`
 - `app/database/`
 - `app/external/`
@@ -569,7 +569,7 @@
   Классы: нет
   Функции: `apply_legacy_aliases` — Возвращает копию контекста со старыми именами плейсхолдеров, если есть новые., `build_common_context` — Values for the type-independent placeholders., `substitute_context_vars` — Replace {var} placeholders in template text with context values., `get_template_override` — Get custom email template from the database., `get_all_overrides` — Get all custom template overrides from the database., `get_overrides_for_type` — Get all language overrides for a specific notification type., `save_template_override` — Save or update a custom email template in the database., `get_rendered_override` — Get a custom template override rendered with the base email template., `delete_template_override` — Delete a custom template override (revert to default).
 - `app/cabinet/services/email_templates.py` — Python-модуль
-  Классы: `EmailNotificationTemplates` (89 методов)
+  Классы: `EmailNotificationTemplates` (88 методов)
   Функции: нет
 - `app/cabinet/services/email_type_switch.py` — Python-модуль
   Классы: нет
@@ -964,7 +964,7 @@
   Функции: `safe_edit_or_send_text` — Безопасно редактирует сообщение или удаляет и отправляет новое., `get_message_buttons_selector_keyboard`, `get_updated_message_buttons_selector_keyboard`, `create_broadcast_keyboard`, `show_messages_menu`, `show_pinned_message_menu`, `prompt_pinned_message_update`, `toggle_pinned_message_position`, `toggle_pinned_message_start_mode`, `delete_pinned_message`, `process_pinned_message_update`, `handle_pinned_broadcast_now` — Разослать закреплённое сообщение сейчас всем пользователям., `handle_pinned_broadcast_skip` — Пропустить рассылку — пользователи увидят при /start., `show_broadcast_targets`, `show_tariff_filter` — Показывает список тарифов для фильтрации рассылки., `show_messages_history`, `show_custom_broadcast`, `select_custom_criteria`, `select_broadcast_target`, `process_broadcast_message`, `handle_media_selection`, `process_broadcast_media`, `show_media_preview`, `handle_media_confirmation`, `handle_change_media`, `show_button_selector_callback`, `show_button_selector`, `toggle_button_selection`, `confirm_button_selection`, `confirm_broadcast`, `get_target_users_count` — Быстрый подсчёт пользователей через SQL COUNT вместо загрузки всех в память., `get_target_users`, `get_custom_users_count`, `get_custom_users`, `get_users_statistics`, `get_target_name`, `get_target_display_name`, `register_handlers`
 - `app/handlers/admin/monitoring.py` — Python-модуль
   Классы: нет
-  Функции: `admin_monitoring_menu`, `admin_monitoring_settings`, `admin_notify_settings`, `toggle_trial_channel_notification`, `preview_trial_channel_notification`, `toggle_expired_1d_notification`, `preview_expired_1d_notification`, `toggle_second_wave_notification`, `preview_second_wave_notification`, `toggle_third_wave_notification`, `preview_third_wave_notification`, `preview_all_notifications`, `edit_second_wave_percent`, `edit_second_wave_hours`, `edit_third_wave_percent`, `edit_third_wave_hours`, `edit_third_wave_threshold`, `start_monitoring_callback`, `stop_monitoring_callback`, `force_check_callback`, `traffic_check_callback` — Ручная проверка трафика — использует snapshot и дельту., `monitoring_logs_callback`, `clear_logs_callback`, `test_notifications_callback`, `monitoring_statistics_callback`, `nalogo_force_process_callback` — Принудительная отправка чеков из очереди., `nalogo_pending_callback` — Просмотр чеков ожидающих ручной проверки., `nalogo_mark_verified_callback` — Пометить чек как созданный в налоговой., `nalogo_retry_callback` — Повторно отправить чек в налоговую., `nalogo_clear_pending_callback` — Очистить всю очередь проверки., `get_monitoring_logs_keyboard`, `get_monitoring_logs_back_keyboard`, `monitoring_command`, `process_notification_value_input`, `admin_traffic_settings` — Показывает настройки мониторинга трафика., `toggle_fast_check` — Переключает быструю проверку трафика., `toggle_daily_check` — Переключает суточную проверку трафика., `edit_fast_interval` — Начинает редактирование интервала быстрой проверки., `edit_fast_threshold` — Начинает редактирование порога быстрой проверки., `edit_daily_time` — Начинает редактирование времени суточной проверки., `edit_daily_threshold` — Начинает редактирование суточного порога., `edit_cooldown` — Начинает редактирование кулдауна уведомлений., `process_traffic_setting_input` — Обрабатывает ввод настройки мониторинга трафика., `register_handlers`
+  Функции: `admin_monitoring_menu`, `admin_monitoring_settings`, `admin_notify_settings`, `toggle_trial_channel_notification`, `preview_trial_channel_notification`, `toggle_expired_1d_notification`, `preview_expired_1d_notification`, `toggle_second_wave_notification`, `preview_second_wave_notification`, `toggle_third_wave_notification`, `preview_third_wave_notification`, `preview_all_notifications`, `edit_second_wave_percent`, `edit_second_wave_hours`, `edit_third_wave_percent`, `edit_third_wave_hours`, `edit_third_wave_threshold`, `start_monitoring_callback`, `stop_monitoring_callback`, `force_check_callback`, `traffic_check_callback` — Ручная проверка трафика — использует snapshot и дельту., `monitoring_logs_callback`, `clear_logs_callback`, `test_notifications_callback`, `monitoring_statistics_callback`, `get_monitoring_logs_keyboard`, `get_monitoring_logs_back_keyboard`, `monitoring_command`, `process_notification_value_input`, `admin_traffic_settings` — Показывает настройки мониторинга трафика., `toggle_fast_check` — Переключает быструю проверку трафика., `toggle_daily_check` — Переключает суточную проверку трафика., `edit_fast_interval` — Начинает редактирование интервала быстрой проверки., `edit_fast_threshold` — Начинает редактирование порога быстрой проверки., `edit_daily_time` — Начинает редактирование времени суточной проверки., `edit_daily_threshold` — Начинает редактирование суточного порога., `edit_cooldown` — Начинает редактирование кулдауна уведомлений., `process_traffic_setting_input` — Обрабатывает ввод настройки мониторинга трафика., `register_handlers`
 - `app/handlers/admin/payments.py` — Python-модуль
   Классы: нет
   Функции: `show_payments_overview`, `show_payment_details`, `manual_check_payment`, `check_all_payments` — Массовая проверка всех ожидающих платежей., `export_payments` — Экспорт данных платежей в JSON файл., `register_handlers`
@@ -1174,65 +1174,6 @@
 
 - `app/lib/__init__.py` — Python-модуль
   Классы: нет
-  Функции: нет
-- `app/lib/nalogo/`
-
-#### app/lib/nalogo
-
-- `app/lib/nalogo/__init__.py` — Python-модуль
-  Классы: нет
-  Функции: нет
-- `app/lib/nalogo/_http.py` — Python-модуль
-  Классы: `AuthProvider` (2 методов), `AsyncHTTPClient` (8 методов)
-  Функции: нет
-- `app/lib/nalogo/auth.py` — Python-модуль
-  Классы: `AuthProviderImpl` (10 методов)
-  Функции: `generate_device_id` — Generate device ID similar to PHP's DeviceIdGenerator.
-- `app/lib/nalogo/client.py` — Python-модуль
-  Классы: `Client` (11 методов)
-  Функции: нет
-- `app/lib/nalogo/dto/`
-- `app/lib/nalogo/exceptions.py` — Python-модуль
-  Классы: `DomainException` (5 методов), `ValidationException`, `UnauthorizedException`, `ForbiddenException`, `NotFoundException`, `ClientException`, `PhoneException`, `ServerException`, `UnknownErrorException`
-  Функции: `raise_for_status` — Raise appropriate domain exception based on HTTP status code.
-- `app/lib/nalogo/income.py` — Python-модуль
-  Классы: `IncomeAPI` (5 методов)
-  Функции: нет
-- `app/lib/nalogo/payment_type.py` — Python-модуль
-  Классы: `PaymentTypeAPI` (3 методов)
-  Функции: нет
-- `app/lib/nalogo/receipt.py` — Python-модуль
-  Классы: `ReceiptAPI` (3 методов)
-  Функции: нет
-- `app/lib/nalogo/tax.py` — Python-модуль
-  Классы: `TaxAPI` (4 методов)
-  Функции: нет
-- `app/lib/nalogo/user.py` — Python-модуль
-  Классы: `UserAPI` (2 методов)
-  Функции: нет
-
-##### app/lib/nalogo/dto
-
-- `app/lib/nalogo/dto/__init__.py` — Python-модуль
-  Классы: нет
-  Функции: нет
-- `app/lib/nalogo/dto/device.py` — Python-модуль
-  Классы: `DeviceInfo` (1 методов)
-  Функции: нет
-- `app/lib/nalogo/dto/income.py` — Python-модуль
-  Классы: `IncomeType`, `PaymentType`, `CancelCommentType`, `AtomDateTime` (3 методов), `IncomeServiceItem` (5 методов), `IncomeClient` (3 методов), `IncomeRequest` (2 методов), `CancelRequest` (2 методов)
-  Функции: нет
-- `app/lib/nalogo/dto/invoice.py` — Python-модуль
-  Классы: `InvoiceServiceItem` (3 методов), `InvoiceClient` (1 методов)
-  Функции: нет
-- `app/lib/nalogo/dto/payment_type.py` — Python-модуль
-  Классы: `PaymentType` (2 методов), `PaymentTypeCollection` (3 методов)
-  Функции: нет
-- `app/lib/nalogo/dto/tax.py` — Python-модуль
-  Классы: `Tax` (1 методов), `History` (1 методов), `HistoryRecords` (3 методов), `Payment` (1 методов), `PaymentRecords` (3 методов)
-  Функции: нет
-- `app/lib/nalogo/dto/user.py` — Python-модуль
-  Классы: `UserType` (5 методов)
   Функции: нет
 
 ### app/localization
@@ -1462,12 +1403,6 @@
 - `app/services/monitoring_service.py` — Python-модуль
   Классы: `AutopayFailState` (2 методов), `MonitoringService` (64 методов)
   Функции: `decide_autopay_fail_notification` — Decide whether/what to send on a failed-autopay tick., `apply_autopay_fail_notification` — Mutate state to record that a notification with `reason` was just sent., `traffic_warning_cache_key` — «Предупредили о трафике» — на подписку и текущий лимит (докупка или новый период дают новый ключ)., `telegram_blocked_cache_key`
-- `app/services/nalogo_queue_service.py` — Python-модуль
-  Классы: `NalogoQueueService` (15 методов)
-  Функции: нет
-- `app/services/nalogo_service.py` — Python-модуль
-  Классы: `NaloGoService` (22 методов)
-  Функции: `send_nalogo_receipt_notifications` — Отправляет ссылку на созданный чек NaloGO пользователю и дублирует её в
 - `app/services/news_media_service.py` — Python-модуль
   Классы: `SavedMedia`
   Функции: `ensure_upload_dirs` — Create images/, videos/, thumbnails/ subdirectories under upload_path., `detect_file_type` — Detect media type and extension from magic bytes., `save_image` — Validate, resize, and save an image file. Runs PIL operations in a thread., `save_video` — Validate and save a video file. Runs I/O in a thread., `delete_media_file` — Delete a media file by filename with path traversal protection.
@@ -2963,6 +2898,9 @@
 - `migrations/alembic/versions/0143_remove_unused_payment_providers.py` — Python-модуль
   Классы: нет
   Функции: `upgrade`, `downgrade`
+- `migrations/alembic/versions/0144_remove_nalogo_receipt_columns.py` — Python-модуль
+  Классы: нет
+  Функции: `upgrade`, `downgrade`
 
 ## scripts
 
@@ -3125,6 +3063,9 @@
 - `tests/test_rubles_to_kopeks.py` — Python-модуль
   Классы: нет
   Функции: `test_rubles_to_kopeks_has_no_float_error`, `test_rubles_to_kopeks_rejects_non_finite_amounts`
+- `tests/test_settings_references.py` — Python-модуль
+  Классы: нет
+  Функции: `test_every_setting_used_in_code_exists`, `test_every_payment_method_used_in_code_exists`
 - `tests/test_sla_defaults_match_env_example.py` — Python-модуль
   Классы: нет
   Функции: `test_code_default_matches_env_example`, `test_sla_is_off_by_default` — Явно: без .env напоминания молчат., `test_withdrawal_reminders_are_off_by_default`
@@ -3394,7 +3335,7 @@
   Функции: `test_editor_exposes_every_email_template_type` — Жалоба из «Багов»: письма уходят, а поменять их шаблон нельзя., `test_every_template_type_has_sample_context_for_all_vars`, `test_default_template_renders_for_editor` — Каждый тип из списка редактора должен иметь рабочий дефолтный шаблон., `test_editor_payload_keeps_placeholders_not_sample_values` — Редактор получает {placeholder}-токены, а не подставленные примеры., `test_verification_template_placeholder_survives_roundtrip` — Сценарий бага: сохранить дефолтный шаблон как override и отправить письмо., `test_substitute_escapes_html_in_body`, `test_substitute_subject_strips_newlines_without_escaping`, `test_substitute_none_value_becomes_empty`, `test_override_without_required_var_falls_back_to_default` — Сломанный override (без {verification_url}) отбрасывается → дефолт., `test_override_with_required_var_is_used`, `test_required_var_with_empty_value_does_not_reject_override` — Пустое значение переменной не должно отбрасывать override., `test_preview_substitutes_sample_values_into_custom_body`, `test_preview_substitutes_common_vars_into_custom_body` — Общие переменные ({cabinet_url}, {service_name}) работают в любом шаблоне., `test_override_render_injects_common_vars` — Боевой рендер override подставляет общие переменные без участия вызывающего кода., `test_common_vars_exposed_to_editor` — Редактор получает список общих переменных для всех типов., `test_recipient_common_vars_never_leak_as_literals` — Даже если отправитель не передал username/email — литерал {username} не уходит в письмо., `test_preview_default_template_uses_sample_values`, `test_saving_template_without_required_placeholder_is_rejected_with_clear_error` — Раньше такой override молча подменялся стандартным письмом при отправке —, `test_saving_template_with_required_placeholder_passes`, `test_legacy_placeholder_names_resolve_in_sample_context` — 7 марта редактор переименовал переменные; шаблоны на старых именах должны жить., `test_override_with_legacy_placeholder_renders_value` — Шаблон пользователя с {new_end_date} — в письме дата, а не литерал., `test_saving_template_with_unknown_placeholder_is_rejected`, `test_saving_template_with_legacy_placeholder_is_allowed`
 - `tests/cabinet/test_email_type_switch.py` — Python-модуль
   Классы: нет
-  Функции: `test_disabled_setting_switches_types_off`, `test_always_on_types_ignore_the_setting`, `test_set_enabled_writes_setting_through_configuration_service`, `test_endpoint_refuses_to_disable_always_on_types`, `test_promo_email_is_skipped_when_disabled`, `test_receipt_email_is_skipped_when_disabled`, `test_switch_module_is_free_of_side_effects_on_import`, `test_delivery_service_skips_disabled_type` — Основной путь уведомлений: отключённый тип не уходит, включённый — уходит.
+  Функции: `test_disabled_setting_switches_types_off`, `test_always_on_types_ignore_the_setting`, `test_set_enabled_writes_setting_through_configuration_service`, `test_endpoint_refuses_to_disable_always_on_types`, `test_promo_email_is_skipped_when_disabled`, `test_switch_module_is_free_of_side_effects_on_import`, `test_delivery_service_skips_disabled_type` — Основной путь уведомлений: отключённый тип не уходит, включённый — уходит.
 - `tests/cabinet/test_email_unsubscribe.py` — Python-модуль
   Классы: нет
   Функции: `smtp_ready` — Делает email_service «настроенным» и подменяет SMTP-соединение., `test_token_roundtrip` — Свежий токен опознаётся: отдаёт user_id и категорию., `test_token_email_is_case_insensitive` — Регистр адреса не должен ломать ссылку из письма., `test_token_rejects_tampering` — Подменённый user_id не проходит проверку подписи., `test_token_dies_with_old_email` — Смена адреса обесценивает старые ссылки — токен привязан к email., `test_parse_token_survives_garbage` — Мусор в query-параметре не должен ронять публичный эндпоинт., `test_build_url_empty_when_disabled` — Выключенная отписка не должна протаскивать битую ссылку в письмо., `test_build_url_uses_cabinet_url_by_default` — Без явного EMAIL_UNSUBSCRIBE_BASE_URL берём публичный путь кабинета., `test_send_email_adds_one_click_headers` — List-Unsubscribe + One-Click — то, из чего Gmail рисует свою кнопку., `test_transactional_email_has_no_unsubscribe_headers` — Письмо со сбросом пароля не должно предлагать отписку., `test_unsubscribe_url_is_header_injection_safe` — Перенос строки в URL не должен дописать чужой заголовок., `test_base_template_renders_footer_link` — Ссылка в футере — для клиентов, которые не рисуют кнопку из заголовка., `test_base_template_without_url_has_no_dangling_footer` — У транзакционных писем футер остаётся прежним., `test_common_context_exposes_unsubscribe_placeholder` — {unsubscribe_url} обязан резолвиться, иначе он утечёт в письмо литералом., `test_email_broadcast_filters_by_category` — Тумблеры кабинета обязаны резать email-рассылку так же, как Telegram., `test_get_does_not_unsubscribe` — GET по ссылке не должен ничего менять., `test_post_applies_and_answers_html_to_browser` — POST из формы: отписка применяется, браузеру отдаём страницу результата., `test_post_answers_bare_200_to_mail_client` — One-click от Gmail: пустой 200, без HTML., `test_parse_token_rejects_ids_outside_int4` — Публичный эндпоинт не должен падать на подобранном id., `test_mailto_with_crlf_is_dropped` — mailto уходит в тот же заголовок — перенос строки дописал бы свой., `test_marketing_email_blocked_after_unsubscribe` — Отписавшийся не должен получать промо и winback — ради этого всё и делалось., `test_marketing_email_carries_unsubscribe_url` — У маркетингового письма ссылка отписки обязана быть., `test_transactional_email_has_no_unsubscribe` — Транзакционному письму ссылка отписки не положена., `test_email_broadcast_path_applies_category_filter` — Проверяем не хелпер, а то, что путь рассылки его ЗОВЁТ., `test_signature_is_compared_in_constant_time` — Сравнение подписи — только hmac.compare_digest.
@@ -4393,9 +4334,6 @@
 - `tests/handlers/test_legacy_subscription_switch_list.py` — Python-модуль
   Классы: нет
   Функции: `test_legacy_subscription_sees_tariffs_when_switching_is_disabled`, `test_expired_legacy_subscription_sees_tariffs` — Истёкшая старая подписка переводится на тариф той же строкой, а не покупкой с нуля., `test_legacy_subscription_list_does_not_say_unknown_tariff` — Человеку не пишем «Текущий: Неизвестно» — у старой подписки тарифа просто нет., `test_legacy_subscription_period_confirmation_does_not_say_unknown_tariff` — Экран подтверждения после выбора тарифа тоже без «Текущий тариф: Неизвестно».
-- `tests/handlers/test_nalogo_pending_callbacks.py` — Python-модуль
-  Классы: нет
-  Функции: `test_pending_receipt_button_roundtrip`, `test_legacy_truncated_callback_does_not_choose_a_receipt`, `test_ambiguous_pending_token_is_rejected`
 - `tests/handlers/test_no_undefined_texts_in_handlers.py` — Python-модуль
   Классы: нет
   Функции: `test_handlers_never_use_undefined_texts`
@@ -4876,9 +4814,6 @@
 - `tests/services/test_guest_purchase_fulfillment.py` — Python-модуль
   Классы: нет
   Функции: `test_fulfill_purchase_passes_purchase_context_to_user_resolution`
-- `tests/services/test_guest_purchase_receipt_contact.py` — Python-модуль
-  Классы: нет
-  Функции: `test_regular_purchase_uses_the_fulfilment_user` — Обычная покупка: покупатель и получатель — одно лицо., `test_gift_receipt_goes_to_the_linked_buyer` — Подарок из кабинета: buyer_user_id проставлен — чек уходит дарителю., `test_guest_gift_falls_back_to_the_purchase_contact` — Подарок с лендинга: аккаунта дарителя нет, но его почта есть на покупке., `test_guest_gift_with_telegram_contact_has_no_usable_channel` — contact_value для telegram — это username, отправить по нему чек нельзя., `test_gift_never_leaks_the_recipient_contacts` — Инвариант: контакты одаряемого не попадают в чек ни в одной ветке.
 - `tests/services/test_guest_purchase_referral_code.py` — Python-модуль
   Классы: нет
   Функции: `test_new_email_user_is_created_with_referral_code` — A landing-page email purchase must persist `referral_code` on the new, `test_new_telegram_user_is_created_with_referral_code` — Same guarantee for the telegram-username guest-purchase branch., `test_existing_email_user_without_referral_code_is_backfilled` — Legacy users created before the fix (with referral_code=NULL) must be, `test_existing_email_user_with_referral_code_is_not_overwritten` — Idempotency: if the user already has a referral_code, do not regenerate
@@ -4942,18 +4877,6 @@
 - `tests/services/test_multi_tariff_device_uuid.py` — Python-модуль
   Классы: нет
   Функции: `test_bot_multi_tariff_uses_subscription_panel_id`, `test_bot_multi_tariff_null_sub_does_not_fall_back_to_user` — The bleed: a null sub id must NOT borrow the user's (another tariff's) panel user., `test_bot_single_tariff_falls_back_to_user`, `test_bot_no_subscription_uses_user_panel_id`, `test_bot_never_returns_legacy_uuid` — Пустой remnawave_id не должен подмениться легаси-uuid'ом ни в одном режиме., `test_cabinet_multi_tariff_uses_subscription_panel_id`, `test_cabinet_multi_tariff_null_sub_no_user_fallback`, `test_cabinet_single_tariff_uses_user_panel_id`, `test_cabinet_no_subscription_uses_user_panel_id`, `test_cabinet_never_returns_legacy_uuid`, `test_both_resolvers_agree_and_return_numeric_ids` — В multi-tariff кабинет и бот обязаны резолвить одинаково и отдавать именно число., `test_deterministic_suffix_distinct_per_subscription_when_short_id_empty` — Two tariffs of one user with empty/legacy short_id must still build DISTINCT
-- `tests/services/test_nalogo_auth_timeout.py` — Python-модуль
-  Классы: нет
-  Функции: `tax_server`, `authenticate`, `test_auth_respects_short_client_timeout`, `test_auth_success_keeps_token_storage_contract`, `test_service_auth_accepts_response_after_ten_seconds`
-- `tests/services/test_nalogo_pending_verification.py` — Python-модуль
-  Классы: нет
-  Функции: `test_pending_verification_entry_keeps_user_email` — Почта покупателя обязана лечь в очередь — иначе при пересылке её нет., `test_retry_delivers_receipt_to_the_buyer` — Чек, созданный ручной пересылкой, доставляется покупателю., `test_retry_recovers_amount_from_legacy_entry` — Старые записи очереди без amount_kopeks — сумма берётся из amount., `test_retry_keeps_receipt_when_delivery_fails` — Доставка упала — чек в ФНС уже создан, из очереди он всё равно уходит., `test_retry_without_bot_still_creates_receipt` — Без bot чек всё равно создаётся — старое поведение не ломаем.
-- `tests/services/test_nalogo_receipt_notifications.py` — Python-модуль
-  Классы: нет
-  Функции: `test_no_telegram_id_admin_only_with_guest_mark`, `test_user_send_failure_does_not_block_admin_duplicate` — Юзер заблокировал бота — админ-топик всё равно получает чек., `test_no_print_url_sends_nothing`, `test_no_admin_chat_user_only`, `test_get_receipt_print_url_builds_v1_link` — Ссылка обязана содержать /v1 — библиотечный print_url() строит без него, `test_receipt_delivered_as_photo_when_download_succeeds` — lknpd недоступен клиентам за VPN — при успешном серверном скачивании чек, `test_receipt_delivered_as_document_for_pdf`, `test_download_failure_falls_back_to_link` — Сбой скачивания (сеть/503 ФНС) не ломает доставку — уходит текст со ссылкой., `test_telegram_rejects_file_falls_back_to_link` — Telegram отверг сам файл — чек обязан дойти, поэтому уходит ссылкой., `test_blocked_user_is_not_retried_as_message` — Юзер заблокировал бота — это не проблема файла, повторять текстом бессмысленно., `test_download_rejects_html_error_page` — ФНС отдаёт HTML-заглушку с кодом 200 — её нельзя слать как «чек»., `test_download_accepts_image_and_pdf`, `test_download_reads_full_body_not_just_first_network_chunk` — Тело длиннее одной сетевой порции обязано склеиться целиком., `test_download_rejects_oversized_receipt` — Предохранитель от вычитывания мусора в память., `test_email_only_user_gets_receipt_by_email` — У покупателя нет Telegram (кабинет/лендинг) — чек уходит на почту файлом., `test_blocked_bot_falls_back_to_email_from_db` — Юзер заблокировал бота — почту берём из БД, чек уходит письмом., `test_telegram_rejected_file_falls_back_to_email_with_attachment` — Telegram отверг файл — ссылка в чате не считается доставкой чека., `test_delivered_to_telegram_skips_email` — Чек дошёл в Telegram — письмо не дублируем., `test_email_not_sent_when_smtp_unconfigured` — SMTP не настроен — не падаем, чек остаётся хотя бы в админ-топике., `test_routine_delivery_failures_are_warnings_not_errors` — «Чат не найден» и флуд-контроль — штатные исходы рассылки, не сбои кода., `test_receipt_email_is_branded_and_uses_admin_override` — Чек на почту раньше был зашит в код (по-русски, без обёртки) — теперь это, `test_receipt_filename_comes_from_setting` — Имя файла чека — настройка NALOGO_RECEIPT_FILENAME; битый шаблон не ломает отправку., `test_sends_to_user_and_duplicates_to_admin_topic`
-- `tests/services/test_nalogo_token_reuse.py` — Python-модуль
-  Классы: нет
-  Функции: `token`, `api`, `service`, `test_valid_saved_token_authenticates_without_password_login`, `test_receipts_use_live_in_memory_token_instead_of_password`, `test_expired_saved_token_refreshes_and_persists_new_token`, `test_revoked_token_and_dead_refresh_fall_back_to_password`, `test_no_usable_storage_retains_password_login`, `test_explicit_authentication_rereads_new_storage`, `test_token_file_is_private_after_atomic_save`, `test_revoked_in_memory_access_recovers_before_giving_up_receipt`, `receipt_cache`, `test_ambiguous_queued_receipt_stays_manual_without_repeated_post`, `test_manual_confirmation_without_uuid_blocks_receipt_and_stale_queue`, `test_manual_retry_preserves_original_operation_time`, `test_failed_atomic_replace_preserves_previous_file_and_cleans_temp`, `test_concurrent_authentication_refreshes_expired_token_only_once`, `test_missing_invalid_or_near_expiry_refreshes_instead_of_password`
 - `tests/services/test_notification_delivery_preferences.py` — Python-модуль
   Классы: нет
   Функции: `test_global_switch_blocks_regular_notifications`, `test_transactional_messages_bypass_global_switch`, `test_per_user_preferences_block_matching_notifications`, `test_referral_switch_is_enforced_by_unified_delivery`, `test_blocked_user_can_receive_the_ban_notification`, `test_blocked_user_does_not_receive_unrelated_notifications`, `test_promo_opt_out_suppresses_the_message_but_keeps_the_discount` — Отказ от промо-уведомлений глушит СООБЩЕНИЕ, но не отбирает скидку.

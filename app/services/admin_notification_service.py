@@ -905,9 +905,6 @@ class AdminNotificationService:
         if transaction.completed_at:
             detail_lines.append(f'Завершена: {format_local_datetime(transaction.completed_at, "%d.%m.%Y %H:%M:%S")}')
 
-        if transaction.receipt_uuid:
-            detail_lines.append(f'Чек UUID: {transaction.receipt_uuid}')
-
         blockquote_body = '\n'.join(detail_lines)
         message_lines.extend(
             [

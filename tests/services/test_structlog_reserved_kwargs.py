@@ -69,9 +69,6 @@ def _sources():
 def test_no_reserved_kwargs_in_log_calls():
     offenders = []
     for path in _sources():
-        # Вендоренный код не наш и живёт по своим правилам.
-        if 'lib/nalogo' in str(path):
-            continue
         try:
             tree = ast.parse(path.read_text(encoding='utf-8'))
         except SyntaxError:  # pragma: no cover - синтаксис ловит отдельный прогон

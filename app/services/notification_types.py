@@ -92,7 +92,6 @@ class NotificationType(Enum):
     # Other
     BROADCAST = 'broadcast'
     PAYMENT_RECEIVED = 'payment_received'
-    NALOGO_RECEIPT = 'nalogo_receipt'
     PROMO_OFFER = 'promo_offer'
 
     # Guest purchase notifications

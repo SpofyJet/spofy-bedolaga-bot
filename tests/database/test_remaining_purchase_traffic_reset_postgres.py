@@ -129,7 +129,6 @@ async def test_paid_existing_purchase_preserves_traffic_contract(
     for name in [
         'send_guest_notification',
         '_send_admin_notification',
-        '_create_nalogo_receipt_for_purchase',
         '_attribute_purchase_campaign',
     ]:
         monkeypatch.setattr(guest, name, AsyncMock())
