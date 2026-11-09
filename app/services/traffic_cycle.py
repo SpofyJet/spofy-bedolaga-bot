@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import calendar
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from zoneinfo import ZoneInfo
 
 
@@ -43,3 +43,26 @@ def is_cycle_due(anchor_at: datetime, last_reset_at: datetime | None, now: datet
     if due is None:
         return False
     return last_reset_at is None or last_reset_at.astimezone(tz).date() < due
+
+
+def next_cycle_date(anchor: date, today: date) -> date:
+    """Первый день сброса строго после ``today``."""
+    year, month = today.year, today.month
+    while True:
+        candidate = _clamped(year, month, anchor.day)
+        if candidate > today and candidate > anchor:
+            return candidate
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+
+
+def next_reset_at(anchor_at: datetime, last_reset_at: datetime | None, now: datetime, tz: ZoneInfo) -> datetime:
+    """Начало (в UTC) местного дня, когда счётчик обнулится в следующий раз.
+
+    Если сброс положен уже сегодня, но проход его ещё не выполнил, это сегодняшний день.
+    """
+    anchor, today = anchor_at.astimezone(tz).date(), now.astimezone(tz).date()
+    if is_cycle_due(anchor_at, last_reset_at, now, tz):
+        day = latest_cycle_date(anchor, today)
+    else:
+        day = next_cycle_date(anchor, today)
+    return datetime.combine(day, time.min, tzinfo=tz).astimezone(UTC)

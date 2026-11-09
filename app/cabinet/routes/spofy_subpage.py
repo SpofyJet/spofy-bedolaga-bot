@@ -53,6 +53,7 @@ from app.services.spofy_subpage_service import (
     tag_current_cart_as_subpage,
 )
 from app.services.user_cart_service import user_cart_service
+from app.services.traffic_cycle_service import next_traffic_reset_at
 from app.utils.lifetime import for_period_ru, is_lifetime_end, is_lifetime_period
 from app.utils.pricing_utils import format_period_description
 
@@ -141,7 +142,17 @@ def snapshot(subscription: Subscription) -> dict[str, Any]:
         'is_lifetime': not subscription.is_trial and is_lifetime_end(end_date),
         'device_limit': subscription.device_limit,
         'traffic_limit_gb': subscription.traffic_limit_gb,
+        # Панель трафик сама не сбрасывает (NO_RESET): день сброса знает только бот.
+        'traffic_reset_at': _traffic_reset_at(subscription, end_date),
     }
+
+
+def _traffic_reset_at(subscription: Subscription, end_date: Any) -> str | None:
+    """ISO-время следующего сброса трафика в UTC; None — безлимит, «Навсегда» или сброса не будет."""
+    if not isinstance(end_date, datetime) or is_lifetime_end(end_date):
+        return None
+    moment = next_traffic_reset_at(subscription)
+    return moment.isoformat() if moment else None
 
 
 async def _soft(coro: Any, default: Any, part: str = 'offer part') -> Any:

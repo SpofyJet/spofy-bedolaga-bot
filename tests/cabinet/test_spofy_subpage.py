@@ -877,3 +877,61 @@ async def test_wait_branch_times_out_with_409_instead_of_hanging(monkeypatch, au
     first.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await first
+
+
+# ───────────── дата сброса трафика и отключённая подписка ─────────────
+
+
+def _cycle_subscription(**over):
+    """Платная подписка с лимитом на тарифе с циклом от дня покупки (15-е число)."""
+    base = dict(
+        tariff=_tariff(traffic_reset_mode='SUBSCRIPTION_MONTH', traffic_limit_gb=100),
+        traffic_limit_gb=100,
+        start_date=datetime(2026, 9, 15, 9, tzinfo=UTC),
+        traffic_cycle_anchor_at=datetime(2026, 9, 15, 9, tzinfo=UTC),
+        traffic_cycle_reset_at=datetime(2026, 10, 15, 1, tzinfo=UTC),
+        end_date=datetime(2027, 3, 15, 9, tzinfo=UTC),
+    )
+    base.update(over)
+    return _subscription(**base)
+
+
+@pytest.fixture
+def november_third(monkeypatch):
+    from zoneinfo import ZoneInfo
+
+    from app.services import traffic_cycle_service
+
+    class _Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 11, 3, 12, tzinfo=UTC)
+
+    monkeypatch.setattr(traffic_cycle_service, 'datetime', _Clock)
+    monkeypatch.setattr(traffic_cycle_service, 'get_local_timezone', lambda: ZoneInfo('Europe/Moscow'))
+
+
+def test_snapshot_gives_next_traffic_reset_day(november_third):
+    # Куплено 15-го → следующий сброс 15 ноября, 00:00 по Москве = 14 ноября 21:00 UTC.
+    assert bridge.snapshot(_cycle_subscription())['traffic_reset_at'] == '2026-11-14T21:00:00+00:00'
+
+
+def test_snapshot_reset_day_is_today_while_reset_is_pending(november_third):
+    pending = _cycle_subscription(
+        traffic_cycle_anchor_at=datetime(2026, 9, 3, 9, tzinfo=UTC),
+        traffic_cycle_reset_at=datetime(2026, 10, 3, 1, tzinfo=UTC),
+    )
+    assert bridge.snapshot(pending)['traffic_reset_at'] == '2026-11-02T21:00:00+00:00'
+
+
+def test_snapshot_has_no_reset_day_without_a_reset(november_third):
+    from app.utils.lifetime import LIFETIME_END
+
+    unlimited = _cycle_subscription(traffic_limit_gb=0)
+    forever = _cycle_subscription(end_date=LIFETIME_END)
+    trial = _cycle_subscription(is_trial=True)
+    other_mode = _cycle_subscription(tariff=_tariff(traffic_reset_mode='NO_RESET'))
+    ends_before = _cycle_subscription(end_date=datetime(2026, 11, 10, tzinfo=UTC))
+
+    for subscription in (unlimited, forever, trial, other_mode, ends_before):
+        assert bridge.snapshot(subscription)['traffic_reset_at'] is None

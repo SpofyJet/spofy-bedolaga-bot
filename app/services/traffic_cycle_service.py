@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database.crud.subscription import reactivate_subscription, update_subscription_usage
 from app.database.models import Subscription, SubscriptionStatus, Tariff
-from app.services.traffic_cycle import MODE, is_cycle_due
+from app.services.traffic_cycle import MODE, is_cycle_due, next_reset_at
 from app.utils.timezone import get_local_timezone
 
 
@@ -29,6 +29,27 @@ _LIVE_STATUSES = (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.LIMITED.va
 
 def _uses_cycle(tariff_mode: str | None) -> bool:
     return (tariff_mode or settings.DEFAULT_TRAFFIC_RESET_STRATEGY or '').upper() == MODE
+
+
+def next_traffic_reset_at(subscription: Subscription, now: datetime | None = None) -> datetime | None:
+    """Когда этот проход обнулит трафик подписки в следующий раз; ``None`` — сброса не будет.
+
+    Условия те же, что в ``_due_ids``: живая платная подписка с лимитом трафика на
+    тарифе с циклом от дня покупки. Если подписка закончится раньше — тоже ``None``.
+    """
+    now = now or datetime.now(UTC)
+    if subscription.is_trial or (subscription.traffic_limit_gb or 0) <= 0:
+        return None
+    if subscription.status not in _LIVE_STATUSES or subscription.end_date is None or subscription.end_date <= now:
+        return None
+    tariff = subscription.tariff if subscription.tariff_id else None
+    if not _uses_cycle(tariff.traffic_reset_mode if tariff else None):
+        return None
+    anchor = subscription.traffic_cycle_anchor_at or subscription.start_date
+    if anchor is None:
+        return None
+    moment = next_reset_at(anchor, subscription.traffic_cycle_reset_at, now, get_local_timezone())
+    return moment if moment < subscription.end_date else None
 
 
 class TrafficCycleService:
