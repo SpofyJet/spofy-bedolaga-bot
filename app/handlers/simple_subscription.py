@@ -16,6 +16,7 @@ from app.services.payment_service import PaymentService
 from app.services.subscription_purchase_service import SubscriptionPurchaseService
 from app.states import SubscriptionStates
 from app.utils.decorators import error_handler
+from app.utils.payment_utils import pay2328_button_label
 from app.utils.pricing_utils import compute_simple_subscription_price
 from app.utils.subscription_time import local_days_until
 from app.utils.subscription_utils import (
@@ -301,7 +302,7 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('PAYMENT_PAY2328', 'Криптовалюта (2328.io)'),
+                    text=pay2328_button_label(texts),
                     callback_data='simple_subscription_pay2328',
                 )
             ]
