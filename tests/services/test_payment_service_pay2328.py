@@ -328,3 +328,62 @@ async def test_non_paid_statuses_never_credit(monkeypatch: pytest.MonkeyPatch, s
     service = _make_service(StubPay2328Service(None))
 
     assert await service.process_pay2328_webhook(DummySession(), {'uuid': payment.uuid, 'payment_status': status})
+
+
+@pytest.mark.anyio('asyncio')
+@pytest.mark.parametrize('status', ['underpaid', 'aml_lock'])
+async def test_manual_review_status_alerts_admins_once(monkeypatch: pytest.MonkeyPatch, status: str) -> None:
+    payment = _stored_payment()
+    updates = _patch_crud(monkeypatch, payment)
+    alerts: list[dict[str, Any]] = []
+
+    async def fake_alert(bot: Any, **kwargs: Any) -> None:
+        alerts.append(kwargs)
+
+    monkeypatch.setattr('app.services.payment.pay2328.alert_payment_not_applied', fake_alert)
+    service = _make_service(StubPay2328Service(None))
+    payload = {'uuid': payment.uuid, 'payment_status': status, 'payer_amount': '1.2', 'payer_currency': 'USDT'}
+
+    assert await service.process_pay2328_webhook(DummySession(), payload)
+    # повторный вебхук и автопроверка приходят с тем же статусом
+    assert await service.process_pay2328_webhook(DummySession(), payload)
+
+    assert len(alerts) == 1
+    assert alerts[0]['provider'] == '2328.io'
+    assert alerts[0]['user_id'] == 8
+    assert alerts[0]['reference'] == payment.uuid
+    assert {'manual_review_alerted': status} in [u.get('metadata') for u in updates]
+
+
+@pytest.mark.anyio('asyncio')
+async def test_waiting_statuses_do_not_alert(monkeypatch: pytest.MonkeyPatch) -> None:
+    payment = _stored_payment()
+    _patch_crud(monkeypatch, payment)
+
+    async def forbidden(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError('алерт только для underpaid и aml_lock')
+
+    monkeypatch.setattr('app.services.payment.pay2328.alert_payment_not_applied', forbidden)
+    service = _make_service(StubPay2328Service(None))
+
+    for status in ('check', 'awaiting_confirmation', 'underpaid_check', 'cancel'):
+        assert await service.process_pay2328_webhook(DummySession(), {'uuid': payment.uuid, 'payment_status': status})
+
+
+@pytest.mark.parametrize(
+    ('status', 'expected'),
+    [
+        ('aml_check', ('⌛', 'Проверяется')),
+        ('aml_lock', ('⌛', 'Проверяется')),
+        ('awaiting_confirmation', ('⌛', 'Ожидает подтверждения')),
+        ('underpaid_check', ('⌛', 'Недостаточная сумма, ожидаем доплату')),
+        ('underpaid', ('⚠️', 'Неверная сумма')),
+        ('check', ('⏳', 'Ожидает оплаты')),
+    ],
+)
+def test_cabinet_names_every_pay2328_status(status: str, expected: tuple[str, str]) -> None:
+    from app.cabinet.routes.balance import _get_status_info
+    from app.database.models import PaymentMethod
+
+    record = SimpleNamespace(status=status, is_paid=False, method=PaymentMethod.PAY2328)
+    assert _get_status_info(record) == expected

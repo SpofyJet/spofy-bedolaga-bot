@@ -12,7 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.bot_factory import create_bot
 from app.config import settings
 from app.database.crud.user import get_user_by_id
-from app.database.models import PAY2328_CLOSED_STATUSES, PAY2328_PAID_STATUSES, PaymentMethod, Transaction, User
+from app.database.models import (
+    PAY2328_CLOSED_STATUSES,
+    PAY2328_PAID_STATUSES,
+    PAY2328_REFUND_STATUSES,
+    PaymentMethod,
+    Transaction,
+    User,
+)
 from app.services.payment_method_config_service import get_enabled_methods_for_user
 from app.services.payment_service import PaymentService
 from app.services.payment_verification_service import (
@@ -664,6 +671,17 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
             return '✅', 'Оплачено'
         if status in {'cancel', 'canceled', 'fail', 'failed', 'expired'}:
             return '❌', 'Отменено'
+        # Промежуточные статусы 2328.io: те же подписи, что в боте.
+        if status in {'aml_check', 'aml_lock'}:
+            return '⌛', 'Проверяется'
+        if status == 'awaiting_confirmation':
+            return '⌛', 'Ожидает подтверждения'
+        if status == 'underpaid_check':
+            return '⌛', 'Недостаточная сумма, ожидаем доплату'
+        if status == 'underpaid':
+            return '⚠️', 'Неверная сумма'
+        if status in PAY2328_REFUND_STATUSES:
+            return '↩️', 'Возврат'
         return '❓', 'Неизвестно'
 
     if record.method == PaymentMethod.CRYPTOBOT:

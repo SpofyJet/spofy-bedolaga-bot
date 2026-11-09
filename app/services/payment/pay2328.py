@@ -20,7 +20,7 @@ from app.database.models import (
     TransactionType,
 )
 from app.services.payment.common import topup_success_text
-from app.services.payment_problem_alert import alert_invoice_failed, note_invoice_created
+from app.services.payment_problem_alert import alert_invoice_failed, alert_payment_not_applied, note_invoice_created
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
@@ -309,12 +309,27 @@ class Pay2328PaymentMixin:
             return updated_payment
 
         if status_normalized in PAY2328_MANUAL_REVIEW_STATUSES:
-            logger.error(
-                '2328.io: платёж требует ручной проверки, баланс не зачислен',
-                uuid=updated_payment.uuid,
-                status=status_normalized,
-                user_id=updated_payment.user_id,
-            )
+            # Раньше недоплата и блокировка были видны только в логе: человек приходил
+            # в поддержку раньше, чем о платеже узнавал владелец. Отметка ставится под
+            # блокировкой строки, поэтому повторный вебхук и автопроверка алерт не дублируют.
+            review_metadata = dict(getattr(updated_payment, 'metadata_json', {}) or {})
+            if review_metadata.get('manual_review_alerted') != status_normalized:
+                review_metadata['manual_review_alerted'] = status_normalized
+                await pay2328_lock_crud.update_pay2328_payment(db, updated_payment.uuid, metadata=review_metadata)
+                updated_payment.metadata_json = review_metadata
+                await alert_payment_not_applied(
+                    getattr(self, 'bot', None),
+                    provider='2328.io',
+                    problem=(
+                        'Оплачена неверная сумма — баланс не пополнен'
+                        if status_normalized == 'underpaid'
+                        else 'Средства заблокированы проверкой провайдера — баланс не пополнен'
+                    ),
+                    user_id=updated_payment.user_id,
+                    amount_kopeks=updated_payment.amount_kopeks,
+                    reference=updated_payment.uuid,
+                    details={'Статус': status_normalized, 'Оплачено': f'{payer_amount} {payer_currency}'},
+                )
 
         if status_normalized not in PAY2328_PAID_STATUSES:
             logger.info('2328.io платёж в этом статусе зачисления не требует', uuid=updated_payment.uuid, status=status)
