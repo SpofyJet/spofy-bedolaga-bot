@@ -557,24 +557,6 @@ async def try_fulfill_guest_purchase(
                 purchase_id=existing.id,
                 provider=provider_name,
             )
-            # NaloGO receipt: payment received, fulfillment deferred until code activation
-            try:
-                await db.refresh(existing)
-                if existing.buyer:
-                    from app.services.guest_purchase_service import _create_nalogo_receipt_for_purchase
-
-                    await _create_nalogo_receipt_for_purchase(db, existing, existing.buyer)
-                else:
-                    logger.warning(
-                        'Code-only gift has no buyer, skipping NaloGO receipt',
-                        purchase_id=existing.id,
-                        buyer_user_id=existing.buyer_user_id,
-                    )
-            except Exception:
-                logger.exception(
-                    'Failed to create NaloGO receipt for code-only gift',
-                    purchase_id=existing.id,
-                )
             # Best-effort: send the claim link to the recipient (if email) and a
             # durable backstop copy to the buyer. Never blocks the payment flow.
             try:

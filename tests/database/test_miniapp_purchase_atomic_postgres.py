@@ -10,14 +10,29 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database.crud import transaction as transaction_crud, user as user_crud
-from app.database.models import Base, ServerSquad, Subscription, SubscriptionServer, Transaction, User
+from app.database.models import (
+    Base,
+    ServerSquad,
+    Subscription,
+    SubscriptionServer,
+    Transaction,
+    User,
+)
 from app.services import (
     monitoring_service as monitoring,
     remnawave_retry_queue as retry,
     subscription_purchase_service as purchase,
 )
-from tests.database.test_renewal_survives_stale_panel_snapshot_postgres import BALANCE, PRICE, _seed
-from tests.fixtures.postgres_db import lock_waiter_appeared, postgres_session, postgres_sessions
+from tests.database.test_renewal_survives_stale_panel_snapshot_postgres import (
+    BALANCE,
+    PRICE,
+    _seed,
+)
+from tests.fixtures.postgres_db import (
+    lock_waiter_appeared,
+    postgres_session,
+    postgres_sessions,
+)
 
 
 pytestmark = pytest.mark.postgres

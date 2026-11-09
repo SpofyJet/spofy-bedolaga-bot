@@ -173,7 +173,9 @@ async def test_cancel_safe_works_even_when_gate_off(monkeypatch):
     фичи бросало бы юзеров с живыми привязками, по которым Platega
     продолжила бы списывать без возможности отписаться.
     """
-    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+    from app.services.payment.platega import (
+        cancel_platega_recurring_for_subscription_safe,
+    )
 
     _configure_gate_on(monkeypatch, PLATEGA_RECURRENT_ENABLED=False)
     mock_cancel = AsyncMock(return_value={'status': 'cancelled'})
@@ -194,7 +196,9 @@ async def test_cancel_safe_commit_false_defers_to_caller_transaction(monkeypatch
     без коммита — откат транзакции вызывающего откатывает и его. Remote-отмена
     при этом выполняется (её при откате добьёт reconciler по remote-статусу).
     """
-    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+    from app.services.payment.platega import (
+        cancel_platega_recurring_for_subscription_safe,
+    )
 
     _configure_gate_on(monkeypatch)
     mock_cancel = AsyncMock(return_value={'status': 'cancelled'})
@@ -219,7 +223,9 @@ async def test_cancel_safe_gate_on_cancels_active_record(monkeypatch):
     сам конструирует лёгкого ``_PlategaSbpAgent`` (только ``PlategaService``,
     без остальных провайдеров ``PaymentService``) и реально доходит до миксина.
     """
-    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+    from app.services.payment.platega import (
+        cancel_platega_recurring_for_subscription_safe,
+    )
 
     _configure_gate_on(monkeypatch)
     mock_cancel = AsyncMock(return_value={'status': 'cancelled'})
@@ -241,7 +247,9 @@ async def test_cancel_safe_never_raises_on_platega_error(monkeypatch):
     пути удаления подписки вызывают её fire-and-forget. Локальный статус
     всё равно переходит в CANCELLED (best-effort семантика миксина).
     """
-    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+    from app.services.payment.platega import (
+        cancel_platega_recurring_for_subscription_safe,
+    )
 
     _configure_gate_on(monkeypatch)
     monkeypatch.setattr(PlategaService, 'cancel_subscription', AsyncMock(side_effect=RuntimeError('platega down')))
@@ -384,6 +392,8 @@ async def test_cancel_safe_wiring_proof_multi_tariff_delete_subscription(monkeyp
     # closing that window before the irreversible delete. Regression guard
     # for that ordering, not just its net effect.
     assert call_order == ['grace_check', 'platega_cancel', 'grace_check']
+
+
 async def test_cancel_safe_wiring_proof_admin_bulk_delete_subscription(monkeypatch):
     """Same wiring proof, for the third reachable delete path that was
     missed: the cabinet admin bulk-actions delete-subscription path
@@ -497,30 +507,14 @@ async def test_delete_user_from_db_cancels_platega_for_each_subscription(monkeyp
     grace-access guard, so a plain best-effort cancel loop before the
     deletes is enough — no lock to re-acquire.
     """
-    import app.services.payment.lava as lava_module
     from app.services.blocked_users_service import BlockedUsersService
 
     recorded: list[tuple[object, int]] = []
-    recorded_lava: list[tuple[object, int]] = []
 
     async def fake_cancel(db, subscription_id):
         recorded.append((db, subscription_id))
 
-    async def fake_cancel_lava(db, subscription_id):
-        recorded_lava.append((db, subscription_id))
-
     monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', fake_cancel)
-    # Тот же teardown-путь гасит и рекуррент Lava — оба провайдера обязаны быть
-    # отменены до удаления пользователя.
-    monkeypatch.setattr(lava_module, 'cancel_lava_recurring_for_subscription_safe', fake_cancel_lava)
-    recorded_cashera: list[tuple[object, int]] = []
-
-    async def fake_cancel_cashera(db, subscription_id):
-        recorded_cashera.append((db, subscription_id))
-
-    monkeypatch.setattr(
-        'app.services.cashera_recurring_cancel.cancel_cashera_recurring_for_subscription_safe', fake_cancel_cashera
-    )
 
     subs = [SimpleNamespace(id=21, connected_squads=None), SimpleNamespace(id=22, connected_squads=None)]
     user = SimpleNamespace(id=9, telegram_id=999, email=None, subscriptions=subs)
@@ -539,7 +533,5 @@ async def test_delete_user_from_db_cancels_platega_for_each_subscription(monkeyp
 
     assert ok is True
     assert recorded == [(db, 21), (db, 22)]
-    assert recorded_lava == [(db, 21), (db, 22)]
-    assert recorded_cashera == [(db, 21), (db, 22)]
     db.delete.assert_awaited_once_with(user)
     db.commit.assert_awaited_once()

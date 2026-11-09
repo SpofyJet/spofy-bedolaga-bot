@@ -847,7 +847,7 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
     'referral_registered': {'referral_name': 'John'},
     'referral_welcome': {'referrer_name': 'John', 'bonus_promise': '100.00 ₽ при первом пополнении от 500.00 ₽'},
     'traffic_reset': {'reset_gb': 50, 'current_limit_gb': 100},
-    'payment_received': {'formatted_amount': '500.00 ₽', 'amount_rubles': 500, 'payment_method': 'YooKassa'},
+    'payment_received': {'formatted_amount': '500.00 ₽', 'amount_rubles': 500, 'payment_method': 'Platega'},
     'ticket_reply': {'ticket_id': 42, 'reply_preview': 'Проверьте настройки подключения', 'has_photo': False},
     'email_verification': {
         'username': 'John',

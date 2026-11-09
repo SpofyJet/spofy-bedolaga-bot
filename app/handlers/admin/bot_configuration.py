@@ -27,7 +27,6 @@ from app.services.system_settings_service import (
     ReadOnlySettingError,
     bot_configuration_service,
 )
-from app.services.tribute_service import TributeService
 from app.states import BotConfigStates
 from app.utils.currency_converter import currency_converter
 from app.utils.decorators import admin_required, error_handler
@@ -64,41 +63,15 @@ CATEGORY_GROUP_METADATA: dict[str, dict[str, object]] = {
     },
     'payments': {
         'title': '💳 Платежные системы',
-        'description': (
-            'YooKassa, CryptoBot, Heleket, CloudPayments, Freekassa, MulenPay, PAL24, Wata, '
-            'Platega, Tribute, Kassa AI, RioPay, SeverPay, PayPear, RollyPay, Overpay, AuraPay, '
-            'Etoplatezhi, Antilopay, Jupiter, CisPay, TabPay, ParityPay, Donut, Lava, Cashera и Telegram Stars.'
-        ),
+        'description': 'CryptoBot, xRocket, Heleket, Wata, Platega и Telegram Stars.',
         'icon': '💳',
         'categories': (
             'PAYMENT',
             'PAYMENT_VERIFICATION',
-            'YOOKASSA',
             'CRYPTOBOT',
             'HELEKET',
-            'CLOUDPAYMENTS',
-            'FREEKASSA',
-            'KASSA_AI',
-            'RIOPAY',
-            'SEVERPAY',
-            'PAYPEAR',
-            'ROLLYPAY',
-            'OVERPAY',
-            'AURAPAY',
-            'ETOPLATEZHI',
-            'ANTILOPAY',
-            'JUPITER',
-            'CISPAY',
-            'CASHERA',
-            'TABPAY',
-            'PARITYPAY',
-            'DONUT',
-            'LAVA',
-            'MULENPAY',
-            'PAL24',
             'WATA',
             'PLATEGA',
-            'TRIBUTE',
             'TELEGRAM',
         ),
     },
@@ -277,16 +250,8 @@ def _get_group_status(group_key: str) -> tuple[str, str]:
     key = group_key
     if key == 'payments':
         payment_statuses = {
-            'YooKassa': settings.is_yookassa_enabled(),
             'CryptoBot': settings.is_cryptobot_enabled(),
             'Platega': settings.is_platega_enabled(),
-            'CloudPayments': settings.is_cloudpayments_enabled(),
-            'Freekassa': settings.is_freekassa_enabled(),
-            'Kassa AI': settings.is_kassa_ai_enabled(),
-            'RioPay': settings.is_riopay_enabled(),
-            'MulenPay': settings.is_mulenpay_enabled(),
-            'PAL24': settings.is_pal24_enabled(),
-            'Tribute': settings.TRIBUTE_ENABLED,
             'Stars': settings.TELEGRAM_STARS_ENABLED,
         }
         active = sum(1 for value in payment_statuses.values() if value)
@@ -553,7 +518,7 @@ async def start_settings_search(
     await callback.message.edit_text(
         '🔍 <b>Поиск по настройкам</b>\n\n'
         'Отправьте часть ключа или названия настройки. \n'
-        'Например: <code>yookassa</code> или <code>уведомления</code>.',
+        'Например: <code>platega</code> или <code>уведомления</code>.',
         reply_markup=keyboard,
         parse_mode='HTML',
     )
@@ -1242,54 +1207,15 @@ def _build_settings_keyboard(
             callback_data=(f'botcfg_test_payment:{method}:{group_key}:{category_key}:{category_page}:{page}'),
         )
 
-    if category_key == 'YOOKASSA':
-        label = texts.t('PAYMENT_CARD_YOOKASSA', '💳 Банковская карта (YooKassa)')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'yookassa')])
-    elif category_key == 'TRIBUTE':
-        label = texts.t('PAYMENT_CARD_TRIBUTE', '💳 Банковская карта (Tribute)')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'tribute')])
-    elif category_key == 'MULENPAY':
-        label = texts.t(
-            'PAYMENT_CARD_MULENPAY',
-            '💳 Банковская карта ({mulenpay_name})',
-        ).format(mulenpay_name=settings.get_mulenpay_display_name())
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'mulenpay')])
-    elif category_key == 'WATA':
+    if category_key == 'WATA':
         label = texts.t('PAYMENT_CARD_WATA', '💳 Банковская карта (WATA)')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'wata')])
-    elif category_key == 'PAL24':
-        label = texts.t('PAYMENT_CARD_PAL24', '🏦 СБП (PayPalych)')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'pal24')])
     elif category_key == 'TELEGRAM':
         label = texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'stars')])
     elif category_key == 'CRYPTOBOT':
         label = texts.t('PAYMENT_CRYPTOBOT', '🦋 Криптовалюта (CryptoBot)')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'cryptobot')])
-    elif category_key == 'FREEKASSA':
-        label = texts.t('PAYMENT_FREEKASSA', '💳 Freekassa')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'freekassa')])
-    elif category_key == 'KASSA_AI':
-        label = texts.t('PAYMENT_KASSA_AI', f'💳 {settings.get_kassa_ai_display_name()}')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'kassa_ai')])
-    elif category_key == 'RIOPAY':
-        label = texts.t('PAYMENT_RIOPAY', f'💳 {settings.get_riopay_display_name()}')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'riopay')])
-    elif category_key == 'SEVERPAY':
-        label = texts.t('PAYMENT_SEVERPAY', f'💳 {settings.get_severpay_display_name()}')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'severpay')])
-    elif category_key == 'PAYPEAR':
-        label = texts.t('PAYMENT_PAYPEAR', f'💳 {settings.get_paypear_display_name()}')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'paypear')])
-    elif category_key == 'ROLLYPAY':
-        label = texts.t('PAYMENT_ROLLYPAY', f'💳 {settings.get_rollypay_display_name()}')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'rollypay')])
-    elif category_key == 'OVERPAY':
-        label = texts.t('PAYMENT_OVERPAY', f'💳 {settings.get_overpay_display_name()}')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'overpay')])
-    elif category_key == 'AURAPAY':
-        label = texts.t('PAYMENT_AURAPAY', f'💳 {settings.get_aurapay_display_name()}')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'aurapay')])
 
     if test_payment_buttons:
         rows.extend(test_payment_buttons)
@@ -1936,248 +1862,6 @@ async def test_payment_provider(
             except Exception:
                 pass
 
-    if method == 'yookassa':
-        if not settings.is_yookassa_enabled():
-            await callback.answer('❌ YooKassa отключена', show_alert=True)
-            return
-
-        amount_kopeks = 10 * 100
-        description = settings.get_balance_payment_description(amount_kopeks, telegram_user_id=db_user.telegram_id)
-        payment_result = await payment_service.create_yookassa_payment(
-            db=db,
-            user_id=db_user.id,
-            amount_kopeks=amount_kopeks,
-            description=f'Тестовый платеж (админ): {description}',
-            metadata={
-                'user_telegram_id': str(db_user.telegram_id),
-                'purpose': 'admin_test_payment',
-                'provider': 'yookassa',
-            },
-        )
-
-        if not payment_result or not payment_result.get('confirmation_url'):
-            await callback.answer('❌ Не удалось создать тестовый платеж YooKassa', show_alert=True)
-            await _refresh_markup()
-            return
-
-        confirmation_url = payment_result['confirmation_url']
-        message_text = (
-            '🧪 <b>Тестовый платеж YooKassa</b>\n\n'
-            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'🆔 ID: {payment_result["yookassa_payment_id"]}'
-        )
-        reply_markup = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text='💳 Оплатить картой',
-                        url=confirmation_url,
-                    )
-                ],
-                [
-                    types.InlineKeyboardButton(
-                        text='📊 Проверить статус',
-                        callback_data=f'check_yookassa_{payment_result["local_payment_id"]}',
-                    )
-                ],
-            ]
-        )
-        await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer('✅ Ссылка на платеж YooKassa отправлена', show_alert=True)
-        await _refresh_markup()
-        return
-
-    if method == 'tribute':
-        if not settings.TRIBUTE_ENABLED:
-            await callback.answer('❌ Tribute отключен', show_alert=True)
-            return
-
-        tribute_service = TributeService(callback.bot)
-        try:
-            payment_url = await tribute_service.create_payment_link(
-                user_id=db_user.telegram_id,
-                amount_kopeks=10 * 100,
-                description='Тестовый платеж Tribute (админ)',
-            )
-        except Exception:
-            payment_url = None
-
-        if not payment_url:
-            await callback.answer('❌ Не удалось создать платеж Tribute', show_alert=True)
-            await _refresh_markup()
-            return
-
-        message_text = (
-            '🧪 <b>Тестовый платеж Tribute</b>\n\n'
-            f'💰 Сумма: {texts.format_price(10 * 100)}\n'
-            '🔗 Нажмите кнопку ниже, чтобы открыть ссылку на оплату.'
-        )
-        reply_markup = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text='💳 Перейти к оплате',
-                        url=payment_url,
-                    )
-                ]
-            ]
-        )
-        await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer('✅ Ссылка на платеж Tribute отправлена', show_alert=True)
-        await _refresh_markup()
-        return
-
-    if method == 'mulenpay':
-        mulenpay_name = settings.get_mulenpay_display_name()
-        mulenpay_name_html = settings.get_mulenpay_display_name_html()
-        if not settings.is_mulenpay_enabled():
-            await callback.answer(
-                f'❌ {mulenpay_name} отключен',
-                show_alert=True,
-            )
-            return
-
-        amount_kopeks = 1 * 100
-        payment_result = await payment_service.create_mulenpay_payment(
-            db=db,
-            user_id=db_user.id,
-            amount_kopeks=amount_kopeks,
-            description=f'Тестовый платеж {mulenpay_name} (админ)',
-            language=language,
-        )
-
-        if not payment_result or not payment_result.get('payment_url'):
-            await callback.answer(
-                f'❌ Не удалось создать платеж {mulenpay_name}',
-                show_alert=True,
-            )
-            await _refresh_markup()
-            return
-
-        payment_url = payment_result['payment_url']
-        message_text = (
-            f'🧪 <b>Тестовый платеж {mulenpay_name_html}</b>\n\n'
-            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'🆔 ID: {payment_result["mulen_payment_id"]}'
-        )
-        reply_markup = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text='💳 Перейти к оплате',
-                        url=payment_url,
-                    )
-                ],
-                [
-                    types.InlineKeyboardButton(
-                        text='📊 Проверить статус',
-                        callback_data=f'check_mulenpay_{payment_result["local_payment_id"]}',
-                    )
-                ],
-            ]
-        )
-        await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer(
-            f'✅ Ссылка на платеж {mulenpay_name} отправлена',
-            show_alert=True,
-        )
-        await _refresh_markup()
-        return
-
-    if method == 'pal24':
-        if not settings.is_pal24_enabled():
-            await callback.answer('❌ PayPalych отключен', show_alert=True)
-            return
-
-        amount_kopeks = 10 * 100
-        payment_result = await payment_service.create_pal24_payment(
-            db=db,
-            user_id=db_user.id,
-            amount_kopeks=amount_kopeks,
-            description='Тестовый платеж PayPalych (админ)',
-            language=language or 'ru',
-        )
-
-        if not payment_result:
-            await callback.answer('❌ Не удалось создать платеж PayPalych', show_alert=True)
-            await _refresh_markup()
-            return
-
-        sbp_url = payment_result.get('sbp_url') or payment_result.get('transfer_url') or payment_result.get('link_url')
-        card_url = payment_result.get('card_url')
-        fallback_url = payment_result.get('link_page_url') or payment_result.get('link_url')
-
-        if not (sbp_url or card_url or fallback_url):
-            await callback.answer('❌ Не удалось создать платеж PayPalych', show_alert=True)
-            await _refresh_markup()
-            return
-
-        if not sbp_url:
-            sbp_url = fallback_url
-
-        default_sbp_text = texts.t(
-            'PAL24_SBP_PAY_BUTTON',
-            '🏦 Оплатить через PayPalych (СБП)',
-        )
-        sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text)
-
-        default_card_text = texts.t(
-            'PAL24_CARD_PAY_BUTTON',
-            '💳 Оплатить банковской картой (PayPalych)',
-        )
-        card_button_text = settings.get_pal24_card_button_text(default_card_text)
-
-        pay_rows: list[list[types.InlineKeyboardButton]] = []
-        if sbp_url:
-            pay_rows.append(
-                [
-                    types.InlineKeyboardButton(
-                        text=sbp_button_text,
-                        url=sbp_url,
-                    )
-                ]
-            )
-
-        if card_url and card_url != sbp_url:
-            pay_rows.append(
-                [
-                    types.InlineKeyboardButton(
-                        text=card_button_text,
-                        url=card_url,
-                    )
-                ]
-            )
-
-        if not pay_rows and fallback_url:
-            pay_rows.append(
-                [
-                    types.InlineKeyboardButton(
-                        text=sbp_button_text,
-                        url=fallback_url,
-                    )
-                ]
-            )
-
-        message_text = (
-            '🧪 <b>Тестовый платеж PayPalych</b>\n\n'
-            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'🆔 Bill ID: {payment_result["bill_id"]}'
-        )
-        keyboard_rows = pay_rows + [
-            [
-                types.InlineKeyboardButton(
-                    text='📊 Проверить статус',
-                    callback_data=f'check_pal24_{payment_result["local_payment_id"]}',
-                )
-            ],
-        ]
-
-        reply_markup = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-        await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer('✅ Ссылка на платеж PayPalych отправлена', show_alert=True)
-        await _refresh_markup()
-        return
-
     if method == 'stars':
         if not settings.TELEGRAM_STARS_ENABLED:
             await callback.answer('❌ Telegram Stars отключены', show_alert=True)
@@ -2284,131 +1968,6 @@ async def test_payment_provider(
         )
         await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
         await callback.answer('✅ Ссылка на платеж CryptoBot отправлена', show_alert=True)
-        await _refresh_markup()
-        return
-
-    if method == 'freekassa':
-        if not settings.is_freekassa_enabled():
-            await callback.answer('❌ Freekassa отключена', show_alert=True)
-            return
-
-        amount_kopeks = settings.FREEKASSA_MIN_AMOUNT_KOPEKS
-        payment_result = await payment_service.create_freekassa_payment(
-            db=db,
-            user_id=db_user.id,
-            amount_kopeks=amount_kopeks,
-            description='Тестовый платеж Freekassa (админ)',
-            email=getattr(db_user, 'email', None),
-            language=db_user.language or settings.DEFAULT_LANGUAGE,
-        )
-
-        if not payment_result or not payment_result.get('payment_url'):
-            await callback.answer('❌ Не удалось создать тестовый платеж Freekassa', show_alert=True)
-            await _refresh_markup()
-            return
-
-        payment_url = payment_result['payment_url']
-        message_text = (
-            '🧪 <b>Тестовый платеж Freekassa</b>\n\n'
-            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'🆔 Order ID: {payment_result["order_id"]}'
-        )
-        reply_markup = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text='💳 Перейти к оплате',
-                        url=payment_url,
-                    )
-                ]
-            ]
-        )
-        await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer('✅ Ссылка на платеж Freekassa отправлена', show_alert=True)
-        await _refresh_markup()
-        return
-
-    if method == 'kassa_ai':
-        if not settings.is_kassa_ai_enabled():
-            await callback.answer('❌ Kassa AI отключена', show_alert=True)
-            return
-
-        amount_kopeks = settings.KASSA_AI_MIN_AMOUNT_KOPEKS
-        payment_result = await payment_service.create_kassa_ai_payment(
-            db=db,
-            user_id=db_user.id,
-            amount_kopeks=amount_kopeks,
-            description='Тестовый платеж Kassa AI (админ)',
-            email=getattr(db_user, 'email', None),
-            language=db_user.language or settings.DEFAULT_LANGUAGE,
-        )
-
-        if not payment_result or not payment_result.get('payment_url'):
-            await callback.answer('❌ Не удалось создать тестовый платеж Kassa AI', show_alert=True)
-            await _refresh_markup()
-            return
-
-        payment_url = payment_result['payment_url']
-        display_name = settings.get_kassa_ai_display_name()
-        message_text = (
-            f'🧪 <b>Тестовый платеж {display_name}</b>\n\n'
-            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'🆔 Order ID: {payment_result["order_id"]}'
-        )
-        reply_markup = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text='💳 Перейти к оплате',
-                        url=payment_url,
-                    )
-                ]
-            ]
-        )
-        await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer(f'✅ Ссылка на платеж {display_name} отправлена', show_alert=True)
-        await _refresh_markup()
-        return
-
-    if method == 'riopay':
-        if not settings.is_riopay_enabled():
-            await callback.answer('❌ RioPay отключена', show_alert=True)
-            return
-
-        amount_kopeks = settings.RIOPAY_MIN_AMOUNT_KOPEKS
-        payment_result = await payment_service.create_riopay_payment(
-            db=db,
-            user_id=db_user.id,
-            amount_kopeks=amount_kopeks,
-            description='Тестовый платеж RioPay (админ)',
-            email=getattr(db_user, 'email', None),
-            language=db_user.language or settings.DEFAULT_LANGUAGE,
-        )
-
-        if not payment_result or not payment_result.get('payment_url'):
-            await callback.answer('❌ Не удалось создать тестовый платеж RioPay', show_alert=True)
-            await _refresh_markup()
-            return
-
-        payment_url = payment_result['payment_url']
-        display_name = settings.get_riopay_display_name()
-        message_text = (
-            f'🧪 <b>Тестовый платеж {display_name}</b>\n\n'
-            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'🆔 Order ID: {payment_result["order_id"]}'
-        )
-        reply_markup = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text='💳 Перейти к оплате',
-                        url=payment_url,
-                    )
-                ]
-            ]
-        )
-        await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer(f'✅ Ссылка на платеж {display_name} отправлена', show_alert=True)
         await _refresh_markup()
         return
 

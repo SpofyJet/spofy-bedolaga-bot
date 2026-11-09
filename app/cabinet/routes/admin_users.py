@@ -1479,14 +1479,10 @@ async def update_user_subscription(
         # переподключит СБП-автопродление под новый тариф (нужна новая
         # банковская авторизация, молча пересоздать нельзя).
         if request.tariff_id != subscription.tariff_id:
-            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
-            from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
             await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
-            await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-            await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
         tariff = await get_tariff_by_id(db, request.tariff_id)
         if not tariff:
             raise HTTPException(
@@ -1614,14 +1610,10 @@ async def update_user_subscription(
         if request.autopay_enabled:
             # Взаимоисключение движков продления: включение balance-autopay
             # отменяет активное СБП-автопродление Platega (иначе двойное списание).
-            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
-            from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
             await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
-            await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-            await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
         state = 'enabled' if request.autopay_enabled else 'disabled'
         logger.info('Admin autopay for user', admin_id=admin.id, state=state, user_id=user_id)
 
@@ -1635,14 +1627,10 @@ async def update_user_subscription(
         # Подписку убивают — СБП-автопродление Platega обязано умереть вместе с
         # ней, иначе следующий коллбек продлит и воскресит её, а банк продолжит
         # списывать.
-        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
-        from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
         await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
-        await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-        await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
         subscription.status = SubscriptionStatus.EXPIRED.value
         subscription.end_date = datetime.now(UTC)
         subscription.grace_suppressed_until = subscription.end_date
@@ -1675,16 +1663,12 @@ async def update_user_subscription(
             # legacy user panel id, and preserve the selected row for an exact
             # retry when panel deactivation fails.
             from app.database.crud.subscription import reset_subscription
-            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
-            from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
             from app.services.subscription_service import SubscriptionService
 
             # Обе привязки, как в reset_subscription_with_panel: иначе живой рекуррент
             # спишет деньги и воскресит только что сброшенную подписку.
             await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-            await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-            await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
             panel_user_id = subscription.remnawave_id
             panel_disabled = False
             if panel_user_id:
@@ -1915,8 +1899,6 @@ async def cancel_user_sbp_recurring(
     if not subscription:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
 
-    # Эндпоинт отменяет именно СБП-автопродление Platega — привязку Lava он
-    # трогать не должен (у неё своя поверхность отмены).
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
     await cancel_platega_recurring_for_subscription_safe(db, sub_id)
@@ -3130,15 +3112,11 @@ async def reset_user_subscription(
     # It therefore runs BEFORE panel deactivation and the DB deletes, and the
     # guard is re-acquired immediately below — closing that window before
     # anything that can't be undone happens.
-    from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
-    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
     for sub in subs:
         await cancel_platega_recurring_for_subscription_safe(db, sub.id)
 
-        await cancel_lava_recurring_for_subscription_safe(db, sub.id)
-        await cancel_cashera_recurring_for_subscription_safe(db, sub.id)
     try:
         await ensure_no_open_grace_for_subscriptions(db, tuple(sub.id for sub in subs))
     except GraceAccessDeletionBlocked as error:

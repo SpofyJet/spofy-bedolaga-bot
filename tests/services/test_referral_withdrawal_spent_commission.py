@@ -15,7 +15,10 @@ import pytest
 
 from app.config import settings
 from app.database.models import TransactionType
-from app.services.referral_withdrawal_service import WITHDRAWAL_TX_DESCRIPTION_PREFIX, ReferralWithdrawalService
+from app.services.referral_withdrawal_service import (
+    WITHDRAWAL_TX_DESCRIPTION_PREFIX,
+    ReferralWithdrawalService,
+)
 
 
 REF = TransactionType.REFERRAL_REWARD.value

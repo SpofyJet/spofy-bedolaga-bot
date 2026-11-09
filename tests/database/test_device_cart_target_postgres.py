@@ -16,7 +16,9 @@ from app.handlers.subscription import devices as telegram_devices
 from app.services import subscription_auto_purchase_service as auto
 from app.services.subscription_service import SubscriptionService
 from tests.fixtures.postgres_db import postgres_session
-from tests.services.test_cart_cleanup_redis import carts  # noqa: F401 - shared real Redis fixture
+from tests.services.test_cart_cleanup_redis import (
+    carts,  # noqa: F401 - shared real Redis fixture
+)
 
 
 pytestmark = [pytest.mark.postgres, pytest.mark.asyncio]

@@ -110,7 +110,12 @@ def test_resolve_keeps_only_existing_periods():
 async def test_highlight_survives_price_edit_only_if_the_period_survives(monkeypatch):
     """Правка цен не должна оставлять метку на периоде, которого больше нет."""
     from app.database.crud.tariff import create_tariff, update_tariff
-    from app.database.models import PromoGroup, Subscription, Tariff, tariff_promo_groups
+    from app.database.models import (
+        PromoGroup,
+        Subscription,
+        Tariff,
+        tariff_promo_groups,
+    )
     from tests.fixtures.sqlite_memory import memory_session
 
     tables = (
@@ -141,7 +146,12 @@ async def test_highlight_survives_price_edit_only_if_the_period_survives(monkeyp
 @pytest.mark.asyncio
 async def test_highlight_cannot_point_at_a_missing_period(monkeypatch):
     from app.database.crud.tariff import create_tariff, update_tariff
-    from app.database.models import PromoGroup, Subscription, Tariff, tariff_promo_groups
+    from app.database.models import (
+        PromoGroup,
+        Subscription,
+        Tariff,
+        tariff_promo_groups,
+    )
     from tests.fixtures.sqlite_memory import memory_session
 
     tables = (Tariff.__table__, PromoGroup.__table__, Subscription.__table__, tariff_promo_groups)
@@ -209,7 +219,12 @@ def test_tariff_list_survives_objects_without_the_flag():
 @pytest.mark.asyncio
 async def test_tariff_highlight_is_stored_and_cleared(monkeypatch):
     from app.database.crud.tariff import create_tariff, update_tariff
-    from app.database.models import PromoGroup, Subscription, Tariff, tariff_promo_groups
+    from app.database.models import (
+        PromoGroup,
+        Subscription,
+        Tariff,
+        tariff_promo_groups,
+    )
     from tests.fixtures.sqlite_memory import memory_session
 
     tables = (Tariff.__table__, PromoGroup.__table__, Subscription.__table__, tariff_promo_groups)

@@ -20,6 +20,16 @@ from app.services.payment_service import PaymentService
 from app.services.wata_service import WataService
 
 
+def _make_service(stub: StubWataService | None) -> PaymentService:
+    service = PaymentService.__new__(PaymentService)  # type: ignore[call-arg]
+    service.bot = None
+    service.wata_service = stub
+    service.stars_service = None
+    service.cryptobot_service = None
+    service.heleket_service = None
+    return service
+
+
 @pytest.fixture
 def anyio_backend() -> str:
     return 'asyncio'
@@ -67,19 +77,6 @@ class DummyWataPayment:
         self.transaction_id: int | None = None
         self.callback_payload: dict[str, Any] | None = None
         self.terminal_public_id: str | None = None
-
-
-def _make_service(stub: StubWataService | None) -> PaymentService:
-    service = PaymentService.__new__(PaymentService)  # type: ignore[call-arg]
-    service.bot = None
-    service.wata_service = stub
-    service.mulenpay_service = None
-    service.pal24_service = None
-    service.yookassa_service = None
-    service.stars_service = None
-    service.cryptobot_service = None
-    service.heleket_service = None
-    return service
 
 
 def test_wata_service_format_datetime_accepts_utc() -> None:

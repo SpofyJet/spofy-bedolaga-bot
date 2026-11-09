@@ -8,12 +8,6 @@ import app.handlers.admin.tariff_panel_settings as mod
 from app.handlers.admin.tariffs import format_tariff_info, get_tariff_view_keyboard
 
 
-def _unwrap(fn):
-    while hasattr(fn, '__wrapped__'):
-        fn = fn.__wrapped__
-    return fn
-
-
 def _tariff(**overrides):
     values = {
         'id': 7,
@@ -48,11 +42,16 @@ def _tariff(**overrides):
         'max_days': 365,
         'panel_tag': None,
         'external_squad_uuid': None,
-        'lava_product_id': None,
         'show_in_gift': True,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
+
+
+def _unwrap(fn):
+    while hasattr(fn, '__wrapped__'):
+        fn = fn.__wrapped__
+    return fn
 
 
 def _callback(data: str):
@@ -95,39 +94,6 @@ def _recording_update(monkeypatch, updates: list):
 
 
 # ---- карточка и экран ----
-
-
-def test_tariff_card_shows_panel_block_and_entry_point() -> None:
-    tariff = _tariff(panel_tag='GOLD', lava_product_id='prod-1', external_squad_uuid='ext-1', show_in_gift=False)
-
-    rendered = format_tariff_info(tariff, 'ru')
-    callbacks = _callbacks(get_tariff_view_keyboard(tariff, 'ru'))
-
-    assert 'Тег панели' in rendered and 'GOLD' in rendered
-    assert 'Внешний сквад' in rendered and 'ext-1' in rendered
-    assert 'Lava' in rendered and 'prod-1' in rendered
-    assert 'В подарках' in rendered
-    assert 'admin_tariff_edit_more:7' in callbacks
-
-
-def test_settings_screen_lists_all_actions_and_current_values() -> None:
-    tariff = _tariff(panel_tag='GOLD', allow_traffic_topup=False)
-
-    rendered = mod.render_panel_settings(tariff)
-    callbacks = _callbacks(mod.get_panel_settings_keyboard(tariff, 'ru'))
-
-    assert 'Gold &lt;t&gt;' in rendered
-    assert 'GOLD' in rendered
-    for expected in (
-        'admin_tariff_edit_panel_tag:7',
-        'admin_tariff_edit_ext_squad:7',
-        'admin_tariff_edit_lava:7',
-        'admin_tariff_edit_order:7',
-        'admin_tariff_toggle_gift:7',
-        'admin_tariff_toggle_allow_topup:7',
-        'admin_tariff_view:7',
-    ):
-        assert expected in callbacks
 
 
 # ---- переключатели ----
@@ -204,20 +170,6 @@ async def test_invalid_panel_tag_keeps_state_and_does_not_write(monkeypatch) -> 
 
 
 # ---- Lava и порядок ----
-
-
-async def test_lava_input_and_dash_clear(monkeypatch) -> None:
-    tariff = _tariff()
-    updates: list = []
-    monkeypatch.setattr(mod, 'get_tariff_by_id', AsyncMock(return_value=tariff))
-    _recording_update(monkeypatch, updates)
-
-    await _unwrap(mod.process_lava_product_input)(
-        _message(' prod-1 '), SimpleNamespace(language='ru'), MagicMock(), _state()
-    )
-    await _unwrap(mod.process_lava_product_input)(_message('-'), SimpleNamespace(language='ru'), MagicMock(), _state())
-
-    assert updates == [{'lava_product_id': 'prod-1'}, {'lava_product_id': ''}]
 
 
 async def test_display_order_accepts_non_negative_int_only(monkeypatch) -> None:
@@ -297,3 +249,34 @@ async def test_set_same_external_squad_does_not_resync(monkeypatch) -> None:
 
     assert updates == []
     assert scheduled == []
+
+
+def test_tariff_card_shows_panel_block_and_entry_point() -> None:
+    tariff = _tariff(panel_tag='GOLD', external_squad_uuid='ext-1', show_in_gift=False)
+
+    rendered = format_tariff_info(tariff, 'ru')
+    callbacks = _callbacks(get_tariff_view_keyboard(tariff, 'ru'))
+
+    assert 'Тег панели' in rendered and 'GOLD' in rendered
+    assert 'Внешний сквад' in rendered and 'ext-1' in rendered
+    assert 'В подарках' in rendered
+    assert 'admin_tariff_edit_more:7' in callbacks
+
+
+def test_settings_screen_lists_all_actions_and_current_values() -> None:
+    tariff = _tariff(panel_tag='GOLD', allow_traffic_topup=False)
+
+    rendered = mod.render_panel_settings(tariff)
+    callbacks = _callbacks(mod.get_panel_settings_keyboard(tariff, 'ru'))
+
+    assert 'Gold &lt;t&gt;' in rendered
+    assert 'GOLD' in rendered
+    for expected in (
+        'admin_tariff_edit_panel_tag:7',
+        'admin_tariff_edit_ext_squad:7',
+        'admin_tariff_edit_order:7',
+        'admin_tariff_toggle_gift:7',
+        'admin_tariff_toggle_allow_topup:7',
+        'admin_tariff_view:7',
+    ):
+        assert expected in callbacks

@@ -2,7 +2,10 @@
 
 import pytest
 
-from app.database.crud.server_squad import get_effective_tariff_squad_uuids, sync_with_remnawave
+from app.database.crud.server_squad import (
+    get_effective_tariff_squad_uuids,
+    sync_with_remnawave,
+)
 from app.database.models import Base, ServerSquad, Tariff
 from tests.fixtures.postgres_db import postgres_session
 

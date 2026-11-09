@@ -137,8 +137,12 @@ async def get_user_referral_summary(db: AsyncSession, user_id: int) -> dict:
             select(
                 func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
                 func.coalesce(func.sum(ReferralEarning.days_granted), 0),
-                func.coalesce(func.sum(ReferralEarning.amount_kopeks).filter(ReferralEarning.created_at >= month_ago), 0),
-                func.coalesce(func.sum(ReferralEarning.days_granted).filter(ReferralEarning.created_at >= month_ago), 0),
+                func.coalesce(
+                    func.sum(ReferralEarning.amount_kopeks).filter(ReferralEarning.created_at >= month_ago), 0
+                ),
+                func.coalesce(
+                    func.sum(ReferralEarning.days_granted).filter(ReferralEarning.created_at >= month_ago), 0
+                ),
             ).where(ReferralEarning.user_id == user_id, not_referee_directed())
         )
         total_earned_kopeks, total_earned_days, month_earned_kopeks, month_earned_days = total_earnings_result.one()

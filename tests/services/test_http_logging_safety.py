@@ -128,61 +128,6 @@ def test_container_cycles_and_header_strings():
     assert 'sentinel-' not in safe_value("headers={'X-Secret': 'sentinel-secret', 'Authorization': 'sentinel-bearer'}")
 
 
-@pytest.mark.parametrize('provider', ['platega', 'mulenpay'])
-async def test_provider_retries_and_final_failure_use_safe_logs(monkeypatch, provider):
-    import importlib
-
-    module = importlib.import_module(f'app.services.{provider}_service')
-    service_class = module.PlategaService if provider == 'platega' else module.MulenPayService
-    monkeypatch.setattr(service_class, 'is_configured', property(lambda self: True))
-    saved_config = structlog.get_config()
-    monkeypatch.setattr(logging_config, '_configure_noisy_loggers', lambda: None)
-    formatters = logging_config.setup_logging()[:2]
-    monkeypatch.setattr(module, 'logger', structlog.get_logger(module.__name__))
-    raw = logging.getLogger(module.__name__)
-    saved = raw.handlers[:], raw.level, raw.propagate
-    outputs = [io.StringIO(), io.StringIO()]
-    raw.handlers, raw.propagate = [], False
-    raw.setLevel(logging.DEBUG)
-    for formatter, output in zip(formatters, outputs, strict=True):
-        handler = logging.StreamHandler(output)
-        handler.setFormatter(formatter)
-        raw.addHandler(handler)
-    requests = []
-
-    class Session:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            pass
-
-        def request(self, method, url, **kwargs):
-            requests.append(kwargs)
-            info = aiohttp.RequestInfo(URL(url), method, CIMultiDictProxy(CIMultiDict(kwargs['headers'])), URL(url))
-            raise aiohttp.TooManyRedirects(info, (), status=302)
-
-    monkeypatch.setattr(aiohttp, 'ClientSession', lambda **kwargs: Session())
-    service = service_class()
-    service.base_url = 'https://payments.example'
-    service.secret = service.api_key = 'sentinel-secret'
-    service.merchant_id = 'sentinel-merchant'
-    service._max_retries, service._retry_delay = 2, 0
-    try:
-        assert await service._request('POST', '/checkout', json_data={}) is None
-        assert len(requests) == 2
-        for output in outputs:
-            rendered = output.getvalue()
-            assert 'sentinel-' not in rendered
-            assert rendered.count('client error, retrying') == 2
-            assert 'failed after all retries' in rendered
-            assert 'TooManyRedirects' in rendered
-    finally:
-        raw.handlers, level, raw.propagate = saved
-        raw.setLevel(level)
-        structlog.configure(**saved_config)
-
-
 def test_reused_exception_in_cause_and_group_cannot_leak_url():
     from app.logging_safety import safe_traceback
 
@@ -244,3 +189,58 @@ def test_exception_object_as_exc_info_keeps_traceback(http_error):
     assert 'TooManyRedirects' in event['exception']
     assert 'test_exception_object_as_exc_info_keeps_traceback' in event['exception']
     assert 'sentinel-' not in str(event)
+
+
+@pytest.mark.parametrize('provider', ['platega'])
+async def test_provider_retries_and_final_failure_use_safe_logs(monkeypatch, provider):
+    import importlib
+
+    module = importlib.import_module(f'app.services.{provider}_service')
+    service_class = module.PlategaService if provider == 'platega' else module.WataService
+    monkeypatch.setattr(service_class, 'is_configured', property(lambda self: True))
+    saved_config = structlog.get_config()
+    monkeypatch.setattr(logging_config, '_configure_noisy_loggers', lambda: None)
+    formatters = logging_config.setup_logging()[:2]
+    monkeypatch.setattr(module, 'logger', structlog.get_logger(module.__name__))
+    raw = logging.getLogger(module.__name__)
+    saved = raw.handlers[:], raw.level, raw.propagate
+    outputs = [io.StringIO(), io.StringIO()]
+    raw.handlers, raw.propagate = [], False
+    raw.setLevel(logging.DEBUG)
+    for formatter, output in zip(formatters, outputs, strict=True):
+        handler = logging.StreamHandler(output)
+        handler.setFormatter(formatter)
+        raw.addHandler(handler)
+    requests = []
+
+    class Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        def request(self, method, url, **kwargs):
+            requests.append(kwargs)
+            info = aiohttp.RequestInfo(URL(url), method, CIMultiDictProxy(CIMultiDict(kwargs['headers'])), URL(url))
+            raise aiohttp.TooManyRedirects(info, (), status=302)
+
+    monkeypatch.setattr(aiohttp, 'ClientSession', lambda **kwargs: Session())
+    service = service_class()
+    service.base_url = 'https://payments.example'
+    service.secret = service.api_key = 'sentinel-secret'
+    service.merchant_id = 'sentinel-merchant'
+    service._max_retries, service._retry_delay = 2, 0
+    try:
+        assert await service._request('POST', '/checkout', json_data={}) is None
+        assert len(requests) == 2
+        for output in outputs:
+            rendered = output.getvalue()
+            assert 'sentinel-' not in rendered
+            assert rendered.count('client error, retrying') == 2
+            assert 'failed after all retries' in rendered
+            assert 'TooManyRedirects' in rendered
+    finally:
+        raw.handlers, level, raw.propagate = saved
+        raw.setLevel(level)
+        structlog.configure(**saved_config)

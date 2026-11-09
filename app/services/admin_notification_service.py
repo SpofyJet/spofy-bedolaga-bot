@@ -2115,21 +2115,10 @@ class AdminNotificationService:
 
         method_names: dict[str, str] = {
             'telegram_stars': '⭐ Telegram Stars',
-            'yookassa': '💳 YooKassa (карта)',
-            'tribute': '💎 Tribute (карта)',
-            'mulenpay': f'💳 {settings.get_mulenpay_display_name()} (карта)',
-            'pal24': f'🏦 {settings.get_pal24_display_name()} (СБП)',
             'cryptobot': f'🪙 {settings.get_cryptobot_display_name()} (крипто)',
             'heleket': f'🪙 {settings.get_heleket_display_name()} (крипто)',
             'wata': f'💳 {settings.get_wata_display_name()}',
             'platega': f'💳 {settings.get_platega_display_name()}',
-            'cloudpayments': f'💳 {settings.get_cloudpayments_display_name()}',
-            'freekassa': f'💳 {settings.get_freekassa_display_name()}',
-            'kassa_ai': f'💳 {settings.get_kassa_ai_display_name()}',
-            'cispay': f'💳 {settings.get_cispay_display_name()}',
-            'cashera': f'💳 {settings.get_cashera_display_name()}',
-            'tabpay': f'💳 {settings.get_tabpay_display_name()}',
-            'paritypay': f'💳 {settings.get_paritypay_display_name()}',
             'manual': '🛠️ Вручную (админ)',
             'balance': '💰 С баланса',
         }

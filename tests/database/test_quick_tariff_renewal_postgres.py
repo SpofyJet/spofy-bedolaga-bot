@@ -12,7 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import CLASSIC_PERIOD_PRICES, settings
 from app.database.crud.user import get_user_by_id
-from app.database.models import Base, PromoGroup, Subscription, Tariff, TrafficPurchase, Transaction, User
+from app.database.models import (
+    Base,
+    PromoGroup,
+    Subscription,
+    Tariff,
+    TrafficPurchase,
+    Transaction,
+    User,
+)
 from app.handlers import simple_subscription as simple
 from app.handlers.subscription.purchase import handle_simple_subscription_purchase
 from app.services.subscription_service import SubscriptionService
@@ -235,7 +243,10 @@ async def test_quick_tariff_renewal_price_variants(postgres_database, monkeypatc
         if entry == 'quick':
             await handle_simple_subscription_purchase(c.callback, c.state, c.user, c.db)
         else:
-            from app.cabinet.routes.subscription_modules.renewal import RenewalRequest, renew_subscription
+            from app.cabinet.routes.subscription_modules.renewal import (
+                RenewalRequest,
+                renew_subscription,
+            )
 
             await renew_subscription(RenewalRequest(period_days=30), c.user, c.db, subscription_id=10)
         await c.db.refresh(c.user)

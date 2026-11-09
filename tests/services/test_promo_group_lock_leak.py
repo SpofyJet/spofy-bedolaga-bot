@@ -35,7 +35,9 @@ async def test_no_lock_without_spending(monkeypatch: pytest.MonkeyPatch) -> None
 
 async def test_lock_is_released_if_group_disappears_after_locking(monkeypatch: pytest.MonkeyPatch) -> None:
     db = _db()
-    user = SimpleNamespace(id=1, telegram_id=1, auto_promo_group_threshold_kopeks=0, get_primary_promo_group=lambda: None)
+    user = SimpleNamespace(
+        id=1, telegram_id=1, auto_promo_group_threshold_kopeks=0, get_primary_promo_group=lambda: None
+    )
     monkeypatch.setattr(assignment, 'lock_user_for_update', AsyncMock(return_value=user))
     monkeypatch.setattr(assignment, 'get_user_total_spent_kopeks', AsyncMock(return_value=100))
     monkeypatch.setattr(

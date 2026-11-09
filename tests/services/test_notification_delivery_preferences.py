@@ -5,7 +5,10 @@ import pytest
 
 from app.config import settings
 from app.database.models import UserStatus
-from app.services.notification_delivery_service import NotificationDeliveryService, NotificationType
+from app.services.notification_delivery_service import (
+    NotificationDeliveryService,
+    NotificationType,
+)
 
 
 def _user(**notification_settings):

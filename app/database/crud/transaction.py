@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import and_, func, or_, select
@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.local_date import as_date, local_date_expr
-from app.database.models import PaymentMethod, Transaction, TransactionType, User
+from app.database.models import PaymentMethod, Transaction, TransactionType
 from app.utils.timezone import local_day_bounds, local_day_start, local_month_start
 
 
@@ -14,10 +14,7 @@ logger = structlog.get_logger(__name__)
 
 # Реальные платёжные методы для подсчёта дохода.
 #
-# Выводим из enum, а не перечисляем руками: раньше список хардкодился, и каждый
-# новый шлюз надо было не забыть добавить — Jupiter/Donut/Lava забыли, и их выручка
-# выпадала из ВСЕХ отчётов (сводка, по методам, партнёрка, ежедневный отчёт, webapi).
-# Теперь новый шлюз попадает в статистику автоматически.
+# Выводим из enum, чтобы новый шлюз попадал в статистику автоматически.
 #
 # Исключаем только НЕ-шлюзовые значения enum:
 #   MANUAL  — админские пополнения (считаются отдельной строкой, не как доход шлюза);
@@ -536,86 +533,3 @@ async def get_revenue_by_period(db: AsyncSession, days: int = 30) -> list[dict]:
     )
 
     return [{'date': as_date(row.date), 'amount_kopeks': row.amount} for row in result]
-
-
-async def check_tribute_payment_duplicate(
-    db: AsyncSession, payment_id: str, amount_kopeks: int, user_telegram_id: int
-) -> Transaction | None:
-    cutoff_time = datetime.now(UTC) - timedelta(hours=24)
-
-    exact_external_id = f'donation_{payment_id}'
-
-    query = (
-        select(Transaction)
-        .options(selectinload(Transaction.user))
-        .where(
-            and_(
-                Transaction.payment_method == PaymentMethod.TRIBUTE.value,
-                Transaction.external_id == exact_external_id,
-                Transaction.amount_kopeks == amount_kopeks,
-                Transaction.is_completed == True,
-                Transaction.created_at >= cutoff_time,
-            )
-        )
-        .join(User)
-        .where(User.telegram_id == user_telegram_id)
-    )
-
-    result = await db.execute(query)
-    transaction = result.scalar_one_or_none()
-
-    if transaction:
-        logger.info('🔍 Найден дубликат платежа в течение 24ч', transaction_id=transaction.id)
-
-    return transaction
-
-
-async def create_unique_tribute_transaction(
-    db: AsyncSession, user_id: int, payment_id: str, amount_kopeks: int, description: str
-) -> tuple[Transaction, bool]:
-    """Create a Tribute deposit transaction idempotently.
-
-    Returns ``(transaction, created)``. When ``created`` is False the payment was
-    already processed (a replayed webhook) and the caller MUST NOT credit the balance
-    again.
-
-    Без коммита (flush) — вызывающий коммитит транзакцию вместе с зачислением
-    и после коммита вызывает ``emit_transaction_side_effects``.
-    """
-    external_id = f'donation_{payment_id}'
-
-    existing = await get_transaction_by_external_id(db, external_id, PaymentMethod.TRIBUTE)
-
-    if existing:
-        # Synthesized fallback ids (``tribute_<tg>_<amount>``) are NOT unique per payment,
-        # so a user legitimately repeating a same-amount donation must still be credited —
-        # keep the disambiguating suffix for those only. A real Tribute event id is unique,
-        # so a collision there means a replayed webhook: stay idempotent and do not
-        # double-credit. (The previous unconditional timestamped suffix defeated the
-        # uq_transaction_external_id_method constraint and credited again on every replay
-        # delivered after the 24h dedup window.)
-        if not str(payment_id).startswith('tribute_'):
-            logger.info(
-                'Tribute: повторный webhook с тем же payment_id — идемпотентно, начисление пропускаем',
-                external_id=external_id,
-                transaction_id=existing.id,
-            )
-            return existing, False
-
-        timestamp = int(datetime.now(UTC).timestamp())
-        external_id = f'donation_{payment_id}_{amount_kopeks}_{timestamp}'
-
-        logger.info('Создан уникальный external_id для fallback payment_id', external_id=external_id)
-
-    transaction = await create_transaction(
-        db=db,
-        user_id=user_id,
-        type=TransactionType.DEPOSIT,
-        amount_kopeks=amount_kopeks,
-        description=description,
-        payment_method=PaymentMethod.TRIBUTE,
-        external_id=external_id,
-        is_completed=True,
-        commit=False,
-    )
-    return transaction, True

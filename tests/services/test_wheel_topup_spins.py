@@ -22,8 +22,15 @@ from app.database.models import (
     WheelSpinPaymentType,
 )
 from app.services.wheel_service import FortuneWheelService, FreeSpinState
-from app.services.wheel_topup_notifier import build_spin_earned_message, on_payment_completed, spins_earned
-from app.utils.subscription_utils import active_wheel_bonus_devices, resolve_hwid_device_limit
+from app.services.wheel_topup_notifier import (
+    build_spin_earned_message,
+    on_payment_completed,
+    spins_earned,
+)
+from app.utils.subscription_utils import (
+    active_wheel_bonus_devices,
+    resolve_hwid_device_limit,
+)
 from tests.fixtures.sqlite_memory import memory_session
 
 
@@ -92,56 +99,6 @@ async def test_free_spins_off_when_disabled():
     svc = FortuneWheelService()
     state = await svc.get_free_spin_state(AsyncMock(), 7, _config(topup_spins_enabled=False))
     assert state == FreeSpinState()
-
-
-@pytest.mark.asyncio
-async def test_deposit_query_counts_only_real_topups(monkeypatch):
-    from app.database.crud.wheel import get_free_spin_counters, get_topup_deposits_kopeks, get_topup_deposits_split
-
-    since = NOW - timedelta(days=1)
-    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
-        db.add(User(id=1, telegram_id=10, first_name='U', language='ru', status='active', balance_kopeks=0))
-
-        def tx(amount, method, *, kind=TransactionType.DEPOSIT, when=NOW, done=True):
-            db.add(
-                Transaction(
-                    user_id=1,
-                    type=kind.value,
-                    amount_kopeks=amount,
-                    payment_method=method,
-                    is_completed=done,
-                    created_at=when,
-                )
-            )
-
-        tx(19900, PaymentMethod.PLATEGA.value)
-        tx(10000, PaymentMethod.TELEGRAM_STARS.value)
-        tx(50000, PaymentMethod.MANUAL.value)  # начисление админа — не пополнение
-        tx(30000, None)  # бонус без метода (промокод, приз колеса)
-        tx(20000, PaymentMethod.YOOKASSA.value, when=since - timedelta(hours=1))  # до включения
-        tx(20000, PaymentMethod.YOOKASSA.value, done=False)  # не оплачен
-        tx(19900, PaymentMethod.PLATEGA.value, kind=TransactionType.SUBSCRIPTION_PAYMENT)
-        db.add(
-            WheelSpin(
-                user_id=1,
-                payment_type=WheelSpinPaymentType.TOPUP_CREDIT.value,
-                payment_amount=1,
-                payment_value_kopeks=1500,
-                prize_type=WheelPrizeType.EXTRA_SPIN.value,
-                prize_value=1,
-                prize_display_name='Ещё спин',
-                prize_value_kopeks=1500,
-                is_applied=True,
-            )
-        )
-        await db.commit()
-
-        assert await get_topup_deposits_kopeks(db, 1, since) == 29900
-        assert await get_topup_deposits_kopeks(db, 1, None) == 0
-        # те же фильтры, но с разбивкой «до запуска / с запуска» (20 000 до, 29 900 после)
-        assert await get_topup_deposits_split(db, 1, since) == (20000, 29900)
-        assert await get_topup_deposits_split(db, 1, None) == (0, 0)
-        assert await get_free_spin_counters(db, 1) == (1, 1)
 
 
 # ---------- доступность и спин ----------
@@ -486,3 +443,57 @@ async def test_days_prize_reactivates_only_expired(status, expected):
         await svc._apply_prize(AsyncMock(), user, prize, _config(), sub, {})
     assert sub.status == expected
     assert sub.end_date > datetime.now(UTC) + timedelta(days=2, hours=23)
+
+
+@pytest.mark.asyncio
+async def test_deposit_query_counts_only_real_topups(monkeypatch):
+    from app.database.crud.wheel import (
+        get_free_spin_counters,
+        get_topup_deposits_kopeks,
+        get_topup_deposits_split,
+    )
+
+    since = NOW - timedelta(days=1)
+    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
+        db.add(User(id=1, telegram_id=10, first_name='U', language='ru', status='active', balance_kopeks=0))
+
+        def tx(amount, method, *, kind=TransactionType.DEPOSIT, when=NOW, done=True):
+            db.add(
+                Transaction(
+                    user_id=1,
+                    type=kind.value,
+                    amount_kopeks=amount,
+                    payment_method=method,
+                    is_completed=done,
+                    created_at=when,
+                )
+            )
+
+        tx(19900, PaymentMethod.PLATEGA.value)
+        tx(10000, PaymentMethod.TELEGRAM_STARS.value)
+        tx(50000, PaymentMethod.MANUAL.value)  # начисление админа — не пополнение
+        tx(30000, None)  # бонус без метода (промокод, приз колеса)
+        tx(20000, PaymentMethod.PLATEGA.value, when=since - timedelta(hours=1))  # до включения
+        tx(20000, PaymentMethod.PLATEGA.value, done=False)  # не оплачен
+        tx(19900, PaymentMethod.PLATEGA.value, kind=TransactionType.SUBSCRIPTION_PAYMENT)
+        db.add(
+            WheelSpin(
+                user_id=1,
+                payment_type=WheelSpinPaymentType.TOPUP_CREDIT.value,
+                payment_amount=1,
+                payment_value_kopeks=1500,
+                prize_type=WheelPrizeType.EXTRA_SPIN.value,
+                prize_value=1,
+                prize_display_name='Ещё спин',
+                prize_value_kopeks=1500,
+                is_applied=True,
+            )
+        )
+        await db.commit()
+
+        assert await get_topup_deposits_kopeks(db, 1, since) == 29900
+        assert await get_topup_deposits_kopeks(db, 1, None) == 0
+        # те же фильтры, но с разбивкой «до запуска / с запуска» (20 000 до, 29 900 после)
+        assert await get_topup_deposits_split(db, 1, since) == (20000, 29900)
+        assert await get_topup_deposits_split(db, 1, None) == (0, 0)
+        assert await get_free_spin_counters(db, 1) == (1, 1)

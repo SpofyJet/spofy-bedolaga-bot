@@ -7,7 +7,10 @@ from pathlib import Path
 import pytest
 
 from app.config import Settings, settings
-from app.keyboards.inline import get_cryptobot_payment_keyboard, get_payment_methods_keyboard
+from app.keyboards.inline import (
+    get_cryptobot_payment_keyboard,
+    get_payment_methods_keyboard,
+)
 from app.localization.texts import get_texts
 
 

@@ -62,39 +62,6 @@ def _patch_user_lookup(monkeypatch, db_user):
     monkeypatch.setattr('app.database.crud.user.get_user_by_telegram_id', AsyncMock(return_value=db_user))
 
 
-async def test_sends_to_user_and_duplicates_to_admin_topic(monkeypatch):
-    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', '-100500', raising=False)
-    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID', 77, raising=False)
-    _patch_user_lookup(
-        monkeypatch,
-        SimpleNamespace(first_name='Вася', last_name='<Пупкин>', username='vasya', email='v@example.com'),
-    )
-    bot = _bot()
-
-    await send_nalogo_receipt_notifications(
-        bot=bot,
-        nalogo_service=_nalogo(),
-        receipt_uuid='uuid-1',
-        amount_kopeks=10000,
-        telegram_user_id=111,
-        context_label='Источник: YooKassa',
-    )
-
-    assert bot.send_message.await_count == 2
-    user_call, admin_call = bot.send_message.await_args_list
-    assert user_call.kwargs['chat_id'] == 111
-    assert 'Чек по вашему платежу' in user_call.kwargs['text']
-    assert user_call.kwargs['reply_markup'].inline_keyboard[0][0].url.endswith('/print')
-
-    assert admin_call.kwargs['chat_id'] == -100500
-    assert admin_call.kwargs['message_thread_id'] == 77
-    admin_text = admin_call.kwargs['text']
-    assert 'Источник: YooKassa' in admin_text
-    assert '&lt;Пупкин&gt;' in admin_text  # имя экранировано — сырой HTML не ломает разметку
-    assert '<Пупкин>' not in admin_text
-    assert 'v@example.com' in admin_text
-
-
 async def test_no_telegram_id_admin_only_with_guest_mark(monkeypatch):
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', '-100500', raising=False)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID', None, raising=False)
@@ -697,3 +664,36 @@ async def test_receipt_filename_comes_from_setting(monkeypatch):
     assert await send('../{uuid}:x') == 'uuid-1_x.jpg'
     assert await send('{nope}') == 'receipt_uuid-1.jpg'
     assert await send('') == 'receipt_uuid-1.jpg'
+
+
+async def test_sends_to_user_and_duplicates_to_admin_topic(monkeypatch):
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', '-100500', raising=False)
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID', 77, raising=False)
+    _patch_user_lookup(
+        monkeypatch,
+        SimpleNamespace(first_name='Вася', last_name='<Пупкин>', username='vasya', email='v@example.com'),
+    )
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+        context_label='Источник: Platega',
+    )
+
+    assert bot.send_message.await_count == 2
+    user_call, admin_call = bot.send_message.await_args_list
+    assert user_call.kwargs['chat_id'] == 111
+    assert 'Чек по вашему платежу' in user_call.kwargs['text']
+    assert user_call.kwargs['reply_markup'].inline_keyboard[0][0].url.endswith('/print')
+
+    assert admin_call.kwargs['chat_id'] == -100500
+    assert admin_call.kwargs['message_thread_id'] == 77
+    admin_text = admin_call.kwargs['text']
+    assert 'Источник: Platega' in admin_text
+    assert '&lt;Пупкин&gt;' in admin_text  # имя экранировано — сырой HTML не ломает разметку
+    assert '<Пупкин>' not in admin_text
+    assert 'v@example.com' in admin_text

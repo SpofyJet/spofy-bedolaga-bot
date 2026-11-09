@@ -17,9 +17,18 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import settings
-from app.database.models import Base, GraceAccessSessionModel, Subscription, Tariff, User
+from app.database.models import (
+    Base,
+    GraceAccessSessionModel,
+    Subscription,
+    Tariff,
+    User,
+)
 from app.services import grace_access_notifications as notify
-from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
+from app.services.admin_notification_service import (
+    AdminNotificationService,
+    NotificationCategory,
+)
 from app.services.notification_delivery_service import notification_delivery_service
 from app.services.notification_types import NotificationType
 from tests.fixtures.sqlite_memory import ensure_real_aiosqlite

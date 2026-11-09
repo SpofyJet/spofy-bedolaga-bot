@@ -27,13 +27,8 @@ from app.database.models import (
     AdvertisingCampaign,
     AdvertisingCampaignRegistration,
     BroadcastHistory,
-    CloudPaymentsPayment,
     CryptoBotPayment,
-    FreekassaPayment,
     HeleketPayment,
-    KassaAiPayment,
-    MulenPayPayment,
-    Pal24Payment,
     PaymentMethod,
     PlategaPayment,
     PromoCode,
@@ -50,7 +45,6 @@ from app.database.models import (
     UserStatus,
     WataPayment,
     WelcomeText,
-    YooKassaPayment,
 )
 from app.localization.texts import get_texts
 from app.services.notification_delivery_service import (
@@ -767,15 +761,11 @@ class UserService:
             # this flow), and the guard is re-acquired immediately after —
             # closing that window before anything that can't be undone
             # happens.
-            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
-            from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
             for sub in subs:
                 await cancel_platega_recurring_for_subscription_safe(db, sub.id)
 
-                await cancel_lava_recurring_for_subscription_safe(db, sub.id)
-                await cancel_cashera_recurring_for_subscription_safe(db, sub.id)
             try:
                 await ensure_no_open_grace_for_subscriptions(db, tuple(sub.id for sub in subs))
             except GraceAccessDeletionBlocked as error:
@@ -948,26 +938,6 @@ class UserService:
 
             try:
                 async with db.begin_nested():
-                    yookassa_result = await db.execute(
-                        select(YooKassaPayment).where(YooKassaPayment.user_id == user_id)
-                    )
-                    yookassa_payments = yookassa_result.scalars().all()
-
-                    if yookassa_payments:
-                        logger.info('🔄 Удаляем YooKassa платежей', yookassa_payments_count=len(yookassa_payments))
-                        await db.execute(
-                            update(YooKassaPayment)
-                            .where(YooKassaPayment.user_id == user_id)
-                            .values(transaction_id=None)
-                        )
-                        await db.flush()
-                        await db.execute(delete(YooKassaPayment).where(YooKassaPayment.user_id == user_id))
-                        await db.flush()
-            except Exception as e:
-                logger.error('❌ Ошибка удаления YooKassa платежей', error=e)
-
-            try:
-                async with db.begin_nested():
                     cryptobot_result = await db.execute(
                         select(CryptoBotPayment).where(CryptoBotPayment.user_id == user_id)
                     )
@@ -1004,51 +974,6 @@ class UserService:
 
             try:
                 async with db.begin_nested():
-                    mulenpay_result = await db.execute(
-                        select(MulenPayPayment).where(MulenPayPayment.user_id == user_id)
-                    )
-                    mulenpay_payments = mulenpay_result.scalars().all()
-
-                    if mulenpay_payments:
-                        mulenpay_name = settings.get_mulenpay_display_name()
-                        logger.info(
-                            '🔄 Удаляем платежей',
-                            mulenpay_payments_count=len(mulenpay_payments),
-                            mulenpay_name=mulenpay_name,
-                        )
-                        await db.execute(
-                            update(MulenPayPayment)
-                            .where(MulenPayPayment.user_id == user_id)
-                            .values(transaction_id=None)
-                        )
-                        await db.flush()
-                        await db.execute(delete(MulenPayPayment).where(MulenPayPayment.user_id == user_id))
-                        await db.flush()
-            except Exception as e:
-                logger.error(
-                    '❌ Ошибка удаления платежей',
-                    get_mulenpay_display_name=settings.get_mulenpay_display_name(),
-                    error=e,
-                )
-
-            try:
-                async with db.begin_nested():
-                    pal24_result = await db.execute(select(Pal24Payment).where(Pal24Payment.user_id == user_id))
-                    pal24_payments = pal24_result.scalars().all()
-
-                    if pal24_payments:
-                        logger.info('🔄 Удаляем Pal24 платежей', pal24_payments_count=len(pal24_payments))
-                        await db.execute(
-                            update(Pal24Payment).where(Pal24Payment.user_id == user_id).values(transaction_id=None)
-                        )
-                        await db.flush()
-                        await db.execute(delete(Pal24Payment).where(Pal24Payment.user_id == user_id))
-                        await db.flush()
-            except Exception as e:
-                logger.error('❌ Ошибка удаления Pal24 платежей', error=e)
-
-            try:
-                async with db.begin_nested():
                     heleket_result = await db.execute(select(HeleketPayment).where(HeleketPayment.user_id == user_id))
                     heleket_payments = heleket_result.scalars().all()
 
@@ -1062,27 +987,6 @@ class UserService:
                         await db.flush()
             except Exception as e:
                 logger.error('❌ Ошибка удаления Heleket платежей', error=e)
-
-            # Удаляем Freekassa платежи
-            try:
-                async with db.begin_nested():
-                    freekassa_payments_result = await db.execute(
-                        select(FreekassaPayment).where(FreekassaPayment.user_id == user_id)
-                    )
-                    freekassa_payments = freekassa_payments_result.scalars().all()
-
-                    if freekassa_payments:
-                        logger.info('🔄 Удаляем Freekassa платежей', freekassa_payments_count=len(freekassa_payments))
-                        await db.execute(
-                            update(FreekassaPayment)
-                            .where(FreekassaPayment.user_id == user_id)
-                            .values(transaction_id=None)
-                        )
-                        await db.flush()
-                        await db.execute(delete(FreekassaPayment).where(FreekassaPayment.user_id == user_id))
-                        await db.flush()
-            except Exception as e:
-                logger.error('❌ Ошибка удаления Freekassa платежей', error=e)
 
             # Удаляем Wata платежи (до транзакций, т.к. wata_payments.transaction_id -> transactions.id)
             try:
@@ -1100,116 +1004,6 @@ class UserService:
                         await db.flush()
             except Exception as e:
                 logger.error('❌ Ошибка удаления Wata платежей', error=e)
-
-            # Удаляем CloudPayments платежи
-            try:
-                async with db.begin_nested():
-                    cloudpayments_result = await db.execute(
-                        select(CloudPaymentsPayment).where(CloudPaymentsPayment.user_id == user_id)
-                    )
-                    cloudpayments_payments = cloudpayments_result.scalars().all()
-
-                    if cloudpayments_payments:
-                        logger.info(
-                            '🔄 Удаляем CloudPayments платежей',
-                            cloudpayments_payments_count=len(cloudpayments_payments),
-                        )
-                        await db.execute(
-                            update(CloudPaymentsPayment)
-                            .where(CloudPaymentsPayment.user_id == user_id)
-                            .values(transaction_id=None)
-                        )
-                        await db.flush()
-                        await db.execute(delete(CloudPaymentsPayment).where(CloudPaymentsPayment.user_id == user_id))
-                        await db.flush()
-            except Exception as e:
-                logger.error('❌ Ошибка удаления CloudPayments платежей', error=e)
-
-            # Удаляем KassaAi платежи
-            try:
-                async with db.begin_nested():
-                    kassa_ai_result = await db.execute(select(KassaAiPayment).where(KassaAiPayment.user_id == user_id))
-                    kassa_ai_payments = kassa_ai_result.scalars().all()
-
-                    if kassa_ai_payments:
-                        logger.info('🔄 Удаляем KassaAi платежей', kassa_ai_payments_count=len(kassa_ai_payments))
-                        await db.execute(
-                            update(KassaAiPayment).where(KassaAiPayment.user_id == user_id).values(transaction_id=None)
-                        )
-                        await db.flush()
-                        await db.execute(delete(KassaAiPayment).where(KassaAiPayment.user_id == user_id))
-                        await db.flush()
-            except Exception as e:
-                logger.error('❌ Ошибка удаления KassaAi платежей', error=e)
-
-            # Платёжные провайдеры, которые ссылаются на transactions через FK без ON DELETE,
-            # но раньше не очищались в этом блоке. Без них DELETE FROM transactions падал с
-            # ForeignKeyViolationError (например, rollypay_payments_transaction_id_fkey).
-            from app.database.models import (
-                AntilopayPayment,
-                AppleTransaction,
-                AuraPayPayment,
-                CasheraPayment,
-                CisPayPayment,
-                DonutPayment,
-                EtoplatezhiPayment,
-                JupiterPayment,
-                LavaPayment,
-                OverpayPayment,
-                ParityPayPayment,
-                PayPearPayment,
-                RioPayPayment,
-                RollyPayPayment,
-                SeverPayPayment,
-                TabPayPayment,
-            )
-
-            extra_payment_models = (
-                RioPayPayment,
-                RollyPayPayment,
-                SeverPayPayment,
-                PayPearPayment,
-                OverpayPayment,
-                AuraPayPayment,
-                EtoplatezhiPayment,
-                AntilopayPayment,
-                JupiterPayment,
-                DonutPayment,
-                LavaPayment,
-                CisPayPayment,
-                TabPayPayment,
-                ParityPayPayment,
-                CasheraPayment,
-            )
-            for model in extra_payment_models:
-                try:
-                    async with db.begin_nested():
-                        await db.execute(update(model).where(model.user_id == user_id).values(transaction_id=None))
-                        await db.flush()
-                        await db.execute(delete(model).where(model.user_id == user_id))
-                        await db.flush()
-                except Exception as error:
-                    logger.error(
-                        '❌ Ошибка удаления платежей провайдера',
-                        provider=model.__tablename__,
-                        error=str(error),
-                    )
-
-            # Apple IAP: FK поле называется transaction_id_fk (не transaction_id),
-            # поэтому отдельным блоком. user_id имеет CASCADE на users, но это сработает
-            # позже при DELETE User — а DELETE Transaction раньше падал бы из-за FK на apple_transactions.
-            try:
-                async with db.begin_nested():
-                    await db.execute(
-                        update(AppleTransaction)
-                        .where(AppleTransaction.user_id == user_id)
-                        .values(transaction_id_fk=None)
-                    )
-                    await db.flush()
-                    await db.execute(delete(AppleTransaction).where(AppleTransaction.user_id == user_id))
-                    await db.flush()
-            except Exception as error:
-                logger.error('❌ Ошибка удаления Apple IAP платежей', error=str(error))
 
             try:
                 async with db.begin_nested():
@@ -1351,17 +1145,8 @@ class UserService:
                 logger.error('❌ Ошибка удаления подписок', error=e)
 
             try:
-                from app.database.models import (
-                    AccessPolicy,
-                    AdminAuditLog,
-                    AdminRole,
-                    SavedPaymentMethod,
-                    UserRole,
-                    WithdrawalRequest,
-                )
+                from app.database.models import AccessPolicy, AdminAuditLog, AdminRole, UserRole, WithdrawalRequest
 
-                await db.execute(delete(SavedPaymentMethod).where(SavedPaymentMethod.user_id == user_id))
-                # RioPayPayment удаляется выше в extra_payment_models — здесь дубликат не нужен.
                 await db.execute(delete(AdminAuditLog).where(AdminAuditLog.user_id == user_id))
                 await db.execute(delete(WithdrawalRequest).where(WithdrawalRequest.user_id == user_id))
                 await db.execute(

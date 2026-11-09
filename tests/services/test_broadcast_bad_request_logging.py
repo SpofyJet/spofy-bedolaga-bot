@@ -18,7 +18,11 @@ from unittest.mock import patch
 
 from aiogram.exceptions import TelegramBadRequest
 
-from app.services.broadcast_service import BroadcastConfig, BroadcastMediaConfig, BroadcastService
+from app.services.broadcast_service import (
+    BroadcastConfig,
+    BroadcastMediaConfig,
+    BroadcastService,
+)
 
 
 CAPTION_TOO_LONG = TelegramBadRequest(method=None, message='Bad Request: MEDIA_CAPTION_TOO_LONG')

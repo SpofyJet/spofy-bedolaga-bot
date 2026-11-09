@@ -572,7 +572,10 @@ class TestBotAndCabinetAgree:
 
     @pytest.mark.asyncio
     async def test_days_are_capped_the_same_way(self, wired, monkeypatch):
-        from app.database.crud.referral_reward_level import MAX_REWARD_DAYS, upsert_reward_level
+        from app.database.crud.referral_reward_level import (
+            MAX_REWARD_DAYS,
+            upsert_reward_level,
+        )
         from app.database.models import ReferralRewardLevel
         from tests.fixtures.sqlite_memory import ensure_real_aiosqlite, memory_session
 
@@ -590,7 +593,10 @@ class TestBotAndCabinetAgree:
         «Включить». Уровень создавался заново СРАЗУ активным и начинал платить по
         одному заполненному полю.
         """
-        from app.database.crud.referral_reward_level import delete_reward_level, upsert_reward_level
+        from app.database.crud.referral_reward_level import (
+            delete_reward_level,
+            upsert_reward_level,
+        )
         from app.database.models import ReferralRewardLevel
         from tests.fixtures.sqlite_memory import ensure_real_aiosqlite, memory_session
 

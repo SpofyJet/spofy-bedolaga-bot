@@ -2603,13 +2603,6 @@ async def _try_auto_extend_expired_after_topup(
         description=description,
     )
 
-    # Update RemnaWave
-    try:
-        from app.services.payment.lava import shift_lava_next_charge_after_manual_extension
-
-        await shift_lava_next_charge_after_manual_extension(db, subscription_id, period_days)
-    except Exception as error:
-        logger.warning('Could not shift Lava charge after expired autopay', error=error)
     await db.refresh(user)
     await db.refresh(updated_subscription)
 

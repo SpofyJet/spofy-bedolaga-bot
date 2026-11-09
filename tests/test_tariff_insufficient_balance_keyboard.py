@@ -75,7 +75,9 @@ def test_no_sbp_purchase_when_recurrent_disabled(monkeypatch):
 
 
 def test_daily_insufficient_balance_offers_sbp_purchase(monkeypatch):
-    from app.handlers.subscription.tariff_purchase import get_daily_tariff_insufficient_balance_keyboard
+    from app.handlers.subscription.tariff_purchase import (
+        get_daily_tariff_insufficient_balance_keyboard,
+    )
 
     monkeypatch.setattr(type(settings), 'is_platega_recurrent_enabled', lambda self: True)
     assert 'tariff_sbp:7' in _callbacks(get_daily_tariff_insufficient_balance_keyboard(7, 'ru'))
@@ -145,23 +147,6 @@ def test_extend_prefilled_amount_is_missing_not_full_price(monkeypatch):
     assert 'subscription_extend' in callbacks
 
 
-def test_extend_back_points_at_the_subscription_in_multi_tariff(monkeypatch):
-    """«Назад» обязан адресовать конкретную подписку, иначе он никуда не ведёт.
-
-    На экране возврата после пополнения активная подписка в FSM не закрепляется,
-    а само состояние к тому моменту могло быть очищено. Голый
-    `subscription_extend` при двух и более подписках упирается в «Выберите
-    подписку» и НИЧЕГО не перерисовывает — кнопка выглядит сломанной. Идиома
-    `se:{id}` уже используется в monitoring_service и recurrent_payment_service.
-    """
-    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-
-    keyboard = get_tariff_extend_insufficient_balance_keyboard(7, 42, 30, 'ru', missing_kopeks=50000)
-
-    assert 'se:42' in _callbacks(keyboard)
-
-
 def test_extend_back_stays_generic_without_multi_tariff(monkeypatch):
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
     monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
@@ -203,3 +188,20 @@ def test_extend_falls_back_to_topup_without_direct_payment_methods(monkeypatch):
     assert 'balance_topup' in callbacks, 'без прямых способов должен остаться классический переход'
     assert 'menu_balance' not in callbacks, 'чужая навигация не должна попадать на экран продления'
     assert 'topup_support' not in callbacks
+
+
+def test_extend_back_points_at_the_subscription_in_multi_tariff(monkeypatch):
+    """«Назад» обязан адресовать конкретную подписку, иначе он никуда не ведёт.
+
+    На экране возврата после пополнения активная подписка в FSM не закрепляется,
+    а само состояние к тому моменту могло быть очищено. Голый
+    `subscription_extend` при двух и более подписках упирается в «Выберите
+    подписку» и НИЧЕГО не перерисовывает — кнопка выглядит сломанной. Идиома
+    `se:{id}` уже используется в monitoring_service и recurrent_payment_service.
+    """
+    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+
+    keyboard = get_tariff_extend_insufficient_balance_keyboard(7, 42, 30, 'ru', missing_kopeks=50000)
+
+    assert 'se:42' in _callbacks(keyboard)

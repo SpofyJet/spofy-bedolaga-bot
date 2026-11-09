@@ -28,7 +28,10 @@ from app.database.models import (
     UserStatus,
     server_squad_promo_groups,
 )
-from app.services.admin_notification_service import AdminNotificationService, _loaded_relationship
+from app.services.admin_notification_service import (
+    AdminNotificationService,
+    _loaded_relationship,
+)
 from tests.fixtures.sqlite_memory import memory_session
 
 

@@ -547,7 +547,7 @@ class ReferralContestService:
         """Синхронизировать события конкурса с реальными данными.
 
         Проверяет всех рефералов и их платежи за период конкурса.
-        Учитывает ВСЕ платёжные системы (Stars, YooKassa, Platega, CryptoBot и др.).
+        Учитывает ВСЕ платёжные системы (Stars, Platega, CryptoBot и др.).
         """
         from app.database.crud.referral_contest import sync_contest_events
 

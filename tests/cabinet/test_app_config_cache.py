@@ -40,9 +40,7 @@ async def test_user_link_does_not_leak_to_next_request(api: AsyncMock) -> None:
     assert 'deepLink' not in second['platforms']['ios'][0]
 
 
-async def test_stale_config_is_served_when_panel_fails(
-    api: AsyncMock, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_stale_config_is_served_when_panel_fails(api: AsyncMock, monkeypatch: pytest.MonkeyPatch) -> None:
     await status._load_app_config_async()
     monkeypatch.setattr(status, '_APP_CONFIG_TTL_SECONDS', 0)
     api.get_subscription_page_config = AsyncMock(side_effect=RuntimeError('panel down'))

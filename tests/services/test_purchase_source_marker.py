@@ -8,7 +8,10 @@ from unittest.mock import AsyncMock, MagicMock
 from app.config import settings
 from app.middlewares.context_binding import ContextVarsMiddleware
 from app.services import spofy_subpage_context as ctx
-from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
+from app.services.admin_notification_service import (
+    AdminNotificationService,
+    NotificationCategory,
+)
 from app.services.user_action_log_service import bind_request_path, reset_request_path
 
 
@@ -124,5 +127,10 @@ async def test_auto_purchase_after_topup_uses_cart_source(monkeypatch):
     monkeypatch.setattr(auto.user_cart_service, 'get_all_subscription_carts', AsyncMock(return_value=carts))
     monkeypatch.setattr(auto.user_cart_service, 'has_topup_intent', AsyncMock(return_value=True))
 
-    assert await auto.auto_purchase_saved_cart_after_topup(AsyncMock(), SimpleNamespace(id=5, telegram_id=5005, email=None), bot=None) is True
+    assert (
+        await auto.auto_purchase_saved_cart_after_topup(
+            AsyncMock(), SimpleNamespace(id=5, telegram_id=5005, email=None), bot=None
+        )
+        is True
+    )
     assert seen == ['cabinet', 'bot']

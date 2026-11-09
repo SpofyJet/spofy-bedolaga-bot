@@ -29,7 +29,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage, StorageKey
-from aiogram.types import CallbackQuery, InaccessibleMessage, InlineKeyboardMarkup, Message, User as TgUser
+from aiogram.types import (
+    CallbackQuery,
+    InaccessibleMessage,
+    InlineKeyboardMarkup,
+    Message,
+    User as TgUser,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
@@ -44,7 +50,9 @@ from app.handlers.subscription.gift import (
 from app.handlers.subscription.my_subscriptions import show_my_subscriptions
 from app.handlers.subscription.purchase import show_subscription_info
 from app.services.gift_history_service import GiftHistoryItem
-from app.services.gift_notification_service import build_gift_history_detail_presentation
+from app.services.gift_notification_service import (
+    build_gift_history_detail_presentation,
+)
 from app.utils.gift_links import build_gift_public_code
 
 

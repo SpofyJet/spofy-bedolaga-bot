@@ -13,7 +13,13 @@ import pytest
 import sqlalchemy as sa
 
 from app.config import settings
-from app.database.models import Base, ReferralEarning, ReferralRewardLevel, ReferralRewardType, User
+from app.database.models import (
+    Base,
+    ReferralEarning,
+    ReferralRewardLevel,
+    ReferralRewardType,
+    User,
+)
 from app.services.referral_reward_service import (
     ReferralRewardLevelService,
     RewardEvent,

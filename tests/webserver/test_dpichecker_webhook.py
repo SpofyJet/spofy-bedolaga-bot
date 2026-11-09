@@ -11,7 +11,10 @@ import json
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.webserver.dpichecker_webhook import MAX_BODY_BYTES, create_dpichecker_webhook_router
+from app.webserver.dpichecker_webhook import (
+    MAX_BODY_BYTES,
+    create_dpichecker_webhook_router,
+)
 from tests.fixtures.dpichecker_fixtures import load_dpichecker_fixture
 
 

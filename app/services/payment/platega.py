@@ -324,14 +324,6 @@ class PlategaPaymentMixin:
             existing.status = 'CANCELLED'
             await db.commit()
 
-        # Взаимоисключение с рекуррентом Lava: оба движка push-модели, и две
-        # живые привязки на одной подписке списывали бы дважды за цикл.
-        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
-        from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
-
-        await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-        await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
-
         # Сумма — полная цена продления, а не голая цена периода: у подписки
         # могут быть докупленные устройства (в классическом режиме — ещё и
         # трафик/серверы), и балансовое автопродление списывает именно с ними.

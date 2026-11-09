@@ -7,11 +7,10 @@ from typing import Any
 
 import structlog
 from aiogram import Bot, Dispatcher
-from fastapi import FastAPI, Response, status
-from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi import FastAPI, status
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.cabinet.apple_iap import apple_iap_only_router
 from app.config import settings
 from app.services.disposable_email_service import disposable_email_service
 from app.services.payment_service import PaymentService
@@ -67,7 +66,7 @@ def _create_base_app(lifespan: Any = None) -> FastAPI:
         )
 
         # Add cabinet routes even when web API is disabled
-        if settings.is_cabinet_enabled() or settings.is_apple_iap_enabled():
+        if settings.is_cabinet_enabled():
             from fastapi.middleware.cors import CORSMiddleware
 
             cabinet_origins = settings.get_cabinet_allowed_origins()
@@ -92,8 +91,6 @@ def _create_base_app(lifespan: Any = None) -> FastAPI:
                 from app.cabinet.routes import router as cabinet_router
 
                 app.include_router(cabinet_router)
-            else:
-                app.include_router(apple_iap_only_router)
 
     _attach_docs_alias(app, app.docs_url)
     return app
@@ -191,12 +188,6 @@ def create_unified_app(
     if payments_router:
         app.include_router(payments_router)
 
-        # ПЕРВЫМ в порядке shutdown: часть платёжных вебхуков отвечает 200 сразу
-        # и дорабатывает в фоне, а провайдер после 200 коллбек не повторит. Дренаж
-        # обязан отработать, пока живы и telegram-процессор (фон шлёт уведомление
-        # о зачислении), и пул БД — то есть до всех остановок ниже.
-        shutdown_handlers.append(payments.drain_webhook_bg_tasks)
-
     # Mount RemnaWave incoming webhook router
     remnawave_webhook_enabled = settings.is_remnawave_webhook_enabled()
     if remnawave_webhook_enabled:
@@ -223,20 +214,12 @@ def create_unified_app(
     app.include_router(create_dpichecker_webhook_router(dpichecker_service))
 
     payment_providers_state = {
-        'tribute': settings.TRIBUTE_ENABLED,
-        'mulenpay': settings.is_mulenpay_enabled(),
         'cryptobot': settings.is_cryptobot_enabled(),
         'xrocket': settings.is_xrocket_enabled(),
-        'yookassa': settings.is_yookassa_enabled(),
-        'pal24': settings.is_pal24_enabled(),
         'wata': settings.is_wata_enabled(),
         'heleket': settings.is_heleket_enabled(),
         'platega': settings.is_platega_enabled(),
-        'cloudpayments': settings.is_cloudpayments_enabled(),
         'stars': bool(settings.TELEGRAM_STARS_ENABLED),
-        'apple_iap': settings.is_apple_iap_enabled(),
-        'freekassa': settings.is_freekassa_enabled(),
-        'riopay': settings.is_riopay_enabled(),
     }
 
     # Маршруты вебхуков фиксируются на старте по учётным данным, а флаги
@@ -271,23 +254,6 @@ def create_unified_app(
 
     miniapp_mounted, miniapp_path = _mount_miniapp_static(app)
     _mount_uploads_static(app)
-
-    # Root-level Antilopay site-verification file. Antilopay crawler ходит
-    # точно по `/<host>/apay-meta-file.txt`, поэтому не можем спрятать роут
-    # под /cabinet prefix. Отдаём 404, если значение не настроено, чтобы
-    # не светить статус «фича выключена» отдельным сигналом.
-    # `no-store`: если оператор ротирует токен, верификация Antilopay не должна
-    # упираться в кэш промежуточных CDN/прокси.
-    @app.get('/apay-meta-file.txt', include_in_schema=False)
-    async def apay_meta_file() -> Response:  # pragma: no cover - thin static endpoint
-        token = (settings.ANTILOPAY_APAY_VERIFICATION_TAG or '').strip()
-        if not token:
-            return Response(status_code=status.HTTP_404_NOT_FOUND)
-        return PlainTextResponse(
-            content=token,
-            media_type='text/plain; charset=utf-8',
-            headers={'Cache-Control': 'no-store'},
-        )
 
     unified_health_path = '/health/unified' if settings.is_web_api_enabled() else '/health'
 

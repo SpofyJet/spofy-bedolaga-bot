@@ -27,10 +27,11 @@ async def test_unified_app_health_reports_features(monkeypatch: pytest.MonkeyPat
     miniapp_static_dir.mkdir()
 
     monkeypatch.setattr(settings, 'WEB_API_ENABLED', True, raising=False)
-    monkeypatch.setattr(settings, 'TRIBUTE_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'PLATEGA_ENABLED', True, raising=False)
     # Маршрут монтируется по учётным данным, а не по флагу: без ключа
     # проверять подпись коллбека нечем, и эндпоинт не поднимается.
-    monkeypatch.setattr(settings, 'TRIBUTE_API_KEY', 'k', raising=False)
+    monkeypatch.setattr(settings, 'PLATEGA_MERCHANT_ID', 'm', raising=False)
+    monkeypatch.setattr(settings, 'PLATEGA_SECRET', 'k', raising=False)
     monkeypatch.setattr(settings, 'WEBHOOK_URL', 'https://hooks.example.com', raising=False)
     monkeypatch.setattr(settings, 'WEBHOOK_PATH', '/telegram-webhook', raising=False)
     monkeypatch.setattr(settings, 'WEBHOOK_SECRET_TOKEN', 'super-secret', raising=False)
@@ -73,11 +74,11 @@ async def test_unified_app_health_reports_features(monkeypatch: pytest.MonkeyPat
     assert payload['telegram_webhook']['path'] == '/telegram-webhook'
     assert payload['telegram_webhook']['secret_configured'] is True
     assert payload['payment_webhooks']['enabled'] is True
-    assert payload['payment_webhooks']['providers']['tribute'] is True
+    assert payload['payment_webhooks']['providers']['platega'] is True
     # Смонтированные пути в health — единственный способ увидеть снаружи,
     # что вебхук провайдера действительно поднят: 404 от коллбека до бота
     # не доходит и в его логах не остаётся ничего.
-    assert settings.TRIBUTE_WEBHOOK_PATH in payload['payment_webhooks']['mounted_paths']
+    assert settings.PLATEGA_WEBHOOK_PATH in payload['payment_webhooks']['mounted_paths']
     assert payload['miniapp_static']['mounted'] is True
     assert payload['miniapp_static']['path'].endswith('miniapp')
 
@@ -97,51 +98,6 @@ def _build_unified_app(monkeypatch: pytest.MonkeyPatch, docs_enabled: bool) -> F
         payment_service,
         enable_telegram_webhook=False,
     )
-
-
-def test_unified_app_apple_iap_only_mounts_only_apple_cabinet_routes(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    bot = AsyncMock()
-    dispatcher = SimpleNamespace(feed_update=AsyncMock())
-    payment_service = AsyncMock(spec=PaymentService)
-    cert_path = tmp_path / 'apple-root.cer'
-    cert_path.write_bytes(b'dummy-cert')
-
-    monkeypatch.setattr(settings, 'WEB_API_ENABLED', False, raising=False)
-    monkeypatch.setattr(settings, 'CABINET_ENABLED', False, raising=False)
-    monkeypatch.setattr(settings, 'MINIAPP_STATIC_PATH', str(tmp_path / 'missing-miniapp'), raising=False)
-    monkeypatch.setattr(settings, 'MEDIA_UPLOAD_DIR', str(tmp_path / 'uploads'), raising=False)
-    monkeypatch.setattr(settings, 'APPLE_IAP_ENABLED', True, raising=False)
-    monkeypatch.setattr(settings, 'APPLE_IAP_KEY_ID', 'TEST_KEY_ID', raising=False)
-    monkeypatch.setattr(settings, 'APPLE_IAP_ISSUER_ID', 'test-issuer-id', raising=False)
-    monkeypatch.setattr(settings, 'APPLE_IAP_BUNDLE_ID', 'com.org.app', raising=False)
-    monkeypatch.setattr(settings, 'APPLE_IAP_APP_APPLE_ID', 123456789, raising=False)
-    monkeypatch.setattr(settings, 'APPLE_IAP_ENVIRONMENT', 'Sandbox', raising=False)
-    monkeypatch.setattr(
-        settings, 'APPLE_IAP_PRIVATE_KEY', '-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----', raising=False
-    )
-    monkeypatch.setattr(settings, 'APPLE_IAP_PRIVATE_KEY_PATH', None, raising=False)
-    monkeypatch.setattr(settings, 'APPLE_IAP_ROOT_CERTS_PATHS', str(cert_path), raising=False)
-
-    app = create_unified_app(
-        bot,
-        dispatcher,  # type: ignore[arg-type]
-        payment_service,
-        enable_telegram_webhook=False,
-    )
-
-    # Starlette 1.x: include_router ленивый, вложенные пути не попадают в
-    # app.routes — резолвим фактическую таблицу через OpenAPI-схему.
-    registered_paths = set(app.openapi().get('paths', {}))
-
-    assert '/cabinet/apple-iap/account-token' in registered_paths
-    assert '/cabinet/apple-purchase' in registered_paths
-    assert '/cabinet/admin/apple-iap/transactions' in registered_paths
-    assert '/cabinet/subscription' not in registered_paths
-    assert '/cabinet/balance' not in registered_paths
-    assert '/cabinet/admin/users' not in registered_paths
 
 
 @pytest.mark.anyio

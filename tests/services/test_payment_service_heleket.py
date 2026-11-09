@@ -15,6 +15,54 @@ from app.database.crud import heleket as heleket_crud
 from app.services.payment_service import PaymentService
 
 
+class StubHeleketService:
+    def __init__(
+        self,
+        response: dict[str, Any] | None,
+        *,
+        info_response: dict[str, Any] | None = None,
+    ) -> None:
+        self.response = response
+        self.info_response = info_response
+        self.calls: list[dict[str, Any]] = []
+        self.info_calls: list[dict[str, str | None]] = []
+        self.list_response: dict[str, Any] | None = None
+        self.list_calls: list[dict[str, str | None]] = []
+
+    async def create_payment(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        self.calls.append(payload)
+        return self.response
+
+    async def get_payment_info(
+        self,
+        *,
+        uuid: str | None = None,
+        order_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        self.info_calls.append({'uuid': uuid, 'order_id': order_id})
+        return self.info_response
+
+    async def list_payments(
+        self,
+        *,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        cursor: str | None = None,
+    ) -> dict[str, Any] | None:
+        self.list_calls.append({'date_from': date_from, 'date_to': date_to, 'cursor': cursor})
+        return self.list_response
+
+
+def _make_service(stub: StubHeleketService | None) -> PaymentService:
+    service = PaymentService.__new__(PaymentService)  # type: ignore[call-arg]
+    service.bot = None
+    service.heleket_service = stub
+    service.stars_service = None
+    service.cryptobot_service = None
+    service.wata_service = None
+    return service
+
+
 @pytest.fixture
 def anyio_backend() -> str:
     return 'asyncio'
@@ -76,19 +124,6 @@ class StubHeleketService:
     ) -> dict[str, Any] | None:
         self.list_calls.append({'date_from': date_from, 'date_to': date_to, 'cursor': cursor})
         return self.list_response
-
-
-def _make_service(stub: StubHeleketService | None) -> PaymentService:
-    service = PaymentService.__new__(PaymentService)  # type: ignore[call-arg]
-    service.bot = None
-    service.heleket_service = stub
-    service.yookassa_service = None
-    service.stars_service = None
-    service.cryptobot_service = None
-    service.mulenpay_service = None
-    service.pal24_service = None
-    service.wata_service = None
-    return service
 
 
 @pytest.mark.anyio('asyncio')

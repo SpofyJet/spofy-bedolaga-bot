@@ -5,7 +5,10 @@ from types import SimpleNamespace
 import pytest
 
 from app.config import settings
-from app.handlers.subscription.tariff_purchase import tariff_has_bypass_quota, tariff_traffic_text
+from app.handlers.subscription.tariff_purchase import (
+    tariff_has_bypass_quota,
+    tariff_traffic_text,
+)
 from app.localization.texts import get_texts
 from app.services import remnawave_webhook_service as webhook
 from app.services.monitoring_service import traffic_warning_cache_key
@@ -42,7 +45,9 @@ def test_traffic_warning_key_changes_with_limit():
 def test_panel_expiry_reminders_yield_to_bot(monkeypatch, kind, expired_1d, expected):
     from app.services.notification_settings_service import NotificationSettingsService
 
-    monkeypatch.setattr(NotificationSettingsService, 'are_notifications_globally_enabled', classmethod(lambda cls: True))
+    monkeypatch.setattr(
+        NotificationSettingsService, 'are_notifications_globally_enabled', classmethod(lambda cls: True)
+    )
     monkeypatch.setattr(NotificationSettingsService, 'is_expired_1d_enabled', classmethod(lambda cls: expired_1d))
     assert webhook._bot_sends_expiry_reminders(kind) is expected
 
@@ -50,7 +55,9 @@ def test_panel_expiry_reminders_yield_to_bot(monkeypatch, kind, expired_1d, expe
 def test_panel_reminders_are_fallback_when_bot_notifications_off(monkeypatch):
     from app.services.notification_settings_service import NotificationSettingsService
 
-    monkeypatch.setattr(NotificationSettingsService, 'are_notifications_globally_enabled', classmethod(lambda cls: False))
+    monkeypatch.setattr(
+        NotificationSettingsService, 'are_notifications_globally_enabled', classmethod(lambda cls: False)
+    )
     assert webhook._bot_sends_expiry_reminders('expiring') is False
 
 

@@ -602,8 +602,17 @@ async def test_replay_never_attaches_another_gifts_transaction(monkeypatch):
     Прежний фоллбек брал последнюю GIFT_PAYMENT покупателя с order_by(id.desc()):
     у того, кто дарил дважды, повтор показывал сумму от другого подарка.
     """
-    from app.database.models import GuestPurchase, GuestPurchaseStatus, PaymentMethod, Transaction, TransactionType
-    from app.services.gift_purchase_service import _build_gift_transaction_external_id, _find_gift_transaction
+    from app.database.models import (
+        GuestPurchase,
+        GuestPurchaseStatus,
+        PaymentMethod,
+        Transaction,
+        TransactionType,
+    )
+    from app.services.gift_purchase_service import (
+        _build_gift_transaction_external_id,
+        _find_gift_transaction,
+    )
     from tests.fixtures.sqlite_memory import memory_session
 
     async with memory_session(monkeypatch, [User.__table__, GuestPurchase.__table__, Transaction.__table__]) as db:

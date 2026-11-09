@@ -12,9 +12,19 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.cabinet.routes import admin_dpichecker
-from app.cabinet.schemas.dpichecker import ActionOut, CheckCreate, MonitorPatch, PanelTargetsRequest, ScanCreate
+from app.cabinet.schemas.dpichecker import (
+    ActionOut,
+    CheckCreate,
+    MonitorPatch,
+    PanelTargetsRequest,
+    ScanCreate,
+)
 from app.external.dpichecker_api import DpiCheckerAPIError, DpiCheckerGatewayError
-from app.services.dpichecker.errors import ActionNotFound, DpiCheckerDisabled, LaunchRefused
+from app.services.dpichecker.errors import (
+    ActionNotFound,
+    DpiCheckerDisabled,
+    LaunchRefused,
+)
 from app.services.dpichecker.targets import PanelTarget, PanelTargetError
 
 

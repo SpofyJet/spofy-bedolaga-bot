@@ -10,7 +10,11 @@ from __future__ import annotations
 
 import pytest
 
-from app.database.crud.promo_group import create_promo_group, delete_promo_group, update_promo_group
+from app.database.crud.promo_group import (
+    create_promo_group,
+    delete_promo_group,
+    update_promo_group,
+)
 from app.database.models import Base
 from tests.fixtures.postgres_db import postgres_session
 

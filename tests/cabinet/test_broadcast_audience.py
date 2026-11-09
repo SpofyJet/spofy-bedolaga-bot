@@ -23,7 +23,15 @@ from app.cabinet.schemas.broadcasts import (
     BroadcastAudiencePreviewRequest,
     CombinedBroadcastCreateRequest,
 )
-from app.database.models import BroadcastHistory, PromoGroup, Subscription, SubscriptionStatus, Tariff, User, UserStatus
+from app.database.models import (
+    BroadcastHistory,
+    PromoGroup,
+    Subscription,
+    SubscriptionStatus,
+    Tariff,
+    User,
+    UserStatus,
+)
 from app.services import broadcast_service
 from app.services.broadcast_audience import (
     EMAIL_FIELDS,

@@ -16,7 +16,11 @@ from app.database.models import Base, Subscription, User
 from app.services import subscription_deletion_service as deletion
 from app.services.remnawave_webhook_service import RemnaWaveWebhookService
 from app.services.subscription_service import SubscriptionService
-from tests.fixtures.postgres_db import postgres_session, postgres_sessions, wait_for_lock_waiter
+from tests.fixtures.postgres_db import (
+    postgres_session,
+    postgres_sessions,
+    wait_for_lock_waiter,
+)
 
 
 pytestmark = pytest.mark.postgres

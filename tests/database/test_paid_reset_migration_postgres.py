@@ -7,7 +7,13 @@ import sqlalchemy as sa
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
-from app.database.models import Base, PaidTrafficResetIntent, Subscription, Transaction, User
+from app.database.models import (
+    Base,
+    PaidTrafficResetIntent,
+    Subscription,
+    Transaction,
+    User,
+)
 from tests.database.migration_loader import _load
 from tests.fixtures.postgres_db import postgres_engine
 

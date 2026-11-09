@@ -20,7 +20,14 @@ from app.cabinet.routes.subscription_modules import purchase as cabinet
 from app.config import settings
 from app.database.crud import subscription as subscriptions
 from app.database.crud.user import get_user_by_id
-from app.database.models import Base, Subscription, Tariff, Transaction, TransactionType, User
+from app.database.models import (
+    Base,
+    Subscription,
+    Tariff,
+    Transaction,
+    TransactionType,
+    User,
+)
 from app.handlers.subscription import tariff_purchase as telegram
 from app.services import subscription_auto_purchase_service as auto
 from app.services.subscription_service import SubscriptionService

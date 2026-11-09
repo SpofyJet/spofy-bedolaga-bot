@@ -85,7 +85,6 @@ def spawned(monkeypatch) -> list[dict]:
         ('/auto-login/abc', '/auto-login/{token}'),
         ('/verify-email/x', '/verify-email/{token}'),
         ('/reset-password/x', '/reset-password/{token}'),
-        ('/balance/top-up/result/yookassa', '/balance/top-up/result/yookassa'),
         ('/profile/', '/profile'),
     ],
 )

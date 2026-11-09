@@ -1092,7 +1092,7 @@ async def reconcile_tariff_traffic_limit(
     """Вернуть тарифную подписку к условиям тарифа: база тарифа + активные докупки.
 
     ``extend_subscription`` делает это на каждом продлении сам. Отдельный вход нужен
-    продлениям, которые идут мимо него — рекуррентным списаниям Lava и Platega,
+    продлениям, которые идут мимо него — рекуррентным списаниям Platega,
     продлевающим через метод модели, — иначе подписка, которой прошлая ошибка
     выдала безлимит, на таком продлении так и оставалась бы безлимитной.
     Подписку без тарифа не трогает. Оверлей грейса, осевший в подписке, отсюда не
@@ -1681,22 +1681,6 @@ async def extend_subscription(
             except Exception as rollback_err:
                 logger.debug('Откат сессии после ошибки очистки уведомлений не удался', error=str(rollback_err))
 
-    # Ручное продление (баланс/промокод/бонусные дни админа) при живой привязке
-    # Lava: двигаем ближайшее автосписание на добавленные дни, иначе Lava спишет
-    # за период, который пользователь уже оплатил другим способом. Наше
-    # собственное рекуррентное списание сюда не заходит — оно продлевает через
-    # метод модели Subscription.extend_subscription.
-    # Только при commit=True: с commit=False вызывающий держит собственную
-    # открытую транзакцию, которая ещё может откатиться — сдвигать дату
-    # списания на стороне Lava до её коммита нельзя (откатить сдвиг нечем).
-    if days > 0 and commit:
-        try:
-            from app.services.payment.lava import shift_lava_next_charge_after_manual_extension
-
-            await shift_lava_next_charge_after_manual_extension(db, subscription.id, days)
-        except Exception as lava_err:  # pragma: no cover - хелпер сам best-effort
-            logger.warning('Failed to shift Lava next charge on extend', error=lava_err)
-
     # Kill other trial subscriptions if this extension converts trial to paid
     if not subscription.is_trial and days > 0:
         try:
@@ -1948,13 +1932,9 @@ async def update_subscription_autopay(
         # вызовы на отдельных поверхностях (бот/кабинет) пропускали новые точки
         # включения (миниапп, админ-тоглы) — и юзер платил дважды за цикл.
         try:
-            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
-            from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
             await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-            await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-            await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
         except Exception as platega_error:  # pragma: no cover - хелпер сам best-effort
             logger.warning(
                 'Не удалось отменить СБП-автопродление при включении автоплатежа',

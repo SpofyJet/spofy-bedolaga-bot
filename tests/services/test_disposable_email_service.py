@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.disposable_email_service import DisposableEmailService, parse_extra_domains
+from app.services.disposable_email_service import (
+    DisposableEmailService,
+    parse_extra_domains,
+)
 
 
 def _service(fetched: set[str]) -> DisposableEmailService:

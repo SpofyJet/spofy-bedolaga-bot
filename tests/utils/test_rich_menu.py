@@ -5,7 +5,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNotFound
+from aiogram.exceptions import (
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramNotFound,
+)
 from aiogram.methods import EditMessageText
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 

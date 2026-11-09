@@ -9,7 +9,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.config import settings
-from app.services.tariff_switch_policy import remaining_days_for_switch, should_reset_used_traffic
+from app.services.tariff_switch_policy import (
+    remaining_days_for_switch,
+    should_reset_used_traffic,
+)
 
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=UTC)

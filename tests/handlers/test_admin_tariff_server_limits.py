@@ -7,18 +7,6 @@ import app.handlers.admin.tariff_server_limits as mod
 from app.handlers.admin.tariffs import format_tariff_info, get_tariff_view_keyboard
 
 
-def _unwrap(fn):
-    while hasattr(fn, '__wrapped__'):
-        fn = fn.__wrapped__
-    return fn
-
-
-SQUADS = [
-    SimpleNamespace(squad_uuid='sq-1', display_name='Amsterdam'),
-    SimpleNamespace(squad_uuid='sq-2', display_name='Berlin'),
-]
-
-
 def _tariff(**overrides):
     values = {
         'id': 7,
@@ -53,11 +41,22 @@ def _tariff(**overrides):
         'max_days': 365,
         'panel_tag': None,
         'external_squad_uuid': None,
-        'lava_product_id': None,
         'show_in_gift': True,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
+
+
+def _unwrap(fn):
+    while hasattr(fn, '__wrapped__'):
+        fn = fn.__wrapped__
+    return fn
+
+
+SQUADS = [
+    SimpleNamespace(squad_uuid='sq-1', display_name='Amsterdam'),
+    SimpleNamespace(squad_uuid='sq-2', display_name='Berlin'),
+]
 
 
 def _callback(data: str):

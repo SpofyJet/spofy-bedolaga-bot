@@ -18,7 +18,11 @@ def test_admin_legal_pages_routes_registered(registered_paths):
 
 
 def test_legal_responses_expose_env_lock_flag():
-    from app.cabinet.routes.admin_legal_pages import FaqResponse, LegalDocumentResponse, RulesResponse
+    from app.cabinet.routes.admin_legal_pages import (
+        FaqResponse,
+        LegalDocumentResponse,
+        RulesResponse,
+    )
 
     for model in (LegalDocumentResponse, RulesResponse, FaqResponse):
         assert 'display_mode_env_locked' in model.model_fields

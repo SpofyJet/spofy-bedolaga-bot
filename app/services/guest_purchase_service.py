@@ -39,7 +39,6 @@ from app.database.models import (
     LandingPage,
     PaymentMethod,
     Tariff,
-    Transaction,
     TransactionType,
     User,
     _aware,
@@ -293,134 +292,6 @@ async def create_purchase(
     return purchase
 
 
-async def _create_nalogo_receipt_for_purchase(
-    db: AsyncSession,
-    purchase: GuestPurchase,
-    user: User,
-    transaction: Transaction | None = None,
-) -> None:
-    """Create NaloGO fiscal receipt for a guest purchase (best-effort)."""
-    if not settings.is_nalogo_enabled():
-        return
-
-    # Чеки НПД формируются только для оплат через YooKassa — как и в основном потоке бота,
-    # где NaloGO вызывает исключительно адаптер YooKassa
-    if _resolve_base_payment_method(purchase.payment_method) != PaymentMethod.YOOKASSA.value:
-        logger.debug(
-            'Skipping NaloGO receipt: guest purchase paid not via YooKassa',
-            purchase_id=purchase.id,
-            payment_method=purchase.payment_method,
-        )
-        return
-
-    # Без payment_id нет dedup-ключа в Redis — нельзя гарантировать идемпотентность
-    if not purchase.payment_id:
-        logger.warning(
-            'Cannot create NaloGO receipt: purchase has no payment_id',
-            purchase_id=purchase.id,
-        )
-        return
-
-    # Нулевые/отрицательные суммы не фискализируем
-    if purchase.amount_kopeks <= 0:
-        return
-
-    # Защита от дублей: если у транзакции или покупки уже есть чек — не создаём новый
-    if transaction and transaction.receipt_uuid:
-        logger.info(
-            'NaloGO receipt already exists for guest purchase (transaction)',
-            purchase_id=purchase.id,
-            receipt_uuid=transaction.receipt_uuid,
-        )
-        return
-
-    if purchase.receipt_uuid:
-        logger.info(
-            'NaloGO receipt already exists for guest purchase (purchase)',
-            purchase_id=purchase.id,
-            receipt_uuid=purchase.receipt_uuid,
-        )
-        return
-
-    try:
-        from app.services.nalogo_service import NaloGoService
-
-        nalogo_service = NaloGoService()
-        if not nalogo_service.configured:
-            return
-
-        amount_rubles = purchase.amount_kopeks / 100
-        # Не передаём telegram_user_id в описание чека — privacy (VPN-сервис)
-        receipt_name = settings.get_balance_payment_description(purchase.amount_kopeks)
-
-        # Адресат чека — покупатель, а не одаряемый (см. _get_receipt_contact)
-        receipt_telegram_id, receipt_email = _get_receipt_contact(purchase, user)
-
-        receipt_uuid = await nalogo_service.create_receipt(
-            name=receipt_name,
-            amount=amount_rubles,
-            quantity=1,
-            payment_id=purchase.payment_id,
-            telegram_user_id=receipt_telegram_id,
-            amount_kopeks=purchase.amount_kopeks,
-            user_email=receipt_email,
-        )
-
-        if receipt_uuid:
-            logger.info(
-                'NaloGO receipt created for guest purchase',
-                purchase_id=purchase.id,
-                receipt_uuid=receipt_uuid,
-                saved_to_transaction=transaction is not None,
-            )
-            # Всегда сохраняем receipt_uuid на purchase (persistent dedup)
-            try:
-                purchase.receipt_uuid = receipt_uuid
-                purchase.receipt_created_at = datetime.now(UTC)
-                if transaction:
-                    transaction.receipt_uuid = receipt_uuid
-                    transaction.receipt_created_at = datetime.now(UTC)
-                await db.commit()
-            except Exception:
-                await db.rollback()
-                logger.warning(
-                    'Failed to save receipt_uuid to purchase/transaction',
-                    purchase_id=purchase.id,
-                    receipt_uuid=receipt_uuid,
-                )
-
-            # Отправляем чек покупателю (Telegram или почта) и дублируем в админ-топик
-            try:
-                from app.bot_factory import create_bot
-                from app.services.nalogo_service import send_nalogo_receipt_notifications
-
-                async with create_bot() as bot:
-                    await send_nalogo_receipt_notifications(
-                        bot=bot,
-                        nalogo_service=nalogo_service,
-                        receipt_uuid=receipt_uuid,
-                        amount_kopeks=purchase.amount_kopeks,
-                        telegram_user_id=receipt_telegram_id,
-                        context_label=f'Источник: гостевая покупка с лендинга (purchase_id={purchase.id})',
-                        user_email=receipt_email,
-                    )
-            except Exception as notify_error:
-                logger.warning(
-                    'Failed to send NaloGO receipt notifications for guest purchase',
-                    purchase_id=purchase.id,
-                    receipt_uuid=receipt_uuid,
-                    error=notify_error,
-                )
-    except Exception as exc:
-        from app.utils.proxy import sanitize_proxy_error
-
-        logger.error(
-            'Failed to create nalogo receipt for guest purchase',
-            purchase_id=purchase.id,
-            error=sanitize_proxy_error(exc),
-        )
-
-
 async def fulfill_purchase(
     db: AsyncSession,
     purchase_token: str,
@@ -541,10 +412,6 @@ async def fulfill_purchase(
 
             await _send_admin_notification(purchase, notification_tariff_name, is_pending_activation=True)
 
-            # Создаем чек через NaloGO (деньги получены, чек нужен)
-            await _create_nalogo_receipt_for_purchase(db, purchase, user)
-            await db.refresh(purchase)  # guard: inner rollback may expire the object
-
             # Clear plaintext password after email delivery
             if purchase.cabinet_password:
                 purchase.cabinet_password = None
@@ -659,11 +526,10 @@ async def fulfill_purchase(
 
         # Create transaction so promo group auto-assignment and contest tracking work.
         # Skip for gift recipients — they didn't pay, so their spending shouldn't be inflated.
-        transaction = None
         if not purchase.is_gift:
             try:
                 payment_method_enum = _resolve_payment_method(purchase.payment_method)
-                transaction = await create_transaction(
+                await create_transaction(
                     db=db,
                     user_id=user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
@@ -729,12 +595,6 @@ async def fulfill_purchase(
 
         await _send_admin_notification(purchase, notification_tariff_name, is_pending_activation=False)
 
-        # Создаем чек через NaloGO
-        await _create_nalogo_receipt_for_purchase(db, purchase, user, transaction)
-
-        # Refresh purchase: если внутри nalogo helper был rollback, объект expired
-        await db.refresh(purchase)
-
         # Clear plaintext password after email delivery — no longer needed in DB
         if purchase.cabinet_password:
             purchase.cabinet_password = None
@@ -766,12 +626,11 @@ async def fulfill_purchase(
 def _resolve_base_payment_method(method_str: str | None) -> str:
     """Resolve base payment method string by stripping sub-option suffixes.
 
-    'yookassa_sbp' → 'yookassa', 'kassa_ai' → 'kassa_ai' (enum match keeps it),
-    'platega_2' → 'platega'.
+    'platega_2' → 'platega'; an exact enum match is kept as-is.
     """
     if not method_str:
         return ''
-    # If exact enum match, return as-is (handles 'telegram_stars', 'kassa_ai', etc.)
+    # If exact enum match, return as-is (handles 'telegram_stars', etc.)
     try:
         PaymentMethod(method_str)
         return method_str
@@ -1945,7 +1804,7 @@ async def recover_stuck_pending_purchases(
 ) -> int:
     """Recover purchases stuck in PENDING by checking provider payment status.
 
-    Queries all payment provider tables (YooKassa, Heleket, CryptoBot, etc.)
+    Queries all payment provider tables (Heleket, CryptoBot, etc.)
     for succeeded payments matching the purchase_token. If a provider payment
     is confirmed but the GuestPurchase is still PENDING (webhook was lost or
     processing failed), marks the purchase as PAID so retry_stuck_paid_purchases
@@ -2001,20 +1860,7 @@ async def _find_succeeded_provider_payment(
     from sqlalchemy import case, cast
     from sqlalchemy.types import JSON as SA_JSON
 
-    from app.database.models import (
-        CloudPaymentsPayment,
-        CryptoBotPayment,
-        FreekassaPayment,
-        HeleketPayment,
-        KassaAiPayment,
-        MulenPayPayment,
-        Pal24Payment,
-        PlategaPayment,
-        RioPayPayment,
-        SeverPayPayment,
-        WataPayment,
-        YooKassaPayment,
-    )
+    from app.database.models import CryptoBotPayment, HeleketPayment, PlategaPayment, WataPayment
 
     # --- CryptoBot: special case — payload field (text JSON), skip amount check ---
     if base_method == 'cryptobot':
@@ -2045,22 +1891,10 @@ async def _find_succeeded_provider_payment(
     payment_id_attr: str = ''
     extra_conditions: list = []
 
-    if base_method.startswith('yookassa'):
-        model = YooKassaPayment
-        payment_id_attr = 'yookassa_payment_id'
-        extra_conditions = [YooKassaPayment.status == 'succeeded', YooKassaPayment.is_paid.is_(True)]
-    elif base_method == 'heleket':
+    if base_method == 'heleket':
         model = HeleketPayment
         payment_id_attr = 'uuid'
         extra_conditions = [HeleketPayment.status.in_(['paid', 'paid_over'])]
-    elif base_method == 'mulenpay':
-        model = MulenPayPayment
-        payment_id_attr = 'uuid'
-        extra_conditions = [MulenPayPayment.is_paid.is_(True)]
-    elif base_method == 'pal24':
-        model = Pal24Payment
-        payment_id_attr = 'bill_id'
-        extra_conditions = [Pal24Payment.is_paid.is_(True)]
     elif base_method == 'wata':
         model = WataPayment
         payment_id_attr = 'payment_link_id'
@@ -2069,26 +1903,6 @@ async def _find_succeeded_provider_payment(
         model = PlategaPayment
         payment_id_attr = 'platega_transaction_id'
         extra_conditions = [PlategaPayment.is_paid.is_(True)]
-    elif base_method == 'cloudpayments':
-        model = CloudPaymentsPayment
-        payment_id_attr = 'invoice_id'
-        extra_conditions = [CloudPaymentsPayment.status == 'completed', CloudPaymentsPayment.is_paid.is_(True)]
-    elif base_method == 'freekassa':
-        model = FreekassaPayment
-        payment_id_attr = 'order_id'
-        extra_conditions = [FreekassaPayment.status == 'success', FreekassaPayment.is_paid.is_(True)]
-    elif base_method == 'kassa_ai':
-        model = KassaAiPayment
-        payment_id_attr = 'order_id'
-        extra_conditions = [KassaAiPayment.status == 'success', KassaAiPayment.is_paid.is_(True)]
-    elif base_method == 'riopay':
-        model = RioPayPayment
-        payment_id_attr = 'order_id'
-        extra_conditions = [RioPayPayment.status == 'success', RioPayPayment.is_paid.is_(True)]
-    elif base_method == 'severpay':
-        model = SeverPayPayment
-        payment_id_attr = 'order_id'
-        extra_conditions = [SeverPayPayment.status == 'success', SeverPayPayment.is_paid.is_(True)]
 
     if model is None:
         return None
@@ -2128,7 +1942,7 @@ async def _check_and_recover_pending_purchase(
     if purchase is None or purchase.status != GuestPurchaseStatus.PENDING.value:
         return False
 
-    # Resolve base method: 'yookassa_sbp' → 'yookassa', 'kassa_ai' stays 'kassa_ai'
+    # Resolve base method: 'platega_2' → 'platega'
     base_method = _resolve_base_payment_method(payment_method)
 
     match = await _find_succeeded_provider_payment(db, base_method, purchase_token)

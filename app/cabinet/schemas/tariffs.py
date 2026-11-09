@@ -57,7 +57,6 @@ class TariffListItem(BaseModel):
     is_highlighted: bool = False
     is_daily: bool = False
     daily_price_kopeks: int = 0
-    lava_product_id: str | None = None
     # Свой тег панельного пользователя (побеждает общие TRIAL/PAID); None = общий
     panel_tag: str | None = None
     allow_traffic_topup: bool = True
@@ -121,7 +120,6 @@ class TariffDetailResponse(BaseModel):
     # Дневной тариф
     is_daily: bool = False
     daily_price_kopeks: int = 0
-    lava_product_id: str | None = None
     # Свой тег панельного пользователя (побеждает общие TRIAL/PAID); None = общий
     panel_tag: str | None = None
     # Режим сброса трафика
@@ -188,8 +186,6 @@ class TariffCreateRequest(BaseModel):
     # Дневной тариф
     is_daily: bool = False
     daily_price_kopeks: int = Field(0, ge=0)
-    # UUID продукта Lava для рекуррентных подписок (цена/период заданы в кабинете Lava)
-    lava_product_id: str | None = Field(None, max_length=255)
     # Свой тег панели: пусто = общий тег из настроек; приводится к верхнему регистру
     panel_tag: str | None = Field(None, max_length=64)
     # Дни триала на тарифе; None = глобальный TRIAL_DURATION_DAYS
@@ -244,7 +240,6 @@ class TariffUpdateRequest(BaseModel):
     # Дневной тариф
     is_daily: bool | None = None
     daily_price_kopeks: int | None = Field(None, ge=0)
-    lava_product_id: str | None = Field(None, max_length=255)
     # Свой тег панели: пусто = общий тег из настроек; приводится к верхнему регистру
     panel_tag: str | None = Field(None, max_length=64)
     # Дни триала на тарифе; None = глобальный TRIAL_DURATION_DAYS

@@ -78,7 +78,9 @@ async def _seed(db, *rows):
 class TestReductionInfo:
     @pytest.mark.asyncio
     async def test_no_subscription(self, monkeypatch):
-        from app.cabinet.routes.subscription_modules.devices import get_device_reduction_info
+        from app.cabinet.routes.subscription_modules.devices import (
+            get_device_reduction_info,
+        )
 
         async with memory_session(monkeypatch, TABLES) as db:
             await _seed(db, _user())
@@ -88,7 +90,9 @@ class TestReductionInfo:
 
     @pytest.mark.asyncio
     async def test_trial(self, monkeypatch):
-        from app.cabinet.routes.subscription_modules.devices import get_device_reduction_info
+        from app.cabinet.routes.subscription_modules.devices import (
+            get_device_reduction_info,
+        )
 
         async with memory_session(monkeypatch, TABLES) as db:
             await _seed(db, _user(), _tariff(), _subscription(status=SubscriptionStatus.TRIAL.value, is_trial=True))
@@ -97,7 +101,9 @@ class TestReductionInfo:
 
     @pytest.mark.asyncio
     async def test_at_minimum_keeps_text_and_adds_code(self, monkeypatch):
-        from app.cabinet.routes.subscription_modules.devices import get_device_reduction_info
+        from app.cabinet.routes.subscription_modules.devices import (
+            get_device_reduction_info,
+        )
 
         async with memory_session(monkeypatch, TABLES) as db:
             await _seed(db, _user(), _tariff(device_limit=1), _subscription(device_limit=1))

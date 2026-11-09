@@ -4,7 +4,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.handlers.menu import _get_subscription_status
-from tests.fixtures.local_day import reset_local_timezone_cache, use_timezone  # noqa: F401
+from tests.fixtures.local_day import (  # noqa: F401
+    reset_local_timezone_cache,
+    use_timezone,
+)
 
 
 class DummyTexts:

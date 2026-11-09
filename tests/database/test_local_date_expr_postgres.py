@@ -17,7 +17,10 @@ from sqlalchemy import func, select, text
 from app.database.crud.transaction import REAL_PAYMENT_METHODS, get_revenue_by_period
 from app.database.local_date import as_date, local_date_expr
 from app.database.models import Transaction, TransactionType, User
-from tests.fixtures.local_day import reset_local_timezone_cache, use_timezone  # noqa: F401
+from tests.fixtures.local_day import (  # noqa: F401
+    reset_local_timezone_cache,
+    use_timezone,
+)
 from tests.fixtures.postgres_db import postgres_session
 
 

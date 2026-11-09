@@ -1,6 +1,6 @@
 """Телеграм-редактор: экран «Ещё настройки» тарифа.
 
-Тег панели, внешний сквад Remnawave, продукт Lava, порядок в списке, показ в подарках и
+Тег панели, внешний сквад Remnawave, порядок в списке, показ в подарках и
 разрешение докупки — поля, которые раньше правились только из кабинета.
 """
 
@@ -39,16 +39,11 @@ def _ext_squad_display(tariff: Tariff) -> str:
     return html.escape(getattr(tariff, 'external_squad_uuid', None) or 'нет')
 
 
-def _lava_display(tariff: Tariff) -> str:
-    return html.escape(getattr(tariff, 'lava_product_id', None) or 'не задан')
-
-
 def format_panel_settings(tariff: Tariff) -> str:
     """Блок для карточки тарифа."""
     return (
         f'• Тег панели: {_tag_display(tariff)}\n'
         f'• Внешний сквад: {_ext_squad_display(tariff)}\n'
-        f'• Продукт Lava: {_lava_display(tariff)}\n'
         f'• В подарках: {_yes_no(getattr(tariff, "show_in_gift", True))}\n'
         f'• Докупка трафика разрешена: {_yes_no(getattr(tariff, "allow_traffic_topup", True))}'
     )
@@ -76,7 +71,6 @@ def get_panel_settings_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
                 InlineKeyboardButton(text='🌐 Внешний сквад', callback_data=f'admin_tariff_edit_ext_squad:{tariff.id}'),
             ],
             [
-                InlineKeyboardButton(text='💳 Продукт Lava', callback_data=f'admin_tariff_edit_lava:{tariff.id}'),
                 InlineKeyboardButton(text='🔢 Порядок', callback_data=f'admin_tariff_edit_order:{tariff.id}'),
             ],
             [
@@ -194,25 +188,6 @@ async def start_edit_panel_tag(callback: types.CallbackQuery, db_user: User, db:
 
 @admin_required
 @error_handler
-async def start_edit_lava_product(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
-    if not tariff:
-        await callback.answer('Тариф не найден', show_alert=True)
-        return
-    await _start_field_edit(
-        callback,
-        db_user,
-        state,
-        tariff,
-        state_value=AdminStates.editing_tariff_lava_product,
-        title='💳 <b>Продукт Lava (автопродление)</b>',
-        current_value=_lava_display(tariff),
-        prompt='Введите UUID продукта из кабинета Lava или <code>-</code>, чтобы отвязать.',
-    )
-
-
-@admin_required
-@error_handler
 async def start_edit_display_order(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
@@ -258,20 +233,6 @@ async def process_panel_tag_input(message: types.Message, db_user: User, db: Asy
         return
     tariff = await update_tariff(db, tariff, panel_tag=tag)
     confirmation = f'✅ Тег панели: {html.escape(tag)}' if tag else '✅ Тег панели снят — общий из настроек'
-    await _finish(message, db_user, state, tariff, confirmation)
-
-
-@admin_required
-@error_handler
-async def process_lava_product_input(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
-    tariff = await _load_tariff_from_state(message, db, state)
-    if tariff is None:
-        return
-    raw = (message.text or '').strip()
-    # Пустая строка для CRUD значит «отвязать» — так же, как в кабинете.
-    value = '' if raw == '-' else raw
-    tariff = await update_tariff(db, tariff, lava_product_id=value)
-    confirmation = f'✅ Продукт Lava: {html.escape(value)}' if value else '✅ Продукт Lava отвязан'
     await _finish(message, db_user, state, tariff, confirmation)
 
 
@@ -390,10 +351,8 @@ def register_panel_settings_handlers(dp: Dispatcher) -> None:
     dp.callback_query.register(toggle_show_in_gift, F.data.startswith('admin_tariff_toggle_gift:'))
     dp.callback_query.register(toggle_allow_traffic_topup, F.data.startswith('admin_tariff_toggle_allow_topup:'))
     dp.callback_query.register(start_edit_panel_tag, F.data.startswith('admin_tariff_edit_panel_tag:'))
-    dp.callback_query.register(start_edit_lava_product, F.data.startswith('admin_tariff_edit_lava:'))
     dp.callback_query.register(start_edit_display_order, F.data.startswith('admin_tariff_edit_order:'))
     dp.callback_query.register(start_edit_external_squad, F.data.startswith('admin_tariff_edit_ext_squad:'))
     dp.callback_query.register(set_external_squad, F.data.startswith('admin_tariff_set_ext_squad:'))
     dp.message.register(process_panel_tag_input, AdminStates.editing_tariff_panel_tag)
-    dp.message.register(process_lava_product_input, AdminStates.editing_tariff_lava_product)
     dp.message.register(process_display_order_input, AdminStates.editing_tariff_display_order)

@@ -11,7 +11,12 @@ from app.database.crud import reachability as crud
 from app.external.remnawave_api import RemnaWaveHost
 from app.services.reachability.batches import estimate_batch_minutes
 from tests.fixtures.bschek_fixtures import load_bschek_fixture
-from tests.services.reachability.test_service import FakeClient, FakePanel, _admin, make_service
+from tests.services.reachability.test_service import (
+    FakeClient,
+    FakePanel,
+    _admin,
+    make_service,
+)
 
 
 class ManyHostsPanel(FakePanel):

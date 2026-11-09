@@ -73,7 +73,9 @@ def test_classic_mode_never_requires_tariff(classic_mode):
 
 def test_list_item_carries_the_flag_for_paid_subscription_without_tariff(tariffs_mode):
     """Список подписок (мультитариф) тоже говорит кабинету, что подписке нужен тариф."""
-    from app.cabinet.routes.subscription_modules.multi_tariff import _subscription_to_list_item
+    from app.cabinet.routes.subscription_modules.multi_tariff import (
+        _subscription_to_list_item,
+    )
 
     assert _subscription_to_list_item(_subscription(tariff_id=None)).requires_tariff_selection is True
     assert _subscription_to_list_item(_subscription(tariff_id=7)).requires_tariff_selection is False

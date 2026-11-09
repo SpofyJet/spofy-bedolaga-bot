@@ -6,7 +6,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
-from app.cabinet.apple_iap import apple_iap_only_router
 from app.config import settings
 from app.webapi.docs import add_redoc_endpoint
 
@@ -164,7 +163,5 @@ def create_web_api_app(lifespan: Any = None) -> FastAPI:
         from app.cabinet.routes import router as cabinet_router
 
         app.include_router(cabinet_router)
-    elif settings.is_apple_iap_enabled():
-        app.include_router(apple_iap_only_router)
 
     return app

@@ -11,7 +11,11 @@ import json
 
 import pytest
 
-from app.services.reachability.links import MAX_CONFIGS_PER_TEST, ParsedLink, parse_links
+from app.services.reachability.links import (
+    MAX_CONFIGS_PER_TEST,
+    ParsedLink,
+    parse_links,
+)
 
 
 UUID = '00000000-0000-4000-8000-000000000001'

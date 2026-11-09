@@ -24,7 +24,10 @@ from app.database.models import (
     server_squad_promo_groups,
 )
 from app.services import broadcast_service
-from app.services.broadcast_service import email_broadcast_service, parse_email_scoped_target
+from app.services.broadcast_service import (
+    email_broadcast_service,
+    parse_email_scoped_target,
+)
 from tests.fixtures.sqlite_memory import memory_session
 
 

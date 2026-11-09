@@ -144,7 +144,6 @@ def test_dynamic_callback_is_not_added_to_static_mapping() -> None:
 EXTEND_BUTTON_MODULES = (
     'app.services.monitoring_service',
     'app.services.remnawave_webhook_service',
-    'app.services.recurrent_payment_service',
 )
 
 

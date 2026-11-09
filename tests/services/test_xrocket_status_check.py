@@ -9,7 +9,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy import select
 
-from app.database.models import Base, PaymentMethod, Transaction, TransactionType, User, XRocketPayment
+from app.database.models import (
+    Base,
+    PaymentMethod,
+    Transaction,
+    TransactionType,
+    User,
+    XRocketPayment,
+)
 from tests.fixtures.sqlite_memory import memory_session
 
 

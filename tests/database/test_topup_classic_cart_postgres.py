@@ -19,8 +19,6 @@ from app.config import settings
 from app.database.crud.user import get_user_by_id
 from app.database.models import (
     Base,
-    CasheraPayment,
-    LavaPayment,
     PlategaPayment,
     Subscription,
     Tariff,
@@ -90,7 +88,7 @@ async def cart_service(monkeypatch):
             await service._redis_client.aclose()
 
 
-@pytest.mark.parametrize('provider', ['lava', 'cashera', 'platega'])
+@pytest.mark.parametrize('provider', ['platega'])
 @pytest.mark.parametrize('cart_case', ['global', 'per_subscription', 'daily_neighbor', 'stale_intent', 'unconfirmed'])
 async def test_topup_finalizer_purchases_selected_classic(
     postgres_database, monkeypatch, provider, cart_case, cart_service
@@ -155,7 +153,7 @@ async def test_topup_finalizer_purchases_selected_classic(
                     updated_at=now - timedelta(minutes=20),
                 )
             )
-        model = {'lava': LavaPayment, 'cashera': CasheraPayment, 'platega': PlategaPayment}[provider]
+        model = {'platega': PlategaPayment}[provider]
         payment = model(
             user_id=1,
             amount_kopeks=1000,

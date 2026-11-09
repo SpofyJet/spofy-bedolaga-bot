@@ -15,7 +15,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import HTTPException
 
-from app.cabinet.schemas.subscription import DevicePurchaseRequest, TrafficPurchaseRequest
+from app.cabinet.schemas.subscription import (
+    DevicePurchaseRequest,
+    TrafficPurchaseRequest,
+)
 from app.config import settings
 from app.database.models import Base, Subscription, SubscriptionStatus, User
 from tests.fixtures.postgres_db import postgres_session

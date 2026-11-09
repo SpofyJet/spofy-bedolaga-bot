@@ -8,9 +8,8 @@ from pathlib import Path
 import pytest
 from sqlalchemy import select
 
-from app.database.models import Base, UserReminder, UserReminderState, User
+from app.database.models import Base, User, UserReminder, UserReminderState
 from tests.fixtures.sqlite_memory import memory_session
-
 
 MIGRATION = Path('migrations/alembic/versions/0127_user_reminders.py')
 

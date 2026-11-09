@@ -55,8 +55,7 @@ async def real_migration(postgres_database, monkeypatch, base, flow='cabinet'):
     monkeypatch.setattr(settings, 'HAPP_CRYPTOLINK_API_FALLBACK_ENABLED', False)
     monkeypatch.setattr('app.services.subscription_renewal_service.with_admin_notification_service', AsyncMock())
     monkeypatch.setattr(telegram.AdminNotificationService, 'send_subscription_purchase_notification', AsyncMock())
-    if flow != 'wallet_topup':
-        monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())
+    monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())
     monkeypatch.setattr(auto, 'clear_subscription_checkout_draft', AsyncMock())
 
     @asynccontextmanager
@@ -256,63 +255,6 @@ async def real_migration(postgres_database, monkeypatch, base, flow='cabinet'):
                         )
                     assert duplicate.value.status_code == 409
                     assert not await auto._auto_purchase_daily_tariff(db, user, {'tariff_id': 1, 'subscription_id': 10})
-                elif flow == 'wallet_topup':
-                    from app.database.models import LavaPayment
-                    from app.services.payment import common
-                    from app.services.payment.lava import LavaPaymentMixin
-                    from app.services.user_cart_service import UserCartService
-                    from tests.database.test_topup_classic_cart_postgres import CartStorage
-
-                    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
-                    cart = UserCartService()
-                    cart._initialized = True
-                    redis_url = os.environ.get('TEST_CART_REDIS_URL')
-                    if redis_url:
-                        from tests.fixtures.real_redis import ensure_real_redis
-
-                        cart_redis_client = ensure_real_redis(monkeypatch).create_redis(redis_url)
-                        cart._redis_client = cart_redis_client
-                    else:
-                        cart._redis_client = CartStorage()
-
-                        async def cleanup(user_id, processed):
-                            await cart.delete_subscription_cart(user_id, processed['subscription_id'])
-                            return await cart.delete_user_cart(user_id)
-
-                        cart.delete_processed_cart = AsyncMock(side_effect=cleanup)
-                    monkeypatch.setattr(auto, 'user_cart_service', cart)
-                    monkeypatch.setattr(common, 'user_cart_service', cart)
-                    price = 301 + (5 - base) * 137
-                    user.balance_kopeks = 0
-                    payment = LavaPayment(
-                        user_id=1,
-                        order_id='test-' + secrets.token_hex(8),
-                        amount_kopeks=1000,
-                        currency='RUB',
-                        is_paid=False,
-                        status='pending',
-                    )
-                    db.add(payment)
-                    await db.commit()
-                    assert await cart.save_user_cart(
-                        1,
-                        {
-                            'cart_mode': 'tariff_purchase',
-                            'tariff_id': 1,
-                            'period_days': 30,
-                            'subscription_id': 10,
-                            'total_price': price,
-                            'return_to_cart': True,
-                        },
-                    )
-                    replay_cart = await cart.get_subscription_cart(1, 10)
-                    await cart.delete_global_cart_only(1)
-                    actor = LavaPaymentMixin()
-                    actor.bot = None
-                    assert await actor._finalize_lava_payment(db, payment, trigger='test-callback')
-                    assert await actor._finalize_lava_payment(db, payment, trigger='test-repeat')
-                    assert await cart.get_all_subscription_carts(1) == []
-                    assert not await auto._auto_purchase_tariff(db, user, replay_cart)
                 else:
                     custom_traffic = 250 if flow in ('cart_return_traffic', 'auto_cart_traffic') else None
                     price = 750 + (5 - base) * 137 * 2 + (custom_traffic or 0) * 2
@@ -397,14 +339,12 @@ async def real_migration(postgres_database, monkeypatch, base, flow='cabinet'):
                             assert not await auto._auto_purchase_tariff(db, user, checkout['identity'])
                 await db.refresh(user)
                 await db.refresh(subscription)
-                assert user.balance_kopeks == (1000 if flow == 'wallet_topup' else 10000) - price
+                assert user.balance_kopeks == 10000 - price
                 assert subscription.tariff_id == 1 and subscription.device_limit == 5
                 assert subscription.remnawave_id == old['id']
                 assert subscription.subscription_url == old['subscriptionUrl']
                 transactions = (await db.scalars(select(Transaction))).all()
-                assert sorted(t.amount_kopeks for t in transactions) == (
-                    [-price, 1000] if flow == 'wallet_topup' else [-price]
-                )
+                assert sorted(t.amount_kopeks for t in transactions) == ([-price])
                 assert len((await db.scalars(select(Subscription))).all()) == 2
                 remote = await request('GET', f'/api/users/{old["id"]}')
                 assert remote['hwidDeviceLimit'] == 5
@@ -439,7 +379,6 @@ async def real_migration(postgres_database, monkeypatch, base, flow='cabinet'):
         'cabinet_daily',
         'telegram_daily',
         'auto_daily',
-        'wallet_topup',
         'cart_return_daily',
         'cart_return_custom',
         'cart_return_traffic',
@@ -475,7 +414,7 @@ async def test_tariff_maximum_applies_to_previously_registered_hwids(postgres_da
         assert admitted <= 5, f'After a real purchase, panel admitted {admitted} old HWIDs with tariff maximum=5'
 
 
-@pytest.mark.parametrize('flow', ['cabinet', 'telegram_period', 'wallet_topup', 'auto_daily'])
+@pytest.mark.parametrize('flow', ['cabinet', 'telegram_period', 'auto_daily'])
 async def test_failed_device_pruning_is_retried_without_recharging(postgres_database, monkeypatch, flow):
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
     from sqlalchemy.pool import NullPool

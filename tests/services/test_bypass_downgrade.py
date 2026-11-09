@@ -16,7 +16,11 @@ from app.database.models import SubscriptionStatus
 from app.external.remnawave_api import UserStatus
 from app.services import bypass_downgrade as rules
 from app.services.bypass_downgrade_service import BypassDowngradeService
-from app.services.panel_sync import PanelSnapshot, build_panel_payload, project_onto_subscription
+from app.services.panel_sync import (
+    PanelSnapshot,
+    build_panel_payload,
+    project_onto_subscription,
+)
 
 
 NOW = datetime(2026, 10, 2, 12, 0, tzinfo=UTC)

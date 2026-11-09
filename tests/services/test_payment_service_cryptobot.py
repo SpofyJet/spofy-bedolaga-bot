@@ -17,6 +17,24 @@ from app.database.crud import cryptobot as cryptobot_crud
 from app.services.payment_service import PaymentService
 
 
+class StubCryptoBotService:
+    def __init__(self, response: dict[str, Any] | None) -> None:
+        self.response = response
+        self.calls: list[dict[str, Any]] = []
+
+    async def create_invoice(self, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append(kwargs)
+        return self.response
+
+
+def _make_service(stub: StubCryptoBotService | None) -> PaymentService:
+    service = PaymentService.__new__(PaymentService)  # type: ignore[call-arg]
+    service.bot = None
+    service.cryptobot_service = stub
+    service.stars_service = None
+    return service
+
+
 @pytest.fixture
 def anyio_backend() -> str:
     return 'asyncio'
@@ -50,17 +68,6 @@ class StubCryptoBotService:
     async def create_invoice(self, **kwargs: Any) -> dict[str, Any] | None:
         self.calls.append(kwargs)
         return self.response
-
-
-def _make_service(stub: StubCryptoBotService | None) -> PaymentService:
-    service = PaymentService.__new__(PaymentService)  # type: ignore[call-arg]
-    service.bot = None
-    service.cryptobot_service = stub
-    service.mulenpay_service = None
-    service.pal24_service = None
-    service.yookassa_service = None
-    service.stars_service = None
-    return service
 
 
 @pytest.mark.anyio('asyncio')

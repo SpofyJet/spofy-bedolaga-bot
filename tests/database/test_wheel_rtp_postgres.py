@@ -6,7 +6,15 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.config import PERIOD_PRICES, settings
-from app.database.models import Base, Subscription, Transaction, User, WheelConfig, WheelPrize, WheelSpin
+from app.database.models import (
+    Base,
+    Subscription,
+    Transaction,
+    User,
+    WheelConfig,
+    WheelPrize,
+    WheelSpin,
+)
 from app.services.wheel_service import FortuneWheelService
 from tests.fixtures.postgres_db import postgres_session
 

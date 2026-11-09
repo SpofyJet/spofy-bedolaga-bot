@@ -42,7 +42,7 @@ async def _seed(db) -> User:
                 type=TransactionType.DEPOSIT.value,
                 amount_kopeks=45000,
                 description='Пополнение баланса',
-                payment_method='yookassa',
+                payment_method='platega',
                 is_completed=True,
                 created_at=now - timedelta(minutes=5),
             ),

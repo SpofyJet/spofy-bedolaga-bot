@@ -11,7 +11,10 @@ from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.utils.timezone import local_date, local_day_bounds, local_day_start
-from tests.fixtures.local_day import reset_local_timezone_cache, use_timezone  # noqa: F401
+from tests.fixtures.local_day import (  # noqa: F401
+    reset_local_timezone_cache,
+    use_timezone,
+)
 
 
 MOSCOW = ZoneInfo('Europe/Moscow')

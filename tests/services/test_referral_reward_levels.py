@@ -563,7 +563,9 @@ class TestLevelNotifications:
     @pytest.mark.asyncio
     async def test_email_context_describes_days_not_zero_rubles(self, monkeypatch):
         """formatted_reward — единственное поле, верное и для денег, и для дней."""
-        from app.services.notification_delivery_service import notification_delivery_service as svc
+        from app.services.notification_delivery_service import (
+            notification_delivery_service as svc,
+        )
 
         captured = {}
 
@@ -589,7 +591,9 @@ class TestLevelNotifications:
 
     @pytest.mark.asyncio
     async def test_email_context_keeps_money_wording_for_money_reward(self, monkeypatch):
-        from app.services.notification_delivery_service import notification_delivery_service as svc
+        from app.services.notification_delivery_service import (
+            notification_delivery_service as svc,
+        )
 
         captured = {}
 
@@ -687,7 +691,10 @@ class TestProgramDescription:
 
     @pytest.mark.asyncio
     async def test_nothing_configured_describes_nothing(self, chain, monkeypatch):
-        from app.services.referral_reward_service import describe_active_levels, describe_referee_bonus
+        from app.services.referral_reward_service import (
+            describe_active_levels,
+            describe_referee_bonus,
+        )
 
         async def fake_all(_db):
             return {}

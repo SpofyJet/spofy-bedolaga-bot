@@ -2,7 +2,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.services.pricing_engine import TariffSwitchPricingUnavailableError, pricing_engine
+from app.services.pricing_engine import (
+    TariffSwitchPricingUnavailableError,
+    pricing_engine,
+)
 
 
 def tariff(prices, daily=False):

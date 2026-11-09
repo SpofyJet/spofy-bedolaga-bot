@@ -18,7 +18,10 @@ import pytest
 
 from app.external.remnawave_api import UserStatus
 from app.services.grace_access_codec import _overlay_from_json, _overlay_to_json
-from app.services.grace_access_runtime import GracePanelError, RemnawaveGracePanelGateway
+from app.services.grace_access_runtime import (
+    GracePanelError,
+    RemnawaveGracePanelGateway,
+)
 from app.services.grace_access_service import (
     GracePanelOverlay,
     GraceReason,

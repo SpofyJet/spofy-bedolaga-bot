@@ -12,7 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cabinet.routes import promocode as cabinet
 from app.config import settings
 from app.database.crud.user import get_user_by_id
-from app.database.models import Base, PromoCode, PromoCodeUse, Subscription, Tariff, User
+from app.database.models import (
+    Base,
+    PromoCode,
+    PromoCodeUse,
+    Subscription,
+    Tariff,
+    User,
+)
 from app.services.promocode_service import PromoCodeService
 from app.services.remnawave_retry_queue import RemnaWaveRetryQueue
 from app.services.subscription_service import SubscriptionService

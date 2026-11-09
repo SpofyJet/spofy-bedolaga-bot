@@ -5,8 +5,14 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.cabinet.routes.admin_partners import PartnerSettingsUpdateRequest, update_partner_settings
-from app.cabinet.services.email_type_switch import is_email_type_enabled, set_email_type_enabled
+from app.cabinet.routes.admin_partners import (
+    PartnerSettingsUpdateRequest,
+    update_partner_settings,
+)
+from app.cabinet.services.email_type_switch import (
+    is_email_type_enabled,
+    set_email_type_enabled,
+)
 from app.config import settings
 from app.database.models import SystemSetting
 from app.services import system_settings_service

@@ -7,7 +7,11 @@ import pytest
 
 from app.handlers.admin import monitoring
 from app.services.nalogo_service import NALOGO_PENDING_VERIFICATION_KEY
-from tests.services.test_nalogo_pending_verification import _FakeCache, _pending, _service
+from tests.services.test_nalogo_pending_verification import (
+    _FakeCache,
+    _pending,
+    _service,
+)
 
 
 @pytest.mark.parametrize('action', ['verified', 'retry'])

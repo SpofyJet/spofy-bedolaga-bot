@@ -836,7 +836,7 @@ async def create_landing_purchase(
         )
 
     # Validate payment method is available on this landing.
-    # The frontend may send a suffixed method ID (e.g. "platega_2", "yookassa_sbp")
+    # The frontend may send a suffixed method ID (e.g. "platega_2")
     # to select a specific sub-option. We match against the base method_id and
     # validate the suffix against known & enabled sub-options.
     raw_methods = landing.payment_methods or []
@@ -845,7 +845,7 @@ async def create_landing_purchase(
     method_config = next((m for m in raw_methods if m.get('method_id') == body.payment_method), None)
     if method_config is None:
         # Try matching by prefix: "platega_2" → base "platega"
-        # Sort by length descending so "freekassa_sbp" is checked before "freekassa"
+        # Sort by length descending so longer ids are checked first
         sorted_methods = sorted(raw_methods, key=lambda m: len(m.get('method_id', '')), reverse=True)
         for m in sorted_methods:
             mid = m.get('method_id', '')

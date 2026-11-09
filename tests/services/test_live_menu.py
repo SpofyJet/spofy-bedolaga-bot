@@ -11,7 +11,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from aiogram.exceptions import ClientDecodeError, TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
+from aiogram.exceptions import (
+    ClientDecodeError,
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramRetryAfter,
+)
 from aiogram.methods import EditMessageText
 from aiogram.types import InlineKeyboardMarkup
 
@@ -24,7 +29,13 @@ from app.services.monitoring_service import MonitoringService
 from app.utils import rich_menu
 from app.utils.cache import CacheService
 from app.webserver.telegram import TelegramWebhookProcessor
-from tests.utils.test_rich_menu import DummyTexts, _make_callback, _make_keyboard, _make_subscription, _make_user
+from tests.utils.test_rich_menu import (
+    DummyTexts,
+    _make_callback,
+    _make_keyboard,
+    _make_subscription,
+    _make_user,
+)
 
 
 KEY = 'live_menu:100'

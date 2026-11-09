@@ -2,8 +2,6 @@
 
 from fastapi import APIRouter
 
-from app.cabinet.apple_iap import apple_iap_only_router, router as apple_iap_router
-
 from .abuse import router as abuse_router
 from .account_linking import merge_router as merge_router, router as account_linking_router
 from .activity import router as activity_router
@@ -28,7 +26,6 @@ from .admin_news import router as admin_news_router
 from .admin_news_categories import router as admin_news_categories_router
 from .admin_news_media import router as admin_news_media_router
 from .admin_news_tags import router as admin_news_tags_router
-from .admin_overpay_certificate import router as admin_overpay_certificate_router
 from .admin_partners import router as admin_partners_router
 from .admin_payment_methods import router as admin_payment_methods_router
 from .admin_payments import router as admin_payments_router
@@ -72,7 +69,6 @@ from .promo import router as promo_router
 from .promocode import router as promocode_router
 from .referral import router as referral_router
 from .reminders import router as reminders_router
-from .site_verification import router as site_verification_router
 from .spofy_subpage import router as spofy_subpage_router
 from .subscription import router as subscription_router
 from .subscription_modules.multi_tariff import router as multi_tariff_subscription_router
@@ -94,7 +90,6 @@ router = APIRouter(prefix='/cabinet', tags=['Cabinet'], redirect_slashes=False)
 # Public (unauthenticated) endpoints used by payment-provider crawlers.
 # Final path becomes `/cabinet/public/site-verification`. Has its own
 # `/public` prefix so it's clearly separated from authenticated routes.
-router.include_router(site_verification_router)
 # Отписка от рассылок — тоже без авторизации: по ссылке ходят почтовые клиенты.
 router.include_router(unsubscribe_router)
 
@@ -110,8 +105,6 @@ router.include_router(multi_tariff_subscription_router)
 router.include_router(balance_router)
 router.include_router(referral_router)
 
-# Apple IAP routes
-router.include_router(apple_iap_router)
 
 router.include_router(partner_application_router)
 router.include_router(withdrawal_router)
@@ -190,7 +183,6 @@ router.include_router(admin_news_media_router)
 router.include_router(admin_news_router)
 router.include_router(admin_info_pages_router)
 router.include_router(admin_legal_pages_router)
-router.include_router(admin_overpay_certificate_router)
 
 # WebSocket route
 router.include_router(websocket_router)

@@ -19,7 +19,12 @@ from sqlalchemy import update
 
 from app.database.crud.user import get_users_list
 from app.database.models import SubscriptionStatus, Transaction, TransactionType, User
-from tests.crud.test_users_list_filter_sort_matrix import SORTS, TABLES, _subscription, _user
+from tests.crud.test_users_list_filter_sort_matrix import (
+    SORTS,
+    TABLES,
+    _subscription,
+    _user,
+)
 from tests.fixtures.postgres_db import postgres_session
 
 

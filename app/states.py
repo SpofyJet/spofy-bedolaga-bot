@@ -48,9 +48,7 @@ class GiftActivationStates(StatesGroup):
 
 class BalanceStates(StatesGroup):
     waiting_for_amount = State()
-    waiting_for_pal24_method = State()
     waiting_for_platega_method = State()
-    waiting_for_cashera_method = State()
     waiting_for_stars_payment = State()
     waiting_for_support_request = State()
 
@@ -240,7 +238,6 @@ class AdminStates(StatesGroup):
     editing_tariff_custom_traffic_max = State()
     editing_tariff_daily_price = State()
     editing_tariff_panel_tag = State()
-    editing_tariff_lava_product = State()
     editing_tariff_display_order = State()
     editing_tariff_custom_days_price = State()
     editing_tariff_custom_days_min = State()

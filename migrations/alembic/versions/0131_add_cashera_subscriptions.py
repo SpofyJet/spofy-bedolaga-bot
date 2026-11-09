@@ -47,9 +47,7 @@ def upgrade() -> None:
     )
     op.create_index('ix_cashera_subscriptions_user_id', 'cashera_subscriptions', ['user_id'])
     op.create_index('ix_cashera_subscriptions_subscription_id', 'cashera_subscriptions', ['subscription_id'])
-    op.create_unique_constraint(
-        'uq_cashera_subscriptions_uuid', 'cashera_subscriptions', ['cashera_subscription_uuid']
-    )
+    op.create_unique_constraint('uq_cashera_subscriptions_uuid', 'cashera_subscriptions', ['cashera_subscription_uuid'])
     op.create_unique_constraint('uq_cashera_subscriptions_external_id', 'cashera_subscriptions', ['external_id'])
     op.create_index('ix_cashera_subscriptions_user_active', 'cashera_subscriptions', ['user_id', 'status'])
     op.execute(

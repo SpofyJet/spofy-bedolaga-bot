@@ -15,40 +15,12 @@ logger = structlog.get_logger(__name__)
 
 METHOD_CONFIG_IDS = {
     'stars': 'telegram_stars',
-    'yookassa_sbp': 'yookassa',
-    'kassa_ai_sbp': 'kassa_ai',
-    'kassa_ai_card': 'kassa_ai',
-    'kassa_ai_sberpay': 'kassa_ai',
-    'aurapay_sbp': 'aurapay',
-    'aurapay_card': 'aurapay',
-    'etoplatezhi_sbp': 'etoplatezhi',
-    'etoplatezhi_card': 'etoplatezhi',
-    'antilopay_sbp': 'antilopay',
-    'antilopay_card': 'antilopay',
-    'antilopay_sberpay': 'antilopay',
-    'jupiter_sbp': 'jupiter',
-    'donut_card': 'donut',
-    'donut_sbp': 'donut',
-    'donut_sbp_qr': 'donut',
-    'lava_card': 'lava',
-    'lava_sbp': 'lava',
-    'cispay_card': 'cispay',
-    'cispay_sbp': 'cispay',
-    'tabpay_card': 'tabpay',
-    'tabpay_sbp': 'tabpay',
-    'paritypay_card': 'paritypay',
-    'paritypay_sbp': 'paritypay',
-    'overpay_fps': 'overpay',
-    'overpay_card': 'overpay',
-    'overpay_int': 'overpay',
 }
 
 
 def resolve_config_method_id(method: str) -> str:
     if method.startswith('platega_m'):
         return 'platega'
-    if method.startswith('cashera_m_'):
-        return 'cashera'
     return METHOD_CONFIG_IDS.get(method, method)
 
 

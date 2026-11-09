@@ -323,7 +323,10 @@ async def test_saving_template_without_required_placeholder_is_rejected_with_cle
 
     from fastapi import HTTPException
 
-    from app.cabinet.routes.admin_email_templates import EmailTemplateUpdate, update_template
+    from app.cabinet.routes.admin_email_templates import (
+        EmailTemplateUpdate,
+        update_template,
+    )
 
     data = EmailTemplateUpdate(subject='Подтвердите почту', body_html='<p>Без ссылки</p>')
     with pytest.raises(HTTPException) as exc:
@@ -395,7 +398,10 @@ async def test_saving_template_with_unknown_placeholder_is_rejected():
 
     from fastapi import HTTPException
 
-    from app.cabinet.routes.admin_email_templates import EmailTemplateUpdate, update_template
+    from app.cabinet.routes.admin_email_templates import (
+        EmailTemplateUpdate,
+        update_template,
+    )
 
     data = EmailTemplateUpdate(subject='x', body_html='<p>До {new_end_dat}</p>')
     with pytest.raises(HTTPException) as exc:

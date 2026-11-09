@@ -154,7 +154,7 @@ def _spofy_devices_cart() -> dict:
 
 async def _charged(db) -> int:
     db.expire_all()
-    user = await db.get(User, USER_ID)
+    await db.get(User, USER_ID)
     payments = (
         (
             await db.execute(
@@ -179,9 +179,7 @@ async def test_completion_charges_the_checkout_price_not_the_recomputed_one(monk
         user, _ = await _seed(db, balance=BOUND_PRICE, days_left=40)
         await cart_service.save_user_cart(USER_ID, _spofy_devices_cart())
 
-        completed = await completion.complete_subpage_carts_after_topup(
-            db, user, bot=None, credited_kopeks=BOUND_PRICE
-        )
+        completed = await completion.complete_subpage_carts_after_topup(db, user, bot=None, credited_kopeks=BOUND_PRICE)
         subscription = await db.get(Subscription, SUB_ID)
         devices_after = subscription.device_limit
         charged = await _charged(db)
@@ -229,9 +227,7 @@ async def test_orphan_topup_sends_notification_on_real_path(monkeypatch, cart_se
         # Апстрим хранит метку намерения и в пер- подпискочном ключе — вырезаем и его.
         await cart_service._redis_client.delete(f'cart_topup_intent:{USER_ID}:sub:{SUB_ID}')
 
-        completed = await completion.complete_subpage_carts_after_topup(
-            db, user, bot=bot, credited_kopeks=BOUND_PRICE
-        )
+        completed = await completion.complete_subpage_carts_after_topup(db, user, bot=bot, credited_kopeks=BOUND_PRICE)
 
     assert completed is False
     bot.send_message.assert_awaited_once()

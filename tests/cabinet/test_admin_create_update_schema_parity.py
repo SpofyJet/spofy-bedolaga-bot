@@ -30,7 +30,14 @@ from app.cabinet.dependencies import get_cabinet_db
 from app.cabinet.routes import admin_tariffs as route
 from app.cabinet.schemas.news import NewsUpdateRequest
 from app.cabinet.schemas.pinned_messages import PinnedMessageCreateRequest
-from app.database.models import PromoGroup, ServerSquad, Subscription, Tariff, User, tariff_promo_groups
+from app.database.models import (
+    PromoGroup,
+    ServerSquad,
+    Subscription,
+    Tariff,
+    User,
+    tariff_promo_groups,
+)
 from tests.fixtures.sqlite_memory import memory_session
 
 

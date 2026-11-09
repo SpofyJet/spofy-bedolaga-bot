@@ -12,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.handlers.subscription.autopay import handle_subscription_cancel
-from app.handlers.subscription.purchase import clear_saved_cart, return_to_saved_cart, save_cart_and_redirect_to_topup
+from app.handlers.subscription.purchase import (
+    clear_saved_cart,
+    return_to_saved_cart,
+    save_cart_and_redirect_to_topup,
+)
 
 
 @pytest.fixture

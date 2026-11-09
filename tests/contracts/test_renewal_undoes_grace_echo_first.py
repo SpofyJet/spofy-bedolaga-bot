@@ -102,15 +102,3 @@ def test_renewal_undoes_grace_echo_first() -> None:
 def test_exemptions_still_exist() -> None:
     stale = sorted(set(EXEMPT) - collect())
     assert not stale, 'Исключения больше не двигают дату мимо починки — уберите из списка:\n  ' + '\n  '.join(stale)
-
-
-def test_detector_sees_the_recurring_gateways_heal_first() -> None:
-    """Самопроверка: Lava продлевает методом модели и чинит до него.
-
-    Spofy: Platega продлевает CRUD-функцией (см. test_platega_renewal_goes_through_crud_extend).
-    """
-    for path in (APP / 'services/payment/lava.py',):
-        tree = ast.parse(path.read_text(encoding='utf-8'))
-        movers = [node for _, node in _guard._iter_functions(tree, path) if _guard._moves_end_date_forward(node)]
-        assert movers, f'детектор не видит продление в {path.name}'
-        assert all(_heals_first(node) for node in movers), path.name

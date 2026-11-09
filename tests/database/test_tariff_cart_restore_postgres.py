@@ -130,7 +130,9 @@ async def test_restore_validates_and_requotes(postgres_database, monkeypatch, mo
             )
         await telegram.return_to_saved_tariff_cart(callback, state, user, db, cart)
         if case.endswith('_traffic'):
-            from app.services.subscription_auto_purchase_service import _auto_purchase_tariff
+            from app.services.subscription_auto_purchase_service import (
+                _auto_purchase_tariff,
+            )
 
             assert not await _auto_purchase_tariff(db, user, cart)
         if bad:

@@ -305,7 +305,7 @@ CREATE TABLE IF NOT EXISTS ma_stats (
 # (вечные тарифы) вклинились после 0098, а апстримные 0099–0104 и 0120–0125
 # были перенесены под номерами 0101–0113. Номера совпадают с апстримными, но
 # значат другое: оставь базу на «0113», и Alembic решит, что апстримные
-# 0105–0113 (рефералка по уровням, email-очередь, TabPay…) уже применены.
+# 0105–0113 (рефералка по уровням, email-очередь…) уже применены.
 # Поэтому базу форка переставляем на последнюю общую точку — апстримную 0104;
 # дальше идемпотентные миграции 0105–0131 докатывают недостающее и пропускают
 # уже сделанное, а 0132/0133 — те же xrocket и вечные тарифы, тоже идемпотентные.
@@ -334,7 +334,7 @@ async def _reconcile_spofy_fork_chain() -> None:
 
     async with engine.connect() as conn:
         tables = set(await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_table_names()))
-        if 'xrocket_payments' not in tables or 'tabpay_payments' in tables:
+        if 'xrocket_payments' not in tables:
             return
         current = (await conn.execute(text('SELECT version_num FROM alembic_version'))).scalar_one_or_none()
 

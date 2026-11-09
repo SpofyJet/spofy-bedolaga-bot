@@ -74,7 +74,7 @@ class TopUpResponse(BaseModel):
     amount_rubles: float
     status: str
     expires_at: datetime | None = None
-    # Свой экран оплаты (Cashera H2H): строка QR СБП или платёжная ссылка — кабинет
+    # Свой экран оплаты: строка QR СБП или платёжная ссылка — кабинет
     # рисует QR рядом с кнопкой оплаты. None — обычный переход по payment_url.
     qr_payload: str | None = None
 
@@ -136,23 +136,3 @@ class ManualCheckResponse(BaseModel):
     status_changed: bool = False
     old_status: str | None = None
     new_status: str | None = None
-
-
-class SavedCardResponse(BaseModel):
-    """Saved payment method (card) for recurrent payments."""
-
-    id: int
-    method_type: str
-    card_last4: str | None = None
-    card_type: str | None = None
-    title: str | None = None
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class SavedCardsListResponse(BaseModel):
-    """List of saved payment methods."""
-
-    cards: list[SavedCardResponse]
-    recurrent_enabled: bool = False

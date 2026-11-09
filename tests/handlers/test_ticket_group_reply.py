@@ -17,12 +17,23 @@ STRANGER_ID = 222
 @pytest.fixture(autouse=True)
 def _settings(monkeypatch):
     monkeypatch.setattr(tgr.settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', str(ADMIN_CHAT), raising=False)
-    monkeypatch.setattr(type(tgr.settings), 'is_admin', lambda self, telegram_id=None, email=None: telegram_id == ADMIN_ID)
+    monkeypatch.setattr(
+        type(tgr.settings), 'is_admin', lambda self, telegram_id=None, email=None: telegram_id == ADMIN_ID
+    )
     monkeypatch.setattr(type(tgr.settings), 'get_admin_ids', lambda self: [ADMIN_ID])
     monkeypatch.setattr(tgr.SupportSettingsService, 'is_moderator', classmethod(lambda cls, tid: False))
 
 
-def _msg(*, chat_id=ADMIN_CHAT, sender=ADMIN_ID, sender_is_bot=False, reply_text=None, reply_from=BOT_ID, text='ответ', sender_chat=None):
+def _msg(
+    *,
+    chat_id=ADMIN_CHAT,
+    sender=ADMIN_ID,
+    sender_is_bot=False,
+    reply_text=None,
+    reply_from=BOT_ID,
+    text='ответ',
+    sender_chat=None,
+):
     reply = None
     if reply_text is not None:
         reply = SimpleNamespace(text=reply_text, caption=None, from_user=SimpleNamespace(id=reply_from))

@@ -31,6 +31,29 @@ OLD_PANEL_ID = 555
 NEW_PANEL_ID = 777
 
 
+def _quiet_side_effects(monkeypatch, api: AsyncMock) -> None:
+    """Грейс, автоплатежи и счётчики серверов живут в своих таблицах и к сценарию не относятся."""
+    monkeypatch.setattr(
+        'app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions', AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        'app.services.grace_access_runtime.lock_grace_sensitive_panel_updates', AsyncMock(return_value=set())
+    )
+    monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', AsyncMock())
+    monkeypatch.setattr(deletion, 'decrement_subscription_server_counts', AsyncMock())
+    monkeypatch.setattr(
+        'app.services.remnawave_webhook_service.RemnaWaveWebhookService.mark_intentional_panel_deletion',
+        lambda **_: None,
+    )
+    monkeypatch.setattr(SubscriptionService, 'validate_and_clean_subscription', AsyncMock(return_value=True))
+
+    @contextlib.asynccontextmanager
+    async def _client(self):
+        yield api
+
+    monkeypatch.setattr(SubscriptionService, 'get_api_client', _client)
+
+
 @pytest.fixture
 def multi_tariff(monkeypatch):
     monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
@@ -75,30 +98,6 @@ def _panel_without_the_old_account() -> AsyncMock:
     api.update_user.side_effect = RemnaWaveAPIError('User not found', 404, {'errorCode': 'A063'})
     api.create_user.return_value = _panel_user(NEW_PANEL_ID)
     return api
-
-
-def _quiet_side_effects(monkeypatch, api: AsyncMock) -> None:
-    """Грейс, автоплатежи и счётчики серверов живут в своих таблицах и к сценарию не относятся."""
-    monkeypatch.setattr(
-        'app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions', AsyncMock(return_value=None)
-    )
-    monkeypatch.setattr(
-        'app.services.grace_access_runtime.lock_grace_sensitive_panel_updates', AsyncMock(return_value=set())
-    )
-    monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', AsyncMock())
-    monkeypatch.setattr('app.services.payment.lava.cancel_lava_recurring_for_subscription_safe', AsyncMock())
-    monkeypatch.setattr(deletion, 'decrement_subscription_server_counts', AsyncMock())
-    monkeypatch.setattr(
-        'app.services.remnawave_webhook_service.RemnaWaveWebhookService.mark_intentional_panel_deletion',
-        lambda **_: None,
-    )
-    monkeypatch.setattr(SubscriptionService, 'validate_and_clean_subscription', AsyncMock(return_value=True))
-
-    @contextlib.asynccontextmanager
-    async def _client(self):
-        yield api
-
-    monkeypatch.setattr(SubscriptionService, 'get_api_client', _client)
 
 
 async def _seed_user_with_subscription(db) -> tuple[User, Subscription]:

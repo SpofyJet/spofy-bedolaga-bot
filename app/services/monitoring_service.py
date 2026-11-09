@@ -472,31 +472,12 @@ class MonitoringService:
                 # экспайрятся до того, как autopay успеет их продлить
                 # Продление с баланса работает всегда, если у подписки autopay_enabled=True
                 await self._process_autopayments(db)
-                # Рекуррентные автоплатежи с карты: требуют ENABLE_AUTOPAY + YOOKASSA_RECURRENT_ENABLED
-                if settings.ENABLE_AUTOPAY and settings.YOOKASSA_RECURRENT_ENABLED:
-                    try:
-                        from app.services.recurrent_payment_service import process_recurrent_payments
-
-                        await process_recurrent_payments(db=db, bot=self.bot)
-                    except Exception as recurrent_error:
-                        logger.error(
-                            'Ошибка рекуррентных автоплатежей',
-                            error=recurrent_error,
-                            exc_info=True,
-                        )
-                        await _rollback_quietly(db, step='recurrent_payments')
                 # Реконсилиация Platega SBP-подписок: страховка на случай потерянных
                 # коллбеков / зависших PENDING. Гейт внутри метода (PLATEGA_RECURRENT_ENABLED).
                 await self._reconcile_platega_subscriptions(db)
                 # n2: pre-bill — уведомление за ~24ч до автосписания Platega.
                 await self._notify_platega_upcoming_charges(db)
 
-                # Реконсилиация рекуррентных подписок Lava: та же страховка на
-                # случай потерянных вебхуков / недошедших отмен.
-                await self._reconcile_lava_subscriptions(db)
-
-                # Реконсилиация подписок Cashera + доначисление пропущенных списаний.
-                await self._reconcile_cashera_subscriptions(db)
                 await self._check_expired_subscriptions(db)
                 await self._check_expiring_subscriptions(db)
                 await self._check_trial_expiring_soon(db)
@@ -1001,7 +982,7 @@ class MonitoringService:
             warning_days = settings.get_autopay_warning_days()
             all_processed_users = set()
 
-            # n2: подписки с активным провайдерским автопродлением (Platega/Lava)
+            # n2: подписки с активным провайдерским автопродлением (Platega)
             # исключаем из «продлите вручную»: у них своё списание, а за ~24ч
             # до него приходит отдельное pre-bill уведомление.
             from app.services.recurrent_amount import list_provider_recurrent_subscription_ids
@@ -1031,13 +1012,6 @@ class MonitoringService:
                 sent_count = 0
 
                 # Batch-запрос: собираем user_id с autopay и проверяем наличие карт одним запросом
-                users_with_cards: set[int] = set()
-                if settings.ENABLE_AUTOPAY and settings.YOOKASSA_RECURRENT_ENABLED:
-                    autopay_user_ids = autopay_user_ids_by_days[days]
-                    if autopay_user_ids:
-                        from app.database.crud.saved_payment_method import get_user_ids_with_active_payment_methods
-
-                        users_with_cards = await get_user_ids_with_active_payment_methods(db, autopay_user_ids)
 
                 for subscription_id, listed in [(listed.id, listed) for listed in expiring_subscriptions]:
                     try:
@@ -1054,7 +1028,6 @@ class MonitoringService:
                             warning_days=warning_days,
                             urgent_ids_by_days=urgent_ids_by_days,
                             recurrent_sub_ids=_recurrent_sub_ids,
-                            users_with_cards=users_with_cards,
                             already_sent=already_sent,
                             processed=all_processed_users,
                         ):
@@ -1086,7 +1059,6 @@ class MonitoringService:
         warning_days,
         urgent_ids_by_days: dict[int, set[int]],
         recurrent_sub_ids,
-        users_with_cards: set[int],
         already_sent: set[tuple[int, int, int | None]],
         processed: set[str],
     ) -> bool:
@@ -1127,8 +1099,6 @@ class MonitoringService:
             )
             return False
 
-        has_saved_card = subscription.autopay_enabled and user.id in users_with_cards
-
         for other_days in warning_days:
             if other_days < days and subscription.id in urgent_ids_by_days[other_days]:
                 logger.debug(
@@ -1161,9 +1131,7 @@ class MonitoringService:
         if not self.bot:
             return False
 
-        success = await self._send_subscription_expiring_notification(
-            user, subscription, days, has_saved_card=has_saved_card
-        )
+        success = await self._send_subscription_expiring_notification(user, subscription, days)
         if not success:
             logger.warning('❌ Не удалось отправить уведомление пользователю', telegram_id=user.telegram_id)
             return False
@@ -1997,12 +1965,6 @@ class MonitoringService:
                                 payment_method=PaymentMethod.BALANCE,
                                 description=description,
                             )
-                            try:
-                                from app.services.payment.lava import shift_lava_next_charge_after_manual_extension
-
-                                await shift_lava_next_charge_after_manual_extension(db, sub_id_local, autopay_period)
-                            except Exception as lava_error:
-                                logger.warning('Could not shift Lava charge after autopay', error=lava_error)
 
                             await db.refresh(user)
                             await db.refresh(subscription)
@@ -2249,16 +2211,7 @@ class MonitoringService:
                             'Пополните заранее — иначе подписка остановится.',
                         ).format(cost=texts.format_price(base_price), balance=texts.format_price(user.balance_kopeks))
 
-            if subscription.autopay_enabled and has_saved_card:
-                autopay_status = texts.t(
-                    'AUTOPAY_STATUS_CARD_ACTIVE',
-                    '✅ Включен — будет автоматическое списание с карты',
-                )
-                action_text = low_balance_action or texts.t(
-                    'AUTOPAY_ACTION_CHECK_BALANCE',
-                    '💰 Убедитесь, что на балансе достаточно средств: {balance}',
-                ).format(balance=texts.format_price(user.balance_kopeks))
-            elif subscription.autopay_enabled:
+            if subscription.autopay_enabled:
                 autopay_status = texts.t(
                     'AUTOPAY_STATUS_NO_CARD',
                     '✅ Включен — подписка продлится автоматически',
@@ -3727,236 +3680,6 @@ class MonitoringService:
         except Exception as error:
             logger.warning('Ошибка pre-bill уведомлений Platega', error=error)
             await _rollback_quietly(db, step='platega_prebill')
-
-    async def _reconcile_lava_subscriptions(self, db: AsyncSession):
-        """Safety net для рекуррентных подписок Lava — зеркало Platega-реконсиляции.
-
-        Сверяет локальный статус со статусом Lava (потерянные вебхуки, зависший
-        PENDING) и добивает недошедшие отмены. Доначисления пропущенных списаний
-        здесь нет: у Lava нет истории чарджей по подписке (``subscription/status``
-        отдаёт только текущее состояние), поэтому восстановить конкретные
-        invoice_id для идемпотентного продления невозможно — ретраи вебхуков Lava
-        (5 попыток раз в 150с) остаются единственным механизмом доставки.
-
-        НЕ гейтится LAVA_RECURRENT_ENABLED намеренно: выключение фичи не
-        останавливает существующие привязки, а отмены разгейчены на всех
-        поверхностях.
-        """
-        try:
-            from app.database.crud import lava_subscription as sub_crud
-            from app.services.lava_recurrent import lava_reconcile_decision, normalize_remote_status
-            from app.services.lava_service import LavaAPIError, lava_service
-
-            if not settings.is_lava_enabled():
-                return
-
-            def _remote_status(payload: dict | None) -> str | None:
-                data = (payload or {}).get('data') or {}
-                return normalize_remote_status(data.get('status'))
-
-            records = await sub_crud.list_lava_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE'])
-
-            rolled_back = False
-            for record_id, listed in [(listed.id, listed) for listed in records]:
-                try:
-                    record = await _fresh_record(db, listed, record_id, rolled_back=rolled_back)
-                    if record is None:
-                        continue
-                    # Нет ни одного идентификатора — провайдер о подписке точно
-                    # не знает (subscribe не дошёл).
-                    remote_missing = True
-                    remote_status = None
-                    if record.lava_subscription_id or record.order_id:
-                        try:
-                            payload = await lava_service.get_recurrent_subscription_status(
-                                subscription_id=record.lava_subscription_id,
-                                order_id=None if record.lava_subscription_id else record.order_id,
-                            )
-                            remote_status = _remote_status(payload)
-                            remote_missing = remote_status is None
-                        except LavaAPIError as api_error:
-                            # 404/422 = провайдер ДОСТОВЕРНО не знает подписку;
-                            # прочие коды и транспортные сбои — временная
-                            # недоступность, зависший PENDING хоронить рано.
-                            # Без этого разделения _post поднимал исключение на
-                            # ЛЮБОЙ 4xx, remote_missing навсегда оставался False,
-                            # и правило «PENDING старше 30 мин → FAILED» было
-                            # недостижимо: запись висела вечно, а partial unique
-                            # не давал пользователю включить автопродление снова.
-                            remote_missing = api_error.status_code in (404, 422)
-                        except Exception:
-                            remote_missing = False
-
-                    age_minutes = (
-                        (datetime.now(UTC) - record.created_at).total_seconds() / 60
-                        if record.created_at is not None
-                        else 0.0
-                    )
-
-                    new_status = lava_reconcile_decision(
-                        record.status, remote_status, age_minutes, remote_missing=remote_missing
-                    )
-                    if new_status and new_status != record.status:
-                        previous_status = record.status
-                        await sub_crud.update_lava_subscription(db, record, status=new_status)
-                        logger.info(
-                            'Lava-подписка реконсилирована',
-                            local_id=record.id,
-                            lava_subscription_id=record.lava_subscription_id,
-                            old_status=previous_status,
-                            new_status=new_status,
-                            remote_status=remote_status,
-                        )
-                except Exception as record_error:
-                    logger.warning(
-                        'Не удалось реконсилировать Lava-подписку',
-                        local_id=record_id,
-                        error=record_error,
-                    )
-                    await _rollback_quietly(db, step='lava_reconcile_record')
-                    rolled_back = True
-
-            # Контрольный свип недавних отмен: локальный CANCELLED мог не дойти
-            # до Lava — тогда провайдер продолжит списывать.
-            cancelled_records = await sub_crud.list_recently_cancelled_lava_subscriptions(
-                db, datetime.now(UTC) - timedelta(days=30)
-            )
-            for record in cancelled_records:
-                try:
-                    payload = await lava_service.get_recurrent_subscription_status(
-                        subscription_id=record.lava_subscription_id,
-                    )
-                    remote_status = _remote_status(payload)
-                    if remote_status in (None, 'cancelled', 'failed', 'expired'):
-                        continue
-                    await lava_service.unsubscribe_recurrent(subscription_id=record.lava_subscription_id)
-                    logger.warning(
-                        'Lava-подписка осталась активной после локальной отмены — повторил отмену',
-                        local_id=record.id,
-                        lava_subscription_id=record.lava_subscription_id,
-                        remote_status=remote_status,
-                    )
-                except Exception as record_error:
-                    logger.warning(
-                        'Не удалось досверить отменённую Lava-подписку',
-                        local_id=getattr(record, 'id', None),
-                        error=record_error,
-                    )
-        except Exception as e:
-            logger.warning('Ошибка реконсиляции Lava-подписок', error=e)
-            await _rollback_quietly(db, step='lava_reconcile')
-
-    async def _reconcile_cashera_subscriptions(self, db: AsyncSession):
-        """Safety net для подписок Cashera — зеркало Platega/Lava-реконсиляции.
-
-        Сверяет локальный статус со статусом Cashera (потерянные вебхуки, зависший
-        PENDING), доначисляет оплаченные списания, чей вебхук не дошёл (у Cashera
-        есть история /charges — в отличие от Lava), и добивает недошедшие отмены.
-
-        НЕ гейтится CASHERA_RECURRENT_ENABLED намеренно: выключение фичи не
-        останавливает существующие привязки.
-        """
-        try:
-            if not settings.is_cashera_enabled():
-                return
-
-            from app.database.crud import cashera_subscription as sub_crud
-            from app.services.cashera_recurrent import cashera_reconcile_decision, normalize_remote_status
-            from app.services.cashera_service import CasheraAPIError, cashera_service
-            from app.services.payment.cashera import _CasheraRecurrentAgent
-
-            agent = _CasheraRecurrentAgent(self.bot)
-            records = await sub_crud.list_cashera_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE'])
-
-            rolled_back = False
-            for record_id, listed in [(listed.id, listed) for listed in records]:
-                try:
-                    record = await _fresh_record(db, listed, record_id, rolled_back=rolled_back)
-                    if record is None:
-                        continue
-                    remote_missing = True
-                    remote_status = None
-                    if record.cashera_subscription_uuid:
-                        try:
-                            payload = await cashera_service.get_subscription(record.cashera_subscription_uuid)
-                            remote_status = normalize_remote_status(payload.get('status'))
-                            remote_missing = remote_status is None
-                        except CasheraAPIError as api_error:
-                            # 404 = провайдер достоверно не знает подписку; прочее — временно.
-                            remote_missing = api_error.status_code == 404
-                        except Exception:
-                            remote_missing = False
-
-                    if record.status in ('ACTIVE', 'PAST_DUE'):
-                        await agent.replay_missed_cashera_charges(db, record.id)
-                        await db.refresh(record)
-
-                    age_minutes = (
-                        (datetime.now(UTC) - record.created_at).total_seconds() / 60
-                        if record.created_at is not None
-                        else 0.0
-                    )
-                    new_status = cashera_reconcile_decision(
-                        record.status, remote_status, age_minutes, remote_missing=remote_missing
-                    )
-                    if new_status and new_status != record.status:
-                        previous_status = record.status
-                        await sub_crud.update_cashera_subscription(
-                            db, record, status=new_status, remote_status=remote_status
-                        )
-                        logger.info(
-                            'Подписка Cashera реконсилирована',
-                            local_id=record.id,
-                            cashera_uuid=record.cashera_subscription_uuid,
-                            old_status=previous_status,
-                            new_status=new_status,
-                            remote_status=remote_status,
-                        )
-                        if new_status == 'FAILED' and record.cashera_subscription_uuid:
-                            # Не дождались подтверждения — гасим и у провайдера, чтобы
-                            # поздно подтверждённая ссылка не начала списывать.
-                            try:
-                                await cashera_service.cancel_subscription(record.cashera_subscription_uuid)
-                            except Exception as cancel_error:
-                                logger.warning(
-                                    'Cashera: не удалось отменить неподтверждённую подписку у провайдера',
-                                    record_id=record.id,
-                                    error=cancel_error,
-                                )
-                except Exception as record_error:
-                    logger.warning(
-                        'Не удалось реконсилировать подписку Cashera',
-                        local_id=record_id,
-                        error=record_error,
-                    )
-                    await _rollback_quietly(db, step='cashera_reconcile_record')
-                    rolled_back = True
-
-            # Свип недавних отмен: локальный CANCELLED мог не дойти до Cashera.
-            cancelled_records = await sub_crud.list_recently_cancelled_cashera_subscriptions(
-                db, datetime.now(UTC) - timedelta(days=30)
-            )
-            for record in cancelled_records:
-                try:
-                    payload = await cashera_service.get_subscription(record.cashera_subscription_uuid)
-                    remote_status = normalize_remote_status(payload.get('status'))
-                    if remote_status in (None, 'cancelled', 'failed'):
-                        continue
-                    await cashera_service.cancel_subscription(record.cashera_subscription_uuid)
-                    logger.warning(
-                        'Подписка Cashera осталась активной после локальной отмены — повторил отмену',
-                        local_id=record.id,
-                        remote_status=remote_status,
-                    )
-                except Exception as record_error:
-                    logger.warning(
-                        'Не удалось досверить отменённую подписку Cashera',
-                        local_id=getattr(record, 'id', None),
-                        error=record_error,
-                    )
-        except Exception as e:
-            logger.warning('Ошибка реконсиляции подписок Cashera', error=e)
-            await _rollback_quietly(db, step='cashera_reconcile')
 
     async def _check_ticket_sla(self, db: AsyncSession):
         try:

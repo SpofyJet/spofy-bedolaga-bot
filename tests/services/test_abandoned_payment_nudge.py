@@ -535,7 +535,9 @@ async def test_no_trial_wave3_sends_after_wave2(monkeypatch):
     engine = create_async_engine('sqlite+aiosqlite:///:memory:')
     async with engine.begin() as conn:
         await conn.run_sync(
-            lambda c: Base.metadata.create_all(c, tables=[User.__table__, Subscription.__table__, SubscriptionEvent.__table__])
+            lambda c: Base.metadata.create_all(
+                c, tables=[User.__table__, Subscription.__table__, SubscriptionEvent.__table__]
+            )
         )
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as session:
@@ -566,7 +568,9 @@ async def test_no_trial_wave3_waits_for_wave2(monkeypatch):
     engine = create_async_engine('sqlite+aiosqlite:///:memory:')
     async with engine.begin() as conn:
         await conn.run_sync(
-            lambda c: Base.metadata.create_all(c, tables=[User.__table__, Subscription.__table__, SubscriptionEvent.__table__])
+            lambda c: Base.metadata.create_all(
+                c, tables=[User.__table__, Subscription.__table__, SubscriptionEvent.__table__]
+            )
         )
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as session:

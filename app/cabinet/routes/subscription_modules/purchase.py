@@ -488,10 +488,6 @@ async def get_purchase_options(
                 # СБП-оформление (Platega recurrent): фронт показывает кнопку
                 # «Оформить с автооплатой СБП» рядом с покупкой с баланса.
                 'platega_recurrent_enabled': settings.is_platega_recurrent_enabled(),
-                # Автопродление Lava: фронт показывает переключатель на странице
-                # подписки, если фича включена.
-                'lava_recurrent_enabled': settings.is_lava_recurrent_enabled(),
-                'cashera_recurrent_enabled': settings.is_cashera_recurrent_enabled(),
             }
 
         # Classic mode - return periods
@@ -502,8 +498,6 @@ async def get_purchase_options(
         # кабинет спрашивал состояние автооплаты у каждой подписки и узнавал об
         # отключённой фиче из ответа 403 — по красной строке в консоли на запрос.
         payload['platega_recurrent_enabled'] = settings.is_platega_recurrent_enabled()
-        payload['lava_recurrent_enabled'] = settings.is_lava_recurrent_enabled()
-        payload['cashera_recurrent_enabled'] = settings.is_cashera_recurrent_enabled()
         return payload
 
     except PurchaseValidationError as e:
@@ -1346,15 +1340,6 @@ async def purchase_tariff(
                 payment_method=PaymentMethod.BALANCE,
                 description=description,
             )
-            if existing_subscription is not None:
-                # extend_subscription(commit=False) defers this external effect.
-                # Keep it after the activation commit, outside compensation.
-                try:
-                    from app.services.payment.lava import shift_lava_next_charge_after_manual_extension
-
-                    await shift_lava_next_charge_after_manual_extension(db, subscription.id, period_days)
-                except Exception as shift_error:
-                    logger.warning('Failed to shift Lava next charge after daily activation', error=shift_error)
 
         # --- Disable killed trials on RemnaWave panel ---
         service = SubscriptionService()

@@ -118,9 +118,6 @@ async def test_daily_auto_activation_is_atomic(
                 assert active.tariff_id == 1 and active.last_daily_charge_at is not None
             shifted.append((subscription_id, days))
 
-        monkeypatch.setattr(
-            'app.services.payment.lava.shift_lava_next_charge_after_manual_extension', shift_after_commit
-        )
         async with maker() as db:
             db.add(
                 User(

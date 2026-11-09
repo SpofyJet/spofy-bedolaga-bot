@@ -167,7 +167,7 @@ Caddy автоматически выпустит сертификаты чер�
 {
   "methods": [
     {
-      "id": "mulenpay",
+      "id": "platega",
       "title": "Банковская карта",
       "integration_type": "iframe",
       "iframe_config": {

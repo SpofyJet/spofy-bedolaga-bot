@@ -23,12 +23,20 @@ import pytest
 from aiogram import Dispatcher
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import CallbackQuery, InaccessibleMessage, InlineKeyboardMarkup, Message, User as TgUser
+from aiogram.types import (
+    CallbackQuery,
+    InaccessibleMessage,
+    InlineKeyboardMarkup,
+    Message,
+    User as TgUser,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.database.models import User
-from app.handlers.gift_activation import register_handlers as register_gift_activation_handlers
+from app.handlers.gift_activation import (
+    register_handlers as register_gift_activation_handlers,
+)
 from app.handlers.subscription import register_gift_handlers
 from app.handlers.subscription.gift import (
     handle_gift_back_periods,

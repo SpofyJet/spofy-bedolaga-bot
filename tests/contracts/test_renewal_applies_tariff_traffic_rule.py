@@ -136,17 +136,6 @@ def test_known_exceptions_still_exist():
     assert not stale, 'Исключения больше не двигают дату мимо правила — уберите их из списка:\n  ' + '\n  '.join(stale)
 
 
-def test_detector_sees_the_recurring_gateways():
-    """Самопроверка детектора: рекуррентные Lava и Platega двигают дату методом модели."""
-    seen: set[str] = set()
-    for path in (APP / 'services/payment/lava.py', APP / 'services/payment/platega.py'):
-        tree = ast.parse(path.read_text(encoding='utf-8'))
-        for key, node in _iter_functions(tree, path):
-            if _moves_end_date_forward(node):
-                seen.add(key)
-    assert any('process_lava_subscription_callback' in key for key in seen)
-
-
 def test_platega_renewal_goes_through_crud_extend():
     """Spofy: чардж Platega продлевает CRUD-функцией extend_subscription (тариф записи,
     конверсия триала, починка грейса и правило трафика — внутри неё), а не методом модели."""

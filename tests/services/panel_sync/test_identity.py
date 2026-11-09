@@ -14,7 +14,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.external.remnawave_api import RemnaWaveInvalidUserIdError, RemnaWaveTransientError
+from app.external.remnawave_api import (
+    RemnaWaveInvalidUserIdError,
+    RemnaWaveTransientError,
+)
 from app.services.panel_sync import resolve_panel_identity
 
 

@@ -11,12 +11,6 @@ from app.database.crud.transaction import REAL_PAYMENT_METHODS
 from app.database.models import PaymentMethod
 
 
-def test_includes_previously_missing_gateways():
-    """Jupiter / Donut / Lava — те самые забытые шлюзы — теперь учитываются."""
-    for method in (PaymentMethod.JUPITER, PaymentMethod.DONUT, PaymentMethod.LAVA):
-        assert method.value in REAL_PAYMENT_METHODS
-
-
 def test_excludes_only_non_gateway_methods():
     """MANUAL (отдельная строка) и BALANCE (двойной счёт) — единственные исключения."""
     assert PaymentMethod.MANUAL.value not in REAL_PAYMENT_METHODS
@@ -32,3 +26,9 @@ def test_covers_every_gateway_in_enum():
     assert set(REAL_PAYMENT_METHODS) == expected
     # на сегодня это 24 шлюза
     assert len(REAL_PAYMENT_METHODS) == len(expected)
+
+
+def test_includes_previously_missing_gateways():
+    """Jupiter / Donut / Lava — те самые забытые шлюзы — теперь учитываются."""
+    for method in ():
+        assert method.value in REAL_PAYMENT_METHODS

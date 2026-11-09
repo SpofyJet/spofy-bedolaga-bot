@@ -17,7 +17,10 @@ from fastapi import HTTPException, status
 from pydantic import ValidationError
 
 from app.cabinet.routes.admin_broadcasts import create_combined_broadcast
-from app.cabinet.schemas.broadcasts import BroadcastMediaRequest, CombinedBroadcastCreateRequest
+from app.cabinet.schemas.broadcasts import (
+    BroadcastMediaRequest,
+    CombinedBroadcastCreateRequest,
+)
 
 
 FILE_ID = 'A' * 32

@@ -7,12 +7,7 @@ import app.keyboards.inline as kb
 
 
 def _callbacks(markup) -> dict[str, object]:
-    return {
-        btn.callback_data: btn.style
-        for row in markup.inline_keyboard
-        for btn in row
-        if btn.callback_data
-    }
+    return {btn.callback_data: btn.style for row in markup.inline_keyboard for btn in row if btn.callback_data}
 
 
 def _fake_sub(actual_status: str = 'active') -> SimpleNamespace:
@@ -59,13 +54,9 @@ def test_clear_saved_cart_is_danger():
 
 def test_subscription_screen_main_actions(monkeypatch):
     _patch_subscription_screen(monkeypatch)
-    markup = kb.get_subscription_keyboard(
-        'ru', has_subscription=True, is_trial=False, subscription=_fake_sub('active')
-    )
+    markup = kb.get_subscription_keyboard('ru', has_subscription=True, is_trial=False, subscription=_fake_sub('active'))
     styles = _callbacks(markup)
-    connect = next(
-        btn for row in markup.inline_keyboard for btn in row if 'Подключить' in (btn.text or '')
-    )
+    connect = next(btn for row in markup.inline_keyboard for btn in row if 'Подключить' in (btn.text or ''))
     assert connect.style == 'success'
     assert styles['subscription_extend'] == 'success'
     assert styles['subscription_autopay'] is None

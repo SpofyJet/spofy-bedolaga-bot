@@ -55,14 +55,6 @@ def _assert_filled(payer: PayerIdentity) -> None:
 # --- пользователь бота -------------------------------------------------------
 
 
-def test_telegram_user_is_identified_by_telegram_id_and_username() -> None:
-    payer = payer_from_user(_record(username='neo', first_name='Томас'))
-
-    assert payer.user_id == '555'
-    assert payer.user_name == '@neo'
-    assert payer.contact == '555', 'MulenPay: Telegram ID, если подтверждённой почты нет'
-
-
 def test_username_is_not_prefixed_twice() -> None:
     assert payer_from_user(_record(username='@neo')).user_name == '@neo'
 
@@ -90,14 +82,6 @@ def test_email_user_is_identified_by_internal_id() -> None:
     assert payer.user_id == 'user-7'
     assert payer.user_name == 'mail@example.com'
     assert payer.contact == 'mail@example.com'
-
-
-def test_unverified_email_is_never_the_contact() -> None:
-    """Адрес назначается до подтверждения, MulenPay фискализирует платёж — чек чужому ящику не нужен."""
-    payer = payer_from_user(_record(telegram_id=None, email='typo@example.com', email_verified=False))
-
-    assert payer.contact == 'user-7'
-    assert payer.user_name == 'typo@example.com'
 
 
 def test_broken_telegram_name_does_not_reach_the_provider() -> None:
@@ -244,3 +228,19 @@ def test_web_user_with_invalid_email_still_pays() -> None:
     payer = payer_from_user(_record(telegram_id=None, email='broken@@mail', username=None))
 
     assert payer.platega_metadata()['user_email'].endswith('@spofyltd.ru')
+
+
+def test_telegram_user_is_identified_by_telegram_id_and_username() -> None:
+    payer = payer_from_user(_record(username='neo', first_name='Томас'))
+
+    assert payer.user_id == '555'
+    assert payer.user_name == '@neo'
+    assert payer.contact == '555', 'Wata: Telegram ID, если подтверждённой почты нет'
+
+
+def test_unverified_email_is_never_the_contact() -> None:
+    """Адрес назначается до подтверждения, Wata фискализирует платёж — чек чужому ящику не нужен."""
+    payer = payer_from_user(_record(telegram_id=None, email='typo@example.com', email_verified=False))
+
+    assert payer.contact == 'user-7'
+    assert payer.user_name == 'typo@example.com'

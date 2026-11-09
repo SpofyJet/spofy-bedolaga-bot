@@ -7,7 +7,12 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.config import settings
-from app.keyboards.inline import _spins_word, _wheel_spins_for_menu, get_balance_keyboard, get_main_menu_keyboard
+from app.keyboards.inline import (
+    _spins_word,
+    _wheel_spins_for_menu,
+    get_balance_keyboard,
+    get_main_menu_keyboard,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -52,7 +57,16 @@ def test_no_cabinet_url_no_button(monkeypatch):
 
 @pytest.mark.parametrize(
     ('count', 'word'),
-    [(1, 'спин'), (2, 'спина'), (4, 'спина'), (5, 'спинов'), (11, 'спинов'), (12, 'спинов'), (21, 'спин'), (22, 'спина')],
+    [
+        (1, 'спин'),
+        (2, 'спина'),
+        (4, 'спина'),
+        (5, 'спинов'),
+        (11, 'спинов'),
+        (12, 'спинов'),
+        (21, 'спин'),
+        (22, 'спина'),
+    ],
 )
 def test_spins_word(count, word):
     assert _spins_word(count) == word
@@ -65,9 +79,7 @@ async def test_spins_for_menu_counts_only_when_topup_spins_enabled(monkeypatch):
     user = SimpleNamespace(id=7)
     config = SimpleNamespace(is_enabled=True, topup_spins_enabled=True)
     monkeypatch.setattr(wheel_crud, 'get_wheel_config', AsyncMock(return_value=config))
-    monkeypatch.setattr(
-        ws.wheel_service, 'get_free_spin_state', AsyncMock(return_value=SimpleNamespace(available=3))
-    )
+    monkeypatch.setattr(ws.wheel_service, 'get_free_spin_state', AsyncMock(return_value=SimpleNamespace(available=3)))
     assert await _wheel_spins_for_menu(object(), user) == 3
 
     config.topup_spins_enabled = False

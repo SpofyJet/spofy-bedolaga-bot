@@ -417,76 +417,6 @@ async def test_lifecycle_cabinet_balance_purchase_to_bot_activation(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_lifecycle_cabinet_gateway_purchase_after_webhook_to_bot_activation(monkeypatch):
-    """4. Cabinet gateway purchase after paid webhook -> Bot activation:
-    Buyer purchases via gateway (starts PENDING), webhook sets PAID, claimant activates in bot.
-    """
-    from app.config import settings
-
-    monkeypatch.setattr(settings, 'CABINET_URL', 'https://cabinet.example.com')
-    monkeypatch.setattr(settings, 'BOT_USERNAME', 'test_vpn_bot')
-    monkeypatch.setattr('app.utils.cache.RateLimitCache.is_rate_limited', AsyncMock(return_value=False))
-
-    fake_payment_service = MagicMock()
-    fake_payment_service.create_guest_payment = AsyncMock(
-        return_value={'payment_url': 'https://pay.gateway.example/inv_777'}
-    )
-    monkeypatch.setattr('app.services.payment_service.PaymentService', lambda **kw: fake_payment_service)
-
-    async with memory_session(monkeypatch, _TABLES) as db:
-        tariff, buyer, claimant1, _ = await _seed_scenario(db)
-
-        # Step 1: Buyer initiates gateway gift purchase
-        req = GiftPurchaseRequest(
-            tariff_id=tariff.id,
-            period_days=30,
-            payment_mode='gateway',
-            payment_method='yookassa',
-        )
-        resp = await cabinet_gift_routes.create_gift_purchase(body=req, user=buyer, db=db)
-        assert resp.status == 'created'
-        assert resp.gift_code is None  # Pending -> no claim fields
-
-        # Purchase in DB is PENDING
-        p_db = (await db.execute(select(GuestPurchase).where(GuestPurchase.buyer_user_id == buyer.id))).scalar_one()
-        assert p_db.status == GuestPurchaseStatus.PENDING.value
-
-        # Step 2: Claimant attempts activation before payment -> rejected (unactivatable)
-        canonical_code = build_gift_public_code(p_db.token)
-        c1_state = _make_fsm_context(claimant1.telegram_id)
-        await c1_state.set_state(GiftActivationStates.waiting_for_code)
-        c1_msg = _make_message(text=canonical_code, user_id=claimant1.telegram_id, username=claimant1.username)
-
-        await handle_gift_code_input(c1_msg, claimant1, db, c1_state)
-        c1_msg.answer.assert_awaited_once()
-        assert 'невозможно активировать' in c1_msg.answer.call_args[0][0]
-
-        # Step 3: Payment gateway webhook marks purchase PAID
-        p_db.status = GuestPurchaseStatus.PAID.value
-        await db.commit()
-
-        # Step 4: Status endpoint now returns canonical fields
-        status_resp = await cabinet_gift_routes.get_gift_purchase_status(token=p_db.token, user=buyer, db=db)
-        assert status_resp.status == 'paid'
-        assert status_resp.is_claimable is True
-        assert status_resp.gift_code == canonical_code
-
-        # Step 5: Claimant activates in bot -> succeeds
-        c1_state2 = _make_fsm_context(claimant1.telegram_id)
-        await c1_state2.set_state(GiftActivationStates.waiting_for_code)
-        c1_msg2 = _make_message(text=canonical_code, user_id=claimant1.telegram_id, username=claimant1.username)
-
-        with patch('app.services.subscription_service.SubscriptionService.create_remnawave_user', AsyncMock()):
-            await handle_gift_code_input(c1_msg2, claimant1, db, c1_state2)
-
-        await db.refresh(p_db)
-        assert p_db.status == GuestPurchaseStatus.DELIVERED.value
-        assert p_db.user_id == claimant1.id
-        c1_msg2.answer.assert_awaited_once()
-        assert 'Подарок активирован' in c1_msg2.answer.call_args[0][0]
-
-
-@pytest.mark.asyncio
 async def test_lifecycle_cabinet_purchase_to_cabinet_activation(monkeypatch):
     """5. Cabinet purchase -> Cabinet activation:
     Full cabinet round-trip: purchased via cabinet balance, activated via cabinet code endpoint.
@@ -820,3 +750,73 @@ async def test_backward_compat_directed_gift_callbacks_and_landing_public_email(
         assert landing_resp.gift_code == f'GIFT_{email_token[:59]}'
         assert landing_resp.bot_claim_url == f'https://t.me/test_vpn_bot?start=GIFT_{email_token[:59]}'
         assert landing_resp.cabinet_claim_url == f'https://cabinet.example.com/buy/gift/{email_token}'
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_cabinet_gateway_purchase_after_webhook_to_bot_activation(monkeypatch):
+    """4. Cabinet gateway purchase after paid webhook -> Bot activation:
+    Buyer purchases via gateway (starts PENDING), webhook sets PAID, claimant activates in bot.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'CABINET_URL', 'https://cabinet.example.com')
+    monkeypatch.setattr(settings, 'BOT_USERNAME', 'test_vpn_bot')
+    monkeypatch.setattr('app.utils.cache.RateLimitCache.is_rate_limited', AsyncMock(return_value=False))
+
+    fake_payment_service = MagicMock()
+    fake_payment_service.create_guest_payment = AsyncMock(
+        return_value={'payment_url': 'https://pay.gateway.example/inv_777'}
+    )
+    monkeypatch.setattr('app.services.payment_service.PaymentService', lambda **kw: fake_payment_service)
+
+    async with memory_session(monkeypatch, _TABLES) as db:
+        tariff, buyer, claimant1, _ = await _seed_scenario(db)
+
+        # Step 1: Buyer initiates gateway gift purchase
+        req = GiftPurchaseRequest(
+            tariff_id=tariff.id,
+            period_days=30,
+            payment_mode='gateway',
+            payment_method='platega',
+        )
+        resp = await cabinet_gift_routes.create_gift_purchase(body=req, user=buyer, db=db)
+        assert resp.status == 'created'
+        assert resp.gift_code is None  # Pending -> no claim fields
+
+        # Purchase in DB is PENDING
+        p_db = (await db.execute(select(GuestPurchase).where(GuestPurchase.buyer_user_id == buyer.id))).scalar_one()
+        assert p_db.status == GuestPurchaseStatus.PENDING.value
+
+        # Step 2: Claimant attempts activation before payment -> rejected (unactivatable)
+        canonical_code = build_gift_public_code(p_db.token)
+        c1_state = _make_fsm_context(claimant1.telegram_id)
+        await c1_state.set_state(GiftActivationStates.waiting_for_code)
+        c1_msg = _make_message(text=canonical_code, user_id=claimant1.telegram_id, username=claimant1.username)
+
+        await handle_gift_code_input(c1_msg, claimant1, db, c1_state)
+        c1_msg.answer.assert_awaited_once()
+        assert 'невозможно активировать' in c1_msg.answer.call_args[0][0]
+
+        # Step 3: Payment gateway webhook marks purchase PAID
+        p_db.status = GuestPurchaseStatus.PAID.value
+        await db.commit()
+
+        # Step 4: Status endpoint now returns canonical fields
+        status_resp = await cabinet_gift_routes.get_gift_purchase_status(token=p_db.token, user=buyer, db=db)
+        assert status_resp.status == 'paid'
+        assert status_resp.is_claimable is True
+        assert status_resp.gift_code == canonical_code
+
+        # Step 5: Claimant activates in bot -> succeeds
+        c1_state2 = _make_fsm_context(claimant1.telegram_id)
+        await c1_state2.set_state(GiftActivationStates.waiting_for_code)
+        c1_msg2 = _make_message(text=canonical_code, user_id=claimant1.telegram_id, username=claimant1.username)
+
+        with patch('app.services.subscription_service.SubscriptionService.create_remnawave_user', AsyncMock()):
+            await handle_gift_code_input(c1_msg2, claimant1, db, c1_state2)
+
+        await db.refresh(p_db)
+        assert p_db.status == GuestPurchaseStatus.DELIVERED.value
+        assert p_db.user_id == claimant1.id
+        c1_msg2.answer.assert_awaited_once()
+        assert 'Подарок активирован' in c1_msg2.answer.call_args[0][0]

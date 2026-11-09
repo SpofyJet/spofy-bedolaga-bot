@@ -11,7 +11,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.database.models import Base, BroadcastHistory, DecisionLog, MassSendJob, User
 from app.services import broadcast_service as broadcast_module, decision_log, mass_send_service as module
-from app.services.broadcast_service import BroadcastConfig, BroadcastMediaConfig, BroadcastService
+from app.services.broadcast_service import (
+    BroadcastConfig,
+    BroadcastMediaConfig,
+    BroadcastService,
+)
 
 
 @contextlib.asynccontextmanager

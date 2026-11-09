@@ -16,8 +16,6 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.postgres]
 STEPS = (
     '_process_autopayments',
     '_reconcile_platega_subscriptions',
-    '_reconcile_lava_subscriptions',
-    '_reconcile_cashera_subscriptions',
     '_check_expired_subscriptions',
     '_check_expiring_subscriptions',
     '_check_trial_expiring_soon',

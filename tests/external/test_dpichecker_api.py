@@ -9,7 +9,11 @@ from typing import Any
 
 import pytest
 
-from app.external.dpichecker_api import DpiCheckerAPI, DpiCheckerAPIError, DpiCheckerGatewayError
+from app.external.dpichecker_api import (
+    DpiCheckerAPI,
+    DpiCheckerAPIError,
+    DpiCheckerGatewayError,
+)
 from tests.fixtures.dpichecker_fixtures import load_dpichecker_fixture
 
 

@@ -10,7 +10,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.cabinet.schemas.tickets import TicketCreateRequest, TicketMediaItem, TicketMessageCreateRequest
+from app.cabinet.schemas.tickets import (
+    TicketCreateRequest,
+    TicketMediaItem,
+    TicketMessageCreateRequest,
+)
 
 
 @pytest.mark.parametrize('model', [TicketCreateRequest, TicketMessageCreateRequest])

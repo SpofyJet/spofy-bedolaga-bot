@@ -17,7 +17,10 @@ import pytest
 from app.cabinet.routes import admin_sales_stats
 from app.services.menu_layout.stats_service import MenuLayoutStatsService
 from app.services.partner_stats_service import PartnerStatsService
-from tests.fixtures.local_day import reset_local_timezone_cache, use_timezone  # noqa: F401
+from tests.fixtures.local_day import (  # noqa: F401
+    reset_local_timezone_cache,
+    use_timezone,
+)
 from tests.fixtures.postgres_db import postgres_session
 
 

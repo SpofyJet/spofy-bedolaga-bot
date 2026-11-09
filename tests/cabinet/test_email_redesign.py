@@ -5,9 +5,16 @@ import re
 
 import pytest
 
-from app.cabinet.routes.admin_email_templates import AVAILABLE_LANGUAGES, SAMPLE_CONTEXTS, TEMPLATE_TYPES
+from app.cabinet.routes.admin_email_templates import (
+    AVAILABLE_LANGUAGES,
+    SAMPLE_CONTEXTS,
+    TEMPLATE_TYPES,
+)
 from app.cabinet.services import email_layout
-from app.cabinet.services.email_layout import inline_email_styles, reset_email_layout_cache
+from app.cabinet.services.email_layout import (
+    inline_email_styles,
+    reset_email_layout_cache,
+)
 from app.cabinet.services.email_service import EmailService
 from app.cabinet.services.email_templates import EmailNotificationTemplates
 from app.config import settings

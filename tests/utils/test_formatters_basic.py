@@ -3,7 +3,10 @@
 from datetime import UTC, datetime, timedelta
 
 from app.utils import formatters
-from tests.fixtures.local_day import reset_local_timezone_cache, use_timezone  # noqa: F401
+from tests.fixtures.local_day import (  # noqa: F401
+    reset_local_timezone_cache,
+    use_timezone,
+)
 
 
 def test_format_datetime_handles_iso_strings(fixed_datetime: datetime, monkeypatch) -> None:

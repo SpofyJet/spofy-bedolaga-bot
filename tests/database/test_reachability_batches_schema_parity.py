@@ -16,7 +16,13 @@ import sqlalchemy as sa
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
-from app.database.models import Base, ReachabilityBatch, ReachabilityJob, ReachabilityLeg, ReachabilityTargetPref
+from app.database.models import (
+    Base,
+    ReachabilityBatch,
+    ReachabilityJob,
+    ReachabilityLeg,
+    ReachabilityTargetPref,
+)
 
 
 VERSIONS = pathlib.Path(__file__).resolve().parents[2] / 'migrations/alembic/versions'

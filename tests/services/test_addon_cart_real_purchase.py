@@ -19,7 +19,14 @@ import pytest
 from sqlalchemy import select
 
 from app.config import settings
-from app.database.models import Base, Subscription, TrafficPurchase, Transaction, TransactionType, User
+from app.database.models import (
+    Base,
+    Subscription,
+    TrafficPurchase,
+    Transaction,
+    TransactionType,
+    User,
+)
 from app.services import subscription_auto_purchase_service as auto_service
 from app.services.user_cart_service import UserCartService
 from app.utils.pricing_utils import calculate_prorated_price
@@ -331,17 +338,15 @@ def test_every_payment_provider_calls_the_shared_topup_hook():
     from pathlib import Path
 
     payment_dir = Path(__file__).resolve().parents[2] / 'app' / 'services' / 'payment'
-    # tribute.py здесь — только создание платежа; зачисление живёт в services/tribute_service.py.
     # payer_identity.py — общий помощник (данные плательщика для шлюзов), не платёжка.
-    skipped = {'__init__.py', 'common.py', 'tribute.py', 'payer_identity.py'}
+    skipped = {'__init__.py', 'common.py', 'payer_identity.py'}
     providers = sorted(p for p in payment_dir.glob('*.py') if p.name not in skipped)
-    extra = [payment_dir.parent / 'tribute_service.py', payment_dir.parent / 'apple_iap.py']
 
     missing = [
         str(path.relative_to(payment_dir.parent.parent))
-        for path in providers + extra
+        for path in providers
         if 'send_cart_notification_after_topup(' not in path.read_text(encoding='utf-8')
     ]
 
-    assert len(providers) >= 25, providers
+    assert len(providers) >= 6, providers
     assert not missing, f'платёжки без общего хука после зачисления: {missing}'

@@ -114,7 +114,10 @@ async def test_reward_scheme_route_persists(monkeypatch):
 @pytest.mark.asyncio
 async def test_email_type_switch_persists(monkeypatch):
     """Выключатель писем по типу — четвёртое место с тем же дефектом."""
-    from app.cabinet.services.email_type_switch import EMAIL_DISABLED_TYPES_KEY, set_email_type_enabled
+    from app.cabinet.services.email_type_switch import (
+        EMAIL_DISABLED_TYPES_KEY,
+        set_email_type_enabled,
+    )
 
     monkeypatch.setattr(settings, 'EMAIL_DISABLED_TYPES', '')
 

@@ -12,7 +12,10 @@ import json
 
 import pytest
 
-from app.cabinet.routes.subscription_modules.status import _create_deep_link, _resolve_button_url
+from app.cabinet.routes.subscription_modules.status import (
+    _create_deep_link,
+    _resolve_button_url,
+)
 from app.config import settings
 from app.handlers.subscription.common import create_deep_link as bot_create_deep_link, resolve_button_url
 from app.utils.incy_crypt1 import _KEY_B64, INCY_CRYPT1_DEEP_LINK_PREFIX

@@ -12,7 +12,12 @@ from app.config import settings
 from app.database.crud import dpichecker as crud
 from app.database.models import Base, User
 from app.external.dpichecker_api import DpiCheckerAPIError, DpiCheckerGatewayError
-from app.services.dpichecker.errors import ActionNotFound, DpiCheckerDisabled, LaunchRefused, human_error
+from app.services.dpichecker.errors import (
+    ActionNotFound,
+    DpiCheckerDisabled,
+    LaunchRefused,
+    human_error,
+)
 from app.services.dpichecker.service import DpiCheckerService
 from tests.fixtures.dpichecker_fixtures import load_dpichecker_fixture
 from tests.fixtures.postgres_db import postgres_session

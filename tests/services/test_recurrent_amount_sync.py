@@ -15,8 +15,6 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 from app.database.models import (
-    CasheraSubscription,
-    LavaSubscription,
     PlategaSubscription,
     PromoGroup,
     Subscription,
@@ -43,8 +41,6 @@ TABLES = (
     UserPromoGroup.__table__,
     tariff_promo_groups,
     PlategaSubscription.__table__,
-    LavaSubscription.__table__,
-    CasheraSubscription.__table__,
 )
 
 BASE_PRICE = 30000  # 300 ₽ за 30 дней
@@ -103,20 +99,6 @@ def _platega(subscription, user, amount: int) -> PlategaSubscription:
     )
 
 
-def _lava(subscription, user, amount: int) -> LavaSubscription:
-    return LavaSubscription(
-        user_id=user.id,
-        subscription_id=subscription.id,
-        tariff_id=subscription.tariff_id,
-        lava_product_id='prod-1',
-        order_id='lavarec1_x',
-        charge_days=30,
-        amount_kopeks=amount,
-        status='ACTIVE',
-        lava_subscription_id='lv-1',
-    )
-
-
 async def test_true_amount_includes_extra_devices(monkeypatch):
     """Цена продления учитывает доп. устройства — это и есть «правильная» сумма."""
     async with memory_session(monkeypatch, TABLES) as db:
@@ -126,59 +108,6 @@ async def test_true_amount_includes_extra_devices(monkeypatch):
 
         # база + 2 доп. устройства × 50 ₽
         assert amount == BASE_PRICE + 2 * DEVICE_PRICE
-
-
-async def test_matching_amount_keeps_bindings(monkeypatch):
-    """Совпадающая сумма — привязки не трогаем."""
-    async with memory_session(monkeypatch, TABLES) as db:
-        user, _, subscription = await _seed(db, device_limit=1)
-        db.add_all([_platega(subscription, user, BASE_PRICE), _lava(subscription, user, BASE_PRICE)])
-        await db.commit()
-
-        cancelled: list[str] = []
-        import app.services.payment.lava as lava_module
-        import app.services.payment.platega as platega_module
-
-        monkeypatch.setattr(
-            platega_module,
-            'cancel_platega_recurring_for_subscription_safe',
-            AsyncMock(side_effect=lambda *a, **k: cancelled.append('platega')),
-        )
-        monkeypatch.setattr(
-            lava_module,
-            'cancel_lava_recurring_for_subscription_safe',
-            AsyncMock(side_effect=lambda *a, **k: cancelled.append('lava')),
-        )
-
-        await sync_recurrent_bindings_after_price_change(db, subscription.id)
-
-        assert cancelled == []
-
-
-async def test_stale_bindings_of_both_providers_are_cancelled(monkeypatch):
-    """Подписка подорожала (докуплены устройства) — обе привязки гасятся."""
-    async with memory_session(monkeypatch, TABLES) as db:
-        user, _, subscription = await _seed(db, device_limit=3)
-        # Привязки заведены по старой цене (до докупки устройств)
-        db.add_all([_platega(subscription, user, BASE_PRICE), _lava(subscription, user, BASE_PRICE)])
-        await db.commit()
-
-        cancelled: list[str] = []
-        import app.services.payment.lava as lava_module
-        import app.services.payment.platega as platega_module
-
-        async def cancel_platega(db_, sub_id, **kwargs):
-            cancelled.append('platega')
-
-        async def cancel_lava(db_, sub_id, **kwargs):
-            cancelled.append('lava')
-
-        monkeypatch.setattr(platega_module, 'cancel_platega_recurring_for_subscription_safe', cancel_platega)
-        monkeypatch.setattr(lava_module, 'cancel_lava_recurring_for_subscription_safe', cancel_lava)
-
-        await sync_recurrent_bindings_after_price_change(db, subscription.id)
-
-        assert sorted(cancelled) == ['lava', 'platega']
 
 
 async def test_sync_never_raises_on_missing_subscription(monkeypatch):
@@ -205,3 +134,45 @@ async def test_device_purchase_triggers_sync(monkeypatch):
         await add_subscription_devices(db, subscription, 2)
 
         assert called == [subscription.id]
+
+
+async def test_matching_amount_keeps_bindings(monkeypatch):
+    """Совпадающая сумма — привязки не трогаем."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        user, _, subscription = await _seed(db, device_limit=1)
+        db.add(_platega(subscription, user, BASE_PRICE))
+        await db.commit()
+
+        cancelled: list[str] = []
+        import app.services.payment.platega as platega_module
+
+        monkeypatch.setattr(
+            platega_module,
+            'cancel_platega_recurring_for_subscription_safe',
+            AsyncMock(side_effect=lambda *a, **k: cancelled.append('platega')),
+        )
+
+        await sync_recurrent_bindings_after_price_change(db, subscription.id)
+
+        assert cancelled == []
+
+
+async def test_stale_platega_binding_is_cancelled(monkeypatch):
+    """Подписка подорожала (докуплены устройства) — привязка гасится."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        user, _, subscription = await _seed(db, device_limit=3)
+        # Привязка заведена по старой цене (до докупки устройств)
+        db.add(_platega(subscription, user, BASE_PRICE))
+        await db.commit()
+
+        cancelled: list[str] = []
+        import app.services.payment.platega as platega_module
+
+        async def cancel_platega(db_, sub_id, **kwargs):
+            cancelled.append('platega')
+
+        monkeypatch.setattr(platega_module, 'cancel_platega_recurring_for_subscription_safe', cancel_platega)
+
+        await sync_recurrent_bindings_after_price_change(db, subscription.id)
+
+        assert sorted(cancelled) == ['platega']

@@ -37,7 +37,10 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from app.database.crud import subscription as subscription_crud
-from app.database.crud.subscription import _AUTOPAY_PERIOD_UNSET, update_subscription_autopay
+from app.database.crud.subscription import (
+    _AUTOPAY_PERIOD_UNSET,
+    update_subscription_autopay,
+)
 from app.handlers.subscription import autopay as autopay_handler
 from app.services import autopay_period, monitoring_service
 from app.services.autopay_period import resolve_autopay_period_candidate

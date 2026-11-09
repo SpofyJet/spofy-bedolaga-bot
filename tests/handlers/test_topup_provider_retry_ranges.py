@@ -1,5 +1,3 @@
-"""Rejected top-ups must explain an enterable range and keep manual retry possible."""
-
 import inspect
 from importlib import import_module
 from types import SimpleNamespace
@@ -15,37 +13,15 @@ from app.config import settings
 from app.states import BalanceStates
 
 
+"""Rejected top-ups must explain an enterable range and keep manual retry possible."""
+
 PROVIDERS = [
-    'antilopay',
-    'aurapay',
-    'cashera',
-    'cispay',
-    'cloudpayments',
     'cryptobot',
-    'donut',
-    'etoplatezhi',
-    'freekassa',
     'heleket',
-    'jupiter',
-    'kassa_ai',
-    'lava',
-    'mulenpay',
-    'overpay',
-    'pal24',
-    'paritypay',
-    'paypear',
     'platega',
-    'riopay',
-    'rollypay',
-    'severpay',
-    'tabpay',
     'wata',
-    'yookassa',
 ]
-ENTRIES = [(name, f'process_{name}_payment_amount') for name in PROVIDERS] + [
-    ('yookassa', 'process_yookassa_sbp_payment_amount'),
-    ('cloudpayments', 'process_cloudpayments_amount'),
-]
+ENTRIES = [(name, f'process_{name}_payment_amount') for name in PROVIDERS]
 
 
 class ProviderSettings:
@@ -56,8 +32,6 @@ class ProviderSettings:
             return 5099
         if name.startswith('is_') and name.endswith('_enabled'):
             return lambda: True
-        if name == 'YOOKASSA_SBP_ENABLED':
-            return True
         return getattr(settings, name)
 
 
@@ -72,14 +46,13 @@ async def test_rejection_keeps_selection_and_shows_exact_enterable_range(
     monkeypatch.setattr(module, 'settings', ProviderSettings())
     factory = MagicMock()
     monkeypatch.setattr(module, 'PaymentService', factory)
-    if module_name in {'platega', 'cashera'}:
+    if module_name == 'platega':
         monkeypatch.setattr(module, '_get_active_methods', lambda: [2, 'sbp'])
     state = FSMContext(MemoryStorage(), StorageKey(bot_id=1, chat_id=1, user_id=1))
     await state.set_state(BalanceStates.waiting_for_amount)
     selection = {
         'payment_method': module_name,
         'platega_method': 2,
-        'cashera_method': 'sbp',
         'saved_cart': {'total_price': 10000},
     }
     await state.set_data(selection)
@@ -116,21 +89,17 @@ async def test_rejection_keeps_selection_and_shows_exact_enterable_range(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('language', ['ru', 'en', 'ua', 'fa', 'zh'])
-@pytest.mark.parametrize('provider,bound', [('cryptobot', 'low'), ('cryptobot', 'high'), ('overpay', 'low')])
+@pytest.mark.parametrize('provider,bound', [('cryptobot', 'low'), ('cryptobot', 'high')])
 async def test_currency_rejection_offers_a_ruble_input_range(monkeypatch, language, provider, bound):
     module = import_module(f'app.handlers.balance.{provider}')
     config = ProviderSettings()
-    config.OVERPAY_MIN_AMOUNT_KOPEKS = 100
-    config.OVERPAY_MAX_AMOUNT_KOPEKS = 10000000
-    config.OVERPAY_INT_MIN_EUR = 6
-    config.OVERPAY_RUB_PER_EUR = 100
     monkeypatch.setattr(module, 'settings', config)
     factory = MagicMock()
     monkeypatch.setattr(module, 'PaymentService', factory)
     state = FSMContext(MemoryStorage(), StorageKey(bot_id=1, chat_id=1, user_id=1))
     await state.set_state(BalanceStates.waiting_for_amount)
     selection = {
-        'payment_method': 'overpay_int' if provider == 'overpay' else 'cryptobot',
+        'payment_method': 'cryptobot',
         'current_rate': 250 if bound == 'low' else 1,
         'saved_cart': {'total_price': 10000},
     }
@@ -147,35 +116,10 @@ async def test_currency_rejection_offers_a_ruble_input_range(monkeypatch, langua
     assert await state.get_state() == BalanceStates.waiting_for_amount.state
     assert await state.get_data() == selection
     text = message.answer.await_args.args[0]
-    assert ('600' if provider == 'overpay' else '250' if bound == 'low' else '100') in text
+    assert ('250' if bound == 'low' else '100') in text
     assert ('50000' if bound == 'low' else '1000') in text
     assert any(
         button.callback_data == 'balance_topup'
         for row in message.answer.await_args.kwargs['reply_markup'].inline_keyboard
         for button in row
     )
-
-
-@pytest.mark.asyncio
-async def test_cloudpayments_legacy_manual_entry_accepts_exact_displayed_minimum(monkeypatch):
-    from app.handlers.balance import cloudpayments
-
-    config = ProviderSettings()
-    config.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS = 6407
-    config.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS = 6407
-    monkeypatch.setattr(cloudpayments, 'settings', config)
-    create = AsyncMock(return_value=None)
-    monkeypatch.setattr(cloudpayments, 'PaymentService', lambda: SimpleNamespace(create_cloudpayments_payment=create))
-    state = FSMContext(MemoryStorage(), StorageKey(bot_id=1, chat_id=1, user_id=1))
-    await state.set_state(BalanceStates.waiting_for_amount)
-    await state.set_data({'payment_method': 'cloudpayments'})
-    message = MagicMock(spec=types.Message)
-    message.text = '64.07'
-    message.answer = AsyncMock()
-    user = SimpleNamespace(id=1, telegram_id=1, language='ru', restriction_topup=False)
-    db = AsyncMock()
-
-    await inspect.unwrap(cloudpayments.process_cloudpayments_amount)(message, user, db, state)
-
-    create.assert_awaited_once()
-    assert create.await_args.kwargs['amount_kopeks'] == 6407

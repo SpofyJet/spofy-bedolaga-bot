@@ -18,7 +18,10 @@ from app.utils.subscription_time import (
     format_time_left,
     local_days_until,
 )
-from tests.fixtures.local_day import reset_local_timezone_cache, use_timezone  # noqa: F401
+from tests.fixtures.local_day import (  # noqa: F401
+    reset_local_timezone_cache,
+    use_timezone,
+)
 
 
 class _Texts:

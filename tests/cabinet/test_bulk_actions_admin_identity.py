@@ -25,7 +25,12 @@ import pytest
 from sqlalchemy.exc import MissingGreenlet
 
 import app.cabinet.routes.admin_bulk_actions as bulk
-from app.cabinet.schemas.bulk_actions import BulkActionParams, BulkActionType, BulkExecuteRequest, BulkUserResult
+from app.cabinet.schemas.bulk_actions import (
+    BulkActionParams,
+    BulkActionType,
+    BulkExecuteRequest,
+    BulkUserResult,
+)
 
 
 class _ExpiringAdmin:

@@ -15,7 +15,10 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from app.config import settings
 from app.services.notification_delivery_service import NotificationType
 from app.utils import rich_notify
-from app.utils.rich_notify import build_notification_rich_html, try_send_rich_notification
+from app.utils.rich_notify import (
+    build_notification_rich_html,
+    try_send_rich_notification,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -182,7 +185,9 @@ class TestDeliveryIntegration:
     def _service_and_user():
         from types import SimpleNamespace
 
-        from app.services.notification_delivery_service import NotificationDeliveryService
+        from app.services.notification_delivery_service import (
+            NotificationDeliveryService,
+        )
 
         service = NotificationDeliveryService.__new__(NotificationDeliveryService)
         return service, SimpleNamespace(telegram_id=42, id=1, language='ru')

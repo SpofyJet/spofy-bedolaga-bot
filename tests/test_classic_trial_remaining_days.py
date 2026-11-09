@@ -146,7 +146,13 @@ async def test_classic_purchase_persists_expiry_balance_and_conversion(
 ):
     from sqlalchemy import func, select
 
-    from app.database.models import Base, Subscription, SubscriptionConversion, Transaction, User
+    from app.database.models import (
+        Base,
+        Subscription,
+        SubscriptionConversion,
+        Transaction,
+        User,
+    )
     from app.services import subscription_purchase_service as m
     from tests.fixtures.postgres_db import postgres_session
 

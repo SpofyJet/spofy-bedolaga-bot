@@ -40,9 +40,7 @@ def _patch_tariffs_mode(monkeypatch):
 
 def test_active_sub_single_traffic_button(monkeypatch):
     _patch_tariffs_mode(monkeypatch)
-    markup = kb.get_subscription_keyboard(
-        'ru', has_subscription=True, is_trial=False, subscription=_fake_sub('active')
-    )
+    markup = kb.get_subscription_keyboard('ru', has_subscription=True, is_trial=False, subscription=_fake_sub('active'))
     assert _callbacks(markup).count('buy_traffic') == 1
 
 

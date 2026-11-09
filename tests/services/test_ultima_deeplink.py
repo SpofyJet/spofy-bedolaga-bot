@@ -11,7 +11,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import settings
-from app.database.models import Base, PromoOfferTemplate, Subscription, SubscriptionEvent
+from app.database.models import (
+    Base,
+    PromoOfferTemplate,
+    Subscription,
+    SubscriptionEvent,
+)
 from app.handlers import ultima_deeplink as link
 from app.handlers.admin import promo_offers
 

@@ -10,7 +10,10 @@ from __future__ import annotations
 from datetime import UTC, datetime, time
 
 from app.services.traffic_monitoring_service import TrafficMonitoringSchedulerV2
-from tests.fixtures.local_day import reset_local_timezone_cache, use_timezone  # noqa: F401
+from tests.fixtures.local_day import (  # noqa: F401
+    reset_local_timezone_cache,
+    use_timezone,
+)
 
 
 def test_daily_check_runs_at_local_midnight(monkeypatch, reset_local_timezone_cache):

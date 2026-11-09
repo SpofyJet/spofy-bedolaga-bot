@@ -12,7 +12,14 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database.crud.user import get_user_by_id
-from app.database.models import Base, GuestPurchase, SystemSetting, Tariff, Transaction, User
+from app.database.models import (
+    Base,
+    GuestPurchase,
+    SystemSetting,
+    Tariff,
+    Transaction,
+    User,
+)
 from app.handlers.subscription import gift
 from app.services import subscription_auto_purchase_service as auto
 from app.services.gift_purchase_service import GIFT_ENABLED_KEY

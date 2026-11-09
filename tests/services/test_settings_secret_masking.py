@@ -20,12 +20,10 @@ MASK = svc.SECRET_MASK
 @pytest.mark.parametrize(
     'key',
     [
-        'YOOKASSA_SECRET_KEY',
         'CRYPTOBOT_API_TOKEN',
         'SMTP_PASSWORD',
         'REMNAWAVE_API_KEY',
         'BOT_TOKEN',
-        'OVERPAY_P12_PASSPHRASE',
     ],
 )
 def test_is_secret_key_matches_secret_names(key: str) -> None:
@@ -43,18 +41,6 @@ def test_is_secret_key_matches_secret_names(key: str) -> None:
 )
 def test_is_secret_key_ignores_plain_names(key: str) -> None:
     assert svc.is_secret_key(key) is False
-
-
-def test_string_secret_is_masked() -> None:
-    assert svc.is_masked_secret('YOOKASSA_SECRET_KEY', 'live_abc123') is True
-    assert svc.mask_secret_value('YOOKASSA_SECRET_KEY', 'live_abc123') == MASK
-
-
-def test_unset_secret_is_not_masked() -> None:
-    # None / empty must pass through (renders as empty, not as the mask sentinel).
-    assert svc.is_masked_secret('YOOKASSA_SECRET_KEY', None) is False
-    assert svc.mask_secret_value('YOOKASSA_SECRET_KEY', None) is None
-    assert svc.mask_secret_value('YOOKASSA_SECRET_KEY', '') == ''
 
 
 @pytest.mark.parametrize(
@@ -83,3 +69,15 @@ def test_no_nonstring_definition_value_is_ever_masked() -> None:
             if svc.is_masked_secret(definition.key, raw) and not isinstance(raw, str):
                 leaked_nonstring.append((definition.key, raw))
     assert leaked_nonstring == []
+
+
+def test_string_secret_is_masked() -> None:
+    assert svc.is_masked_secret('PLATEGA_SECRET_KEY', 'live_abc123') is True
+    assert svc.mask_secret_value('PLATEGA_SECRET_KEY', 'live_abc123') == MASK
+
+
+def test_unset_secret_is_not_masked() -> None:
+    # None / empty must pass through (renders as empty, not as the mask sentinel).
+    assert svc.is_masked_secret('PLATEGA_SECRET_KEY', None) is False
+    assert svc.mask_secret_value('PLATEGA_SECRET_KEY', None) is None
+    assert svc.mask_secret_value('PLATEGA_SECRET_KEY', '') == ''

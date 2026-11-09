@@ -1,9 +1,8 @@
 """Согласование суммы провайдерских рекуррентов с реальной ценой продления.
 
-Проблема: и Platega, и Lava фиксируют сумму списания в момент привязки —
-Platega берёт её из ``create_subscription`` (в их API есть только create/get/
-cancel, обновления суммы нет), Lava вовсе не принимает сумму, она задана
-ПРОДУКТОМ в кабинете провайдера. Поэтому докупка устройств или трафика,
+Проблема: Platega фиксирует сумму списания в момент привязки — берёт её из
+``create_subscription`` (в их API есть только create/get/cancel, обновления
+суммы нет). Поэтому докупка устройств или трафика,
 которая меняет цену продления (см. ``PricingEngine.calculate_renewal_price``:
 в тарифном режиме на цену влияют доп. устройства, в классическом — ещё и
 трафик), не отражается в регулярном списании: подписка продлевается по
@@ -80,16 +79,10 @@ async def sync_recurrent_bindings_after_price_change(db: AsyncSession, subscript
         if subscription is None:
             return
 
-        from app.database.crud import (
-            cashera_subscription as cashera_crud,
-            lava_subscription as lava_crud,
-            platega_subscription as platega_crud,
-        )
+        from app.database.crud import platega_subscription as platega_crud
 
         providers = (
             ('platega', await platega_crud.get_active_platega_subscription_by_subscription(db, subscription_id)),
-            ('lava', await lava_crud.get_active_lava_subscription_by_subscription(db, subscription_id)),
-            ('cashera', await cashera_crud.get_active_cashera_subscription_by_subscription(db, subscription_id)),
         )
 
         for provider, record in providers:
@@ -99,11 +92,6 @@ async def sync_recurrent_bindings_after_price_change(db: AsyncSession, subscript
             true_amount = await resolve_true_renewal_amount(db, subscription, record.charge_days)
             if true_amount is None or true_amount <= 0:
                 continue
-            if provider == 'cashera':
-                # Cashera принимает только целые рубли — привязка хранит сумму, округлённую вверх.
-                from app.services.cashera_recurrent import round_up_to_rubles
-
-                true_amount = round_up_to_rubles(true_amount)
             if abs(true_amount - record.amount_kopeks) <= AMOUNT_TOLERANCE_KOPEKS:
                 continue
 
@@ -124,17 +112,9 @@ async def sync_recurrent_bindings_after_price_change(db: AsyncSession, subscript
 
                 await cancel_platega_recurring_for_subscription_safe(db, subscription_id)
                 agent = _PlategaSbpAgent()
-            elif provider == 'lava':
-                from app.services.payment.lava import _LavaRecurrentAgent, cancel_lava_recurring_for_subscription_safe
-
-                await cancel_lava_recurring_for_subscription_safe(db, subscription_id)
-                agent = _LavaRecurrentAgent()
             else:
-                from app.services import cashera_recurring_cancel
-
-                await cashera_recurring_cancel.cancel_cashera_recurring_for_subscription_safe(db, subscription_id)
-                # Без бота уйдёт только WS-событие; payment.cashera отсюда не импортируем — кольцо.
-                agent = SimpleNamespace(_notify_cashera_recurring=cashera_recurring_cancel.notify_cashera_recurring)
+                # Без бота уйдёт только WS-событие.
+                agent = SimpleNamespace()
 
             # Уведомление best-effort: у модульного агента нет бота, поэтому
             # доедет WS-событие в кабинет; бот-сообщение уйдёт там, где агент
@@ -142,8 +122,6 @@ async def sync_recurrent_bindings_after_price_change(db: AsyncSession, subscript
             try:
                 notify = {
                     'platega': getattr(agent, '_notify_sbp_recurring', None),
-                    'lava': getattr(agent, '_notify_lava_recurring', None),
-                    'cashera': getattr(agent, '_notify_cashera_recurring', None),
                 }[provider]
                 await notify(db, record, 'cancelled')
             except Exception as notify_error:  # pragma: no cover - best-effort
@@ -161,7 +139,7 @@ async def sync_recurrent_bindings_after_price_change(db: AsyncSession, subscript
 
 
 async def get_active_recurrent_engines(db: AsyncSession, subscription) -> set[str]:
-    """Какие движки автопродления активны у подписки: {'platega', 'lava', 'balance'}.
+    """Какие движки автопродления активны у подписки: {'platega', 'balance'}.
 
     n2: предупреждение о взаимоисключении при подключении нового движка.
     Ошибки провайдерских запросов глушатся: лучше не предупредить, чем
@@ -177,20 +155,13 @@ async def get_active_recurrent_engines(db: AsyncSession, subscription) -> set[st
             engines.add('platega')
     except Exception:
         pass
-    try:
-        from app.database.crud.lava_subscription import get_active_lava_subscription_by_subscription
-
-        if await get_active_lava_subscription_by_subscription(db, subscription.id):
-            engines.add('lava')
-    except Exception:
-        pass
     return engines
 
 
 def recurrent_engines_warning(texts, engines: set[str], *, enabling: str) -> str | None:
     """Текст предупреждения о смене движка автопродления, либо None.
 
-    ``enabling`` — движок, который подключают ('platega'/'lava'/'balance');
+    ``enabling`` — движок, который подключают ('platega'/'balance');
     остальные активные будут отключены сервисом при создании привязки
     (взаимоисключение централизовано там) — об этом и предупреждаем.
     """
@@ -199,10 +170,9 @@ def recurrent_engines_warning(texts, engines: set[str], *, enabling: str) -> str
         return None
     names = {
         'platega': texts.t('RECURRENT_ENGINE_SBP', 'СБП'),
-        'lava': texts.t('RECURRENT_ENGINE_LAVA', 'карта (Lava)'),
         'balance': texts.t('RECURRENT_ENGINE_BALANCE', 'с баланса'),
     }
-    listed = ', '.join(names[engine] for engine in ('platega', 'lava', 'balance') if engine in others)
+    listed = ', '.join(names[engine] for engine in ('platega', 'balance') if engine in others)
     return texts.t(
         'RECURRENT_ENGINE_SWITCH_WARNING',
         '⚠️ У вас уже включено автопродление: {engines}. '
@@ -211,7 +181,7 @@ def recurrent_engines_warning(texts, engines: set[str], *, enabling: str) -> str
 
 
 async def list_provider_recurrent_subscription_ids(db: AsyncSession) -> set[int]:
-    """id подписок с живой провайдерской привязкой (Platega/Lava), любой alive-статус.
+    """id подписок с живой провайдерской привязкой (Platega), любой alive-статус.
 
     n2: исключение таких подписок из «продлите вручную»-уведомлений — у них
     своё списание, а за ~24ч до него приходит pre-bill. Ошибки -> пустое
@@ -224,19 +194,6 @@ async def list_provider_recurrent_subscription_ids(db: AsyncSession) -> set[int]
         for record in await platega_crud.list_platega_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE']):
             if record.subscription_id is not None:
                 ids.add(record.subscription_id)
-    except Exception:
-        pass
-    try:
-        from sqlalchemy import select
-
-        from app.database.models import LavaSubscription
-
-        result = await db.execute(
-            select(LavaSubscription.subscription_id).where(
-                LavaSubscription.status.in_(('PENDING', 'ACTIVE', 'PAST_DUE'))
-            )
-        )
-        ids.update(row[0] for row in result.all())
     except Exception:
         pass
     return ids

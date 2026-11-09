@@ -19,7 +19,10 @@ from app.config import Settings
 from app.database.models import WithdrawalRequestStatus
 from app.services import withdrawal_notifications
 from app.services.support_settings_service import SupportSettingsService
-from app.services.withdrawal_notifications import DEFAULT_BOT_REJECT_COMMENT, build_withdrawal_status_message
+from app.services.withdrawal_notifications import (
+    DEFAULT_BOT_REJECT_COMMENT,
+    build_withdrawal_status_message,
+)
 
 
 REJECTED = WithdrawalRequestStatus.REJECTED.value

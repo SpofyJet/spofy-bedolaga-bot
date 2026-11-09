@@ -11,7 +11,13 @@ from sqlalchemy import select
 from app.cabinet.dependencies import get_cabinet_db, get_current_cabinet_user
 from app.cabinet.routes import account_linking
 from app.config import settings
-from app.database.models import Base, GraceAccessSessionModel, Subscription, Transaction, User
+from app.database.models import (
+    Base,
+    GraceAccessSessionModel,
+    Subscription,
+    Transaction,
+    User,
+)
 from tests.fixtures.postgres_db import postgres_session
 
 

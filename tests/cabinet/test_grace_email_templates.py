@@ -10,7 +10,11 @@ from __future__ import annotations
 
 import pytest
 
-from app.cabinet.routes.admin_email_templates import AVAILABLE_LANGUAGES, SAMPLE_CONTEXTS, TEMPLATE_TYPES
+from app.cabinet.routes.admin_email_templates import (
+    AVAILABLE_LANGUAGES,
+    SAMPLE_CONTEXTS,
+    TEMPLATE_TYPES,
+)
 from app.cabinet.services.email_templates import EmailNotificationTemplates
 from app.services.notification_types import NotificationType
 

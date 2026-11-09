@@ -13,7 +13,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.config import settings
-from app.database.models import Base, GuestPurchase, GuestPurchaseStatus, User, XRocketPayment
+from app.database.models import (
+    Base,
+    GuestPurchase,
+    GuestPurchaseStatus,
+    User,
+    XRocketPayment,
+)
 from app.services import payment_problem_alert as alerts
 from tests.fixtures.sqlite_memory import memory_session
 
@@ -40,7 +46,10 @@ def test_alert_text_escapes_and_lists_details():
 
 @pytest.mark.asyncio
 async def test_alert_goes_to_errors_topic_with_given_bot():
-    from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
+    from app.services.admin_notification_service import (
+        AdminNotificationService,
+        NotificationCategory,
+    )
 
     with patch.object(AdminNotificationService, 'send_admin_notification', AsyncMock(return_value=True)) as send:
         await alerts.alert_payment_not_applied(object(), provider='Platega', problem='p', user_id=1)

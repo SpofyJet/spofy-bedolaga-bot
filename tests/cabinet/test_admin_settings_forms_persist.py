@@ -45,7 +45,10 @@ async def _stored(db, key: str) -> str | None:
 class TestPartnerSettings:
     @pytest.mark.asyncio
     async def test_unchecking_visibility_lands_in_db_and_applies(self, monkeypatch):
-        from app.cabinet.routes.admin_partners import PartnerSettingsUpdateRequest, update_partner_settings
+        from app.cabinet.routes.admin_partners import (
+            PartnerSettingsUpdateRequest,
+            update_partner_settings,
+        )
 
         async with memory_session(monkeypatch, TABLES) as db:
             response = await update_partner_settings(
@@ -62,7 +65,10 @@ class TestPartnerSettings:
 
     @pytest.mark.asyncio
     async def test_env_locked_key_is_reported_and_not_applied(self, monkeypatch):
-        from app.cabinet.routes.admin_partners import PartnerSettingsUpdateRequest, update_partner_settings
+        from app.cabinet.routes.admin_partners import (
+            PartnerSettingsUpdateRequest,
+            update_partner_settings,
+        )
 
         monkeypatch.setattr(BotConfigurationService, '_env_override_keys', {'REFERRAL_PARTNER_SECTION_VISIBLE'})
         async with memory_session(monkeypatch, TABLES) as db:
@@ -87,7 +93,10 @@ class TestPartnerSettings:
     @pytest.mark.asyncio
     async def test_withdrawal_reminder_fields_land_in_db_and_apply(self, monkeypatch):
         """Напоминания о заявках на вывод настраиваются той же формой, что и сам вывод."""
-        from app.cabinet.routes.admin_partners import PartnerSettingsUpdateRequest, update_partner_settings
+        from app.cabinet.routes.admin_partners import (
+            PartnerSettingsUpdateRequest,
+            update_partner_settings,
+        )
 
         monkeypatch.setattr(settings, 'REFERRAL_WITHDRAWAL_REMINDER_ENABLED', False)
         monkeypatch.setattr(settings, 'REFERRAL_WITHDRAWAL_REMINDER_COOLDOWN_MINUTES', 30)
@@ -111,7 +120,10 @@ class TestPartnerSettings:
 class TestTicketSettings:
     @pytest.mark.asyncio
     async def test_sla_minutes_land_in_db_and_apply(self, monkeypatch):
-        from app.cabinet.routes.admin_tickets import TicketSettingsUpdateRequest, update_ticket_settings
+        from app.cabinet.routes.admin_tickets import (
+            TicketSettingsUpdateRequest,
+            update_ticket_settings,
+        )
 
         async with memory_session(monkeypatch, TABLES) as db:
             response = await update_ticket_settings(

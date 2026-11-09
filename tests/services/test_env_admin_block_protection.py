@@ -123,7 +123,10 @@ async def test_cabinet_restores_stale_blocked_admin_with_invite_only_off(env_adm
     """The gate only emits VERIFIED_ADMIN while invite-only is on — recovery must not depend on it."""
     from app.cabinet.auth.registration_access import is_env_admin_recovery
     from app.cabinet.routes import auth
-    from app.services.registration_access_service import RegistrationAccessDecision, RegistrationAccessReason
+    from app.services.registration_access_service import (
+        RegistrationAccessDecision,
+        RegistrationAccessReason,
+    )
 
     env_admin.status = UserStatus.BLOCKED.value
     invite_only_off = RegistrationAccessDecision(True, RegistrationAccessReason.INVITE_ONLY_DISABLED)
@@ -141,7 +144,10 @@ async def test_cabinet_restores_stale_blocked_admin_with_invite_only_off(env_adm
 async def test_cabinet_still_refuses_a_blocked_ordinary_user(monkeypatch):
     from app.cabinet.routes import auth
     from app.config import settings
-    from app.services.registration_access_service import RegistrationAccessDecision, RegistrationAccessReason
+    from app.services.registration_access_service import (
+        RegistrationAccessDecision,
+        RegistrationAccessReason,
+    )
 
     monkeypatch.setattr(type(settings), 'get_admin_ids', lambda self: [42])
     monkeypatch.setattr(type(settings), 'get_admin_emails', lambda self: [])

@@ -194,7 +194,9 @@ def test_both_screens_are_registered():
 
 
 def test_card_offers_both_buttons():
-    from app.services.gift_notification_service import build_gift_history_detail_presentation
+    from app.services.gift_notification_service import (
+        build_gift_history_detail_presentation,
+    )
 
     item = SimpleNamespace(
         purchase_id=7,

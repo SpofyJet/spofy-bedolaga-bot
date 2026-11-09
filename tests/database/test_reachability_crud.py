@@ -12,7 +12,12 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.database.crud import reachability as crud
-from app.database.models import ReachabilityJob, ReachabilityLeg, ReachabilityTargetPref, User
+from app.database.models import (
+    ReachabilityJob,
+    ReachabilityLeg,
+    ReachabilityTargetPref,
+    User,
+)
 from tests.fixtures.sqlite_memory import memory_session
 
 

@@ -162,28 +162,6 @@ TABLES = [PlategaSubscription.__table__, Subscription.__table__]
 
 
 @pytest.mark.asyncio
-async def test_abandoned_pending_binding_gets_a_fresh_link(monkeypatch):
-    monkeypatch.setattr(
-        'app.services.payment.lava.cancel_lava_recurring_for_subscription_safe', AsyncMock(return_value=None)
-    )
-    monkeypatch.setattr(
-        'app.services.cashera_recurring_cancel.cancel_cashera_recurring_for_subscription_safe',
-        AsyncMock(return_value=None),
-    )
-    subscription = SimpleNamespace(id=1, autopay_enabled=False, autopay_period_days=30)
-    async with memory_session(monkeypatch, TABLES) as db:
-        old = await _pending(db, minutes_ago=90)
-        svc = _service('https://pay.platega.io/subscription/new')
-
-        result = await svc.create_platega_sbp_subscription(db, user_id=777, subscription=subscription, tariff=_tariff())
-
-        assert result['redirect_url'] == 'https://pay.platega.io/subscription/new'
-        svc.platega_service.cancel_subscription.assert_awaited_once_with('tx-old')
-        await db.refresh(old)
-        assert old.status == 'CANCELLED'
-
-
-@pytest.mark.asyncio
 async def test_fresh_pending_binding_keeps_its_link(monkeypatch):
     subscription = SimpleNamespace(id=1, autopay_enabled=False, autopay_period_days=30)
     async with memory_session(monkeypatch, TABLES) as db:
@@ -195,3 +173,18 @@ async def test_fresh_pending_binding_keeps_its_link(monkeypatch):
     assert result['redirect_url'] == 'https://pay.platega.io/subscription/old'
     svc.platega_service.create_subscription.assert_not_awaited()
     svc.platega_service.cancel_subscription.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_abandoned_pending_binding_gets_a_fresh_link(monkeypatch):
+    subscription = SimpleNamespace(id=1, autopay_enabled=False, autopay_period_days=30)
+    async with memory_session(monkeypatch, TABLES) as db:
+        old = await _pending(db, minutes_ago=90)
+        svc = _service('https://pay.platega.io/subscription/new')
+
+        result = await svc.create_platega_sbp_subscription(db, user_id=777, subscription=subscription, tariff=_tariff())
+
+        assert result['redirect_url'] == 'https://pay.platega.io/subscription/new'
+        svc.platega_service.cancel_subscription.assert_awaited_once_with('tx-old')
+        await db.refresh(old)
+        assert old.status == 'CANCELLED'

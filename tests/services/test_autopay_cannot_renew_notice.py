@@ -155,7 +155,10 @@ async def test_low_balance_keeps_its_own_notice(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_guard_reports_inactive_tariff_but_wrapper_keeps_contract(monkeypatch):
-    from app.services.autopay_guard import lock_autopay_target, lock_autopay_target_checked
+    from app.services.autopay_guard import (
+        lock_autopay_target,
+        lock_autopay_target_checked,
+    )
 
     async with memory_session(monkeypatch, TABLES) as db:
         db.add_all(_rows(period_prices={'30': 20000}, tariff_active=False))

@@ -18,7 +18,11 @@ from structlog.testing import capture_logs
 
 from app.cabinet.routes import branding as branding_routes
 from app.cabinet.utils import brand_monogram
-from app.cabinet.utils.brand_monogram import MONOGRAM_PNG_SIZE, monogram_png, monogram_svg
+from app.cabinet.utils.brand_monogram import (
+    MONOGRAM_PNG_SIZE,
+    monogram_png,
+    monogram_svg,
+)
 from app.cabinet.utils.favicon_tile import FAVICON_CORNER_RATIO, FAVICON_TILE_SIZE
 from app.config import settings
 

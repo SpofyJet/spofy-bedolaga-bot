@@ -7,7 +7,12 @@
 
 import pytest
 
-from app.utils.email_alias import canonical_email, email_domain, has_alias_forms, is_email_alias_of
+from app.utils.email_alias import (
+    canonical_email,
+    email_domain,
+    has_alias_forms,
+    is_email_alias_of,
+)
 
 
 class TestCanonicalEmail:

@@ -9,7 +9,13 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.reachability.units import Selector, SelectorError, UnitsCache, UnitsCatalog, parse_selector
+from app.services.reachability.units import (
+    Selector,
+    SelectorError,
+    UnitsCache,
+    UnitsCatalog,
+    parse_selector,
+)
 from tests.fixtures.bschek_fixtures import load_bschek_fixture
 
 

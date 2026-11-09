@@ -12,7 +12,10 @@ plain-версию, отдавали пользователю простыню C
 после удаления блоков схлопываются.
 """
 
-from app.cabinet.routes.admin_email_templates import SAMPLE_CONTEXTS, _get_default_template
+from app.cabinet.routes.admin_email_templates import (
+    SAMPLE_CONTEXTS,
+    _get_default_template,
+)
 from app.cabinet.services.email_service import EmailService
 
 

@@ -5,13 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import app.handlers.admin.tariff_custom_days as mod
 from app.handlers.admin.tariffs import format_tariff_info, get_tariff_view_keyboard
-from app.services.tariff_custom_days import parse_positive_days, validate_custom_days_configuration
-
-
-def _unwrap(fn):
-    while hasattr(fn, '__wrapped__'):
-        fn = fn.__wrapped__
-    return fn
+from app.services.tariff_custom_days import (
+    parse_positive_days,
+    validate_custom_days_configuration,
+)
 
 
 def _tariff(**overrides):
@@ -48,11 +45,16 @@ def _tariff(**overrides):
         'max_days': 365,
         'panel_tag': None,
         'external_squad_uuid': None,
-        'lava_product_id': None,
         'show_in_gift': True,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
+
+
+def _unwrap(fn):
+    while hasattr(fn, '__wrapped__'):
+        fn = fn.__wrapped__
+    return fn
 
 
 def _callback(data: str):

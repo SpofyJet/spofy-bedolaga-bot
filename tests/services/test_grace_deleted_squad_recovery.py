@@ -10,7 +10,11 @@ from app.config import settings
 from app.database.models import GraceAccessSessionModel, Subscription, Tariff, User
 from app.external.remnawave_api import RemnaWaveAPIError, UserStatus
 from app.services import grace_access_runtime as runtime
-from app.services.grace_access_service import GraceAccessMode, GracePanelSnapshot, GraceReason
+from app.services.grace_access_service import (
+    GraceAccessMode,
+    GracePanelSnapshot,
+    GraceReason,
+)
 from tests.fixtures.postgres_db import postgres_session
 from tests.fixtures.sqlite_memory import memory_session
 from tests.services.test_grace_access_runtime import (
@@ -126,7 +130,11 @@ async def test_background_paid_reconciliation_checks_surviving_target(monkeypatc
     from dataclasses import replace
     from unittest.mock import AsyncMock
 
-    from tests.services.test_grace_access_runtime import install_fake_api, make_limited_billing, make_overlay
+    from tests.services.test_grace_access_runtime import (
+        install_fake_api,
+        make_limited_billing,
+        make_overlay,
+    )
 
     billing = replace(
         make_limited_billing(), status='active', used_traffic_bytes=0, squad_uuids=(REGULAR_SQUAD, OTHER_SQUAD)

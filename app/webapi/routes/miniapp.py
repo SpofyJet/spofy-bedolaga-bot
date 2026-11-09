@@ -11,7 +11,6 @@ from uuid import uuid4
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -95,7 +94,6 @@ from app.services.trial_activation_service import (
     revert_trial_activation,
     rollback_trial_subscription_activation,
 )
-from app.services.tribute_service import TributeService
 from app.services.user_action_log_service import mark_user_seen, schedule_miniapp_action_log
 from app.utils.currency_converter import currency_converter
 from app.utils.lifetime import for_period_ru
@@ -134,7 +132,6 @@ from ..schemas.miniapp import (
     MiniAppMaintenanceStatusResponse,
     MiniAppPaymentCreateRequest,
     MiniAppPaymentCreateResponse,
-    MiniAppPaymentIframeConfig,
     MiniAppPaymentIntegrationType,
     MiniAppPaymentMethod,
     MiniAppPaymentMethodsRequest,
@@ -646,18 +643,6 @@ def _normalize_amount_kopeks(
     return normalized if normalized >= 0 else None
 
 
-def _build_mulenpay_iframe_config() -> MiniAppPaymentIframeConfig | None:
-    expected_origin = settings.get_mulenpay_expected_origin()
-    if not expected_origin:
-        return None
-
-    try:
-        return MiniAppPaymentIframeConfig(expected_origin=expected_origin)
-    except ValidationError as error:  # pragma: no cover - defensive logging
-        logger.error("Invalid MulenPay expected origin ''", expected_origin=expected_origin, error=error)
-        return None
-
-
 @router.post(
     '/maintenance/status',
     response_model=MiniAppMaintenanceStatusResponse,
@@ -698,82 +683,6 @@ async def get_payment_methods(
                 min_amount_kopeks=stars_min_amount,
                 amount_step_kopeks=stars_min_amount,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
-            )
-        )
-
-    if settings.is_yookassa_enabled():
-        if settings.YOOKASSA_SBP_ENABLED:
-            methods.append(
-                MiniAppPaymentMethod(
-                    id='yookassa_sbp',
-                    icon='🏦',
-                    requires_amount=True,
-                    currency='RUB',
-                    min_amount_kopeks=settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
-                    max_amount_kopeks=settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
-                    integration_type=MiniAppPaymentIntegrationType.REDIRECT,
-                )
-            )
-
-        methods.append(
-            MiniAppPaymentMethod(
-                id='yookassa',
-                icon='💳',
-                requires_amount=True,
-                currency='RUB',
-                min_amount_kopeks=settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
-                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
-            )
-        )
-
-    if settings.is_mulenpay_enabled():
-        mulenpay_iframe_config = _build_mulenpay_iframe_config()
-        mulenpay_integration = (
-            MiniAppPaymentIntegrationType.IFRAME if mulenpay_iframe_config else MiniAppPaymentIntegrationType.REDIRECT
-        )
-        methods.append(
-            MiniAppPaymentMethod(
-                id='mulenpay',
-                name=settings.get_mulenpay_display_name(),
-                icon='💳',
-                requires_amount=True,
-                currency='RUB',
-                min_amount_kopeks=settings.MULENPAY_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.MULENPAY_MAX_AMOUNT_KOPEKS,
-                integration_type=mulenpay_integration,
-                iframe_config=mulenpay_iframe_config,
-            )
-        )
-
-    if settings.is_pal24_enabled():
-        methods.append(
-            MiniAppPaymentMethod(
-                id='pal24',
-                icon='🏦',
-                requires_amount=True,
-                currency='RUB',
-                min_amount_kopeks=settings.PAL24_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.PAL24_MAX_AMOUNT_KOPEKS,
-                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
-                options=[
-                    MiniAppPaymentOption(
-                        id='sbp',
-                        icon='🏦',
-                        title_key='topup.method.pal24.option.sbp.title',
-                        description_key='topup.method.pal24.option.sbp.description',
-                        title='Faster Payments (SBP)',
-                        description='Instant SBP transfer with no fees.',
-                    ),
-                    MiniAppPaymentOption(
-                        id='card',
-                        icon='💳',
-                        title_key='topup.method.pal24.option.card.title',
-                        description_key='topup.method.pal24.option.card.description',
-                        title='Bank card',
-                        description='Pay with a bank card via PayPalych.',
-                    ),
-                ],
             )
         )
 
@@ -849,56 +758,12 @@ async def get_payment_methods(
             )
         )
 
-    if settings.is_cloudpayments_enabled():
-        methods.append(
-            MiniAppPaymentMethod(
-                id='cloudpayments',
-                icon='💳',
-                requires_amount=True,
-                currency='RUB',
-                min_amount_kopeks=settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS,
-                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
-            )
-        )
-
-    if settings.is_freekassa_enabled():
-        methods.append(
-            MiniAppPaymentMethod(
-                id='freekassa',
-                icon='💳',
-                requires_amount=True,
-                currency='RUB',
-                min_amount_kopeks=settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
-                max_amount_kopeks=settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
-                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
-            )
-        )
-
-    if settings.TRIBUTE_ENABLED:
-        methods.append(
-            MiniAppPaymentMethod(
-                id='tribute',
-                icon='💎',
-                requires_amount=False,
-                currency='RUB',
-                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
-            )
-        )
-
     order_map = {
         'stars': 1,
-        'yookassa_sbp': 2,
-        'yookassa': 3,
-        'cloudpayments': 4,
-        'freekassa': 5,
-        'mulenpay': 6,
-        'pal24': 7,
         'platega': 8,
         'wata': 9,
         'cryptobot': 10,
         'heleket': 11,
-        'tribute': 12,
     }
     methods.sort(key=lambda item: order_map.get(item.id, 99))
 
@@ -978,114 +843,6 @@ async def create_payment_link(
                 'requested_at': _current_request_timestamp(),
                 'stars_amount': stars_amount,
                 'requested_amount_kopeks': requested_amount_kopeks,
-            },
-        )
-
-    if method == 'yookassa_sbp':
-        if not settings.is_yookassa_enabled() or not settings.YOOKASSA_SBP_ENABLED:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
-        if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
-        if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount is below minimum')
-        if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount exceeds maximum')
-
-        payment_service = PaymentService()
-        result = await payment_service.create_yookassa_sbp_payment(
-            db=db,
-            user_id=user.id,
-            amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(
-                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
-            ),
-        )
-        confirmation_url = result.get('confirmation_url') if result else None
-        if not result or not confirmation_url:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
-
-        extra: dict[str, Any] = {
-            'local_payment_id': result.get('local_payment_id'),
-            'payment_id': result.get('yookassa_payment_id'),
-            'status': result.get('status'),
-            'requested_at': _current_request_timestamp(),
-        }
-        confirmation_token = result.get('confirmation_token')
-        if confirmation_token:
-            extra['confirmation_token'] = confirmation_token
-
-        return MiniAppPaymentCreateResponse(
-            method=method,
-            payment_url=confirmation_url,
-            amount_kopeks=amount_kopeks,
-            extra=extra,
-        )
-
-    if method == 'yookassa':
-        if not settings.is_yookassa_enabled():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
-        if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
-        if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount is below minimum')
-        if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount exceeds maximum')
-
-        payment_service = PaymentService()
-        result = await payment_service.create_yookassa_payment(
-            db=db,
-            user_id=user.id,
-            amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(
-                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
-            ),
-        )
-        if not result or not result.get('confirmation_url'):
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
-
-        return MiniAppPaymentCreateResponse(
-            method=method,
-            payment_url=result['confirmation_url'],
-            amount_kopeks=amount_kopeks,
-            extra={
-                'local_payment_id': result.get('local_payment_id'),
-                'payment_id': result.get('yookassa_payment_id'),
-                'status': result.get('status'),
-                'requested_at': _current_request_timestamp(),
-            },
-        )
-
-    if method == 'mulenpay':
-        if not settings.is_mulenpay_enabled():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
-        if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
-        if amount_kopeks < settings.MULENPAY_MIN_AMOUNT_KOPEKS:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount is below minimum')
-        if amount_kopeks > settings.MULENPAY_MAX_AMOUNT_KOPEKS:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount exceeds maximum')
-
-        payment_service = PaymentService()
-        result = await payment_service.create_mulenpay_payment(
-            db=db,
-            user_id=user.id,
-            amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(
-                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
-            ),
-            language=user.language,
-        )
-        if not result or not result.get('payment_url'):
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
-
-        return MiniAppPaymentCreateResponse(
-            method=method,
-            payment_url=result['payment_url'],
-            amount_kopeks=amount_kopeks,
-            extra={
-                'local_payment_id': result.get('local_payment_id'),
-                'payment_id': result.get('mulen_payment_id'),
-                'requested_at': _current_request_timestamp(),
             },
         )
 
@@ -1173,73 +930,6 @@ async def create_payment_link(
                 'payment_id': result.get('payment_link_id'),
                 'status': result.get('status'),
                 'order_id': result.get('order_id'),
-                'requested_at': _current_request_timestamp(),
-            },
-        )
-
-    if method == 'pal24':
-        if not settings.is_pal24_enabled():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
-        if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
-        if amount_kopeks < settings.PAL24_MIN_AMOUNT_KOPEKS:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount is below minimum')
-        if amount_kopeks > settings.PAL24_MAX_AMOUNT_KOPEKS:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount exceeds maximum')
-
-        option = (payload.payment_option or '').strip().lower()
-        if option not in {'card', 'sbp'}:
-            option = 'sbp'
-        # Передаём выбранный пользователем способ (card/sbp) в Pal24 — иначе счёт
-        # всегда создаётся как SBP, а ниже provider_method ещё и используется в
-        # ответе. (Регрессия из 95a32e85: и определение, и проброс были удалены.)
-        provider_method = 'card' if option == 'card' else 'sbp'
-        payment_service = PaymentService()
-        result = await payment_service.create_pal24_payment(
-            db=db,
-            user_id=user.id,
-            amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(
-                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
-            ),
-            language=user.language or settings.DEFAULT_LANGUAGE,
-            payment_method=provider_method,
-        )
-        if not result:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
-
-        preferred_urls: list[str | None] = []
-        if option == 'sbp':
-            preferred_urls.append(result.get('sbp_url') or result.get('transfer_url'))
-        elif option == 'card':
-            preferred_urls.append(result.get('card_url'))
-        preferred_urls.extend(
-            [
-                result.get('link_url'),
-                result.get('link_page_url'),
-                result.get('payment_url'),
-                result.get('transfer_url'),
-            ]
-        )
-        payment_url = next((url for url in preferred_urls if url), None)
-        if not payment_url:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to obtain payment url')
-
-        return MiniAppPaymentCreateResponse(
-            method=method,
-            payment_url=payment_url,
-            amount_kopeks=amount_kopeks,
-            extra={
-                'local_payment_id': result.get('local_payment_id'),
-                'bill_id': result.get('bill_id'),
-                'order_id': result.get('order_id'),
-                'payment_method': result.get('payment_method') or provider_method,
-                'sbp_url': result.get('sbp_url') or result.get('transfer_url'),
-                'card_url': result.get('card_url'),
-                'link_url': result.get('link_url'),
-                'link_page_url': result.get('link_page_url'),
-                'transfer_url': result.get('transfer_url'),
-                'selected_option': option,
                 'requested_at': _current_request_timestamp(),
             },
         )
@@ -1357,123 +1047,6 @@ async def create_payment_link(
             },
         )
 
-    if method == 'cloudpayments':
-        if not settings.is_cloudpayments_enabled():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
-        if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
-
-        if amount_kopeks < settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=f'Amount is below minimum ({settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS / 100:.2f} RUB)',
-            )
-        if amount_kopeks > settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=f'Amount exceeds maximum ({settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS / 100:.2f} RUB)',
-            )
-
-        payment_service = PaymentService()
-        result = await payment_service.create_cloudpayments_payment(
-            db=db,
-            user_id=user.id,
-            amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(
-                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
-            ),
-            telegram_id=user.telegram_id,
-            language=user.language or settings.DEFAULT_LANGUAGE,
-        )
-
-        if not result or not result.get('payment_url'):
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
-
-        return MiniAppPaymentCreateResponse(
-            method=method,
-            payment_url=result['payment_url'],
-            amount_kopeks=amount_kopeks,
-            extra={
-                'local_payment_id': result.get('payment_id'),
-                'invoice_id': result.get('invoice_id'),
-                'requested_at': _current_request_timestamp(),
-            },
-        )
-
-    if method == 'freekassa':
-        if not settings.is_freekassa_enabled():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
-        if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
-
-        if amount_kopeks < settings.FREEKASSA_MIN_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=f'Amount is below minimum ({settings.FREEKASSA_MIN_AMOUNT_KOPEKS / 100:.2f} RUB)',
-            )
-        if amount_kopeks > settings.FREEKASSA_MAX_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=f'Amount exceeds maximum ({settings.FREEKASSA_MAX_AMOUNT_KOPEKS / 100:.2f} RUB)',
-            )
-
-        payment_service = PaymentService()
-        result = await payment_service.create_freekassa_payment(
-            db=db,
-            user_id=user.id,
-            amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(
-                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
-            ),
-            email=getattr(user, 'email', None),
-            language=user.language or settings.DEFAULT_LANGUAGE,
-        )
-
-        if not result or not result.get('payment_url'):
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
-
-        return MiniAppPaymentCreateResponse(
-            method=method,
-            payment_url=result['payment_url'],
-            amount_kopeks=amount_kopeks,
-            extra={
-                'local_payment_id': result.get('local_payment_id'),
-                'order_id': result.get('order_id'),
-                'requested_at': _current_request_timestamp(),
-            },
-        )
-
-    if method == 'tribute':
-        if not settings.TRIBUTE_ENABLED:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
-        if not settings.BOT_TOKEN:
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Bot token is not configured')
-
-        bot = create_bot()
-        try:
-            tribute_service = TributeService(bot)
-            payment_url = await tribute_service.create_payment_link(
-                user_id=user.telegram_id,
-                amount_kopeks=amount_kopeks or 0,
-                description=settings.get_balance_payment_description(
-                    amount_kopeks or 0, telegram_user_id=user.telegram_id, user_db_id=user.id
-                ),
-            )
-        finally:
-            await bot.session.close()
-
-        if not payment_url:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
-
-        return MiniAppPaymentCreateResponse(
-            method=method,
-            payment_url=payment_url,
-            amount_kopeks=amount_kopeks,
-            extra={
-                'requested_at': _current_request_timestamp(),
-            },
-        )
-
     raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Unknown payment method')
 
 
@@ -1522,170 +1095,21 @@ async def _resolve_payment_status_entry(
             message='Payment method is required',
         )
 
-    if method in {'yookassa', 'yookassa_sbp'}:
-        return await _resolve_yookassa_payment_status(
-            db,
-            user,
-            query,
-            method=method,
-        )
-    if method == 'mulenpay':
-        return await _resolve_mulenpay_payment_status(payment_service, db, user, query)
     if method == 'platega':
         return await _resolve_platega_payment_status(payment_service, db, user, query)
     if method == 'wata':
         return await _resolve_wata_payment_status(payment_service, db, user, query)
-    if method == 'pal24':
-        return await _resolve_pal24_payment_status(payment_service, db, user, query)
     if method == 'cryptobot':
         return await _resolve_cryptobot_payment_status(db, user, query)
     if method == 'heleket':
         return await _resolve_heleket_payment_status(db, user, query)
-    if method == 'cloudpayments':
-        return await _resolve_cloudpayments_payment_status(db, user, query)
-    if method == 'freekassa':
-        return await _resolve_freekassa_payment_status(db, user, query)
     if method == 'stars':
         return await _resolve_stars_payment_status(db, user, query)
-    if method == 'tribute':
-        return await _resolve_tribute_payment_status(db, user, query)
 
     return MiniAppPaymentStatusResult(
         method=method,
         status='unknown',
         message='Unsupported payment method',
-    )
-
-
-async def _resolve_yookassa_payment_status(
-    db: AsyncSession,
-    user: User,
-    query: MiniAppPaymentStatusQuery,
-    *,
-    method: str = 'yookassa',
-) -> MiniAppPaymentStatusResult:
-    from app.database.crud.yookassa import (
-        get_yookassa_payment_by_id,
-        get_yookassa_payment_by_local_id,
-    )
-
-    payment = None
-    if query.local_payment_id:
-        payment = await get_yookassa_payment_by_local_id(db, query.local_payment_id)
-    if not payment and query.payment_id:
-        payment = await get_yookassa_payment_by_id(db, query.payment_id)
-
-    if not payment or payment.user_id != user.id:
-        return MiniAppPaymentStatusResult(
-            method=method,
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
-            message='Payment not found',
-            extra={
-                'local_payment_id': query.local_payment_id,
-                'payment_id': query.payment_id,
-                'invoice_id': query.payment_id,
-                'payload': query.payload,
-                'started_at': query.started_at,
-            },
-        )
-
-    succeeded = bool(payment.is_paid and (payment.status or '').lower() == 'succeeded')
-    status = _classify_status(payment.status, succeeded)
-    completed_at = payment.captured_at or payment.updated_at or payment.created_at
-
-    return MiniAppPaymentStatusResult(
-        method=method,
-        status=status,
-        is_paid=status == 'paid',
-        amount_kopeks=payment.amount_kopeks,
-        currency=payment.currency,
-        completed_at=completed_at,
-        transaction_id=payment.transaction_id,
-        external_id=payment.yookassa_payment_id,
-        extra={
-            'status': payment.status,
-            'is_paid': payment.is_paid,
-            'local_payment_id': payment.id,
-            'payment_id': payment.yookassa_payment_id,
-            'invoice_id': payment.yookassa_payment_id,
-            'payload': query.payload,
-            'started_at': query.started_at,
-        },
-    )
-
-
-async def _resolve_mulenpay_payment_status(
-    payment_service: PaymentService,
-    db: AsyncSession,
-    user: User,
-    query: MiniAppPaymentStatusQuery,
-) -> MiniAppPaymentStatusResult:
-    if not query.local_payment_id:
-        return MiniAppPaymentStatusResult(
-            method='mulenpay',
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
-            message='Missing payment identifier',
-            extra={
-                'local_payment_id': query.local_payment_id,
-                'invoice_id': query.invoice_id,
-                'payment_id': query.payment_id,
-                'payload': query.payload,
-                'started_at': query.started_at,
-            },
-        )
-
-    status_info = await payment_service.get_mulenpay_payment_status(db, query.local_payment_id)
-    payment = status_info.get('payment') if status_info else None
-
-    if not payment or payment.user_id != user.id:
-        return MiniAppPaymentStatusResult(
-            method='mulenpay',
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
-            message='Payment not found',
-            extra={
-                'local_payment_id': query.local_payment_id,
-                'invoice_id': query.invoice_id,
-                'payment_id': query.payment_id,
-                'payload': query.payload,
-                'started_at': query.started_at,
-            },
-        )
-
-    status_raw = status_info.get('status') or payment.status
-    is_paid = bool(payment.is_paid)
-    status = _classify_status(status_raw, is_paid)
-    completed_at = payment.paid_at or payment.updated_at or payment.created_at
-    message = None
-    if status == 'failed':
-        remote_status = status_info.get('remote_status_code') or status_raw
-        if remote_status:
-            message = f'Status: {remote_status}'
-
-    return MiniAppPaymentStatusResult(
-        method='mulenpay',
-        status=status,
-        is_paid=status == 'paid',
-        amount_kopeks=payment.amount_kopeks,
-        currency=payment.currency,
-        completed_at=completed_at,
-        transaction_id=payment.transaction_id,
-        external_id=str(payment.mulen_payment_id or payment.uuid),
-        message=message,
-        extra={
-            'status': payment.status,
-            'remote_status': status_info.get('remote_status_code'),
-            'local_payment_id': payment.id,
-            'payment_id': payment.mulen_payment_id,
-            'uuid': str(payment.uuid),
-            'payload': query.payload,
-            'started_at': query.started_at,
-        },
     )
 
 
@@ -1868,98 +1292,6 @@ async def _resolve_wata_payment_status(
     )
 
 
-async def _resolve_pal24_payment_status(
-    payment_service: PaymentService,
-    db: AsyncSession,
-    user: User,
-    query: MiniAppPaymentStatusQuery,
-) -> MiniAppPaymentStatusResult:
-    from app.database.crud.pal24 import get_pal24_payment_by_bill_id
-
-    local_id = query.local_payment_id
-    if not local_id and query.invoice_id:
-        payment_by_bill = await get_pal24_payment_by_bill_id(db, query.invoice_id)
-        if payment_by_bill and payment_by_bill.user_id == user.id:
-            local_id = payment_by_bill.id
-
-    if not local_id:
-        return MiniAppPaymentStatusResult(
-            method='pal24',
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
-            message='Missing payment identifier',
-            extra={
-                'local_payment_id': query.local_payment_id,
-                'bill_id': query.invoice_id,
-                'order_id': None,
-                'payload': query.payload,
-                'started_at': query.started_at,
-            },
-        )
-
-    status_info = await payment_service.get_pal24_payment_status(db, local_id)
-    payment = status_info.get('payment') if status_info else None
-
-    if not payment or payment.user_id != user.id:
-        return MiniAppPaymentStatusResult(
-            method='pal24',
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
-            message='Payment not found',
-            extra={
-                'local_payment_id': local_id,
-                'bill_id': query.invoice_id,
-                'order_id': None,
-                'payload': query.payload,
-                'started_at': query.started_at,
-            },
-        )
-
-    status_raw = status_info.get('status') or payment.status
-    is_paid = bool(payment.is_paid)
-    status = _classify_status(status_raw, is_paid)
-    completed_at = payment.paid_at or payment.updated_at or payment.created_at
-    message = None
-    if status == 'failed':
-        remote_status = status_info.get('remote_status') or status_raw
-        if remote_status:
-            message = f'Status: {remote_status}'
-
-    links_info = status_info.get('links') if status_info else {}
-
-    return MiniAppPaymentStatusResult(
-        method='pal24',
-        status=status,
-        is_paid=status == 'paid',
-        amount_kopeks=payment.amount_kopeks,
-        currency=payment.currency,
-        completed_at=completed_at,
-        transaction_id=payment.transaction_id,
-        external_id=payment.bill_id,
-        message=message,
-        extra={
-            'status': payment.status,
-            'remote_status': status_info.get('remote_status'),
-            'local_payment_id': payment.id,
-            'bill_id': payment.bill_id,
-            'order_id': payment.order_id,
-            'payment_method': getattr(payment, 'payment_method', None),
-            'payload': query.payload,
-            'started_at': query.started_at,
-            'links': links_info or None,
-            'sbp_url': status_info.get('sbp_url') if status_info else None,
-            'card_url': status_info.get('card_url') if status_info else None,
-            'link_url': status_info.get('link_url') if status_info else None,
-            'link_page_url': status_info.get('link_page_url') if status_info else None,
-            'primary_url': status_info.get('primary_url') if status_info else None,
-            'secondary_url': status_info.get('secondary_url') if status_info else None,
-            'selected_method': status_info.get('selected_method') if status_info else None,
-        },
-    )
-
-
 async def _resolve_cryptobot_payment_status(
     db: AsyncSession,
     user: User,
@@ -2097,126 +1429,6 @@ async def _resolve_heleket_payment_status(
     )
 
 
-async def _resolve_cloudpayments_payment_status(
-    db: AsyncSession,
-    user: User,
-    query: MiniAppPaymentStatusQuery,
-) -> MiniAppPaymentStatusResult:
-    from app.database.crud.cloudpayments import (
-        get_cloudpayments_payment_by_id,
-        get_cloudpayments_payment_by_invoice_id,
-    )
-
-    payment = None
-    if query.local_payment_id:
-        payment = await get_cloudpayments_payment_by_id(db, query.local_payment_id)
-    if not payment and query.invoice_id:
-        payment = await get_cloudpayments_payment_by_invoice_id(db, query.invoice_id)
-    if not payment and query.payment_id:
-        payment = await get_cloudpayments_payment_by_invoice_id(db, query.payment_id)
-
-    if not payment or payment.user_id != user.id:
-        return MiniAppPaymentStatusResult(
-            method='cloudpayments',
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
-            message='Payment not found',
-            extra={
-                'local_payment_id': query.local_payment_id,
-                'invoice_id': query.invoice_id,
-                'payload': query.payload,
-                'started_at': query.started_at,
-            },
-        )
-
-    status_raw = payment.status
-    is_paid = bool(payment.is_paid)
-    status = _classify_status(status_raw, is_paid)
-    completed_at = payment.paid_at or payment.updated_at or payment.created_at
-
-    return MiniAppPaymentStatusResult(
-        method='cloudpayments',
-        status=status,
-        is_paid=status == 'paid',
-        amount_kopeks=payment.amount_kopeks,
-        currency=payment.currency,
-        completed_at=completed_at,
-        transaction_id=payment.transaction_id,
-        external_id=payment.invoice_id,
-        message=None,
-        extra={
-            'status': payment.status,
-            'local_payment_id': payment.id,
-            'invoice_id': payment.invoice_id,
-            'transaction_id_cp': payment.transaction_id_cp,
-            'card_type': payment.card_type,
-            'card_last_four': payment.card_last_four,
-            'payment_url': payment.payment_url,
-            'payload': query.payload,
-            'started_at': query.started_at,
-        },
-    )
-
-
-async def _resolve_freekassa_payment_status(
-    db: AsyncSession,
-    user: User,
-    query: MiniAppPaymentStatusQuery,
-) -> MiniAppPaymentStatusResult:
-    from app.database.crud.freekassa import (
-        get_freekassa_payment_by_id,
-        get_freekassa_payment_by_order_id,
-    )
-
-    payment = None
-    if query.local_payment_id:
-        payment = await get_freekassa_payment_by_id(db, query.local_payment_id)
-    if not payment and query.payment_id:
-        payment = await get_freekassa_payment_by_order_id(db, query.payment_id)
-
-    if not payment or payment.user_id != user.id:
-        return MiniAppPaymentStatusResult(
-            method='freekassa',
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
-            message='Payment not found',
-            extra={
-                'local_payment_id': query.local_payment_id,
-                'order_id': query.payment_id,
-                'payload': query.payload,
-                'started_at': query.started_at,
-            },
-        )
-
-    status_raw = payment.status
-    is_paid = bool(payment.is_paid)
-    status = _classify_status(status_raw, is_paid)
-    completed_at = payment.paid_at or payment.updated_at or payment.created_at
-
-    return MiniAppPaymentStatusResult(
-        method='freekassa',
-        status=status,
-        is_paid=status == 'paid',
-        amount_kopeks=payment.amount_kopeks,
-        currency=payment.currency,
-        completed_at=completed_at,
-        transaction_id=payment.transaction_id,
-        external_id=payment.freekassa_order_id,
-        message=None,
-        extra={
-            'status': payment.status,
-            'local_payment_id': payment.id,
-            'order_id': payment.order_id,
-            'freekassa_order_id': payment.freekassa_order_id,
-            'payment_url': payment.payment_url,
-            'payload': query.payload,
-            'started_at': query.started_at,
-        },
-    )
-
-
 async def _resolve_stars_payment_status(
     db: AsyncSession,
     user: User,
@@ -2246,49 +1458,6 @@ async def _resolve_stars_payment_status(
 
     return MiniAppPaymentStatusResult(
         method='stars',
-        status='paid',
-        is_paid=True,
-        amount_kopeks=transaction.amount_kopeks,
-        currency='RUB',
-        completed_at=transaction.completed_at or transaction.created_at,
-        transaction_id=transaction.id,
-        external_id=transaction.external_id,
-        extra={
-            'payload': query.payload,
-            'started_at': query.started_at,
-        },
-    )
-
-
-async def _resolve_tribute_payment_status(
-    db: AsyncSession,
-    user: User,
-    query: MiniAppPaymentStatusQuery,
-) -> MiniAppPaymentStatusResult:
-    started_at = _parse_client_timestamp(query.started_at)
-    transaction = await _find_recent_deposit(
-        db,
-        user_id=user.id,
-        payment_method=PaymentMethod.TRIBUTE,
-        amount_kopeks=query.amount_kopeks,
-        started_at=started_at,
-    )
-
-    if not transaction:
-        return MiniAppPaymentStatusResult(
-            method='tribute',
-            status='pending',
-            is_paid=False,
-            amount_kopeks=query.amount_kopeks,
-            message='Waiting for confirmation',
-            extra={
-                'payload': query.payload,
-                'started_at': query.started_at,
-            },
-        )
-
-    return MiniAppPaymentStatusResult(
-        method='tribute',
         status='paid',
         is_paid=True,
         amount_kopeks=transaction.amount_kopeks,
@@ -4569,13 +3738,8 @@ def _build_promo_offer_payload(user: User | None) -> dict[str, Any] | None:
 def _format_payment_method_title(method: str) -> str:
     mapping = {
         'cryptobot': 'CryptoBot',
-        'yookassa': 'YooKassa',
-        'yookassa_sbp': 'YooKassa СБП',
-        'mulenpay': 'MulenPay',
-        'pal24': 'Pal24',
         'wata': 'WataPay',
         'heleket': 'Heleket',
-        'tribute': 'Tribute',
         'stars': 'Telegram Stars',
     }
     key = (method or '').lower()

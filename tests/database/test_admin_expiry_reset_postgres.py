@@ -13,8 +13,17 @@ from app.database.crud.subscription import reactivate_subscription
 from app.database.crud.user import get_user_by_id
 from app.database.models import Base, Subscription, Transaction, TransactionType, User
 from app.external.remnawave_api import RemnaWaveAPI
-from app.services.panel_sync import ADMIN_PULL, BULK_SNAPSHOT, ROUTINE, project_onto_subscription, read_panel_user
-from app.services.subscription_service import SubscriptionService, reset_subscription_with_panel
+from app.services.panel_sync import (
+    ADMIN_PULL,
+    BULK_SNAPSHOT,
+    ROUTINE,
+    project_onto_subscription,
+    read_panel_user,
+)
+from app.services.subscription_service import (
+    SubscriptionService,
+    reset_subscription_with_panel,
+)
 from tests.fixtures.postgres_db import postgres_session
 
 

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.reachability.geo_requests import GeoOptions, GeoScope, build_geo_request, parse_geo_options
+from app.services.reachability.geo_requests import (
+    GeoOptions,
+    GeoScope,
+    build_geo_request,
+    parse_geo_options,
+)
 from app.services.reachability.kinds import KIND_GEO
 from app.services.reachability.requests import RequestBuildError
 from app.services.reachability.targets import Target

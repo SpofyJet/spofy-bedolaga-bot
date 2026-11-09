@@ -15,7 +15,14 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message, User as 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.models import GuestPurchase, GuestPurchaseStatus, Tariff, Transaction, TransactionType, User
+from app.database.models import (
+    GuestPurchase,
+    GuestPurchaseStatus,
+    Tariff,
+    Transaction,
+    TransactionType,
+    User,
+)
 from app.handlers.subscription.gift import (
     handle_gift_cancel,
     handle_gift_confirm,
@@ -29,7 +36,9 @@ from app.services.gift_purchase_service import (
     GiftTariffUnavailableError,
 )
 from app.services.payment.common import PaymentCommonMixin
-from app.services.subscription_auto_purchase_service import auto_purchase_saved_cart_after_topup
+from app.services.subscription_auto_purchase_service import (
+    auto_purchase_saved_cart_after_topup,
+)
 from app.services.user_cart_service import UserCartService
 from app.states import GiftPurchaseStates
 from tests.fixtures.gift_callbacks import bind_gift_action

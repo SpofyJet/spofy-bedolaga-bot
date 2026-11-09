@@ -17,7 +17,7 @@ import pytest
 from app.cabinet.routes.subscription_modules import purchase as purchase_routes
 
 
-RECURRENT_FLAGS = ('platega_recurrent_enabled', 'lava_recurrent_enabled')
+RECURRENT_FLAGS = ('platega_recurrent_enabled',)
 
 
 class _StubUser:
@@ -47,7 +47,6 @@ async def test_classic_mode_reports_recurrent_flags(monkeypatch, stub_purchase_s
     monkeypatch.setattr(settings_cls, 'is_tariffs_mode', lambda self: False)
     monkeypatch.setattr(settings_cls, 'get_sales_mode', lambda self: 'classic')
     monkeypatch.setattr(settings_cls, 'is_platega_recurrent_enabled', lambda self: enabled)
-    monkeypatch.setattr(settings_cls, 'is_lava_recurrent_enabled', lambda self: enabled)
 
     payload = await purchase_routes.get_purchase_options(user=_StubUser(), db=None, subscription_id=None)
 

@@ -8,10 +8,26 @@ from sqlalchemy import func, select
 
 from app.cabinet.routes.admin_payments import _record_to_response
 from app.database.crud import platega_subscription as sub_crud
-from app.database.models import Base, PaymentMethod, PlategaPayment, Subscription, Transaction, TransactionType, User
+from app.database.models import (
+    Base,
+    PaymentMethod,
+    PlategaPayment,
+    Subscription,
+    Transaction,
+    TransactionType,
+    User,
+)
 from app.services.payment.platega import PlategaPaymentMixin
-from app.services.payment_search_service import SearchParams, StatusFilter, search_payments, search_payments_stats
-from app.services.payment_verification_service import get_payment_record, list_recent_pending_payments
+from app.services.payment_search_service import (
+    SearchParams,
+    StatusFilter,
+    search_payments,
+    search_payments_stats,
+)
+from app.services.payment_verification_service import (
+    get_payment_record,
+    list_recent_pending_payments,
+)
 from tests.fixtures.postgres_db import postgres_session
 
 

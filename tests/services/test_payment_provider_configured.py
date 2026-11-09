@@ -24,35 +24,14 @@ from app.config import Settings, settings
 
 # Ровно те провайдеры, чьи вебхуки монтирует create_payment_router.
 PROVIDERS = [
-    'antilopay',
-    'apple_iap',
-    'aurapay',
-    'cispay',
-    'cloudpayments',
     'cryptobot',
-    'donut',
-    'etoplatezhi',
-    'freekassa',
     'heleket',
-    'jupiter',
-    'kassa_ai',
-    'lava',
-    'mulenpay',
-    'overpay',
-    'pal24',
-    'paritypay',
-    'paypear',
     'platega',
-    'riopay',
-    'rollypay',
-    'severpay',
-    'tabpay',
     'wata',
-    'yookassa',
 ]
 # У Tribute нет is_tribute_enabled — код читает флаг напрямую, инвариант ниже
 # к нему неприменим, но сам предикат должен существовать (см. отдельный тест).
-FLAG_OVERRIDES = {'kassa_ai': 'KASSA_AI_ENABLED', 'apple_iap': 'APPLE_IAP_ENABLED'}
+FLAG_OVERRIDES = {}
 
 
 def _flag_name(provider: str) -> str:
@@ -94,7 +73,7 @@ def test_enabled_is_flag_and_configured(monkeypatch, provider: str, flag: bool) 
 # Apple IAP дополнительно читает файлы сертификатов. Список закрытый нарочно —
 # иначе новый провайдер с таким же поведением начал бы тихо пропускаться, и две
 # проверки ниже перестали бы его касаться, не сказав ни слова.
-UNFAKEABLE_CREDENTIALS = frozenset({'apple_iap'})
+UNFAKEABLE_CREDENTIALS = frozenset({})
 
 
 def _skip_if_unfakeable(provider: str) -> None:
@@ -138,8 +117,3 @@ def test_missing_credential_disables_the_provider(monkeypatch, provider: str) ->
         assert getattr(settings, f'is_{provider}_enabled')() is False, missing
 
         monkeypatch.setattr(settings, missing, 'x', raising=False)
-
-
-def test_tribute_has_a_configured_predicate() -> None:
-    """У Tribute нет is_*_enabled, но маршруту нужен тот же признак."""
-    assert hasattr(settings, 'is_tribute_configured')

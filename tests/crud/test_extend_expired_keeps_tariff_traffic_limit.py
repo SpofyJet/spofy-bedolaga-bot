@@ -23,7 +23,14 @@ import pytest
 
 from app.config import settings
 from app.database.crud.subscription import extend_subscription
-from app.database.models import Base, Subscription, SubscriptionStatus, Tariff, TrafficPurchase, User
+from app.database.models import (
+    Base,
+    Subscription,
+    SubscriptionStatus,
+    Tariff,
+    TrafficPurchase,
+    User,
+)
 from tests.fixtures.sqlite_memory import memory_session
 
 

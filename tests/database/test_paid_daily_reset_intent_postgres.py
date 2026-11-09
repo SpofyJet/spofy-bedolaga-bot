@@ -10,7 +10,13 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.config import settings
-from app.database.models import Base, PaidTrafficResetIntent, Subscription, Transaction, User
+from app.database.models import (
+    Base,
+    PaidTrafficResetIntent,
+    Subscription,
+    Transaction,
+    User,
+)
 from app.services import (
     paid_traffic_reset_service as resets,
     subscription_auto_purchase_service as auto,

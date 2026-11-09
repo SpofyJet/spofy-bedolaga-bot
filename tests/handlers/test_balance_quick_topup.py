@@ -23,7 +23,7 @@ from app.handlers.balance import main as balance_main
 STALE = 'Bad Request: query is too old and response timeout expired or query ID is invalid'
 
 
-def _callback(data: str = 'topup_amount|yookassa|10000') -> SimpleNamespace:
+def _callback(data: str = 'topup_amount|wata|10000') -> SimpleNamespace:
     message = MagicMock(spec=types.Message)
     message.answer = AsyncMock()
     return SimpleNamespace(
@@ -46,28 +46,6 @@ def _user() -> SimpleNamespace:
 
 def _stale() -> TelegramBadRequest:
     return TelegramBadRequest(method=AnswerCallbackQuery(callback_query_id='1'), message=STALE)
-
-
-@pytest.mark.asyncio
-async def test_answers_the_tap_before_calling_the_provider(monkeypatch):
-    callback = _callback()
-    state = _state()
-    answered_before_provider: list[int] = []
-
-    async def route(message, db_user, amount_kopeks, st, method):
-        answered_before_provider.append(callback.answer.await_count)
-        assert message is callback.message
-        assert (amount_kopeks, method) == (10000, 'yookassa')
-        return True
-
-    monkeypatch.setattr(balance_main, 'route_payment_by_method', route)
-
-    await balance_main.handle_topup_amount_callback(callback, _user(), state)
-
-    assert answered_before_provider == [1], 'часики снимаются до похода к провайдеру'
-    assert callback.answer.await_count == 1
-    state.update_data.assert_awaited_once_with(payment_method='yookassa')
-    state.set_state.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -128,34 +106,6 @@ async def test_unknown_method_is_reported_with_a_message(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_tribute_flow_owns_the_answer(monkeypatch):
-    """Сценарии, которым передаётся сам callback, отвечают на нажатие сами — родитель не лезет."""
-    from app.handlers.balance import tribute
-
-    callback = _callback('topup_amount|tribute|10000')
-    started = AsyncMock()
-    monkeypatch.setattr(tribute, 'start_tribute_payment', started)
-
-    await balance_main.handle_topup_amount_callback(callback, _user(), _state())
-
-    started.assert_awaited_once()
-    assert started.await_args.args[0] is callback
-    callback.answer.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_invalid_amount_alerts_immediately(monkeypatch):
-    callback = _callback('topup_amount|yookassa|0')
-    route = AsyncMock(return_value=True)
-    monkeypatch.setattr(balance_main, 'route_payment_by_method', route)
-
-    await balance_main.handle_topup_amount_callback(callback, _user(), _state())
-
-    callback.answer.assert_awaited_once_with('❌ Некорректная сумма', show_alert=True)
-    route.assert_not_awaited()
-
-
-@pytest.mark.asyncio
 async def test_repeated_taps_are_acknowledged_while_provider_is_still_waiting(monkeypatch):
     import asyncio
 
@@ -200,3 +150,37 @@ async def test_already_expired_tap_does_not_create_payment(monkeypatch):
     provider.assert_not_awaited()
     assert callback.answer.await_count == 1
     callback.message.answer.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_answers_the_tap_before_calling_the_provider(monkeypatch):
+    callback = _callback()
+    state = _state()
+    answered_before_provider: list[int] = []
+
+    async def route(message, db_user, amount_kopeks, st, method):
+        answered_before_provider.append(callback.answer.await_count)
+        assert message is callback.message
+        assert (amount_kopeks, method) == (10000, 'wata')
+        return True
+
+    monkeypatch.setattr(balance_main, 'route_payment_by_method', route)
+
+    await balance_main.handle_topup_amount_callback(callback, _user(), state)
+
+    assert answered_before_provider == [1], 'часики снимаются до похода к провайдеру'
+    assert callback.answer.await_count == 1
+    state.update_data.assert_awaited_once_with(payment_method='wata')
+    state.set_state.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_invalid_amount_alerts_immediately(monkeypatch):
+    callback = _callback('topup_amount|wata|0')
+    route = AsyncMock(return_value=True)
+    monkeypatch.setattr(balance_main, 'route_payment_by_method', route)
+
+    await balance_main.handle_topup_amount_callback(callback, _user(), _state())
+
+    callback.answer.assert_awaited_once_with('❌ Некорректная сумма', show_alert=True)
+    route.assert_not_awaited()

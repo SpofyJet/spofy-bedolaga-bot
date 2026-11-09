@@ -10,7 +10,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.cabinet.schemas.remnawave import SquadActionRequest, SquadCreateRequest, SquadUpdateRequest
+from app.cabinet.schemas.remnawave import (
+    SquadActionRequest,
+    SquadCreateRequest,
+    SquadUpdateRequest,
+)
 from app.external.remnawave_api import (
     INTERNAL_SQUAD_NAME_MAX_LENGTH,
     INTERNAL_SQUAD_NAME_MIN_LENGTH,

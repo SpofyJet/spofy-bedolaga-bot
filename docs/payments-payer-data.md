@@ -38,10 +38,9 @@
   `create_subscription` плательщик — обязательный параметр: забыть его в новом вызове нельзя.
 - Platega, СБП-подписка: дополнительно `paymentDetails.intervalCount = 1` — обязательное поле по документации
   «Создать подписку»; каденс и так «одно списание за период».
-- MulenPay: все пути `create_mulenpay_payment`; гостевой путь передаёт контакт гостя явно.
 
 ## Тесты
 
 `tests/services/test_payer_identity.py`, `tests/services/test_platega_payer_metadata.py`,
-`tests/services/test_platega_service.py`, `tests/services/test_platega_subscription_service.py`,
-`tests/services/test_payment_service_mulenpay.py`, `tests/services/test_mulenpay_guest_client.py`.
+`tests/services/test_platega_service.py`, `tests/services/test_platega_subscription_service.py`.
+

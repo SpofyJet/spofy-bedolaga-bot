@@ -13,7 +13,6 @@ from alembic.operations import Operations
 from app.database.models import DpiCheckerAction, User
 from tests.fixtures.postgres_db import postgres_engine
 
-
 MIGRATION = Path('migrations/alembic/versions/0128_dpichecker_actions.py')
 
 

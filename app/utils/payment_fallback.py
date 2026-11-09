@@ -12,7 +12,7 @@ from app.localization.texts import get_texts
 
 
 def _is_failed(callback_data: str, prefix: str, exact: bool) -> bool:
-    if exact:  # только этот способ, например yookassa (карта), но не yookassa_sbp
+    if exact:  # только этот способ, например platega, но не platega_m2
         return callback_data.split('|')[1:2] == [prefix]
     return callback_data.startswith(f'topup_amount|{prefix}')
 
@@ -22,7 +22,7 @@ def fallback_methods_keyboard(
 ) -> InlineKeyboardMarkup | None:
     """Кнопки способов на ту же сумму без упавшего провайдера; ``None``, если других способов нет.
 
-    ``failed_method_prefix`` отсекает и варианты провайдера (platega_m2, freekassa_sbp);
+    ``failed_method_prefix`` отсекает и варианты провайдера (platega_m2);
     ``exact=True`` убирает только сам способ.
     """
     from app.keyboards.inline import get_payment_methods_keyboard

@@ -23,7 +23,7 @@ _display_sort_orders: dict[str, int] = {}
 
 
 def _config_method_id(method_id: str) -> str:
-    return {'stars': 'telegram_stars', 'yookassa_sbp': 'yookassa'}.get(method_id, method_id)
+    return {'stars': 'telegram_stars'}.get(method_id, method_id)
 
 
 async def refresh_display_name_overrides(db: AsyncSession) -> None:
@@ -67,13 +67,6 @@ def _get_method_defaults() -> dict:
             'default_max': 1000000,
             'available_sub_options': None,
         },
-        'tribute': {
-            'default_display_name': 'Tribute',
-            'is_configured': settings.TRIBUTE_ENABLED and bool(settings.TRIBUTE_DONATE_LINK),
-            'default_min': 10000,
-            'default_max': 10000000,
-            'available_sub_options': None,
-        },
         'cryptobot': {
             'default_display_name': settings.get_cryptobot_display_name(),
             'is_configured': settings.is_cryptobot_enabled(),
@@ -95,33 +88,6 @@ def _get_method_defaults() -> dict:
             'default_max': 10000000,
             'available_sub_options': None,
         },
-        'yookassa': {
-            'default_display_name': settings.get_yookassa_display_name(),
-            'is_configured': settings.is_yookassa_enabled(),
-            'default_min': settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
-            ],
-        },
-        'mulenpay': {
-            'default_display_name': settings.get_mulenpay_display_name(),
-            'is_configured': settings.is_mulenpay_enabled(),
-            'default_min': settings.MULENPAY_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.MULENPAY_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': None,
-        },
-        'pal24': {
-            'default_display_name': settings.get_pal24_display_name(),
-            'is_configured': settings.is_pal24_enabled(),
-            'default_min': settings.PAL24_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.PAL24_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'sbp', 'name': 'СБП'},
-                {'id': 'card', 'name': 'Карта'},
-            ],
-        },
         'platega': {
             'default_display_name': settings.get_platega_display_name(),
             'is_configured': settings.is_platega_enabled(),
@@ -135,192 +101,6 @@ def _get_method_defaults() -> dict:
             'default_min': settings.WATA_MIN_AMOUNT_KOPEKS,
             'default_max': settings.WATA_MAX_AMOUNT_KOPEKS,
             'available_sub_options': None,
-        },
-        'freekassa': {
-            'default_display_name': settings.get_freekassa_display_name(),
-            'is_configured': settings.is_freekassa_enabled(),
-            'default_min': settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'sbp', 'name': 'NSPK СБП'},
-                {'id': 'card', 'name': 'Карта'},
-            ],
-        },
-        'freekassa_sbp': {
-            'default_display_name': settings.get_freekassa_sbp_display_name(),
-            'is_configured': settings.is_freekassa_sbp_enabled(),
-            'default_min': settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': None,
-        },
-        'freekassa_card': {
-            'default_display_name': settings.get_freekassa_card_display_name(),
-            'is_configured': settings.is_freekassa_card_enabled(),
-            'default_min': settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': None,
-        },
-        'cloudpayments': {
-            'default_display_name': settings.get_cloudpayments_display_name(),
-            'is_configured': settings.is_cloudpayments_enabled(),
-            'default_min': settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS,
-            # CloudPayments doesn't support programmatic card/sbp routing —
-            # user selects payment method on the provider's payment page.
-            'available_sub_options': None,
-        },
-        'kassa_ai': {
-            'default_display_name': settings.get_kassa_ai_display_name(),
-            'is_configured': settings.is_kassa_ai_enabled(),
-            'default_min': settings.KASSA_AI_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.KASSA_AI_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'sbp', 'name': 'СБП'},
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sberpay', 'name': 'SberPay'},
-            ],
-        },
-        'riopay': {
-            'default_display_name': settings.get_riopay_display_name(),
-            'is_configured': settings.is_riopay_enabled(),
-            'default_min': settings.RIOPAY_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.RIOPAY_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': None,
-        },
-        'severpay': {
-            'default_display_name': settings.get_severpay_display_name(),
-            'is_configured': settings.is_severpay_enabled(),
-            'default_min': settings.SEVERPAY_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.SEVERPAY_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': None,
-        },
-        'paypear': {
-            'default_display_name': settings.get_paypear_display_name(),
-            'is_configured': settings.is_paypear_enabled(),
-            'default_min': settings.PAYPEAR_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.PAYPEAR_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'bank_card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
-                {'id': 'sberpay', 'name': 'SberPay'},
-                {'id': 'tpay', 'name': 'T-Pay'},
-            ],
-        },
-        'rollypay': {
-            'default_display_name': settings.get_rollypay_display_name(),
-            'is_configured': settings.is_rollypay_enabled(),
-            'default_min': settings.ROLLYPAY_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.ROLLYPAY_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'sbp', 'name': 'СБП'},
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'crypto', 'name': 'Криптовалюта'},
-            ],
-        },
-        'overpay': {
-            'default_display_name': settings.get_overpay_display_name(),
-            'is_configured': settings.is_overpay_enabled(),
-            'default_min': settings.OVERPAY_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.OVERPAY_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': _get_overpay_sub_options(),
-        },
-        'aurapay': {
-            'default_display_name': settings.get_aurapay_display_name(),
-            'is_configured': settings.is_aurapay_enabled(),
-            'default_min': settings.AURAPAY_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.AURAPAY_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
-            ],
-        },
-        'etoplatezhi': {
-            'default_display_name': settings.get_etoplatezhi_display_name(),
-            'is_configured': settings.is_etoplatezhi_enabled(),
-            'default_min': settings.ETOPLATEZHI_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.ETOPLATEZHI_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
-            ],
-        },
-        'antilopay': {
-            'default_display_name': settings.get_antilopay_display_name(),
-            'is_configured': settings.is_antilopay_enabled(),
-            'default_min': settings.ANTILOPAY_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.ANTILOPAY_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
-                {'id': 'sberpay', 'name': 'SberPay'},
-            ],
-        },
-        'jupiter': {
-            'default_display_name': settings.get_jupiter_display_name(),
-            'is_configured': settings.is_jupiter_enabled(),
-            'default_min': settings.JUPITER_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.JUPITER_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'sbp', 'name': 'СБП'},
-            ],
-        },
-        'donut': {
-            'default_display_name': settings.get_donut_display_name(),
-            'is_configured': settings.is_donut_enabled(),
-            'default_min': settings.DONUT_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.DONUT_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
-                {'id': 'sbp_qr', 'name': 'СБП QR'},
-            ],
-        },
-        'lava': {
-            'default_display_name': settings.get_lava_display_name(),
-            'is_configured': settings.is_lava_enabled(),
-            'default_min': settings.LAVA_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.LAVA_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
-            ],
-        },
-        'cispay': {
-            'default_display_name': settings.get_cispay_display_name(),
-            'is_configured': settings.is_cispay_enabled(),
-            'default_min': settings.CISPAY_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.CISPAY_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
-            ],
-        },
-        'paritypay': {
-            'default_display_name': settings.get_paritypay_display_name(),
-            'is_configured': settings.is_paritypay_enabled(),
-            'default_min': settings.PARITYPAY_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.PARITYPAY_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
-            ],
-        },
-        'tabpay': {
-            'default_display_name': settings.get_tabpay_display_name(),
-            'is_configured': settings.is_tabpay_enabled(),
-            'default_min': settings.TABPAY_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.TABPAY_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
-            ],
-        },
-        'cashera': {
-            'default_display_name': settings.get_cashera_display_name(),
-            'is_configured': settings.is_cashera_enabled(),
-            'default_min': settings.CASHERA_MIN_AMOUNT_KOPEKS,
-            'default_max': settings.CASHERA_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': _get_cashera_sub_options(),
         },
     }
 
@@ -357,59 +137,14 @@ def _get_platega_sub_options() -> list[dict] | None:
         return None
 
 
-def _get_cashera_sub_options() -> list[dict] | None:
-    """Методы Cashera из CASHERA_ACTIVE_METHODS — как у Platega."""
-    try:
-        return [
-            {'id': code, 'name': settings.get_cashera_method_display_title(code)}
-            for code in settings.get_cashera_active_methods()
-        ] or None
-    except Exception:
-        return None
-
-
-def _get_overpay_sub_options() -> list[dict]:
-    options = [
-        {'id': 'card', 'name': 'Карта'},
-        {'id': 'fps', 'name': 'СБП'},
-    ]
-    if settings.is_overpay_int_enabled():
-        options.append({'id': 'int', 'name': 'Международная карта (EUR)'})
-    return options
-
-
 # Default order of methods
 DEFAULT_METHOD_ORDER = [
     'telegram_stars',
-    'tribute',
     'cryptobot',
     'xrocket',
     'heleket',
-    'yookassa',
-    'mulenpay',
-    'pal24',
     'platega',
     'wata',
-    'freekassa',
-    'freekassa_sbp',
-    'freekassa_card',
-    'cloudpayments',
-    'kassa_ai',
-    'riopay',
-    'severpay',
-    'paypear',
-    'rollypay',
-    'overpay',
-    'aurapay',
-    'etoplatezhi',
-    'antilopay',
-    'jupiter',
-    'donut',
-    'lava',
-    'cispay',
-    'tabpay',
-    'paritypay',
-    'cashera',
 ]
 
 
@@ -711,14 +446,7 @@ async def get_enabled_methods_for_user(
         # Build options (filter by sub_options config)
         options = None
         available_sub_options = method_def.get('available_sub_options')
-        if method_id == 'antilopay' and available_sub_options:
-            # Preserve the distinction between default options and all disabled.
-            # Cabinet checkout must never fall back to the provider's unrestricted form.
-            configured_options = config.sub_options or {}
-            options = [opt for opt in available_sub_options if configured_options.get(opt['id'], True)]
-            if not options:
-                continue
-        elif available_sub_options and config.sub_options:
+        if available_sub_options and config.sub_options:
             enabled_options = []
             for opt in available_sub_options:
                 opt_id = opt['id']

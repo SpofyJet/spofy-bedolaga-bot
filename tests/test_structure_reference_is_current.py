@@ -15,7 +15,13 @@ from pathlib import Path, PureWindowsPath
 
 import pytest
 
-from scripts.generate_structure_reference import OUTPUT, REPO_ROOT, build, render_entries, tracked_paths
+from scripts.generate_structure_reference import (
+    OUTPUT,
+    REPO_ROOT,
+    build,
+    render_entries,
+    tracked_paths,
+)
 
 
 REBUILD_HINT = 'выполните `make docs-structure` и закоммитьте результат'

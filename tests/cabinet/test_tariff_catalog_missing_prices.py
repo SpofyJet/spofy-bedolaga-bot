@@ -21,7 +21,9 @@ async def test_catalog_omits_missing_period_and_keeps_explicit_zero(surface):
         display_order=1,
     )
     if surface == 'cabinet':
-        from app.cabinet.routes.subscription_modules.purchase import _build_tariff_response
+        from app.cabinet.routes.subscription_modules.purchase import (
+            _build_tariff_response,
+        )
 
         result = await _build_tariff_response(SimpleNamespace(), tariff)
         periods = result['periods']

@@ -25,7 +25,11 @@ import structlog
 from aiogram.exceptions import TelegramNetworkError
 from aiohttp import ClientOSError
 
-from app.logging_handler import STATUS_SUPPRESSED, TelegramNotifierProcessor, _is_transient_telegram_error
+from app.logging_handler import (
+    STATUS_SUPPRESSED,
+    TelegramNotifierProcessor,
+    _is_transient_telegram_error,
+)
 
 
 def _aiogram_record(error: BaseException, *, logger: str = 'aiogram.dispatcher') -> dict:
@@ -68,13 +72,6 @@ def test_raw_socket_drop_from_aiogram_is_transient():
     assert _is_transient_telegram_error(_aiogram_record(ClientOSError(104, 'Connection reset by peer'))) is True
 
 
-def test_socket_drop_from_another_client_is_not_telegram_noise():
-    """ClientOSError бывает у любого aiohttp-клиента — платёжки, панель; их не глушим."""
-    event = _aiogram_record(ClientOSError(104, 'Connection reset by peer'), logger='app.services.payment.cispay')
-
-    assert _is_transient_telegram_error(event) is False
-
-
 def test_unrelated_error_is_not_suppressed():
     event = _aiogram_record(ValueError('unexpected payload'), logger='app.services.payment')
 
@@ -101,3 +98,10 @@ def test_processor_suppresses_only_the_transport_noise(monkeypatch, error, expec
     assert len(sends) == expected_sends
     if not expected_sends:
         assert statuses == [STATUS_SUPPRESSED]
+
+
+def test_socket_drop_from_another_client_is_not_telegram_noise():
+    """ClientOSError бывает у любого aiohttp-клиента — платёжки, панель; их не глушим."""
+    event = _aiogram_record(ClientOSError(104, 'Connection reset by peer'), logger='app.services.payment.wata')
+
+    assert _is_transient_telegram_error(event) is False

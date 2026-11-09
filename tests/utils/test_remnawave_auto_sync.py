@@ -9,7 +9,10 @@ import pytest
 from app.config import settings
 from app.services.remnawave_service import RemnaWaveConfigurationError
 from app.services.remnawave_sync_service import RemnaWaveAutoSyncService
-from tests.fixtures.local_day import reset_local_timezone_cache, use_timezone  # noqa: F401
+from tests.fixtures.local_day import (  # noqa: F401
+    reset_local_timezone_cache,
+    use_timezone,
+)
 
 
 @pytest.mark.parametrize(

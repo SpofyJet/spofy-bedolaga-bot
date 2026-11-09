@@ -8,21 +8,14 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.saved_payment_method import (
-    deactivate_payment_method,
-    get_active_payment_methods_by_user,
-)
 from app.database.crud.subscription import update_subscription_autopay
 from app.database.models import User
 from app.keyboards.inline import (
-    _get_payment_method_display_name,
     get_autopay_days_keyboard,
     get_autopay_keyboard,
     get_autopay_period_keyboard,
-    get_confirm_unlink_keyboard,
     get_countries_keyboard,
     get_devices_keyboard,
-    get_saved_cards_keyboard,
     get_subscription_period_keyboard,
     get_traffic_packages_keyboard,
 )
@@ -54,43 +47,6 @@ async def _resolve_subscription(callback, db_user, db, state=None):
     return await resolve_subscription_from_context(callback, db_user, db, state)
 
 
-async def _cashera_recurring_rows(db: AsyncSession, subscription, texts) -> list[list[types.InlineKeyboardButton]]:
-    """Строка автопродления Cashera: отключить (если привязка есть) или подключить.
-
-    Отключение показывается и при выключенной фиче: живые привязки у Cashera
-    продолжают списывать, и остановить их человек должен мочь из бота.
-    """
-    if not settings.is_cashera_configured():
-        return []
-
-    from app.services.cashera_recurring_cancel import get_cashera_recurring_status
-
-    try:
-        state = await get_cashera_recurring_status(db, subscription.id)
-    except Exception as error:  # необязательная строка не должна ломать меню автоплатежа
-        logger.warning('Не удалось получить состояние автопродления Cashera', error=str(error))
-        return []
-    if state:
-        return [
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('CASHERA_RECURRING_CANCEL_BUTTON', '🛑 Отключить автопродление Cashera'),
-                    callback_data='cashera_recurring_cancel',
-                )
-            ]
-        ]
-    if settings.is_cashera_recurrent_enabled() and not getattr(subscription, 'is_trial', False):
-        return [
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('CASHERA_RECURRING_MENU_BUTTON', '⚡ Автопродление через Cashera'),
-                    callback_data='cashera_recurring_enable',
-                )
-            ]
-        ]
-    return []
-
-
 async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     texts = get_texts(db_user.language)
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
@@ -120,7 +76,6 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
                     )
                 ]
             )
-        daily_keyboard_rows.extend(await _cashera_recurring_rows(db, subscription, texts))
         back_cb = f'sm:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'menu_subscription'
         daily_keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)])
 
@@ -171,9 +126,6 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
                 )
             ],
         )
-
-    for row in await _cashera_recurring_rows(db, subscription, texts):
-        keyboard.inline_keyboard.insert(-1, row)
 
     await callback.message.edit_text(
         text,
@@ -254,14 +206,10 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
         # иначе оба движка продления начнут списывать параллельно (двойное
         # списание). Прямое взаимоисключение (СБП -> выключение
         # balance-autopay) уже реализовано в create_platega_sbp_subscription.
-        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
-        from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
         await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
-        await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-        await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
     texts = get_texts(db_user.language)
     status = texts.t('AUTOPAY_STATUS_ENABLED', 'включен') if enable else texts.t('AUTOPAY_STATUS_DISABLED', 'выключен')
     if engines_warning:
@@ -629,7 +577,7 @@ async def handle_sbp_recurring_enable(
 
     reply = _OneShotCallbackReply(callback)
 
-    # n2: предупреждение о смене движка: активная Lava-привязка или
+    # n2: предупреждение о смене движка:
     # баланс-автоплатёж этой подписки будут отключены при создании
     # СБП-привязки — предупреждаем alert'ом, флоу не прерываем.
     try:
@@ -777,7 +725,7 @@ async def handle_sbp_recurring_enable_for(
 
     reply = _OneShotCallbackReply(callback)
 
-    # n2: предупреждение о смене движка: активная Lava-привязка или
+    # n2: предупреждение о смене движка:
     # баланс-автоплатёж этой подписки будут отключены при создании
     # СБП-привязки — предупреждаем alert'ом, флоу не прерываем.
     try:
@@ -916,8 +864,6 @@ async def handle_sbp_recurring_cancel_confirm(
         )
         return
 
-    # Это кнопка отмены именно СБП-автопродления Platega — привязку Lava она
-    # трогать не должна (у неё своя поверхность отмены).
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
     await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
@@ -926,97 +872,6 @@ async def handle_sbp_recurring_cancel_confirm(
     # успешной отмены юзер не получил второй алерт «недоступно».
     if settings.is_platega_recurrent_enabled():
         await handle_sbp_recurring_menu(callback, db_user, db, state)
-
-
-async def handle_saved_cards_list(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    texts = get_texts(db_user.language)
-    cards = await get_active_payment_methods_by_user(db, db_user.id)
-
-    if not cards:
-        await callback.message.edit_text(
-            texts.t(
-                'SAVED_CARDS_EMPTY',
-                '💳 <b>Привязанные карты</b>\n\nНет привязанных карт.\n'
-                'Карта привяжется автоматически при следующем пополнении баланса.',
-            ),
-            reply_markup=get_saved_cards_keyboard([], db_user.language),
-            parse_mode='HTML',
-        )
-    else:
-        await callback.message.edit_text(
-            texts.t(
-                'SAVED_CARDS_TITLE',
-                '💳 <b>Привязанные карты</b>\n\nВыберите карту для отвязки:',
-            ),
-            reply_markup=get_saved_cards_keyboard(cards, db_user.language),
-            parse_mode='HTML',
-        )
-    await callback.answer()
-
-
-async def handle_unlink_card(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    texts = get_texts(db_user.language)
-    try:
-        card_id = int(callback.data.split('_')[-1])
-    except (ValueError, IndexError):
-        await callback.answer(texts.t('INVALID_REQUEST', 'Invalid request'), show_alert=True)
-        return
-
-    cards = await get_active_payment_methods_by_user(db, db_user.id)
-    card = next((c for c in cards if c.id == card_id), None)
-
-    if not card:
-        await callback.answer(
-            texts.t('SAVED_CARDS_UNLINK_ERROR', '❌ Не удалось отвязать карту'),
-            show_alert=True,
-        )
-        return
-
-    card_label = _get_payment_method_display_name(card, db_user.language)
-    text = texts.t(
-        'SAVED_CARDS_CONFIRM_UNLINK',
-        'Вы уверены, что хотите отвязать карту <b>{card}</b>?\n\n'
-        'После отвязки автоплатеж не сможет использовать эту карту.',
-    ).format(card=card_label)
-
-    if len(cards) == 1:
-        text += texts.t(
-            'SAVED_CARDS_LAST_CARD_WARNING',
-            '\n\n⚠️ <b>Внимание:</b> это ваша последняя привязанная карта. '
-            'После отвязки автоплатеж не сможет списывать средства.',
-        )
-
-    await callback.message.edit_text(
-        text,
-        reply_markup=get_confirm_unlink_keyboard(card_id, db_user.language),
-        parse_mode='HTML',
-    )
-    await callback.answer()
-
-
-async def handle_confirm_unlink(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    texts = get_texts(db_user.language)
-    try:
-        card_id = int(callback.data.split('_')[-1])
-    except (ValueError, IndexError):
-        await callback.answer(texts.t('INVALID_REQUEST', 'Invalid request'), show_alert=True)
-        return
-
-    success = await deactivate_payment_method(db, card_id, db_user.id)
-
-    if success:
-        await callback.answer(
-            texts.t('SAVED_CARDS_UNLINKED', '✅ Карта отвязана'),
-        )
-    else:
-        await callback.answer(
-            texts.t('SAVED_CARDS_UNLINK_ERROR', '❌ Не удалось отвязать карту'),
-            show_alert=True,
-        )
-        return
-
-    # Return to the updated cards list
-    await handle_saved_cards_list(callback, db_user, db)
 
 
 async def handle_subscription_config_back(
@@ -1151,84 +1006,3 @@ async def _show_previous_configuration_step(
         parse_mode='HTML',
     )
     await state.set_state(SubscriptionStates.selecting_period)
-
-
-async def handle_cashera_recurring_enable(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
-):
-    """Подключить автопродление Cashera к текущей подписке (ссылка на подтверждение)."""
-    texts = get_texts(db_user.language)
-    subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
-    if not subscription:
-        await callback.answer(
-            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'), show_alert=True
-        )
-        return
-    try:
-        await db.refresh(subscription, ['tariff'])
-    except Exception as refresh_error:
-        logger.warning('Не удалось подгрузить тариф подписки', subscription_id=subscription.id, error=refresh_error)
-
-    from app.services.payment.cashera import enable_cashera_recurring
-
-    try:
-        result = await enable_cashera_recurring(
-            db, user_id=db_user.id, subscription=subscription, tariff=subscription.tariff
-        )
-    except ValueError as error:
-        await callback.answer(str(error), show_alert=True)
-        return
-    except Exception:
-        await callback.answer(
-            texts.t(
-                'CASHERA_RECURRING_ENABLE_ERROR', '❌ Не удалось подключить автопродление Cashera. Попробуйте позже.'
-            ),
-            show_alert=True,
-        )
-        return
-
-    buttons = []
-    if result.get('redirect_url'):
-        buttons.append(
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('CASHERA_RECURRING_PAY_BUTTON', '💳 Подтвердить'), url=result['redirect_url']
-                )
-            ]
-        )
-    buttons.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_autopay')])
-    await callback.message.edit_text(
-        texts.t(
-            'CASHERA_RECURRING_ENABLE_SUCCESS',
-            '⚡ <b>Автопродление Cashera</b>\n\nПодтвердите автосписания по кнопке ниже.\n'
-            'После подтверждения и первого списания подписка продлится автоматически.',
-        ),
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
-        parse_mode='HTML',
-    )
-    await callback.answer()
-
-
-async def handle_cashera_recurring_cancel(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
-):
-    """Отключить автопродление Cashera. НЕ гейтится флагом — отмена это безопасность.
-
-    Кнопка именно Cashera: привязки Platega/Lava она не трогает.
-    """
-    texts = get_texts(db_user.language)
-    subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
-    if not subscription:
-        await callback.answer(
-            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'), show_alert=True
-        )
-        return
-
-    from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
-
-    await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
-    await callback.answer(texts.t('CASHERA_RECURRING_CANCELLED', '✅ Автопродление Cashera отключено'))
-    try:
-        await handle_autopay_menu(callback, db_user, db, state)
-    except TelegramBadRequest:
-        pass  # «message is not modified»: экран уже актуален

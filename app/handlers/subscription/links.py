@@ -182,7 +182,7 @@ async def handle_connect_subscription(
             [
                 InlineKeyboardButton(
                     text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
-                        style='success',
+                    style='success',
                     callback_data=f'open_subscription_link:{sub_id}'
                     if settings.is_multi_tariff_enabled()
                     else 'open_subscription_link',

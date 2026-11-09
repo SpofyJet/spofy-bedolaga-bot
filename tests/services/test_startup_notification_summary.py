@@ -14,7 +14,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.database.models import Base, Subscription, SubscriptionStatus, Transaction, TransactionType, User
+from app.database.models import (
+    Base,
+    Subscription,
+    SubscriptionStatus,
+    Transaction,
+    TransactionType,
+    User,
+)
 from app.services import startup_notification_service as startup
 from app.services.startup_notification_service import (
     StartupNotificationService,

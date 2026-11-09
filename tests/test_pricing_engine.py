@@ -881,7 +881,10 @@ SETTINGS_PATH = 'app.services.pricing_engine.settings'
 class TestFromPayloadLegacyRoundTrip:
     def test_legacy_to_payload_roundtrip(self):
         """Legacy SubscriptionRenewalPricing.to_payload() -> from_payload() preserves all fields."""
-        from app.services.subscription_renewal_service import SubscriptionRenewalPricing, build_renewal_period_id
+        from app.services.subscription_renewal_service import (
+            SubscriptionRenewalPricing,
+            build_renewal_period_id,
+        )
 
         original = SubscriptionRenewalPricing(
             period_days=30,

@@ -28,41 +28,6 @@ def _paths(router) -> set[str]:
     return {route.path for route in getattr(router, 'routes', []) if getattr(route, 'path', None)}
 
 
-@pytest.fixture
-def tribute_configured(monkeypatch):
-    monkeypatch.setattr(settings, 'TRIBUTE_API_KEY', 'key', raising=False)
-    monkeypatch.setattr(settings, 'TRIBUTE_WEBHOOK_PATH', '/tribute-webhook', raising=False)
-
-
-def test_route_is_mounted_while_provider_is_switched_off(monkeypatch, tribute_configured) -> None:
-    """Ровно сценарий из жалобы: перезапуск с выключенной платёжкой."""
-    monkeypatch.setattr(settings, 'TRIBUTE_ENABLED', False, raising=False)
-
-    router = create_payment_router(SimpleNamespace(), SimpleNamespace())
-
-    assert router is not None
-    assert '/tribute-webhook' in _paths(router)
-
-
-def test_route_is_mounted_when_provider_is_on(monkeypatch, tribute_configured) -> None:
-    monkeypatch.setattr(settings, 'TRIBUTE_ENABLED', True, raising=False)
-
-    router = create_payment_router(SimpleNamespace(), SimpleNamespace())
-
-    assert '/tribute-webhook' in _paths(router)
-
-
-def test_unconfigured_provider_has_no_endpoint(monkeypatch) -> None:
-    """Без ключа подпись коллбека проверять нечем — маршрута быть не должно."""
-    monkeypatch.setattr(settings, 'TRIBUTE_ENABLED', True, raising=False)
-    monkeypatch.setattr(settings, 'TRIBUTE_API_KEY', None, raising=False)
-    monkeypatch.setattr(settings, 'TRIBUTE_WEBHOOK_PATH', '/tribute-webhook', raising=False)
-
-    router = create_payment_router(SimpleNamespace(), SimpleNamespace())
-
-    assert '/tribute-webhook' not in _paths(router)
-
-
 def test_registration_never_looks_at_the_enable_flag() -> None:
     """Ни один маршрут не должен монтироваться по is_X_enabled().
 
@@ -116,3 +81,36 @@ def test_auto_verification_watchdog_is_not_latched() -> None:
     for condition in conditions:
         names = {n.id for n in ast.walk(condition) if isinstance(n, ast.Name)}
         assert 'auto_verification_active' not in names, ast.dump(condition)
+
+
+@pytest.fixture
+def platega_configured(monkeypatch):
+    monkeypatch.setattr(settings, 'PLATEGA_MERCHANT_ID', 'merchant', raising=False)
+    monkeypatch.setattr(settings, 'PLATEGA_SECRET', 'secret', raising=False)
+    monkeypatch.setattr(settings, 'PLATEGA_WEBHOOK_PATH', '/platega-webhook', raising=False)
+
+
+def test_route_is_mounted_while_provider_is_switched_off(monkeypatch, platega_configured) -> None:
+    """Ровно сценарий из жалобы: перезапуск с выключенной платёжкой."""
+    monkeypatch.setattr(settings, 'PLATEGA_ENABLED', False, raising=False)
+
+    router = create_payment_router(SimpleNamespace(), SimpleNamespace())
+
+    assert router is not None
+    assert '/platega-webhook' in _paths(router)
+
+
+def test_route_is_mounted_when_provider_is_on(monkeypatch, platega_configured) -> None:
+    monkeypatch.setattr(settings, 'PLATEGA_ENABLED', True, raising=False)
+
+    router = create_payment_router(SimpleNamespace(), SimpleNamespace())
+
+    assert '/platega-webhook' in _paths(router)
+
+
+def test_unconfigured_provider_has_no_endpoint(monkeypatch) -> None:
+    """Без ключа подпись коллбека проверять нечем — маршрута быть не должно."""
+
+    router = create_payment_router(SimpleNamespace(), SimpleNamespace())
+
+    assert '/platega-webhook' not in _paths(router)

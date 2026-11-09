@@ -59,7 +59,9 @@ def test_missing_subscription_is_not_legacy(tariffs_mode):
 
 def test_classic_mode_addon_guard_does_not_fire(monkeypatch):
     """В классическом режиме сторож докупок молчит: подписка без тарифа там — обычная."""
-    from app.cabinet.routes.subscription_modules.helpers import ensure_subscription_has_tariff
+    from app.cabinet.routes.subscription_modules.helpers import (
+        ensure_subscription_has_tariff,
+    )
 
     monkeypatch.setattr(Settings, 'is_tariffs_mode', lambda self: False)
 

@@ -180,7 +180,10 @@ def test_base_template_without_url_has_no_dangling_footer():
 
 def test_common_context_exposes_unsubscribe_placeholder():
     """{unsubscribe_url} обязан резолвиться, иначе он утечёт в письмо литералом."""
-    from app.cabinet.services.email_template_overrides import COMMON_CONTEXT_VARS, build_common_context
+    from app.cabinet.services.email_template_overrides import (
+        COMMON_CONTEXT_VARS,
+        build_common_context,
+    )
 
     assert 'unsubscribe_url' in COMMON_CONTEXT_VARS
     assert 'unsubscribe_url' in build_common_context()

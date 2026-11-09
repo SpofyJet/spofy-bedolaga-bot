@@ -21,7 +21,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.cabinet.utils.device_ownership import _collect_panel_user_ids, verify_hwid_belongs_to_user
+from app.cabinet.utils.device_ownership import (
+    _collect_panel_user_ids,
+    verify_hwid_belongs_to_user,
+)
 from app.external.remnawave_api import RemnaWaveInvalidUserIdError
 
 

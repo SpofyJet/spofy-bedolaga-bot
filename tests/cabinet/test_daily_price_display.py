@@ -44,7 +44,9 @@ class TestDailyGroupPrice:
 class TestPurchaseOptionsDailyPrice:
     @pytest.mark.asyncio
     async def test_daily_price_excludes_promo_offer(self, monkeypatch):
-        from app.cabinet.routes.subscription_modules.purchase import _build_tariff_response
+        from app.cabinet.routes.subscription_modules.purchase import (
+            _build_tariff_response,
+        )
         from app.database.models import Tariff
 
         tariff = Tariff(
@@ -67,7 +69,9 @@ class TestPurchaseOptionsDailyPrice:
 
     @pytest.mark.asyncio
     async def test_daily_price_with_group_discount(self, monkeypatch):
-        from app.cabinet.routes.subscription_modules.purchase import _build_tariff_response
+        from app.cabinet.routes.subscription_modules.purchase import (
+            _build_tariff_response,
+        )
         from app.database.models import Tariff
 
         tariff = Tariff(

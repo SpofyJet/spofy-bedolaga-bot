@@ -93,7 +93,10 @@ def test_bot_limit_matches_cabinet_and_webapi():
     Схемы — источник правды: пользователь пишет одно и то же сообщение из двух
     клиентов одной системы и должен получать одинаковый результат.
     """
-    from app.cabinet.schemas.tickets import TicketCreateRequest, TicketMessageCreateRequest
+    from app.cabinet.schemas.tickets import (
+        TicketCreateRequest,
+        TicketMessageCreateRequest,
+    )
     from app.webapi.schemas.tickets import TicketReplyRequest
 
     fields = [

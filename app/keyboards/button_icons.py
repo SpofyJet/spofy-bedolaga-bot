@@ -90,7 +90,11 @@ _EMOJI_KEYS = sorted(BUTTON_ICONS, key=len, reverse=True)
 # Один скомпилированный проход вместо перебора всех ключей: middleware
 # вызывает это на каждой кнопке каждого исходящего сообщения.
 _EMOJI_RE = re.compile(
-    r'^(?:' + '|'.join(re.escape(sym) for sym in _EMOJI_KEYS) + r')|(?:' + '|'.join(re.escape(sym) for sym in _EMOJI_KEYS) + r')$'
+    r'^(?:'
+    + '|'.join(re.escape(sym) for sym in _EMOJI_KEYS)
+    + r')|(?:'
+    + '|'.join(re.escape(sym) for sym in _EMOJI_KEYS)
+    + r')$'
 )
 
 # Страховка: если в текст кнопки затесался tg-emoji-тег (из локали, где ключ

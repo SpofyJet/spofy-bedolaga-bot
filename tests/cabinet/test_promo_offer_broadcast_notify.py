@@ -15,7 +15,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from app.cabinet.routes.admin_promo_offers import PromoOfferBroadcastRequest, broadcast_offer
+from app.cabinet.routes.admin_promo_offers import (
+    PromoOfferBroadcastRequest,
+    broadcast_offer,
+)
 from app.database.models import (
     BroadcastHistory,
     DiscountOffer,

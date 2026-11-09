@@ -374,7 +374,10 @@ async def test_old_gift_completion_preserves_replacement_and_independent_intent(
 async def test_old_gift_failure_or_update_cannot_overwrite_replacement(carts, monkeypatch, failure):
     from unittest.mock import MagicMock
 
-    from app.services.gift_purchase_service import GiftFeatureDisabledError, GiftPriceChangedError
+    from app.services.gift_purchase_service import (
+        GiftFeatureDisabledError,
+        GiftPriceChangedError,
+    )
 
     service, uid, _ = carts
     await service.save_user_cart(uid, {'cart_mode': 'tariff_purchase', 'subscription_id': 10, 'return_to_cart': True})

@@ -760,7 +760,10 @@ class TestProgressFormatting:
     """format_tier_progress: обе строки можно было вырезать и остаться зелёным."""
 
     def test_renders_rank_and_distance(self):
-        from app.services.referral_reward_service import TierProgress, format_tier_progress
+        from app.services.referral_reward_service import (
+            TierProgress,
+            format_tier_progress,
+        )
 
         lines = format_tier_progress(
             TierProgress(current_level=2, referrals_any=12, referrals_active=12, next_level=3, next_remaining=13),
@@ -770,13 +773,19 @@ class TestProgressFormatting:
         assert any('3' in line and '13' in line for line in lines), lines
 
     def test_says_so_when_no_rank_reached(self):
-        from app.services.referral_reward_service import TierProgress, format_tier_progress
+        from app.services.referral_reward_service import (
+            TierProgress,
+            format_tier_progress,
+        )
 
         lines = format_tier_progress(TierProgress(current_level=None, referrals_any=0, referrals_active=0), 'ru')
         assert lines and 'не открыт' in lines[0], lines
 
     def test_top_rank_has_no_next_line(self):
-        from app.services.referral_reward_service import TierProgress, format_tier_progress
+        from app.services.referral_reward_service import (
+            TierProgress,
+            format_tier_progress,
+        )
 
         lines = format_tier_progress(
             TierProgress(current_level=3, referrals_any=99, referrals_active=99, next_level=None), 'ru'

@@ -127,8 +127,6 @@ from app.utils.timezone import format_local_datetime, to_local_datetime
 
 from .autopay import (
     handle_autopay_menu,
-    handle_cashera_recurring_cancel,
-    handle_cashera_recurring_enable,
     handle_sbp_recurring_cancel,
     handle_sbp_recurring_cancel_confirm,
     handle_sbp_recurring_enable,
@@ -463,10 +461,9 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
             engines = await get_active_recurrent_engines(db, subscription)
             engine_names = {
                 'platega': texts.t('RECURRENT_ENGINE_SBP', 'СБП'),
-                'lava': texts.t('RECURRENT_ENGINE_LAVA', 'карта (Lava)'),
                 'balance': texts.t('RECURRENT_ENGINE_BALANCE', 'с баланса'),
             }
-            active_engines = [engine_names[e] for e in ('platega', 'lava', 'balance') if e in engines]
+            active_engines = [engine_names[e] for e in ('platega', 'balance') if e in engines]
             if active_engines:
                 autopay_line = '\n' + texts.t(
                     'SUBSCRIPTION_AUTOPAY_ON', '💳 Автопродление: включено ({engine})'
@@ -869,24 +866,6 @@ def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = Fals
             ]
         )
 
-    if settings.is_yookassa_enabled():
-        yookassa_methods = []
-        if settings.YOOKASSA_SBP_ENABLED:
-            yookassa_methods.append(
-                types.InlineKeyboardButton(
-                    text=texts.t('PAYMENT_SBP_YOOKASSA', '🏦 Оплатить по СБП (YooKassa)'),
-                    callback_data='trial_payment_yookassa_sbp',
-                )
-            )
-        yookassa_methods.append(
-            types.InlineKeyboardButton(
-                text=texts.t('PAYMENT_CARD_YOOKASSA', '💳 Банковская карта (YooKassa)'),
-                callback_data='trial_payment_yookassa',
-            )
-        )
-        if yookassa_methods:
-            keyboard.append(yookassa_methods)
-
     if settings.is_cryptobot_enabled():
         keyboard.append(
             [
@@ -902,28 +881,6 @@ def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = Fals
             [
                 types.InlineKeyboardButton(
                     text=texts.t('PAYMENT_HELEKET', 'Криптовалюта (Heleket)'), callback_data='trial_payment_heleket'
-                )
-            ]
-        )
-
-    if settings.is_mulenpay_enabled():
-        mulenpay_name = settings.get_mulenpay_display_name()
-        keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('PAYMENT_CARD_MULENPAY', '💳 Банковская карта ({mulenpay_name})').format(
-                        mulenpay_name=mulenpay_name
-                    ),
-                    callback_data='trial_payment_mulenpay',
-                )
-            ]
-        )
-
-    if settings.is_pal24_enabled():
-        keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('PAYMENT_CARD_PAL24', '🏦 СБП (PayPalych)'), callback_data='trial_payment_pal24'
                 )
             ]
         )
@@ -4088,78 +4045,6 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
                 parse_mode='HTML',
             )
 
-        elif payment_method == 'yookassa_sbp':
-            # Оплата через YooKassa СБП
-            payment_result = await payment_service.create_yookassa_sbp_payment(
-                db=db,
-                amount_kopeks=trial_price_kopeks,
-                description=texts.t('PAID_TRIAL_PAYMENT_DESC', 'Пробная подписка на {days} дней').format(
-                    days=trial_duration
-                ),
-                user_id=db_user.id,
-                metadata={
-                    'type': 'trial',
-                    'subscription_id': pending_subscription.id,
-                    'user_id': db_user.id,
-                },
-            )
-
-            if not payment_result or not payment_result.get('confirmation_url'):
-                await callback.answer('❌ Не удалось создать платеж. Попробуйте позже.', show_alert=True)
-                return
-
-            qr_url = payment_result.get('qr_code_url') or payment_result.get('confirmation_url')
-
-            await callback.message.edit_text(
-                texts.t(
-                    'PAID_TRIAL_YOOKASSA_SBP',
-                    '🏦 <b>Оплата через СБП</b>\n\n'
-                    'Отсканируйте QR-код или перейдите по ссылке для оплаты.\n\n'
-                    '💰 Сумма: {amount}',
-                ).format(amount=settings.format_price(trial_price_kopeks)),
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [InlineKeyboardButton(text='💳 Оплатить', url=qr_url)],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
-                    ]
-                ),
-                parse_mode='HTML',
-            )
-
-        elif payment_method == 'yookassa':
-            # Оплата через YooKassa карта
-            payment_result = await payment_service.create_yookassa_payment(
-                db=db,
-                user_id=db_user.id,
-                amount_kopeks=trial_price_kopeks,
-                description=texts.t('PAID_TRIAL_PAYMENT_DESC', 'Пробная подписка на {days} дней').format(
-                    days=trial_duration
-                ),
-                metadata={
-                    'type': 'trial',
-                    'subscription_id': pending_subscription.id,
-                    'user_id': db_user.id,
-                },
-            )
-
-            if not payment_result or not payment_result.get('confirmation_url'):
-                await callback.answer('❌ Не удалось создать платеж. Попробуйте позже.', show_alert=True)
-                return
-
-            await callback.message.edit_text(
-                texts.t(
-                    'PAID_TRIAL_YOOKASSA_CARD',
-                    '💳 <b>Оплата картой</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\n💰 Сумма: {amount}',
-                ).format(amount=settings.format_price(trial_price_kopeks)),
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [InlineKeyboardButton(text='💳 Оплатить', url=payment_result['confirmation_url'])],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
-                    ]
-                ),
-                parse_mode='HTML',
-            )
-
         elif payment_method == 'cryptobot':
             # Оплата через CryptoBot
             # Конвертируем копейки в USD
@@ -4253,81 +4138,6 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
                             InlineKeyboardButton(
                                 text=texts.t('CHECK_PAYMENT', '🔄 Проверить оплату'),
                                 callback_data=f'check_trial_heleket_{pending_subscription.id}',
-                            )
-                        ],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
-                    ]
-                ),
-                parse_mode='HTML',
-            )
-
-        elif payment_method == 'mulenpay':
-            # Оплата через MulenPay
-            payment_result = await payment_service.create_mulenpay_payment(
-                db=db,
-                user_id=db_user.id,
-                amount_kopeks=trial_price_kopeks,
-                description=texts.t('PAID_TRIAL_PAYMENT_DESC', 'Пробная подписка на {days} дней').format(
-                    days=trial_duration
-                ),
-                language=db_user.language,
-            )
-
-            if not payment_result or not payment_result.get('payment_url'):
-                await callback.answer('❌ Не удалось создать платеж. Попробуйте позже.', show_alert=True)
-                return
-
-            mulenpay_name = settings.get_mulenpay_display_name()
-            await callback.message.edit_text(
-                texts.t(
-                    'PAID_TRIAL_MULENPAY',
-                    '💳 <b>Оплата через {name}</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\n💰 Сумма: {amount}',
-                ).format(name=mulenpay_name, amount=settings.format_price(trial_price_kopeks)),
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [InlineKeyboardButton(text='💳 Оплатить', url=payment_result['payment_url'])],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t('CHECK_PAYMENT', '🔄 Проверить оплату'),
-                                callback_data=f'check_trial_mulenpay_{pending_subscription.id}',
-                            )
-                        ],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
-                    ]
-                ),
-                parse_mode='HTML',
-            )
-
-        elif payment_method == 'pal24':
-            # Оплата через PAL24
-            payment_result = await payment_service.create_pal24_payment(
-                db=db,
-                user_id=db_user.id,
-                amount_kopeks=trial_price_kopeks,
-                description=texts.t('PAID_TRIAL_PAYMENT_DESC', 'Пробная подписка на {days} дней').format(
-                    days=trial_duration
-                ),
-                language=db_user.language,
-            )
-
-            if not payment_result or not payment_result.get('payment_url'):
-                await callback.answer('❌ Не удалось создать платеж. Попробуйте позже.', show_alert=True)
-                return
-
-            await callback.message.edit_text(
-                texts.t(
-                    'PAID_TRIAL_PAL24',
-                    '💳 <b>Оплата через PayPalych</b>\n\n'
-                    'Нажмите кнопку ниже для перехода к оплате.\n\n'
-                    '💰 Сумма: {amount}',
-                ).format(amount=settings.format_price(trial_price_kopeks)),
-                reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [InlineKeyboardButton(text='💳 Оплатить', url=payment_result['payment_url'])],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t('CHECK_PAYMENT', '🔄 Проверить оплату'),
-                                callback_data=f'check_trial_pal24_{pending_subscription.id}',
                             )
                         ],
                         [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
@@ -4596,9 +4406,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_sbp_recurring_cancel, F.data == 'sbp_recurring_cancel')
 
     dp.callback_query.register(handle_sbp_recurring_cancel_confirm, F.data == 'sbp_recurring_cancel_confirm')
-    dp.callback_query.register(handle_cashera_recurring_enable, F.data == 'cashera_recurring_enable')
-
-    dp.callback_query.register(handle_cashera_recurring_cancel, F.data == 'cashera_recurring_cancel')
 
     dp.callback_query.register(handle_subscription_config_back, F.data == 'subscription_config_back')
 

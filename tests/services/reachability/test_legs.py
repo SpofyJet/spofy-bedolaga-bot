@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.services.reachability.legs import build_probe_legs, build_vless_legs, merge_skipped, vless_op_key
+from app.services.reachability.legs import (
+    build_probe_legs,
+    build_vless_legs,
+    merge_skipped,
+    vless_op_key,
+)
 from app.services.reachability.targets import Target
 from tests.fixtures.bschek_fixtures import load_bschek_fixture
 

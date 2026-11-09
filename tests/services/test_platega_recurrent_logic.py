@@ -1,6 +1,9 @@
 import pytest
 
-from app.services.platega_recurrent import platega_reconcile_decision, resolve_platega_interval
+from app.services.platega_recurrent import (
+    platega_reconcile_decision,
+    resolve_platega_interval,
+)
 
 
 @pytest.mark.parametrize(

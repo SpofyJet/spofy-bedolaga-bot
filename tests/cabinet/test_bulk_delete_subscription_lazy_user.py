@@ -139,28 +139,6 @@ async def test_execute_for_user_survives_unloaded_collection(monkeypatch):
     db.rollback.assert_not_awaited()
 
 
-@pytest.mark.asyncio
-async def test_delete_subscription_survives_unloaded_collection():
-    """Удаление истёкшего триала доходит до конца, а не падает на подписках."""
-    user = _LazyUser()
-    sub = _expired_trial_sub(user)
-    db = MagicMock()
-    db.execute = AsyncMock()
-    db.commit = AsyncMock()
-    params = SimpleNamespace(force_delete_active_paid=False)
-
-    with (
-        patch('app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions', AsyncMock()),
-        patch('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', AsyncMock()),
-        patch('app.services.payment.lava.cancel_lava_recurring_for_subscription_safe', AsyncMock()),
-    ):
-        result = await bulk._do_delete_subscription(db, user, params, dry_run=False, sub_override=sub)
-
-    assert result.success is True
-    assert 'Пробный' in result.message
-    db.commit.assert_awaited()
-
-
 class _LazyUserSqlalchemy21(_LazyUser):
     """То же на SQLAlchemy 2.1: MissingGreenlet приходит завёрнутой в StatementError."""
 
@@ -175,3 +153,24 @@ def test_known_subscriptions_falls_back_when_sqlalchemy_21_wraps_missing_greenle
     target = _expired_trial_sub(user)
 
     assert bulk._known_subscriptions(user, target) == [target]
+
+
+@pytest.mark.asyncio
+async def test_delete_subscription_survives_unloaded_collection():
+    """Удаление истёкшего триала доходит до конца, а не падает на подписках."""
+    user = _LazyUser()
+    sub = _expired_trial_sub(user)
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.commit = AsyncMock()
+    params = SimpleNamespace(force_delete_active_paid=False)
+
+    with (
+        patch('app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions', AsyncMock()),
+        patch('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', AsyncMock()),
+    ):
+        result = await bulk._do_delete_subscription(db, user, params, dry_run=False, sub_override=sub)
+
+    assert result.success is True
+    assert 'Пробный' in result.message
+    db.commit.assert_awaited()

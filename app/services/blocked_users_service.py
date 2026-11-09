@@ -22,15 +22,10 @@ from app.database.models import (
     AdvertisingCampaignRegistration,
     ButtonClickLog,
     CabinetRefreshToken,
-    CloudPaymentsPayment,
     ContestAttempt,
     CryptoBotPayment,
     DiscountOffer,
-    FreekassaPayment,
     HeleketPayment,
-    KassaAiPayment,
-    MulenPayPayment,
-    Pal24Payment,
     PlategaPayment,
     PollResponse,
     PromoCodeUse,
@@ -51,7 +46,6 @@ from app.database.models import (
     WataPayment,
     WheelSpin,
     WithdrawalRequest,
-    YooKassaPayment,
 )
 from app.external.remnawave_api import RemnaWaveInvalidUserIdError
 from app.services.remnawave_service import RemnaWaveService
@@ -331,28 +325,17 @@ class BlockedUsersService:
             # user keeps getting charged for a deleted account. This path has
             # no grace-access guard (unlike UserService.delete_user_account), so
             # a plain best-effort cancel loop is enough — no lock to re-acquire.
-            from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
-            from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
             for sub in getattr(user, 'subscriptions', None) or []:
                 await cancel_platega_recurring_for_subscription_safe(db, sub.id)
 
-                await cancel_lava_recurring_for_subscription_safe(db, sub.id)
-                await cancel_cashera_recurring_for_subscription_safe(db, sub.id)
             # Удаляем связанные записи (порядок важен из-за foreign keys)
 
-            # 1. Платежные системы (до транзакций, т.к. ссылаются на них)
-            await db.execute(delete(YooKassaPayment).where(YooKassaPayment.user_id == user.id))
             await db.execute(delete(CryptoBotPayment).where(CryptoBotPayment.user_id == user.id))
             await db.execute(delete(HeleketPayment).where(HeleketPayment.user_id == user.id))
-            await db.execute(delete(MulenPayPayment).where(MulenPayPayment.user_id == user.id))
-            await db.execute(delete(Pal24Payment).where(Pal24Payment.user_id == user.id))
             await db.execute(delete(WataPayment).where(WataPayment.user_id == user.id))
             await db.execute(delete(PlategaPayment).where(PlategaPayment.user_id == user.id))
-            await db.execute(delete(CloudPaymentsPayment).where(CloudPaymentsPayment.user_id == user.id))
-            await db.execute(delete(FreekassaPayment).where(FreekassaPayment.user_id == user.id))
-            await db.execute(delete(KassaAiPayment).where(KassaAiPayment.user_id == user.id))
 
             # 2. Транзакции (после платежей)
             await db.execute(delete(Transaction).where(Transaction.user_id == user.id))

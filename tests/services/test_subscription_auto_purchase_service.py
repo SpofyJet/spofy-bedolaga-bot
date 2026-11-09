@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import TransactionType, User
-from app.services.subscription_auto_purchase_service import auto_purchase_saved_cart_after_topup
+from app.services.subscription_auto_purchase_service import (
+    auto_purchase_saved_cart_after_topup,
+)
 from app.services.subscription_purchase_service import (
     PurchaseDevicesConfig,
     PurchaseOptionsContext,

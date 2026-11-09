@@ -9,7 +9,11 @@ from sqlalchemy import select
 from app.config import settings
 from app.database.models import Base, Subscription, Transaction, User
 from app.services import subscription_auto_purchase_service as auto_purchase, subscription_renewal_service as renewal
-from tests.fixtures.postgres_db import postgres_session, postgres_sessions, wait_for_lock_waiter
+from tests.fixtures.postgres_db import (
+    postgres_session,
+    postgres_sessions,
+    wait_for_lock_waiter,
+)
 from tests.services.test_daily_topup_resume_traffic_reset import (
     BALANCE_KOPEKS,
     DAILY_PRICE_KOPEKS,
@@ -144,7 +148,9 @@ async def test_payment_hook_keeps_topup_and_notification_when_daily_disabled(
 
 async def test_daily_topup_reads_database_setting_override(postgres_database, monkeypatch, panel):
     from app.services.settings_store import store_setting
-    from app.services.system_settings_service import bot_configuration_service as configuration
+    from app.services.system_settings_service import (
+        bot_configuration_service as configuration,
+    )
 
     configuration.initialize_definitions()
     monkeypatch.setattr(configuration, '_env_override_keys', set())

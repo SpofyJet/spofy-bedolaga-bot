@@ -488,7 +488,9 @@ def test_tariff_confirm_keyboard_hides_sbp_button_when_gate_off(monkeypatch):
 
 
 def test_daily_tariff_confirm_keyboard_gates_sbp_button(monkeypatch):
-    from app.handlers.subscription.tariff_purchase import get_daily_tariff_confirm_keyboard
+    from app.handlers.subscription.tariff_purchase import (
+        get_daily_tariff_confirm_keyboard,
+    )
 
     _gate(monkeypatch, True)
     assert 'tariff_sbp:7' in _keyboard_callbacks(get_daily_tariff_confirm_keyboard(7, 'ru'))

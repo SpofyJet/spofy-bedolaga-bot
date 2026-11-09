@@ -60,14 +60,18 @@ def test_rule_matrix():
 
 
 def test_unlimited_new_base_stays_unlimited():
-    unlimited = SimpleNamespace(device_limit=0, device_price_kopeks=None, device_price_flat=False, max_device_limit=None)
+    unlimited = SimpleNamespace(
+        device_limit=0, device_price_kopeks=None, device_price_flat=False, max_device_limit=None
+    )
     assert _switch(calc_device_limit_on_tariff_switch, 6, STANDARD, unlimited) == 0
 
 
 def test_every_call_site_passes_tariffs():
     """Без old_tariff/new_tariff правило молча не применится — следим за всеми вызовами."""
     root = Path(__file__).resolve().parents[2] / 'app'
-    pattern = re.compile(r'(calc_device_limit_on_tariff_switch|calc_device_limit_on_admin_tariff_change|_calc_sw_devices)\(')
+    pattern = re.compile(
+        r'(calc_device_limit_on_tariff_switch|calc_device_limit_on_admin_tariff_change|_calc_sw_devices)\('
+    )
     offenders = []
     for path in root.rglob('*.py'):
         source = path.read_text(encoding='utf-8')

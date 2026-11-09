@@ -27,8 +27,6 @@ def test_devices_selection_disabled_amount_zero_stays_plain() -> None:
 @pytest.mark.parametrize(
     'key',
     [
-        'YOOKASSA_MIN_AMOUNT_KOPEKS',
-        'CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS',
         'REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS',
         'BASE_SUBSCRIPTION_PRICE',
         'PRICE_30_DAYS',

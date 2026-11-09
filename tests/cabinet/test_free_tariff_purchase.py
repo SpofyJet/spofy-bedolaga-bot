@@ -117,7 +117,10 @@ async def test_free_tariff_can_be_purchased(monkeypatch, panel):
 @pytest.mark.parametrize('old_devices', [1, 5])
 @pytest.mark.parametrize('trial', [False, True])
 async def test_unlimited_tariff_clears_old_device_cap_without_addon_charge(monkeypatch, panel, old_devices, trial):
-    from app.cabinet.routes.subscription_modules.purchase import _build_tariff_response, purchase_tariff
+    from app.cabinet.routes.subscription_modules.purchase import (
+        _build_tariff_response,
+        purchase_tariff,
+    )
 
     async with memory_session(monkeypatch, TABLES) as db:
         user = await _seed_free_subscription(db, {'30': 0})

@@ -19,7 +19,10 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database.models import Base, Subscription, SubscriptionStatus, User
-from app.services.remnawave_service import RemnaWaveService, _relink_existing_subscription
+from app.services.remnawave_service import (
+    RemnaWaveService,
+    _relink_existing_subscription,
+)
 from tests.fixtures.sqlite_memory import memory_session
 
 

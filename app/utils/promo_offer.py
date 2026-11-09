@@ -70,7 +70,7 @@ def get_user_active_promo_discount_percent(user: User | None, tariff_id: int | N
 async def consume_user_promo_offer(db: AsyncSession, user_id: int) -> bool:
     """Consume the user's one-shot promo-offer discount (zeroes out the fields).
 
-    Used by external payment fulfillment handlers (Stars, YooKassa)
+    Used by external payment fulfillment handlers (Stars)
     where subtract_user_balance (which normally consumes the offer) is not called.
     Returns True if an offer was actually consumed.
     """

@@ -23,7 +23,11 @@ from fastapi import HTTPException, status
 
 from app.cabinet.routes.auth import auth_telegram_oidc, auth_telegram_widget
 from app.cabinet.schemas.auth import TelegramOIDCAuthRequest, TelegramWidgetAuthRequest
-from app.services.legal_consent_service import PRIVACY_POLICY, PUBLIC_OFFER, LegalConsentRequirement
+from app.services.legal_consent_service import (
+    PRIVACY_POLICY,
+    PUBLIC_OFFER,
+    LegalConsentRequirement,
+)
 
 
 H = 'a' * 64

@@ -13,19 +13,163 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cabinet.dependencies import get_cabinet_db
 from app.cabinet.routes import admin_payments
 from app.cabinet.routes.admin_payments import _record_to_response
-from app.database.models import Base, CryptoBotPayment, GuestPurchase, PaymentMethod, PlategaPayment, Transaction, User
-from app.handlers.admin.payments import _build_detail_keyboard, _build_list_keyboard, _build_payment_details_text
+from app.database.models import (
+    Base,
+    CryptoBotPayment,
+    GuestPurchase,
+    PaymentMethod,
+    PlategaPayment,
+    Transaction,
+    User,
+)
+from app.handlers.admin.payments import (
+    _build_detail_keyboard,
+    _build_list_keyboard,
+    _build_payment_details_text,
+)
 from app.localization.texts import get_texts
 from app.services.payment.common import try_fulfill_guest_purchase
-from app.services.payment_search_service import SearchParams, StatusFilter, search_payments, search_payments_stats
-from app.services.payment_verification_service import get_payment_record, list_recent_pending_payments
+from app.services.payment_search_service import (
+    SearchParams,
+    StatusFilter,
+    search_payments,
+    search_payments_stats,
+)
+from app.services.payment_verification_service import (
+    get_payment_record,
+    list_recent_pending_payments,
+)
 from tests.fixtures.postgres_db import postgres_session
 
 
 pytestmark = [pytest.mark.postgres, pytest.mark.asyncio]
 
 
-@pytest.mark.parametrize('method', ['yookassa_sbp', 'platega_2', 'cryptobot', 'pal24', 'wata'])
+@pytest.mark.parametrize(
+    'method,status,paid,source',
+    [
+        ('balance', 'delivered', True, 'bot'),
+        ('manual', 'delivered', True, 'landing'),
+    ],
+)
+async def test_internal_and_unpaid_purchases_are_excluded(postgres_database, method, status, paid, source):
+    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
+        db.add(
+            GuestPurchase(
+                token='local-excluded',
+                contact_type='email',
+                contact_value='local@example.com',
+                period_days=30,
+                amount_kopeks=19900,
+                payment_method=method,
+                source=source,
+                status=status,
+                paid_at=datetime.now(UTC) if paid else None,
+            )
+        )
+        await db.commit()
+        assert await list_recent_pending_payments(db) == []
+        found, total = await search_payments(db, SearchParams())
+        assert total == 0 and found == []
+
+
+async def test_cryptobot_payload_does_not_duplicate_landing_purchase(postgres_database):
+    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
+        db.add(User(id=1, telegram_id=1001, language='ru', status='active', balance_kopeks=0))
+        await db.flush()
+        db.add(
+            GuestPurchase(
+                token='local-crypto',
+                contact_type='email',
+                contact_value='local@example.com',
+                period_days=30,
+                amount_kopeks=19900,
+                payment_method='cryptobot',
+                payment_id='local-crypto-id',
+                source='landing',
+                status='delivered',
+                paid_at=datetime.now(UTC),
+                user_id=1,
+            )
+        )
+        db.add(
+            CryptoBotPayment(
+                user_id=1,
+                invoice_id='local-crypto-id',
+                amount='2',
+                asset='USDT',
+                status='paid',
+                payload='{"purpose":"guest_purchase","purchase_token":"local-crypto"}',
+            )
+        )
+        await db.commit()
+        records = await list_recent_pending_payments(db)
+        assert len(records) == 1 and records[0].source == 'landing'
+        found, total = await search_payments(db, SearchParams(method_filter=PaymentMethod.CRYPTOBOT))
+        assert total == 1 and found[0].source == 'landing'
+
+
+@pytest.mark.parametrize('view', ['list', 'search', 'stats'])
+async def test_payment_confirmed_between_admin_queries_is_not_duplicated(postgres_database, monkeypatch, view):
+    from app.services import landing_payment_records, payment_search_service
+
+    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
+        db.add(User(id=1, telegram_id=1001, language='ru', status='active', balance_kopeks=0))
+        await db.flush()
+        db.add(
+            GuestPurchase(
+                token='local-race',
+                contact_type='email',
+                contact_value='local@example.com',
+                period_days=30,
+                amount_kopeks=19900,
+                payment_method='platega_2',
+                payment_id='local-race-invoice',
+                source='landing',
+                status='pending',
+            )
+        )
+        db.add(
+            PlategaPayment(
+                user_id=1,
+                amount_kopeks=19900,
+                status='PENDING',
+                is_paid=False,
+                platega_transaction_id='local-race-invoice',
+                correlation_id='local-race-correlation',
+                payment_method_code=2,
+                metadata_json={'purpose': 'guest_purchase', 'purchase_token': 'local-race'},
+            )
+        )
+        await db.commit()
+        original_fetch = landing_payment_records.fetch_landing_payments
+
+        async def confirm_then_fetch(*args, **kwargs):
+            # A separate real transaction commits after provider invoices were read.
+            async with AsyncSession(db.bind) as payment_db:
+                await payment_db.execute(
+                    update(GuestPurchase)
+                    .where(GuestPurchase.token == 'local-race')
+                    .values(status='paid', paid_at=datetime.now(UTC))
+                )
+                await payment_db.commit()
+            return await original_fetch(*args, **kwargs)
+
+        target = landing_payment_records if view == 'list' else payment_search_service
+        monkeypatch.setattr(target, 'fetch_landing_payments', confirm_then_fetch)
+        if view == 'list':
+            found = await list_recent_pending_payments(db)
+            assert len(found) == 1 and found[0].source == 'landing'
+        elif view == 'search':
+            found, total = await search_payments(db, SearchParams())
+            assert total == 1 and found[0].source == 'landing'
+        else:
+            stats = await search_payments_stats(db, SearchParams())
+            assert stats.total == stats.paid == 1
+            assert stats.pending == 0
+
+
+@pytest.mark.parametrize('method', ['platega', 'platega_2', 'cryptobot', 'wata', 'wata'])
 @pytest.mark.parametrize('gift', [False, True])
 async def test_paid_landing_purchase_visible_without_provider_user(postgres_database, method, gift):
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
@@ -158,76 +302,10 @@ async def test_landing_deduplicates_provider_and_transaction_but_preserves_other
             assert total == 1 and found[0].source == 'landing'
         found, total = await search_payments(db, SearchParams(search='local-invoice'))
         assert total == 1 and found[0].source == 'landing'
-        assert await get_payment_record(db, PaymentMethod.YOOKASSA, 1, source='landing') is None
+        assert await get_payment_record(db, PaymentMethod.PLATEGA, 1, source='landing') is None
         provider = await get_payment_record(db, PaymentMethod.PLATEGA, 1)
         assert provider is not None and provider.identifier == 'local-provider-id'
         assert await db.scalar(select(func.count()).select_from(Transaction)) == 3
-
-
-@pytest.mark.parametrize(
-    'method,status,paid,source',
-    [
-        ('balance', 'delivered', True, 'bot'),
-        ('manual', 'delivered', True, 'landing'),
-        ('yookassa', 'pending', False, 'landing'),
-        ('yookassa', 'failed', False, 'landing'),
-    ],
-)
-async def test_internal_and_unpaid_purchases_are_excluded(postgres_database, method, status, paid, source):
-    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
-        db.add(
-            GuestPurchase(
-                token='local-excluded',
-                contact_type='email',
-                contact_value='local@example.com',
-                period_days=30,
-                amount_kopeks=19900,
-                payment_method=method,
-                source=source,
-                status=status,
-                paid_at=datetime.now(UTC) if paid else None,
-            )
-        )
-        await db.commit()
-        assert await list_recent_pending_payments(db) == []
-        found, total = await search_payments(db, SearchParams())
-        assert total == 0 and found == []
-
-
-async def test_cryptobot_payload_does_not_duplicate_landing_purchase(postgres_database):
-    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
-        db.add(User(id=1, telegram_id=1001, language='ru', status='active', balance_kopeks=0))
-        await db.flush()
-        db.add(
-            GuestPurchase(
-                token='local-crypto',
-                contact_type='email',
-                contact_value='local@example.com',
-                period_days=30,
-                amount_kopeks=19900,
-                payment_method='cryptobot',
-                payment_id='local-crypto-id',
-                source='landing',
-                status='delivered',
-                paid_at=datetime.now(UTC),
-                user_id=1,
-            )
-        )
-        db.add(
-            CryptoBotPayment(
-                user_id=1,
-                invoice_id='local-crypto-id',
-                amount='2',
-                asset='USDT',
-                status='paid',
-                payload='{"purpose":"guest_purchase","purchase_token":"local-crypto"}',
-            )
-        )
-        await db.commit()
-        records = await list_recent_pending_payments(db)
-        assert len(records) == 1 and records[0].source == 'landing'
-        found, total = await search_payments(db, SearchParams(method_filter=PaymentMethod.CRYPTOBOT))
-        assert total == 1 and found[0].source == 'landing'
 
 
 async def test_confirmed_gift_replay_and_http_details_keep_source_identity(postgres_database, monkeypatch):
@@ -307,63 +385,3 @@ async def test_confirmed_gift_replay_and_http_details_keep_source_identity(postg
         assert await db.scalar(select(func.count()).select_from(Transaction)) == 0
         await db.refresh(admin)
         assert admin.balance_kopeks == 50000
-
-
-@pytest.mark.parametrize('view', ['list', 'search', 'stats'])
-async def test_payment_confirmed_between_admin_queries_is_not_duplicated(postgres_database, monkeypatch, view):
-    from app.services import landing_payment_records, payment_search_service
-
-    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
-        db.add(User(id=1, telegram_id=1001, language='ru', status='active', balance_kopeks=0))
-        await db.flush()
-        db.add(
-            GuestPurchase(
-                token='local-race',
-                contact_type='email',
-                contact_value='local@example.com',
-                period_days=30,
-                amount_kopeks=19900,
-                payment_method='platega_2',
-                payment_id='local-race-invoice',
-                source='landing',
-                status='pending',
-            )
-        )
-        db.add(
-            PlategaPayment(
-                user_id=1,
-                amount_kopeks=19900,
-                status='PENDING',
-                is_paid=False,
-                platega_transaction_id='local-race-invoice',
-                correlation_id='local-race-correlation',
-                payment_method_code=2,
-                metadata_json={'purpose': 'guest_purchase', 'purchase_token': 'local-race'},
-            )
-        )
-        await db.commit()
-        original_fetch = landing_payment_records.fetch_landing_payments
-
-        async def confirm_then_fetch(*args, **kwargs):
-            # A separate real transaction commits after provider invoices were read.
-            async with AsyncSession(db.bind) as payment_db:
-                await payment_db.execute(
-                    update(GuestPurchase)
-                    .where(GuestPurchase.token == 'local-race')
-                    .values(status='paid', paid_at=datetime.now(UTC))
-                )
-                await payment_db.commit()
-            return await original_fetch(*args, **kwargs)
-
-        target = landing_payment_records if view == 'list' else payment_search_service
-        monkeypatch.setattr(target, 'fetch_landing_payments', confirm_then_fetch)
-        if view == 'list':
-            found = await list_recent_pending_payments(db)
-            assert len(found) == 1 and found[0].source == 'landing'
-        elif view == 'search':
-            found, total = await search_payments(db, SearchParams())
-            assert total == 1 and found[0].source == 'landing'
-        else:
-            stats = await search_payments_stats(db, SearchParams())
-            assert stats.total == stats.paid == 1
-            assert stats.pending == 0

@@ -19,10 +19,20 @@ from sqlalchemy import select
 
 from app.cabinet.routes.subscription_modules.devices import get_device_price
 from app.config import settings
-from app.database.models import Base, Subscription, Tariff, Transaction, TransactionType, User
+from app.database.models import (
+    Base,
+    Subscription,
+    Tariff,
+    Transaction,
+    TransactionType,
+    User,
+)
 from app.services import spofy_subpage_service as subpage_service, subscription_auto_purchase_service as auto_service
 from app.services.user_cart_service import UserCartService
-from app.utils.pricing_utils import calculate_device_addon_price, count_chargeable_devices
+from app.utils.pricing_utils import (
+    calculate_device_addon_price,
+    count_chargeable_devices,
+)
 from app.webapi.routes import miniapp as miniapp_routes
 from tests.fixtures.redis_pipeline import SequentialPipelineMixin
 from tests.fixtures.sqlite_memory import memory_session

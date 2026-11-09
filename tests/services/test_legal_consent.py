@@ -13,7 +13,15 @@ import pytest
 from fastapi import HTTPException
 
 from app.config import settings
-from app.database.models import LegalConsent, PromoGroup, Subscription, Tariff, User, UserPromoGroup, UserStatus
+from app.database.models import (
+    LegalConsent,
+    PromoGroup,
+    Subscription,
+    Tariff,
+    User,
+    UserPromoGroup,
+    UserStatus,
+)
 from app.services import legal_consent_service as lcs
 from tests.fixtures.sqlite_memory import memory_session
 

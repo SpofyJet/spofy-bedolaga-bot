@@ -218,7 +218,11 @@ async def test_pending_intent_does_not_prevent_actual_expiry(postgres_database, 
             'expireAt': (subscription.end_date - timedelta(days=30)).isoformat(),
         }
         if event == 'panel-truth':
-            from app.services.panel_sync.projection import PANEL_TRUTH, project_onto_subscription, read_panel_user
+            from app.services.panel_sync.projection import (
+                PANEL_TRUTH,
+                project_onto_subscription,
+                read_panel_user,
+            )
 
             project_onto_subscription(subscription, read_panel_user(payload), policy=PANEL_TRUTH)
             await db.commit()

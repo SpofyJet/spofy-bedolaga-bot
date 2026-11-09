@@ -21,7 +21,12 @@ from app.services import remnawave_retry_queue as retry
 from app.services.remnawave_webhook_service import RemnaWaveWebhookService
 from app.services.subscription_renewal_service import SubscriptionRenewalService
 from app.services.subscription_service import SubscriptionService
-from tests.database.test_renewal_survives_stale_panel_snapshot_postgres import BALANCE, PRICE, _pricing, _seed
+from tests.database.test_renewal_survives_stale_panel_snapshot_postgres import (
+    BALANCE,
+    PRICE,
+    _pricing,
+    _seed,
+)
 from tests.fixtures.postgres_db import postgres_session
 
 

@@ -116,27 +116,6 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
     if record.is_paid:
         return '✅', 'Оплачено'
 
-    if record.method == PaymentMethod.PAL24:
-        mapping = {
-            'new': ('⏳', 'Ожидает оплаты'),
-            'process': ('⌛', 'Обрабатывается'),
-            'success': ('✅', 'Оплачено'),
-            'fail': ('❌', 'Ошибка'),
-            'canceled': ('❌', 'Отменено'),
-        }
-        return mapping.get(status_str, ('❓', 'Неизвестно'))
-
-    if record.method == PaymentMethod.MULENPAY:
-        mapping = {
-            'created': ('⏳', 'Ожидает оплаты'),
-            'processing': ('⌛', 'Обрабатывается'),
-            'hold': ('🔒', 'На удержании'),
-            'success': ('✅', 'Оплачено'),
-            'canceled': ('❌', 'Отменено'),
-            'error': ('❌', 'Ошибка'),
-        }
-        return mapping.get(status_str, ('❓', 'Неизвестно'))
-
     if record.method == PaymentMethod.WATA:
         mapping = {
             'opened': ('⏳', 'Ожидает оплаты'),
@@ -170,39 +149,11 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
             return '❌', 'Отменено'
         return '❓', 'Неизвестно'
 
-    if record.method == PaymentMethod.YOOKASSA:
-        mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'waiting_for_capture': ('⌛', 'Обрабатывается'),
-            'succeeded': ('✅', 'Оплачено'),
-            'canceled': ('❌', 'Отменено'),
-        }
-        return mapping.get(status_str, ('❓', 'Неизвестно'))
-
     if record.method == PaymentMethod.CRYPTOBOT:
         mapping = {
             'active': ('⏳', 'Ожидает оплаты'),
             'paid': ('✅', 'Оплачено'),
             'expired': ('⌛', 'Истёк'),
-        }
-        return mapping.get(status_str, ('❓', 'Неизвестно'))
-
-    if record.method == PaymentMethod.CLOUDPAYMENTS:
-        mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'authorized': ('⌛', 'Авторизовано'),
-            'completed': ('✅', 'Оплачено'),
-            'failed': ('❌', 'Ошибка'),
-        }
-        return mapping.get(status_str, ('❓', 'Неизвестно'))
-
-    if record.method == PaymentMethod.FREEKASSA:
-        mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'success': ('✅', 'Оплачено'),
-            'paid': ('✅', 'Оплачено'),
-            'canceled': ('❌', 'Отменено'),
-            'error': ('❌', 'Ошибка'),
         }
         return mapping.get(status_str, ('❓', 'Неизвестно'))
 
@@ -216,24 +167,14 @@ def _is_checkable(record: PendingPayment) -> bool:
     if not record.is_recent():
         return False
     status_str = (record.status or '').lower()
-    if record.method == PaymentMethod.PAL24:
-        return status_str in {'new', 'process'}
-    if record.method == PaymentMethod.MULENPAY:
-        return status_str in {'created', 'processing', 'hold'}
     if record.method == PaymentMethod.WATA:
         return status_str in {'opened', 'pending', 'processing', 'inprogress', 'in_progress'}
     if record.method == PaymentMethod.PLATEGA:
         return status_str in {'pending', 'inprogress', 'in_progress'}
     if record.method == PaymentMethod.HELEKET:
         return status_str not in {'paid', 'paid_over', 'cancel', 'canceled', 'fail', 'failed', 'expired'}
-    if record.method == PaymentMethod.YOOKASSA:
-        return status_str in {'pending', 'waiting_for_capture'}
     if record.method == PaymentMethod.CRYPTOBOT:
         return status_str == 'active'
-    if record.method == PaymentMethod.CLOUDPAYMENTS:
-        return status_str in {'pending', 'authorized'}
-    if record.method == PaymentMethod.FREEKASSA:
-        return status_str in {'pending', 'created', 'processing'}
     return False
 
 
@@ -242,12 +183,8 @@ def _get_payment_url(record: PendingPayment) -> str | None:
     payment = record.payment
     payment_url = getattr(payment, 'payment_url', None)
 
-    if record.method == PaymentMethod.PAL24:
-        payment_url = getattr(payment, 'link_url', None) or getattr(payment, 'link_page_url', None) or payment_url
-    elif record.method == PaymentMethod.WATA:
+    if record.method == PaymentMethod.WATA:
         payment_url = getattr(payment, 'url', None) or payment_url
-    elif record.method == PaymentMethod.YOOKASSA:
-        payment_url = getattr(payment, 'confirmation_url', None) or payment_url
     elif record.method == PaymentMethod.CRYPTOBOT:
         payment_url = (
             getattr(payment, 'bot_invoice_url', None)
@@ -257,8 +194,6 @@ def _get_payment_url(record: PendingPayment) -> str | None:
         )
     elif record.method == PaymentMethod.PLATEGA:
         payment_url = getattr(payment, 'redirect_url', None) or payment_url
-    elif record.method == PaymentMethod.CLOUDPAYMENTS or record.method == PaymentMethod.FREEKASSA:
-        payment_url = getattr(payment, 'payment_url', None) or payment_url
 
     if payment_url and not payment_url.startswith(('https://', 'http://')):
         return None
@@ -266,7 +201,7 @@ def _get_payment_url(record: PendingPayment) -> str | None:
 
 
 def _extract_decline_reason(record: PendingPayment) -> str | None:
-    """Достаёт причину отклонения платежа из callback_payload (EtoPlatezhi и др.)."""
+    """Достаёт причину отклонения платежа из callback_payload (провайдера)."""
     status = (record.status or '').lower()
     if status not in ('declined', 'decline', 'error', 'failed'):
         return None

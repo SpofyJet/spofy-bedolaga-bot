@@ -7,7 +7,10 @@ import pytest
 
 from app.database.models import GuestPurchaseStatus
 from app.services.guest_purchase_service import GuestPurchaseError, fulfill_purchase
-from app.services.registration_access_service import RegistrationAccessDecision, RegistrationAccessReason
+from app.services.registration_access_service import (
+    RegistrationAccessDecision,
+    RegistrationAccessReason,
+)
 
 
 @pytest.mark.asyncio

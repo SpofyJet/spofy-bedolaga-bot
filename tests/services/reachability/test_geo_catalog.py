@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.reachability.geo_catalog import GeoCatalogCache, catalog_params, names_from_catalog
+from app.services.reachability.geo_catalog import (
+    GeoCatalogCache,
+    catalog_params,
+    names_from_catalog,
+)
 from tests.services.reachability.fakes import FakeClock
 
 

@@ -50,7 +50,10 @@ async def test_tariff_checkout_checks_live_squads_before_debit(postgres_database
         request = TariffPurchaseRequest(tariff_id=3, period_days=30)
         from app.services.subscription_service import SubscriptionService
         from app.webapi.routes import miniapp
-        from app.webapi.schemas.miniapp import MiniAppTariffPurchaseRequest, MiniAppTariffSwitchRequest
+        from app.webapi.schemas.miniapp import (
+            MiniAppTariffPurchaseRequest,
+            MiniAppTariffSwitchRequest,
+        )
 
         monkeypatch.setattr(SubscriptionService, 'create_remnawave_user', AsyncMock())
         monkeypatch.setattr(SubscriptionService, 'update_remnawave_user', AsyncMock())

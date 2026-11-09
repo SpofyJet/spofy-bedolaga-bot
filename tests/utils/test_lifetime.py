@@ -140,7 +140,10 @@ def test_subscription_keyboard_has_no_renew_for_lifetime():
 async def test_renewal_of_lifetime_subscription_is_refused_before_any_charge():
     from unittest.mock import AsyncMock
 
-    from app.services.subscription_renewal_service import SubscriptionRenewalError, SubscriptionRenewalService
+    from app.services.subscription_renewal_service import (
+        SubscriptionRenewalError,
+        SubscriptionRenewalService,
+    )
 
     db = AsyncMock()
     sub = SimpleNamespace(id=1, is_trial=False, end_date=LIFETIME_END)

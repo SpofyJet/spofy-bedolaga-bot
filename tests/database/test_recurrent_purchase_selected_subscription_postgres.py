@@ -18,8 +18,6 @@ from tests.fixtures.postgres_db import postgres_session
 pytestmark = pytest.mark.postgres
 PROVIDERS = [
     ('platega', 'sbp', 'enable_platega_sbp_recurring'),
-    ('lava', 'lava', 'enable_lava_recurring'),
-    ('cashera', 'cashera', 'enable_cashera_recurring'),
 ]
 
 

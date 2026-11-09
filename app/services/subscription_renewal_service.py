@@ -435,12 +435,6 @@ class SubscriptionRenewalService:
             description=description_text,
             payment_method=payment_method or PaymentMethod.BALANCE,
         )
-        try:
-            from app.services.payment.lava import shift_lava_next_charge_after_manual_extension
-
-            await shift_lava_next_charge_after_manual_extension(db, subscription_id, period_days)
-        except Exception as lava_error:
-            logger.warning('Failed to shift Lava next charge after renewal', error=lava_error)
         await db.refresh(subscription_after)
         await db.refresh(user)
 

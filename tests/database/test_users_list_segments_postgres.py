@@ -19,7 +19,14 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.database.crud.user import get_users_count, get_users_list
-from app.database.models import Base, Subscription, SubscriptionStatus, Tariff, User, UserStatus
+from app.database.models import (
+    Base,
+    Subscription,
+    SubscriptionStatus,
+    Tariff,
+    User,
+    UserStatus,
+)
 from tests.fixtures.postgres_db import postgres_session
 
 

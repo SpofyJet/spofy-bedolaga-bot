@@ -13,32 +13,6 @@ class DummyBot:
     pass
 
 
-@pytest.fixture(autouse=True)
-def reset_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Mirrors tests/webserver/test_payments.py's reset_settings — disables the
-    # other providers that fixture guards against, plus enables Platega.
-    monkeypatch.setattr(settings, 'TRIBUTE_ENABLED', False, raising=False)
-    monkeypatch.setattr(settings, 'TRIBUTE_API_KEY', None, raising=False)
-    monkeypatch.setattr(settings, 'TRIBUTE_WEBHOOK_PATH', '/tribute', raising=False)
-    monkeypatch.setattr(settings, 'MULENPAY_WEBHOOK_PATH', '/mulen', raising=False)
-    monkeypatch.setattr(settings, 'CRYPTOBOT_ENABLED', False, raising=False)
-    monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', None, raising=False)
-    monkeypatch.setattr(settings, 'CRYPTOBOT_WEBHOOK_PATH', '/cryptobot', raising=False)
-    monkeypatch.setattr(settings, 'CRYPTOBOT_WEBHOOK_SECRET', None, raising=False)
-    monkeypatch.setattr(settings, 'YOOKASSA_ENABLED', False, raising=False)
-    monkeypatch.setattr(settings, 'YOOKASSA_WEBHOOK_PATH', '/yookassa', raising=False)
-    monkeypatch.setattr(settings, 'YOOKASSA_SHOP_ID', 'shop', raising=False)
-    monkeypatch.setattr(settings, 'YOOKASSA_SECRET_KEY', 'key', raising=False)
-    monkeypatch.setattr(settings, 'YOOKASSA_TRUSTED_PROXY_NETWORKS', '', raising=False)
-    monkeypatch.setattr(settings, 'YOOKASSA_SKIP_IP_CHECK', False, raising=False)
-    monkeypatch.setattr(settings, 'WEBHOOK_URL', 'http://test', raising=False)
-
-    monkeypatch.setattr(settings, 'PLATEGA_ENABLED', True, raising=False)
-    monkeypatch.setattr(settings, 'PLATEGA_MERCHANT_ID', 'm', raising=False)
-    monkeypatch.setattr(settings, 'PLATEGA_SECRET', 's', raising=False)
-    monkeypatch.setattr(settings, 'PLATEGA_WEBHOOK_PATH', '/platega-webhook', raising=False)
-
-
 def _get_route(router, path: str, method: str = 'POST'):
     for route in router.routes:
         if getattr(route, 'path', '') == path and method in getattr(route, 'methods', set()):
@@ -67,6 +41,20 @@ def _build_request(
         return {'type': 'http.request', 'body': body, 'more_body': False}
 
     return Request(scope, receive)
+
+
+@pytest.fixture(autouse=True)
+def reset_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, 'CRYPTOBOT_ENABLED', False, raising=False)
+    monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', None, raising=False)
+    monkeypatch.setattr(settings, 'CRYPTOBOT_WEBHOOK_PATH', '/cryptobot', raising=False)
+    monkeypatch.setattr(settings, 'CRYPTOBOT_WEBHOOK_SECRET', None, raising=False)
+    monkeypatch.setattr(settings, 'WEBHOOK_URL', 'http://test', raising=False)
+
+    monkeypatch.setattr(settings, 'PLATEGA_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'PLATEGA_MERCHANT_ID', 'm', raising=False)
+    monkeypatch.setattr(settings, 'PLATEGA_SECRET', 's', raising=False)
+    monkeypatch.setattr(settings, 'PLATEGA_WEBHOOK_PATH', '/platega-webhook', raising=False)
 
 
 def _install_recorder(monkeypatch: pytest.MonkeyPatch) -> list[str]:

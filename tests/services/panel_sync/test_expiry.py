@@ -253,7 +253,10 @@ def test_billing_target_keeps_the_real_date_for_a_live_subscription():
 
 
 def test_restore_target_leaves_the_date_alone_for_disabled():
-    from app.services.grace_access_runtime import GracePanelSnapshot, _build_restore_target
+    from app.services.grace_access_runtime import (
+        GracePanelSnapshot,
+        _build_restore_target,
+    )
 
     snapshot = GracePanelSnapshot(
         remnawave_id=42,

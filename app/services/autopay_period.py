@@ -1,6 +1,6 @@
 """Валидация периода автопродления — общая для balance-autopay и СБП-рекуррентов.
 
-Живёт отдельно от monitoring_service: платёжные модули (Platega, Cashera) зовут её при
+Живёт отдельно от monitoring_service: платёжный модуль Platega зовёт её при
 оформлении, и импорт мониторинга оттуда замыкал кольцо
 crud.subscription → payment.* → monitoring_service (CodeQL py/cyclic-import).
 """

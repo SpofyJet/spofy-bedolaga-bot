@@ -19,6 +19,17 @@ from app.config import settings
 from app.services.payment_service import PaymentService
 
 
+def _make_service(stub: StubPlategaService | None) -> PaymentService:
+    service = PaymentService.__new__(PaymentService)  # type: ignore[call-arg]
+    service.bot = None
+    service.platega_service = stub
+    service.cryptobot_service = None
+    service.heleket_service = None
+    service.stars_service = None
+    service.wata_service = None
+    return service
+
+
 @pytest.fixture
 def anyio_backend() -> str:
     return 'asyncio'
@@ -66,20 +77,6 @@ class StubPlategaService:
     async def get_transaction(self, transaction_id: str) -> dict[str, Any] | None:
         self.calls.append({'transaction_lookup': transaction_id})
         return self.transaction_payload
-
-
-def _make_service(stub: StubPlategaService | None) -> PaymentService:
-    service = PaymentService.__new__(PaymentService)  # type: ignore[call-arg]
-    service.bot = None
-    service.platega_service = stub
-    service.yookassa_service = None
-    service.cryptobot_service = None
-    service.heleket_service = None
-    service.mulenpay_service = None
-    service.pal24_service = None
-    service.stars_service = None
-    service.wata_service = None
-    return service
 
 
 @pytest.mark.anyio('asyncio')

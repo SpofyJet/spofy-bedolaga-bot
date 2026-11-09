@@ -9,7 +9,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.cabinet.services.email_layout import reset_email_layout_cache, set_cached_email_layouts
+from app.cabinet.services.email_layout import (
+    reset_email_layout_cache,
+    set_cached_email_layouts,
+)
 from app.services.broadcast_service import EmailBroadcastService, _EmailRecipient
 
 

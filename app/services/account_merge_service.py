@@ -19,17 +19,12 @@ from app.database.models import (
     BroadcastHistory,
     ButtonClickLog,
     CabinetRefreshToken,
-    CloudPaymentsPayment,
     ContestAttempt,
     CryptoBotPayment,
     DiscountOffer,
-    FreekassaPayment,
     GuestPurchase,
     HeleketPayment,
-    KassaAiPayment,
-    MulenPayPayment,
     NewsArticle,
-    Pal24Payment,
     PartnerApplication,
     PartnerStatus,
     PinnedMessage,
@@ -44,10 +39,7 @@ from app.database.models import (
     ReferralContest,
     ReferralContestEvent,
     ReferralEarning,
-    RioPayPayment,
-    SavedPaymentMethod,
     SentNotification,
-    SeverPayPayment,
     Subscription,
     SubscriptionConversion,
     SubscriptionEvent,
@@ -66,7 +58,6 @@ from app.database.models import (
     WelcomeText,
     WheelSpin,
     WithdrawalRequest,
-    YooKassaPayment,
 )
 from app.external.remnawave_api import RemnaWaveAPI
 from app.services.panel_sync import patch_panel_account
@@ -79,18 +70,10 @@ _OAUTH_FIELDS: tuple[str, ...] = tuple(OAUTH_PROVIDER_COLUMNS.values())
 
 # Все платёжные таблицы с колонкой user_id
 _PAYMENT_MODELS: tuple[type, ...] = (
-    CloudPaymentsPayment,
     CryptoBotPayment,
-    FreekassaPayment,
     HeleketPayment,
-    KassaAiPayment,
-    MulenPayPayment,
-    Pal24Payment,
     PlategaPayment,
-    RioPayPayment,
-    SeverPayPayment,
     WataPayment,
-    YooKassaPayment,
 )
 
 # Приоритет партнёрских статусов (чем выше число — тем приоритетнее)
@@ -648,13 +631,9 @@ async def _handle_subscription_merge(
             primary.remnawave_id = None
         # СБП-автопродление Platega удаляемой подписки отменяем ДО delete: CASCADE
         # снесёт локальную запись, и Platega продолжила бы списывать в никуда.
-        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
-        from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
         await cancel_platega_recurring_for_subscription_safe(db, primary_sub.id, commit=False)
-        await cancel_lava_recurring_for_subscription_safe(db, primary_sub.id, commit=False)
-        await cancel_cashera_recurring_for_subscription_safe(db, primary_sub.id, commit=False)
         # Явно удаляем subscription_servers перед подпиской (CASCADE настроен, но делаем явно для ясности)
         await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == primary_sub.id))
         # Удаляем запись подписки primary
@@ -682,13 +661,9 @@ async def _handle_subscription_merge(
             deferred_remnawave_deletions.append(secondary.remnawave_id)
             secondary.remnawave_id = None
         # СБП-автопродление Platega удаляемой подписки отменяем ДО delete (см. выше).
-        from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
-        from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
         await cancel_platega_recurring_for_subscription_safe(db, secondary_sub.id, commit=False)
-        await cancel_lava_recurring_for_subscription_safe(db, secondary_sub.id, commit=False)
-        await cancel_cashera_recurring_for_subscription_safe(db, secondary_sub.id, commit=False)
         # Явно удаляем subscription_servers перед подпиской (CASCADE настроен, но делаем явно для ясности)
         await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == secondary_sub.id))
         # Удаляем запись подписки secondary
@@ -895,11 +870,6 @@ async def execute_merge(
     # 7. Переназначение всех платёжных таблиц
     for payment_model in _PAYMENT_MODELS:
         await db.execute(update(payment_model).where(payment_model.user_id == secondary.id).values(user_id=primary.id))
-
-    # 7b. Переназначение saved_payment_methods (FK без ondelete)
-    await db.execute(
-        update(SavedPaymentMethod).where(SavedPaymentMethod.user_id == secondary.id).values(user_id=primary.id)
-    )
 
     # 8. Переназначение referral_earnings
     # 8a. Удаляем cross-referral записи между участниками мержа (иначе станут self-referral)

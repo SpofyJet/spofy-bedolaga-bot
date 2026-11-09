@@ -644,9 +644,7 @@ class TelegramStarsMixin:
         logger.info('🔍 Проверка реферальной логики для описания', description_for_referral=description_for_referral)
 
         lower_description = description_for_referral.lower()
-        contains_allowed_keywords = any(
-            word in lower_description for word in ['пополнение', 'stars', 'yookassa', 'topup']
-        )
+        contains_allowed_keywords = any(word in lower_description for word in ['пополнение', 'stars', 'topup'])
         contains_forbidden_keywords = any(word in lower_description for word in ['комиссия', 'бонус'])
         allow_referral = contains_allowed_keywords and not contains_forbidden_keywords
 

@@ -548,24 +548,6 @@ def get_tariff_confirm_keyboard(
                 )
             ]
         )
-    if settings.is_lava_recurrent_enabled():
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('LAVA_PURCHASE_BUTTON', '💳 Автооплата картой (Lava)'),
-                    callback_data=f'tariff_lava:{tariff_id}',
-                )
-            ]
-        )
-    if settings.is_cashera_recurrent_enabled():
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('CASHERA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Cashera'),
-                    callback_data=f'tariff_cashera:{tariff_id}',
-                )
-            ]
-        )
     # Разовая оплата с баланса: рядом с автооплатой подписываем явно
     one_time_label = (
         texts.t('TARIFF_PURCHASE_ONE_TIME_BUTTON', '💳 Разово — только этот период')
@@ -670,10 +652,9 @@ def get_tariff_extend_insufficient_balance_keyboard(
     мультитарифе — ``se:{id}``, потому что голый ``subscription_extend`` на
     экране возврата после пополнения упирается в «Выберите подписку» и ничего
     не перерисовывает (FSM к тому моменту мог быть очищен, а активная подписка
-    там не закрепляется). Идиома та же, что в monitoring_service и
-    recurrent_payment_service.
+    там не закрепляется). Идиома та же, что в monitoring_service.
 
-    SBP/Lava-строки НОВОЙ покупки (``tariff_sbp`` / ``tariff_lava``) не
+    SBP-строки НОВОЙ покупки (``tariff_sbp``) не
     добавляем: их обработчики оформляют новую подписку, а не продление.
     Наши ряды привязки продления (``_sbp_renew_recurring_rows``) вызывающий
     передаёт явно через ``sbp_rows``.
@@ -736,24 +717,6 @@ def _sbp_purchase_rows(tariff_id: int, texts, period_days: int | None = None) ->
                     callback_data=(
                         f'tariff_sbp:{tariff_id}:{period_days}' if period_days else f'tariff_sbp:{tariff_id}'
                     ),
-                )
-            ]
-        )
-    if settings.is_lava_recurrent_enabled():
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('LAVA_PURCHASE_BUTTON', '💳 Автооплата картой (Lava)'),
-                    callback_data=f'tariff_lava:{tariff_id}',
-                )
-            ]
-        )
-    if settings.is_cashera_recurrent_enabled():
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('CASHERA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Cashera'),
-                    callback_data=f'tariff_cashera:{tariff_id}',
                 )
             ]
         )
@@ -857,24 +820,6 @@ def get_daily_tariff_confirm_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оплатить с автопродлением (СБП)'),
                     callback_data=f'tariff_sbp:{tariff_id}',
-                )
-            ]
-        )
-    if settings.is_lava_recurrent_enabled():
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('LAVA_PURCHASE_BUTTON', '💳 Автооплата картой (Lava)'),
-                    callback_data=f'tariff_lava:{tariff_id}',
-                )
-            ]
-        )
-    if settings.is_cashera_recurrent_enabled():
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('CASHERA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Cashera'),
-                    callback_data=f'tariff_cashera:{tariff_id}',
                 )
             ]
         )
@@ -3293,15 +3238,6 @@ async def confirm_tariff_extend(
             await db.rollback()
             raise
 
-        # commit=False defers the irreversible provider schedule update.
-        if period > 0:
-            try:
-                from app.services.payment.lava import shift_lava_next_charge_after_manual_extension
-
-                await shift_lava_next_charge_after_manual_extension(db, subscription.id, period)
-            except Exception as shift_error:
-                logger.warning('Failed to shift Lava next charge after manual tariff payment', error=shift_error)
-
         from app.database.crud.transaction import emit_transaction_side_effects
 
         await emit_transaction_side_effects(
@@ -4059,7 +3995,7 @@ async def confirm_tariff_switch(
         return
 
     # Запоминаем старый тариф: после переключения снимаем привязки
-    # автопродления СТАРОГО тарифа (СБП/Lava) — иначе следующее списание по
+    # автопродления СТАРОГО тарифа (СБП) — иначе следующее списание по
     # старой привязке оттянет тариф обратно (логика смены тарифа при списании).
     _sw_old_tariff_id = getattr(subscription, 'tariff_id', None)
     _sw_recurring_note = ''
@@ -4201,15 +4137,6 @@ async def confirm_tariff_switch(
             await db.rollback()
             raise
 
-        # commit=False defers the irreversible provider schedule update.
-        if period > 0:
-            try:
-                from app.services.payment.lava import shift_lava_next_charge_after_manual_extension
-
-                await shift_lava_next_charge_after_manual_extension(db, subscription.id, period)
-            except Exception as shift_error:
-                logger.warning('Failed to shift Lava next charge after manual tariff payment', error=shift_error)
-
         from app.database.crud.transaction import emit_transaction_side_effects
 
         await emit_transaction_side_effects(
@@ -4234,12 +4161,6 @@ async def confirm_tariff_switch(
                 await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
             except Exception as cancel_error:  # pragma: no cover - defensive
                 logger.warning('Не удалось отменить СБП-привязку при смене тарифа', error=str(cancel_error))
-            try:
-                from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
-
-                await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-            except Exception as cancel_error:  # pragma: no cover - defensive
-                logger.warning('Не удалось отменить Lava-привязку при смене тарифа', error=str(cancel_error))
             _sw_recurring_note = texts.t(
                 'TARIFF_SWITCH_RECURRING_NOTE',
                 '\n\n⚠️ Автопродление по старому тарифу отменено — подключите заново кнопкой ниже.',
@@ -4566,12 +4487,6 @@ async def confirm_daily_tariff_switch(
                 await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
             except Exception as cancel_error:  # pragma: no cover - defensive
                 logger.warning('Не удалось отменить СБП-привязку при смене на суточный тариф', error=str(cancel_error))
-            try:
-                from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
-
-                await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-            except Exception as cancel_error:  # pragma: no cover - defensive
-                logger.warning('Не удалось отменить Lava-привязку при смене на суточный тариф', error=str(cancel_error))
             _sw_recurring_note = texts.t(
                 'TARIFF_SWITCH_RECURRING_NOTE',
                 '\n\n⚠️ Автопродление по старому тарифу отменено — подключите заново в разделе «Автоплатёж».',
@@ -5366,133 +5281,6 @@ async def preview_instant_switch(
 
 
 @error_handler
-async def purchase_tariff_with_lava(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-    """Оформление подписки на тариф через автопродление Lava.
-
-    Зеркало ``purchase_tariff_with_sbp``: первое списание оплачивается по
-    ссылке Lava и оживляет подписку (для нового тарифа создаётся заготовка).
-    Выбранный период игнорируется — каденс задан продуктом в кабинете Lava.
-    """
-    texts = get_texts(db_user.language)
-    tariff_id = int(callback.data.split(':')[1])
-
-    tariff = await get_tariff_by_id(db, tariff_id)
-    if not tariff or not tariff.is_active:
-        await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
-        return
-
-    # n2: предупреждение о смене движка автопродления на целевой подписке —
-    # активные СБП/баланс-автоплатёж будут отключены при создании
-    # Lava-привязки. Ошибка предупреждения не должна ломать покупку.
-    try:
-        from app.services.recurrent_amount import get_active_recurrent_engines, recurrent_engines_warning
-
-        if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-            _target_sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff.id, include_inactive=True)
-        else:
-            _target_sub = await get_subscription_by_user_id(db, db_user.id)
-        if _target_sub is not None:
-            _engines = await get_active_recurrent_engines(db, _target_sub)
-            _warning = recurrent_engines_warning(texts, _engines, enabling='lava')
-            if _warning:
-                await callback.answer(_warning, show_alert=True)
-    except Exception:
-        pass
-
-    from app.services.payment.lava import purchase_tariff_with_lava_recurring
-
-    try:
-        result = await purchase_tariff_with_lava_recurring(db, user=db_user, tariff=tariff)
-    except ValueError as error:
-        await callback.answer(str(error), show_alert=True)
-        return
-    except Exception:
-        await callback.answer(
-            texts.t('LAVA_RECURRING_ENABLE_ERROR', '❌ Не удалось подключить автопродление Lava. Попробуйте позже.'),
-            show_alert=True,
-        )
-        return
-
-    redirect_url = result.get('redirect_url')
-    text = texts.t(
-        'LAVA_RECURRING_ENABLE_SUCCESS',
-        '⚡ <b>Автопродление Lava</b>\n\nОплатите первый счёт по кнопке ниже.\nПосле оплаты автопродление станет активным.',
-    )
-    text += '\n\n' + texts.t(
-        'LAVA_PURCHASE_PENDING_NOTE',
-        'ℹ️ Подписка активируется после оплаты первого счёта.',
-    )
-
-    buttons = []
-    if redirect_url:
-        buttons.append(
-            [InlineKeyboardButton(text=texts.t('LAVA_RECURRING_PAY_BUTTON', '💳 Оплатить'), url=redirect_url)]
-        )
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
-
-    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
-
-
-@error_handler
-async def purchase_tariff_with_cashera(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-    """Оформление подписки на тариф через автопродление Cashera.
-
-    Зеркало ``purchase_tariff_with_lava``: клиент подтверждает подписку по ссылке
-    Cashera, первое списание оживляет подписку (для нового тарифа — заготовка).
-    Каденс — по периоду тарифа, как у Platega.
-    """
-    texts = get_texts(db_user.language)
-    tariff_id = int(callback.data.split(':')[1])
-
-    tariff = await get_tariff_by_id(db, tariff_id)
-    if not tariff or not tariff.is_active:
-        await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
-        return
-
-    from app.services.payment.cashera import purchase_tariff_with_cashera_recurring
-
-    try:
-        result = await purchase_tariff_with_cashera_recurring(db, user=db_user, tariff=tariff)
-    except ValueError as error:
-        await callback.answer(str(error), show_alert=True)
-        return
-    except Exception:
-        await callback.answer(
-            texts.t(
-                'CASHERA_RECURRING_ENABLE_ERROR', '❌ Не удалось подключить автопродление Cashera. Попробуйте позже.'
-            ),
-            show_alert=True,
-        )
-        return
-
-    redirect_url = result.get('redirect_url')
-    text = texts.t(
-        'CASHERA_RECURRING_ENABLE_SUCCESS',
-        '⚡ <b>Автопродление Cashera</b>\n\nПодтвердите автосписания по кнопке ниже.\n'
-        'После подтверждения и первого списания подписка продлится автоматически.',
-    )
-
-    buttons = []
-    if redirect_url:
-        buttons.append(
-            [InlineKeyboardButton(text=texts.t('CASHERA_RECURRING_PAY_BUTTON', '💳 Подтвердить'), url=redirect_url)]
-        )
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
-
-    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
-
-
-@error_handler
 async def confirm_instant_switch(
     callback: types.CallbackQuery,
     db_user: User,
@@ -6277,7 +6065,7 @@ async def purchase_tariff_with_sbp(
         return
 
     # n2: предупреждение о смене движка автопродления на целевой подписке
-    # (та же резолюция, что в сервисе): активные Lava/баланс-автоплатёж будут
+    # (та же резолюция, что в сервисе): активный баланс-автоплатёж будут
     # отключены при создании СБП-привязки. Ошибка предупреждения не должна
     # ломать покупку.
     try:
@@ -6365,8 +6153,6 @@ def register_tariff_purchase_handlers(dp: Dispatcher):
 
     # Оформление через СБП-автопродление Platega (альтернатива балансу)
     dp.callback_query.register(purchase_tariff_with_sbp, F.data.startswith('tariff_sbp:'))
-    dp.callback_query.register(purchase_tariff_with_lava, F.data.startswith('tariff_lava:'))
-    dp.callback_query.register(purchase_tariff_with_cashera, F.data.startswith('tariff_cashera:'))
 
     # Подтверждение покупки суточного тарифа
     dp.callback_query.register(confirm_daily_tariff_purchase, F.data.startswith('daily_tariff_confirm:'))

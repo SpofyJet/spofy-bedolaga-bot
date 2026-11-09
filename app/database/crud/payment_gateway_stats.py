@@ -17,64 +17,16 @@ from datetime import datetime
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import (
-    AntilopayPayment,
-    AuraPayPayment,
-    CasheraPayment,
-    CisPayPayment,
-    CloudPaymentsPayment,
-    CryptoBotPayment,
-    DonutPayment,
-    EtoplatezhiPayment,
-    FreekassaPayment,
-    HeleketPayment,
-    JupiterPayment,
-    KassaAiPayment,
-    LavaPayment,
-    MulenPayPayment,
-    OverpayPayment,
-    Pal24Payment,
-    ParityPayPayment,
-    PaymentMethod,
-    PayPearPayment,
-    PlategaPayment,
-    RioPayPayment,
-    RollyPayPayment,
-    SeverPayPayment,
-    TabPayPayment,
-    WataPayment,
-    YooKassaPayment,
-)
+from app.database.models import CryptoBotPayment, HeleketPayment, PaymentMethod, PlategaPayment, WataPayment
 
 
 # (PaymentMethod value, payment model, "successfully paid" SQL predicate).
 # 20 gateways use the is_paid Boolean column; CryptoBot/Heleket match status.
 _GATEWAY_REGISTRY: list[tuple[str, type, object]] = [
-    (PaymentMethod.YOOKASSA.value, YooKassaPayment, YooKassaPayment.is_paid.is_(True)),
     (PaymentMethod.CRYPTOBOT.value, CryptoBotPayment, CryptoBotPayment.status == 'paid'),
     (PaymentMethod.HELEKET.value, HeleketPayment, HeleketPayment.status.in_(('paid', 'paid_over'))),
-    (PaymentMethod.MULENPAY.value, MulenPayPayment, MulenPayPayment.is_paid.is_(True)),
-    (PaymentMethod.PAL24.value, Pal24Payment, Pal24Payment.is_paid.is_(True)),
     (PaymentMethod.WATA.value, WataPayment, WataPayment.is_paid.is_(True)),
     (PaymentMethod.PLATEGA.value, PlategaPayment, PlategaPayment.is_paid.is_(True)),
-    (PaymentMethod.CLOUDPAYMENTS.value, CloudPaymentsPayment, CloudPaymentsPayment.is_paid.is_(True)),
-    (PaymentMethod.FREEKASSA.value, FreekassaPayment, FreekassaPayment.is_paid.is_(True)),
-    (PaymentMethod.KASSA_AI.value, KassaAiPayment, KassaAiPayment.is_paid.is_(True)),
-    (PaymentMethod.RIOPAY.value, RioPayPayment, RioPayPayment.is_paid.is_(True)),
-    (PaymentMethod.SEVERPAY.value, SeverPayPayment, SeverPayPayment.is_paid.is_(True)),
-    (PaymentMethod.PAYPEAR.value, PayPearPayment, PayPearPayment.is_paid.is_(True)),
-    (PaymentMethod.ROLLYPAY.value, RollyPayPayment, RollyPayPayment.is_paid.is_(True)),
-    (PaymentMethod.OVERPAY.value, OverpayPayment, OverpayPayment.is_paid.is_(True)),
-    (PaymentMethod.AURAPAY.value, AuraPayPayment, AuraPayPayment.is_paid.is_(True)),
-    (PaymentMethod.ETOPLATEZHI.value, EtoplatezhiPayment, EtoplatezhiPayment.is_paid.is_(True)),
-    (PaymentMethod.ANTILOPAY.value, AntilopayPayment, AntilopayPayment.is_paid.is_(True)),
-    (PaymentMethod.JUPITER.value, JupiterPayment, JupiterPayment.is_paid.is_(True)),
-    (PaymentMethod.DONUT.value, DonutPayment, DonutPayment.is_paid.is_(True)),
-    (PaymentMethod.LAVA.value, LavaPayment, LavaPayment.is_paid.is_(True)),
-    (PaymentMethod.CISPAY.value, CisPayPayment, CisPayPayment.is_paid.is_(True)),
-    (PaymentMethod.CASHERA.value, CasheraPayment, CasheraPayment.is_paid.is_(True)),
-    (PaymentMethod.TABPAY.value, TabPayPayment, TabPayPayment.is_paid.is_(True)),
-    (PaymentMethod.PARITYPAY.value, ParityPayPayment, ParityPayPayment.is_paid.is_(True)),
 ]
 
 

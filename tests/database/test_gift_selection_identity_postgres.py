@@ -12,9 +12,19 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from sqlalchemy import select
 
 from app.database.crud.user import get_user_by_id
-from app.database.models import Base, GuestPurchase, SystemSetting, Tariff, Transaction, User
+from app.database.models import (
+    Base,
+    GuestPurchase,
+    SystemSetting,
+    Tariff,
+    Transaction,
+    User,
+)
 from app.handlers.subscription import gift
-from app.services.gift_purchase_service import GIFT_ENABLED_KEY, purchase_gift_from_balance
+from app.services.gift_purchase_service import (
+    GIFT_ENABLED_KEY,
+    purchase_gift_from_balance,
+)
 from tests.fixtures.postgres_db import postgres_session
 from tests.services.test_cart_cleanup_redis import carts  # noqa: F401
 

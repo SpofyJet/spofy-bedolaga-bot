@@ -21,7 +21,10 @@ from app.database.models import (
     User,
     UserStatus,
 )
-from tests.fixtures.local_day import reset_local_timezone_cache, use_timezone  # noqa: F401
+from tests.fixtures.local_day import (  # noqa: F401
+    reset_local_timezone_cache,
+    use_timezone,
+)
 from tests.fixtures.sqlite_memory import memory_session
 
 

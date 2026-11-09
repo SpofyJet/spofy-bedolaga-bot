@@ -1673,20 +1673,14 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             from sqlalchemy import delete, update as sa_update
 
             from app.database.models import (
-                CloudPaymentsPayment,
                 CryptoBotPayment,
-                FreekassaPayment,
                 HeleketPayment,
-                KassaAiPayment,
-                MulenPayPayment,
-                Pal24Payment,
                 PlategaPayment,
                 PromoCodeUse,
                 ReferralEarning,
                 SubscriptionServer,
                 Transaction,
                 WataPayment,
-                YooKassaPayment,
             )
 
             user_subs = getattr(user, 'subscriptions', None) or []
@@ -1716,16 +1710,10 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
             # Обнуляем transaction_id во всех таблицах платежей перед удалением транзакций
             payment_models = [
-                YooKassaPayment,
                 CryptoBotPayment,
                 HeleketPayment,
-                MulenPayPayment,
-                Pal24Payment,
                 WataPayment,
                 PlategaPayment,
-                CloudPaymentsPayment,
-                FreekassaPayment,
-                KassaAiPayment,
             ]
             for payment_model in payment_models:
                 await db.execute(

@@ -10,9 +10,20 @@ import pytest
 from sqlalchemy import select
 
 from app.config import settings
-from app.database.models import Base, Subscription, Tariff, TrafficPurchase, Transaction, User
+from app.database.models import (
+    Base,
+    Subscription,
+    Tariff,
+    TrafficPurchase,
+    Transaction,
+    User,
+)
 from app.services.remnawave_service import RemnaWaveService
-from tests.fixtures.postgres_db import postgres_session, postgres_sessions, wait_for_lock_waiter
+from tests.fixtures.postgres_db import (
+    postgres_session,
+    postgres_sessions,
+    wait_for_lock_waiter,
+)
 
 
 pytestmark = pytest.mark.postgres
@@ -423,7 +434,9 @@ async def test_parallel_reversed_pages_do_not_deadlock_owner_locks(postgres_data
 
 async def test_trial_marker_reads_live_database_override(postgres_database, monkeypatch):
     from app.services.settings_store import store_setting
-    from app.services.system_settings_service import bot_configuration_service as configuration
+    from app.services.system_settings_service import (
+        bot_configuration_service as configuration,
+    )
 
     accounts = [account(tag='TRY')]
     svc = service(monkeypatch, accounts)

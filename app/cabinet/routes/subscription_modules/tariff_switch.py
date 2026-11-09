@@ -497,8 +497,6 @@ async def switch_tariff(
 
     # Device limit = new tariff base + extra purchased devices (carried over)
     from app.database.crud.subscription import calc_device_limit_on_tariff_switch
-    from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
-    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
 
     # Смена тарифа делает СБП-привязку Platega несогласованной: она продолжила бы
     # списывать сумму СТАРОГО тарифа со старым каденсом. Отменяем привязку до
@@ -508,8 +506,6 @@ async def switch_tariff(
 
     await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
-    await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-    await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
     # Re-load subscription to avoid MissingGreenlet from expired lazy relationship
     # (subtract_user_balance re-selects User with populate_existing=True which expires relationships)
     await db.refresh(subscription)

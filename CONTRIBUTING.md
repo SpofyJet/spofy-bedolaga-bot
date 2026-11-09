@@ -267,7 +267,7 @@ test: добавить тесты для subscription_service
 chore: обновить зависимости
 
 # Примеры
-git commit -m "feat(payments): добавить поддержку YooKassa webhook"
+git commit -m "feat(payments): добавить поддержку Platega webhook"
 git commit -m "fix(subscription): исправить расчет стоимости устройств"
 git commit -m "docs(readme): обновить инструкцию по установке"
 ```

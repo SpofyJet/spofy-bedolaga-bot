@@ -5,10 +5,6 @@ Platega (docs.platega.io, «Создание платежной ссылки с 
 категорий магазинов. «Отсутствие ``metadata.userId`` при наличии требования
 отключает антифрод-защиту и может привести к отключению магазина».
 
-MulenPay (письмо провайдера, 2026-09-15): поле ``client`` «требуется заполнять
-почтой, телефоном или ТГ ид и т.п.». Документация формата не задаёт — в примере
-только почта.
-
 Platega (обновление docs.platega.io от 2026-10-30): ``metadata.user_email``
 обязателен в каждом платеже и должен обозначать покупателя, а не заказ. Почту у
 пользователя не спрашиваем — лишний шаг перед оплатой. Подставляем сами:
@@ -101,7 +97,7 @@ class PayerIdentity:
     user_id: str
     #: Как человека назвать (Platega ``userName``).
     user_name: str
-    #: Как с ним связаться (MulenPay ``client``).
+    #: Как с ним связаться.
     contact: str
     #: Только идентификация в Platega (``metadata.user_email``), не для чеков.
     platega_email: str | None = None
@@ -154,8 +150,7 @@ def payer_from_user(record: PayerRecord) -> PayerIdentity:
     """Плательщик-пользователь.
 
     ``userName``: @username → имя → почта → id<telegram_id>. Контакт: только
-    подтверждённая почта (адрес назначается до подтверждения, а MulenPay
-    фискализирует платёж — чек чужому ящику не нужен), иначе Telegram ID.
+    подтверждённая почта, иначе Telegram ID.
     """
     telegram_id = str(record.telegram_id) if record.telegram_id else None
     user_id = telegram_id or f'user-{record.id}'

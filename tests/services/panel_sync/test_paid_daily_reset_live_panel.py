@@ -11,7 +11,13 @@ import httpx
 import pytest
 
 from app.config import settings
-from app.database.models import Base, PaidTrafficResetIntent, Subscription, Transaction, User
+from app.database.models import (
+    Base,
+    PaidTrafficResetIntent,
+    Subscription,
+    Transaction,
+    User,
+)
 from app.external.remnawave_api import RemnaWaveAPI
 from app.services import paid_traffic_reset_service as resets
 from tests.fixtures.postgres_db import postgres_session

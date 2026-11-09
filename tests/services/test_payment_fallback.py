@@ -38,16 +38,6 @@ def test_cryptobot_payload_gives_kopeks():
     assert _cryptobot_payload_kopeks('garbage') == 0
 
 
-def test_exact_mode_removes_only_that_method(monkeypatch):
-    monkeypatch.setattr(
-        'app.keyboards.inline.get_payment_methods_keyboard',
-        lambda amount, lang: _keyboard('yookassa', 'yookassa_sbp', 'wata'),
-    )
-    markup = payment_fallback.fallback_methods_keyboard(31500, 'ru', 'yookassa', exact=True)
-    callbacks = [b.callback_data for row in markup.inline_keyboard for b in row]
-    assert callbacks == ['topup_amount|yookassa_sbp|31500', 'topup_amount|wata|31500']  # СБП остаётся
-
-
 async def test_answer_creation_failed_offers_other_methods(monkeypatch):
     from unittest.mock import AsyncMock
 
@@ -92,3 +82,13 @@ def test_payment_error_keyboard_hides_support_when_disabled(monkeypatch):
     )
     markup = get_payment_error_keyboard('ru', back_callback='menu_balance')
     assert [b.callback_data for row in markup.inline_keyboard for b in row] == ['menu_balance']
+
+
+def test_exact_mode_removes_only_that_method(monkeypatch):
+    monkeypatch.setattr(
+        'app.keyboards.inline.get_payment_methods_keyboard',
+        lambda amount, lang: _keyboard('platega', 'platega_m2', 'wata'),
+    )
+    markup = payment_fallback.fallback_methods_keyboard(31500, 'ru', 'platega', exact=True)
+    callbacks = [b.callback_data for row in markup.inline_keyboard for b in row]
+    assert callbacks == ['topup_amount|platega_m2|31500', 'topup_amount|wata|31500']  # другой метод Platega остаётся

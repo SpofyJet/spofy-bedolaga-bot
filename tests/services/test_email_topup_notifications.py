@@ -33,7 +33,9 @@ from app.services.notification_delivery_service import (
     notification_delivery_service,
 )
 from app.services.payment import common as payment_common
-from app.services.subscription_auto_purchase_service import _notify_email_user_auto_purchase
+from app.services.subscription_auto_purchase_service import (
+    _notify_email_user_auto_purchase,
+)
 
 
 def _email_user(**overrides):

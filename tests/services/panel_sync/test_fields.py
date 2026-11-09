@@ -5,7 +5,10 @@
 описание: без него тег тарифа не доезжал до панели через поштучный синк.
 """
 
-from app.services.panel_sync.fields import PANEL_ACCOUNT_METADATA_FIELDS, narrow_push_fields
+from app.services.panel_sync.fields import (
+    PANEL_ACCOUNT_METADATA_FIELDS,
+    narrow_push_fields,
+)
 
 
 def test_account_metadata_includes_tag_alongside_description():

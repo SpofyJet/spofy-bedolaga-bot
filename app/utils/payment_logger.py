@@ -9,7 +9,7 @@ Usage::
 
     from app.utils.payment_logger import payment_logger
 
-    payment_logger.info('Created YooKassa payment', payment_id=payment_id, amount=amount)
+    payment_logger.info('Created payment', payment_id=payment_id, amount=amount)
     payment_logger.error('Webhook processing error', error=error)
 """
 

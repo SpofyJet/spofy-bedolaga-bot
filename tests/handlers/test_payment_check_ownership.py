@@ -14,7 +14,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import app.handlers.balance.cryptobot as cryptobot_handlers
-import app.handlers.balance.main as balance_main
 import app.handlers.balance.platega as platega_handlers
 from app.handlers import simple_subscription
 
@@ -85,19 +84,6 @@ async def test_cryptobot_foreign_payment_hidden() -> None:
 
     _assert_not_found_alert(callback)
     callback.message.edit_text.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_sbp_confirmation_token_not_sent_to_foreign_user() -> None:
-    callback = _callback('sbp_pay_5')
-
-    with patch(
-        'app.database.crud.yookassa.get_yookassa_payment_by_local_id', AsyncMock(return_value=_foreign_payment())
-    ):
-        await balance_main.handle_sbp_payment(callback, db_user=ATTACKER, db=AsyncMock())
-
-    _assert_not_found_alert(callback)
-    callback.message.answer.assert_not_called()
 
 
 @pytest.mark.asyncio

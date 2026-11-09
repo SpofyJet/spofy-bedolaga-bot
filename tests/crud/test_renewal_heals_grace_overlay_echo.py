@@ -24,8 +24,18 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.config import settings
-from app.database.crud.subscription import extend_subscription, reconcile_tariff_traffic_limit
-from app.database.models import Base, ServerSquad, Subscription, SubscriptionStatus, Tariff, User
+from app.database.crud.subscription import (
+    extend_subscription,
+    reconcile_tariff_traffic_limit,
+)
+from app.database.models import (
+    Base,
+    ServerSquad,
+    Subscription,
+    SubscriptionStatus,
+    Tariff,
+    User,
+)
 from app.services.grace_access_runtime import _session_to_model
 from app.services.grace_access_service import (
     GraceAccessSession,
@@ -297,35 +307,6 @@ async def test_squads_changed_after_grace_are_left_alone(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_recurring_charge_order_counts_the_new_period_from_the_real_end(monkeypatch) -> None:
-    """Lava и Platega продлевают методом модели: починка идёт до него, как в самих шлюзах."""
-    from app.services.grace_access_echo import undo_grace_overlay_echo
-
-    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
-    now = datetime.now(UTC)
-    real_end = now - timedelta(hours=1)
-    session = _session(
-        started_at=real_end + timedelta(seconds=30),
-        billing_before=_billing(end_at=real_end, squads=(SRV_A,), limit_gb=0),
-    )
-    async with memory_session(monkeypatch, TABLES) as db:
-        await _seed(db, _tariff(limit_gb=0))
-        subscription = _leaked_subscription(grace_until=session.grace_until, tariff_id=1)
-        await _seed_rows(db, subscription, _session_to_model(session))
-
-        await undo_grace_overlay_echo(db, subscription)
-        subscription.extend_subscription(30)
-        await reconcile_tariff_traffic_limit(db, subscription)
-        await db.commit()
-        await db.refresh(subscription)
-
-    assert subscription.connected_squads == [SRV_A]
-    assert subscription.traffic_limit_gb == 0
-    new_end = subscription.end_date.replace(tzinfo=UTC)
-    assert abs((new_end - (now + timedelta(days=30))).total_seconds()) < 120
-
-
-@pytest.mark.asyncio
 async def test_fractional_usage_limit_echo_is_recognised(monkeypatch) -> None:
     """Ревью 2026-09-15: лимит приходил в подписку округлённым вниз — «расход 7,3 + 1» = 8 ГБ.
 
@@ -523,3 +504,32 @@ async def test_grace_squad_next_to_a_bought_server_is_not_recognised_without_the
         await db.refresh(subscription)
 
     assert set(subscription.connected_squads) == {GRACE, SRV_B}
+
+
+@pytest.mark.asyncio
+async def test_recurring_charge_order_counts_the_new_period_from_the_real_end(monkeypatch) -> None:
+    """Lava и Platega продлевают методом модели: починка идёт до него, как в самих шлюзах."""
+    from app.services.grace_access_echo import undo_grace_overlay_echo
+
+    monkeypatch.setattr(settings, 'SALES_MODE', 'tariffs')
+    now = datetime.now(UTC)
+    real_end = now - timedelta(hours=1)
+    session = _session(
+        started_at=real_end + timedelta(seconds=30),
+        billing_before=_billing(end_at=real_end, squads=(SRV_A,), limit_gb=0),
+    )
+    async with memory_session(monkeypatch, TABLES) as db:
+        await _seed(db, _tariff(limit_gb=0))
+        subscription = _leaked_subscription(grace_until=session.grace_until, tariff_id=1)
+        await _seed_rows(db, subscription, _session_to_model(session))
+
+        await undo_grace_overlay_echo(db, subscription)
+        subscription.extend_subscription(30)
+        await reconcile_tariff_traffic_limit(db, subscription)
+        await db.commit()
+        await db.refresh(subscription)
+
+    assert subscription.connected_squads == [SRV_A]
+    assert subscription.traffic_limit_gb == 0
+    new_end = subscription.end_date.replace(tzinfo=UTC)
+    assert abs((new_end - (now + timedelta(days=30))).total_seconds()) < 120

@@ -8,7 +8,10 @@ naive substitution would produce ``happ://crypt4/happ://crypt5/...``.
 
 from __future__ import annotations
 
-from app.cabinet.routes.subscription_modules.status import _create_deep_link, _resolve_button_url
+from app.cabinet.routes.subscription_modules.status import (
+    _create_deep_link,
+    _resolve_button_url,
+)
 from app.handlers.subscription.common import create_deep_link as bot_create_deep_link, resolve_button_url
 
 

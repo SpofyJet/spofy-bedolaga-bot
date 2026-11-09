@@ -20,7 +20,14 @@ from aiogram import Dispatcher
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import CallbackQuery, Chat, InaccessibleMessage, InlineKeyboardMarkup, Message, User as TgUser
+from aiogram.types import (
+    CallbackQuery,
+    Chat,
+    InaccessibleMessage,
+    InlineKeyboardMarkup,
+    Message,
+    User as TgUser,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

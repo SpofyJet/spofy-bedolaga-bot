@@ -128,7 +128,10 @@ def test_switch_module_is_free_of_side_effects_on_import():
 @pytest.mark.asyncio
 async def test_delivery_service_skips_disabled_type(monkeypatch):
     """Основной путь уведомлений: отключённый тип не уходит, включённый — уходит."""
-    from app.services.notification_delivery_service import NotificationType, notification_delivery_service as service
+    from app.services.notification_delivery_service import (
+        NotificationType,
+        notification_delivery_service as service,
+    )
 
     captured: list[dict] = []
 
