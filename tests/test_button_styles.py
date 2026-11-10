@@ -42,7 +42,8 @@ def test_subscription_screen_main_actions(monkeypatch):
     markup = kb.get_subscription_keyboard('ru', has_subscription=True, is_trial=False, subscription=_fake_sub('active'))
     styles = _callbacks(markup)
     connect = next(btn for row in markup.inline_keyboard for btn in row if 'Подключить' in (btn.text or ''))
-    assert connect.style == 'success'
+    # На экране одна зелёная кнопка: продление, подключение без цвета.
+    assert connect.style is None
     assert styles['subscription_extend'] == 'success'
     assert styles['subscription_autopay'] is None
     assert styles['back_to_menu'] is None
@@ -68,3 +69,30 @@ def test_referral_secondary_buttons_plain():
     assert styles['referral_show_qr'] is None
     assert styles['referral_list'] is None
     assert styles['referral_analytics'] is None
+
+
+def _green(markup):
+    return [btn.callback_data or btn.url for row in markup.inline_keyboard for btn in row if btn.style == 'success']
+
+
+def test_one_accent_keeps_only_the_preferred_button():
+    connect = kb.InlineKeyboardButton(text='c', url='https://example.com', style='success')
+    extend = kb.InlineKeyboardButton(text='e', callback_data='subscription_extend', style='success')
+    traffic = kb.InlineKeyboardButton(text='t', callback_data='buy_traffic', style='success')
+    plain = kb.InlineKeyboardButton(text='p', callback_data='menu_info')
+    result = kb._one_accent([[connect], [extend], [traffic, plain]], ('subscription_extend',))
+    assert [[btn.style for btn in row] for row in result] == [[None], ['success'], [None, None]]
+
+
+def test_one_accent_falls_back_to_the_top_button():
+    connect = kb.InlineKeyboardButton(text='c', url='https://example.com', style='success')
+    traffic = kb.InlineKeyboardButton(text='t', callback_data='buy_traffic', style='success')
+    result = kb._one_accent([[connect], [traffic]], ('menu_buy',))
+    assert result[0][0].style == 'success'
+    assert result[1][0].style is None
+
+
+def test_subscription_screen_has_one_green_button(monkeypatch):
+    _patch_subscription_screen(monkeypatch)
+    markup = kb.get_subscription_keyboard('ru', has_subscription=True, is_trial=False, subscription=_fake_sub('active'))
+    assert _green(markup) == ['subscription_extend']

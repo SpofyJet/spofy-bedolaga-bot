@@ -658,6 +658,26 @@ def _build_cabinet_main_menu_keyboard(
     return apply_button_icons(InlineKeyboardMarkup(inline_keyboard=keyboard_rows))
 
 
+def _one_accent(
+    rows: list[list[InlineKeyboardButton]], prefer: tuple[str, ...] = ()
+) -> list[list[InlineKeyboardButton]]:
+    """На экране одна зелёная кнопка: первая из prefer, а если их нет, то верхняя зелёная."""
+    accented = [button for row in rows for button in row if button.style == 'success']
+    if len(accented) < 2:
+        return rows
+    keep = next(
+        (button for callback in prefer for button in accented if button.callback_data == callback),
+        accented[0],
+    )
+    return [
+        [
+            button.model_copy(update={'style': None}) if button.style == 'success' and button is not keep else button
+            for button in row
+        ]
+        for row in rows
+    ]
+
+
 def get_main_menu_keyboard(
     language: str = DEFAULT_LANGUAGE,
     is_admin: bool = False,
@@ -959,6 +979,10 @@ def get_main_menu_keyboard(
         keyboard.append(
             [InlineKeyboardButton(text=texts.t('MODERATION_BUTTON', '🧑‍⚖️ Модерация'), callback_data='moderator_panel')]
         )
+
+    # Незавершённый заказ важнее всего; без действующего доступа главное действие — получить его.
+    accent_prefer = ('return_to_saved_cart', *(() if has_live_access else ('menu_trial', 'menu_buy')))
+    keyboard = _one_accent(keyboard, accent_prefer)
 
     return apply_button_icons(InlineKeyboardMarkup(inline_keyboard=keyboard))
 
@@ -1578,7 +1602,9 @@ def get_subscription_keyboard(
         ]
     )
 
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+    # Главное действие экрана подписки — то, что сохраняет доступ; иначе верхняя кнопка (подключение).
+    accent_prefer = ('subscription_upgrade', 'toggle_daily_subscription_pause', 'subscription_extend', 'menu_buy')
+    return InlineKeyboardMarkup(inline_keyboard=_one_accent(keyboard, accent_prefer))
 
 
 def get_payment_methods_keyboard_with_cart(
