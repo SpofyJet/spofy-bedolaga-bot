@@ -27,7 +27,7 @@ from app.handlers.admin.messages import (
     get_custom_users,
     get_target_users,
 )
-from app.services.broadcast_audience import select_audience_users
+from app.services.broadcast_audience import BROADCAST_USER_STATUSES, select_audience_users
 
 
 if TYPE_CHECKING:
@@ -1011,11 +1011,11 @@ class EmailBroadcastService:
                     )
                 return recipients
 
-            # Base query: verified email users with active status
+            # Base query: verified email users, active or deleted (as in Telegram broadcasts)
             base_conditions = [
                 User.email.isnot(None),
                 User.email_verified == True,
-                User.status == 'active',
+                User.status.in_(BROADCAST_USER_STATUSES),
             ]
 
             if target == 'all_email':
