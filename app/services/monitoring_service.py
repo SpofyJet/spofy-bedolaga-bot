@@ -33,8 +33,6 @@ from app.database.crud.subscription import (
 )
 from app.database.crud.user import (
     cleanup_expired_promo_offer_discounts,
-    delete_user,
-    get_inactive_users,
     get_user_by_id,
     subtract_user_balance,
 )
@@ -495,7 +493,8 @@ class MonitoringService:
                 await self._retry_stuck_guest_purchases(db)
                 await self._cleanup_expired_refresh_tokens(db)
                 await self._cleanup_button_click_logs(db)
-                await self._cleanup_inactive_users(db)
+                # Неактивных не удаляем (решение владельца 11.11.2026): удалённым рассылка
+                # доходит, а повторная регистрация после /start стирает их историю.
                 await self._sync_with_remnawave(db)
 
                 await self._log_monitoring_event(
@@ -3184,36 +3183,6 @@ class MonitoringService:
                 await db.rollback()
             except Exception:
                 logger.debug('Ignored error in _cleanup_button_click_logs', exc_info=True)
-
-    async def _cleanup_inactive_users(self, db: AsyncSession):
-        try:
-            now = datetime.now(UTC)
-            if now.hour != 3:
-                return
-
-            inactive_users = await get_inactive_users(db, settings.INACTIVE_USER_DELETE_MONTHS)
-            deleted_count = 0
-
-            for user in inactive_users:
-                # Check if user has ANY active subscription (multi-tariff aware)
-                has_active = any(sub.is_active for sub in (getattr(user, 'subscriptions', None) or []))
-                if not has_active:
-                    success = await delete_user(db, user)
-                    if success:
-                        deleted_count += 1
-
-            if deleted_count > 0:
-                await self._log_monitoring_event(
-                    db,
-                    'inactive_users_cleanup',
-                    f'Удалено {deleted_count} неактивных пользователей',
-                    {'deleted_count': deleted_count},
-                )
-                logger.info('🗑️ Удалено неактивных пользователей', deleted_count=deleted_count)
-
-        except Exception as e:
-            logger.error('Ошибка очистки неактивных пользователей', error=e)
-            await _rollback_quietly(db, step='inactive_users_cleanup')
 
     async def _sync_with_remnawave(self, db: AsyncSession):
         try:
