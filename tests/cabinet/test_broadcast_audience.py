@@ -701,3 +701,24 @@ def test_bot_history_names_cabinet_audience() -> None:
     from app.handlers.admin.messages import get_target_name
 
     assert get_target_name('audience') == 'По условиям из кабинета'
+
+
+@pytest.mark.asyncio
+async def test_all_reaches_deleted_users_but_not_blocked(monkeypatch) -> None:
+    # Удалённым рассылка доходит (рассылка 97: 3 664 из 7 031), заблокированным админом — нет.
+    async with memory_session(monkeypatch, TABLES) as db:
+        db.add_all(
+            [
+                _user(1201),
+                User(telegram_id=1202, status=UserStatus.DELETED.value),
+                User(telegram_id=1203, status=UserStatus.BLOCKED.value),
+            ]
+        )
+        await db.commit()
+
+        audience = BroadcastAudience(conditions=[rule('basic', 'all')])
+        users = await select_audience_users(db, audience, 'telegram', 'system')
+        count, _ = await preview_audience_users(db, audience, 'telegram', 'system', 0, 10)
+
+    assert [user.telegram_id for user in users] == [1201, 1202]
+    assert count == 2

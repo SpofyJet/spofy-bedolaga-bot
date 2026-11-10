@@ -15,6 +15,11 @@ from app.utils.notification_prefs import filter_users_by_broadcast_category
 from app.utils.timezone import get_local_timezone, local_day_start
 
 
+# Рассылка идёт и удалённым: до половины из них сообщение доходит (рассылка 97,
+# 10.11.2026: 3 664 из 7 031). Заблокированные админом не входят.
+BROADCAST_USER_STATUSES = (UserStatus.ACTIVE.value, UserStatus.DELETED.value)
+
+
 TELEGRAM_FIELDS: dict[str, set[str]] = {
     'basic': {'all'},
     'subscription': {'active', 'trial', 'no', 'expiring', 'expired'},
@@ -303,7 +308,7 @@ def audience_predicate(audience: BroadcastAudience, now: datetime | None = None)
 
 def audience_user_query(audience: BroadcastAudience, channel: str):
     """One user row per recipient, independent of subscription count."""
-    base = [User.status == UserStatus.ACTIVE.value]
+    base = [User.status.in_(BROADCAST_USER_STATUSES)]
     if channel == 'telegram':
         base.append(User.telegram_id.isnot(None))
     elif channel == 'email':

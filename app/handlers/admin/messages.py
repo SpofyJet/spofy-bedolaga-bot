@@ -37,6 +37,7 @@ from app.keyboards.admin import (
     get_updated_message_buttons_selector_keyboard_with_media,
 )
 from app.localization.texts import get_texts
+from app.services.broadcast_audience import BROADCAST_USER_STATUSES
 from app.services.pinned_message_service import (
     broadcast_pinned_message,
     get_active_pinned_message,
@@ -1546,7 +1547,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
     """Быстрый подсчёт пользователей через SQL COUNT вместо загрузки всех в память."""
     from sqlalchemy import distinct, func as sql_func
 
-    base_filter = User.status == UserStatus.ACTIVE.value
+    base_filter = User.status.in_(BROADCAST_USER_STATUSES)
 
     if target == 'all':
         query = select(sql_func.count(User.id)).where(base_filter)
@@ -1810,24 +1811,25 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
 
 
 async def get_target_users(db: AsyncSession, target: str) -> list:
-    # Загружаем всех активных пользователей батчами, чтобы не ограничиваться 10к
+    # Загружаем батчами активных и удалённых (рассылка идёт и им), чтобы не ограничиваться 10к
     users: list[User] = []
-    offset = 0
     batch_size = 5000
 
-    while True:
-        batch = await get_users_list(
-            db,
-            offset=offset,
-            limit=batch_size,
-            status=UserStatus.ACTIVE,
-        )
+    for status in (UserStatus.ACTIVE, UserStatus.DELETED):
+        offset = 0
+        while True:
+            batch = await get_users_list(
+                db,
+                offset=offset,
+                limit=batch_size,
+                status=status,
+            )
 
-        if not batch:
-            break
+            if not batch:
+                break
 
-        users.extend(batch)
-        offset += batch_size
+            users.extend(batch)
+            offset += batch_size
 
     if target == 'all':
         return users
