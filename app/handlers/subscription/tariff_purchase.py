@@ -413,7 +413,7 @@ def _period_button_text(tariff: Tariff, period: int, price: int, price_text: str
         price_text = texts.t('TARIFF_PERIOD_PER_MONTH', '{price} · {per_month}/мес').format(
             price=price_text, per_month=format_price_kopeks(per_month_kopeks)
         )
-    label = f'📅 {format_period(period)} — {price_text}'
+    label = f'{format_period(period)} — {price_text}'
     if tariff.highlight_period_days is not None and int(tariff.highlight_period_days) == period:
         return f'{texts.t("TARIFF_PERIOD_BEST_VALUE_BADGE", "⭐ выгодно")} · {label}'
     return label

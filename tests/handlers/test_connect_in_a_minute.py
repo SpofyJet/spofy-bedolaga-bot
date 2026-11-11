@@ -28,7 +28,7 @@ def _tariff():
 def test_per_month_price_on_long_periods():
     texts = get_texts('ru')
     prices = {'30': 15900, '90': 35900, '365': 129000}
-    assert _period_button_text(_tariff(), 30, 15900, '159 ₽', prices, texts) == '📅 30 дней — 159 ₽'
+    assert _period_button_text(_tariff(), 30, 15900, '159 ₽', prices, texts) == '30 дней — 159 ₽'
     assert '359 ₽ · 120 ₽/мес' in _period_button_text(_tariff(), 90, 35900, '359 ₽', prices, texts)
     # 365 дней = 12 месяцев, 107,5 ₽ округляем вверх
     assert '1 290 ₽ · 108 ₽/мес' in _period_button_text(_tariff(), 365, 129000, '1 290 ₽', prices, texts)
