@@ -15,7 +15,7 @@ dependencies = [
     # Без [standard]: с FastAPI 0.142 он тянет OpenTelemetry, protobuf и httpx2,
     # которые боту не нужны. Из набора нужны только загрузки файлов (multipart),
     # EmailStr (email-validator) и uvicorn[standard] (uvloop, httptools).
-    'fastapi==0.162.2',
+    'fastapi==0.162.4',
     'python-multipart==0.0.33',
     'email-validator==2.3.0',
     'redis==8.1.0',
