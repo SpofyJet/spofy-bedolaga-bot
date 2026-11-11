@@ -1,7 +1,8 @@
 import hashlib
 import hmac
-import json
 import os
+import time
+from decimal import Decimal
 from typing import Any
 
 import aiohttp
@@ -14,14 +15,14 @@ logger = structlog.get_logger(__name__)
 
 
 class XRocketService:
-    """Клиент xRocket Pay API (https://pay.xrocket.tg/api-json).
+    """Клиент xRocket Pay API (https://pay.api.xrocket.exchange, пути /api/v1/…).
 
-    Авторизация: header ``Rocket-Pay-Key``.
-    Ответы обёрнуты в ``{"success": bool, "data": {...}}``.
+    Авторизация: ``Authorization: Bearer <токен приложения>``.
+    Ответ — сам объект без обёртки ``success/data``; ошибки — RFC 9457 (поле ``type``).
+    Суммы — десятичные строки. Наружу клиент отдаёт счета в прежнем (Legacy) виде:
+    ``id``, ``status``, ``link``, ``paid``, ``payload`` — остальной код не меняется.
     """
 
-    # Публичный Trade API (курсы), авторизация не нужна
-    TRADE_URL = 'https://trade.xrocket.exchange'
     # Без таймаута зависший ответ xRocket держал вебхук/кнопку «Проверить статус»
     # и цикл автопроверки сколько угодно долго (дефолт aiohttp — 5 минут).
     REQUEST_TIMEOUT_SECONDS = 20
@@ -36,14 +37,17 @@ class XRocketService:
         endpoint: str,
         data: dict | None = None,
         *,
+        auth: bool = True,
         not_found: Any | None = None,
     ) -> Any | None:
-        if not self.api_token:
+        if auth and not self.api_token:
             logger.error('xRocket API token не настроен')
             return None
 
         url = f'{self.base_url}/{endpoint.lstrip("/")}'
-        headers = {'Rocket-Pay-Key': self.api_token, 'Content-Type': 'application/json'}
+        headers = {'Accept': 'application/json'}
+        if auth:
+            headers['Authorization'] = f'Bearer {self.api_token}'
 
         try:
             async with aiohttp.ClientSession(
@@ -59,7 +63,6 @@ class XRocketService:
 
                 async with session.request(method, url, **request_kwargs) as response:
                     if response.status == 404 and not_found is not None:
-                        # Удалённый или истёкший объект: xRocket отвечает HTML-страницей 404.
                         logger.info('xRocket API: объект не найден', endpoint=endpoint)
                         return not_found
 
@@ -68,16 +71,14 @@ class XRocketService:
                     except ValueError:
                         logger.warning('xRocket API ответил не JSON', status=response.status, endpoint=endpoint)
                         return None
-                    if not isinstance(response_data, dict):
-                        logger.warning('xRocket API: неожиданный ответ', status=response.status, endpoint=endpoint)
-                        return None
 
-                    if response.status in (200, 201) and response_data.get('success'):
-                        return response_data.get('data')
+                    if 200 <= response.status < 300:
+                        return response_data
 
                     logger.error(
                         'xRocket API ошибка',
                         status=response.status,
+                        endpoint=endpoint,
                         response_data=response_data,
                     )
                     return None
@@ -85,6 +86,24 @@ class XRocketService:
         except Exception as e:
             logger.error('Ошибка запроса к xRocket API', error=e)
             return None
+
+    @staticmethod
+    def _legacy_invoice(invoice: dict[str, Any]) -> dict[str, Any]:
+        """Счёт Pay API → поля, которые ждёт платёжный сервис (как в Legacy API)."""
+        links = invoice.get('links') or {}
+        callback = invoice.get('callback') or {}
+        cb_payload = callback.get('payload')
+        payload = cb_payload.get('payload') if isinstance(cb_payload, dict) else None
+        return {
+            **invoice,
+            'id': invoice.get('id'),
+            'status': invoice.get('status'),
+            'amount': invoice.get('priceAmount'),
+            'currency': invoice.get('priceCurrency'),
+            'link': links.get('telegramBotLink') or links.get('webLink') or links.get('telegramMiniAppLink'),
+            'payload': payload,
+            'paid': None,
+        }
 
     async def create_invoice(
         self,
@@ -96,63 +115,58 @@ class XRocketService:
         callback_url: str | None = None,
     ) -> dict[str, Any] | None:
         data: dict[str, Any] = {
-            'amount': round(float(amount), 9),
+            'priceAmount': format(Decimal(str(round(float(amount), 9))).normalize(), 'f'),
+            'priceCurrency': currency,
+            'payCurrencies': [currency],
             'numPayments': 1,
-            'currency': currency,
-            'commentsEnabled': False,
         }
 
         if description:
             data['description'] = description[:1000]
 
-        if payload:
-            data['payload'] = payload
+        callback: dict[str, Any] = {}
+        if payload and len(payload.encode()) < 3500:
+            callback['payload'] = {'payload': payload}
+        if callback_url:
+            callback['callbackUrl'] = callback_url
+        if callback:
+            data['callback'] = callback
 
         if expires_in:
-            # xRocket: максимум 1 сутки
-            data['expiredIn'] = min(int(expires_in), 86400)
+            # Pay API: время жизни в миллисекундах; держим прежний максимум — сутки
+            data['expiresIn'] = min(int(expires_in), 86400) * 1000
 
-        if callback_url:
-            data['callbackUrl'] = callback_url
+        result = await self._make_request('POST', 'api/v1/invoices', data)
+        if not isinstance(result, dict) or not result.get('id'):
+            return None
 
-        result = await self._make_request('POST', 'tg-invoices', data)
-
-        if result:
-            logger.info(
-                'Создан xRocket invoice',
-                invoice_id=result.get('id'),
-                amount=amount,
-                currency=currency,
-            )
-
-        return result
+        logger.info('Создан xRocket invoice', invoice_id=result.get('id'), amount=amount, currency=currency)
+        return self._legacy_invoice(result)
 
     async def get_invoice(self, invoice_id: str | int) -> dict[str, Any] | None:
-        """Счёт по id. Удалённый счёт (404) возвращается как истёкший.
-
-        Раньше 404 с HTML-страницей падал на разборе JSON: счёт оставался
-        «активным», и автопроверка каждые три минуты слала ошибку в админ-чат.
-        Оплату это не теряет: оплаченный счёт приходит вебхуком при любом
-        локальном статусе.
-        """
-        return await self._make_request(
+        """Счёт по id. Удалённый счёт (404) возвращается как истёкший."""
+        result = await self._make_request(
             'GET',
-            f'tg-invoices/{invoice_id}',
+            'api/v1/invoice',
+            {'invoiceId': str(invoice_id)},
             not_found={'id': invoice_id, 'status': 'expired'},
         )
+        if not isinstance(result, dict):
+            return None
+        return self._legacy_invoice(result)
 
     async def get_fiat_rate(self, crypto: str, fiat: str = 'RUB') -> float | None:
         """Курс 1 {crypto} = N {fiat}.
 
-        Цепочка источников (Trade API xRocket с июля 2026 отдаёт 404):
-        1) публичный Trade API xRocket — на случай, если эндпоинт оживёт;
+        Цепочка источников:
+        1) Pay API xRocket GET /api/v1/rates (публичный, без токена);
         2) CryptoBot getExchangeRates — токен уже настроен в боте;
         3) статический резерв из env XROCKET_FALLBACK_USDT_RUB (только USDT/RUB).
 
         Сбои отдельных источников — warning (без репорта в админку); error —
         только когда недоступны ВСЕ источники (платёж будет отменён).
         """
-        rate = await self._get_rate_xrocket_trade(crypto, fiat)
+        rate = await self._get_rate_pay_api(crypto, fiat)
         if rate:
             return rate
 
@@ -181,46 +195,23 @@ class XRocketService:
         )
         return None
 
-    # Trade API с июля 2026 отдаёт 404: после первого не-JSON ответа не спрашиваем его 6 часов
-    # (экономит запрос на каждом платеже и убирает предупреждение из лога).
-    _trade_dead_until: float = 0.0
-    _TRADE_DEAD_SECONDS = 6 * 3600
-
-    async def _get_rate_xrocket_trade(self, crypto: str, fiat: str) -> float | None:
-        """Публичный Trade API xRocket (без авторизации). Content-type-safe."""
-        import time
-
-        if time.monotonic() < XRocketService._trade_dead_until:
+    async def _get_rate_pay_api(self, crypto: str, fiat: str) -> float | None:
+        """Курс 1 {crypto} в {fiat} из Pay API xRocket (тот же, по которому xRocket считает счета)."""
+        result = await self._make_request(
+            'GET', 'api/v1/rates', {'base': fiat.upper(), 'assets': crypto.upper()}, auth=False
+        )
+        if not isinstance(result, list):
+            logger.warning('xRocket: курс из Pay API не получен', crypto=crypto, fiat=fiat)
             return None
-        url = f'{self.TRADE_URL}/rates/fiat/{crypto.upper()}/{fiat.upper()}'
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
-                    raw = await response.text()
-                    try:
-                        data = json.loads(raw)
-                    except (json.JSONDecodeError, ValueError):
-                        XRocketService._trade_dead_until = time.monotonic() + self._TRADE_DEAD_SECONDS
-                        logger.warning(
-                            'xRocket Trade API: не-JSON ответ (эндпоинт недоступен?), курс берём из CryptoBot 6 часов',
-                            status=response.status,
-                            body=raw[:200],
-                        )
-                        return None
-                    if response.status == 200 and data.get('success'):
-                        rate = data.get('data', {}).get('rate')
-                        if rate and float(rate) > 0:
-                            return float(rate)
-                    logger.warning(
-                        'xRocket Trade API: курс не получен',
-                        status=response.status,
-                        crypto=crypto,
-                        fiat=fiat,
-                    )
-                    return None
-        except Exception as e:
-            logger.warning('xRocket Trade API: ошибка запроса курса', crypto=crypto, fiat=fiat, error=str(e))
-            return None
+        for item in result:
+            if str(item.get('currency', '')).upper() == crypto.upper():
+                try:
+                    rate = float(item.get('rate') or 0)
+                except (TypeError, ValueError):
+                    rate = 0
+                if rate > 0:
+                    return rate
+        return None
 
     async def _get_rate_cryptobot(self, crypto: str, fiat: str) -> float | None:
         """Резервный курс через CryptoBot getExchangeRates (токен уже есть в настройках)."""
@@ -235,9 +226,10 @@ class XRocketService:
             if not rates:
                 logger.warning('xRocket: CryptoBot getExchangeRates не вернул данные')
                 return None
+            source = 'TON' if crypto.upper() in ('GRAM', 'TONCOIN') else crypto.upper()
             for item in rates:
                 if (
-                    str(item.get('source', '')).upper() == crypto.upper()
+                    str(item.get('source', '')).upper() == source
                     and str(item.get('target', '')).upper() == fiat.upper()
                     and item.get('is_valid', True)
                 ):
@@ -256,55 +248,50 @@ class XRocketService:
             logger.warning('xRocket: ошибка CryptoBot-резерва курса', crypto=crypto, fiat=fiat, error=str(e))
             return None
 
-    async def get_available_currencies(self) -> dict[str, dict] | None:
-        """{'USDT': {...minInvoice...}, ...} — публичный эндпоинт Pay API."""
-        url = f'{self.base_url}/currencies/available'
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
-                    data = await response.json()
-                    if response.status == 200 and data.get('success'):
-                        results = data.get('data', {}).get('results', [])
-                        return {c['currency']: c for c in results if c.get('currency')}
-                    return None
-        except Exception as e:
-            logger.error('Ошибка запроса списка валют xRocket', error=e)
-            return None
-
     async def get_min_invoice(self, currency: str) -> float | None:
-        currencies = await self.get_available_currencies()
-        if not currencies:
-            return None
-        info = currencies.get(currency.upper())
-        return float(info['minInvoice']) if info and info.get('minInvoice') else None
+        """В Pay API минимума счёта нет в справочнике: слишком малую сумму xRocket отклонит сам."""
+        return None
 
-    def verify_webhook_signature(self, body: str, signature: str) -> bool:
-        """HMAC-SHA256(SHA256(api_token), raw_body) — как в официальном SDK."""
-        token = self.api_token
-        if not token:
-            logger.error('xRocket API token не настроен, отклоняем webhook')
+    def verify_webhook_signature(self, body: bytes | str, signature: str, timestamp: str, version: str = 'v1') -> bool:
+        """Pay API: hex HMAC-SHA256(webhook secret, f"{Signature-Timestamp}.{raw_body}"), окно 5 минут."""
+        secret = (settings.XROCKET_WEBHOOK_SECRET or '').strip()
+        if not secret:
+            logger.error('xRocket: XROCKET_WEBHOOK_SECRET не задан, вебхук отклонён (оплату проведёт автопроверка)')
             return False
-
-        if not signature:
+        if not signature or not timestamp or (version or 'v1') != 'v1':
             return False
-
-        try:
-            secret = hashlib.sha256(token.encode()).digest()
-            expected = hmac.new(secret, body.encode('utf-8'), hashlib.sha256).hexdigest()
-
-            if hmac.compare_digest(signature.strip().lower(), expected):
-                return True
-
-            logger.error(
-                'Неверная подпись xRocket webhook',
-                received_signature=signature,
-                body_length=len(body),
-            )
+        ts = timestamp.strip()
+        if not ts.isdigit() or abs(time.time() * 1000 - int(ts)) > 5 * 60 * 1000:
+            logger.warning('xRocket webhook: устаревшая или неверная метка времени', timestamp=ts)
             return False
+        raw = body.encode('utf-8') if isinstance(body, str) else body
+        expected = hmac.new(secret.encode(), ts.encode() + b'.' + raw, hashlib.sha256).hexdigest()
+        if hmac.compare_digest(signature.strip().lower(), expected):
+            return True
+        logger.error('Неверная подпись xRocket webhook', body_length=len(raw))
+        return False
 
-        except Exception as e:
-            logger.error('Ошибка проверки подписи xRocket webhook', error=e)
-            return False
+    @staticmethod
+    def to_legacy_webhook(webhook_data: dict[str, Any]) -> dict[str, Any]:
+        """Вебхук Pay API → прежний вид {'type': 'invoicePay', 'data': {...}} для платёжного сервиса.
+
+        Оплату проводим по invoice_status_changed со статусом paid (счёт на один платёж);
+        остальные события пропускаются как «не оплачено».
+        """
+        if webhook_data.get('type') != 'invoice':
+            return webhook_data
+        data = webhook_data.get('data') or {}
+        invoice = data.get('invoice') or {}
+        event = data.get('event')
+        legacy = XRocketService._legacy_invoice(invoice)
+        if event == 'payment_status_changed':
+            payment = data.get('payment') or {}
+            if payment.get('status') == 'paid' and payment.get('finalizedAt'):
+                legacy['status'] = 'paid'
+                legacy['paid'] = payment.get('finalizedAt')
+        elif event != 'invoice_status_changed':
+            legacy['status'] = 'unknown_event'
+        return {'type': 'invoicePay', 'data': legacy}
 
     async def process_webhook(self, webhook_data: dict[str, Any]) -> dict[str, Any] | None:
         try:

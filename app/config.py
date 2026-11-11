@@ -707,10 +707,12 @@ class Settings(BaseSettings):
     XROCKET_ENABLED: bool = False
     XROCKET_DISPLAY_NAME: str = 'xRocket'
     XROCKET_API_TOKEN: str | None = None
-    XROCKET_BASE_URL: str = 'https://pay.xrocket.tg'
+    XROCKET_BASE_URL: str = 'https://pay.api.xrocket.exchange'
+    # Pay API: подпись вебхуков — отдельный секрет (@xRocket → Pay API → приложение → Settings → Webhook Token)
+    XROCKET_WEBHOOK_SECRET: str | None = None
     XROCKET_WEBHOOK_PATH: str = '/xrocket-webhook'
     XROCKET_DEFAULT_ASSET: str = 'USDT'
-    XROCKET_ASSETS: str = 'USDT,TONCOIN,BTC,ETH'
+    XROCKET_ASSETS: str = 'USDT,GRAM,BTC,ETH'
     XROCKET_INVOICE_EXPIRES_HOURS: int = 24
 
     PAY2328_ENABLED: bool = False
@@ -2260,10 +2262,14 @@ class Settings(BaseSettings):
         return self.CRYPTOBOT_INVOICE_EXPIRES_HOURS * 3600
 
     def get_xrocket_base_url(self) -> str:
-        return self.XROCKET_BASE_URL
+        url = (self.XROCKET_BASE_URL or '').strip()
+        # Legacy-хост pay.xrocket.tg с ключом Pay API не работает: старое значение из .env заменяем.
+        if not url or 'pay.xrocket.tg' in url:
+            return 'https://pay.api.xrocket.exchange'
+        return url
 
     def get_xrocket_assets(self) -> list[str]:
-        # ВНИМАНИЕ: у xRocket тикер тонкоина — TONCOIN, не TON (TON API отвергнет).
+        # В Pay API тонкоин называется GRAM; TON и TONCOIN (Legacy) API отвергает.
         raw = (self.XROCKET_ASSETS or '').strip()
         default = (self.XROCKET_DEFAULT_ASSET or 'USDT').strip().upper()
         if not raw:
@@ -2273,8 +2279,8 @@ class Settings(BaseSettings):
             a = a.strip().upper()
             if not a:
                 continue
-            if a == 'TON':  # частая ошибка при копировании из CRYPTOBOT_ASSETS
-                a = 'TONCOIN'
+            if a in ('TON', 'TONCOIN'):
+                a = 'GRAM'
             if a not in assets:
                 assets.append(a)
         if default not in assets:

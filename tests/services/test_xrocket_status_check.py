@@ -220,7 +220,8 @@ def _client(monkeypatch, status: int, body: str):
 @pytest.mark.asyncio
 async def test_deleted_invoice_is_reported_as_expired(monkeypatch):
     service = _client(monkeypatch, 404, '<html><body>Not Found</body></html>')
-    assert await service.get_invoice(7375402) == {'id': 7375402, 'status': 'expired'}
+    invoice = await service.get_invoice(7375402)
+    assert (invoice['id'], invoice['status']) == (7375402, 'expired')
 
 
 @pytest.mark.asyncio

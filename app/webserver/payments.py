@@ -217,16 +217,18 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
 
-            signature = request.headers.get('rocket-pay-signature')
-            secret = settings.XROCKET_API_TOKEN
-            if not secret:
-                logger.error('xRocket webhook received but API token is not configured, rejecting')
+            # Pay API: Signature + Signature-Timestamp, ключ — XROCKET_WEBHOOK_SECRET.
+            # Без секрета отвечаем 503: xRocket повторит, а оплату за ~15 с проведёт автопроверка счетов.
+            if not (settings.XROCKET_WEBHOOK_SECRET or '').strip():
+                logger.warning('xRocket webhook получен, но XROCKET_WEBHOOK_SECRET не задан')
                 return JSONResponse(
                     {'status': 'error', 'reason': 'service_not_configured'},
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
 
-            if not signature:
+            signature = request.headers.get('signature')
+            timestamp = request.headers.get('signature-timestamp')
+            if not signature or not timestamp:
                 return JSONResponse(
                     {'status': 'error', 'reason': 'missing_signature'},
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -234,11 +236,15 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
             from app.external.xrocket import XRocketService
 
-            if not XRocketService().verify_webhook_signature(payload_text, signature):
+            if not XRocketService().verify_webhook_signature(
+                raw_body, signature, timestamp, request.headers.get('signature-version') or 'v1'
+            ):
                 return JSONResponse(
                     {'status': 'error', 'reason': 'invalid_signature'},
                     status_code=status.HTTP_401_UNAUTHORIZED,
                 )
+
+            payload = XRocketService.to_legacy_webhook(payload)
 
             try:
                 success = await _process_payment_service_callback(
