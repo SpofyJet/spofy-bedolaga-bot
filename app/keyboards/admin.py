@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -1413,6 +1414,10 @@ def get_welcome_text_keyboard(language: str = 'ru', is_enabled: bool = True) -> 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
+# Иконка в начале подписи кнопки: премиум-тег целиком или обычный эмодзи до пробела.
+_LEADING_ICON_RE = re.compile(r'^\s*(?:<tg-emoji\b[^>]*>.*?</tg-emoji>|\S+)\s+', re.DOTALL)
+
+
 DEFAULT_BROADCAST_BUTTONS = ('home',)
 
 BROADCAST_BUTTONS = {
@@ -1551,10 +1556,9 @@ def get_updated_message_buttons_selector_keyboard_with_media(
             button_config = button_config_map[button_key]
             base_text = button_config['text']
             if button_key in selected_buttons:
-                if ' ' in base_text:
-                    toggle_text = f'✅ {base_text.split(" ", 1)[1]}'
-                else:
-                    toggle_text = f'✅ {base_text}'
+                # Галочка вместо иконки кнопки. Иконка в локали — целый тег <tg-emoji …>…</tg-emoji>
+                # с пробелом внутри: резать по первому пробелу нельзя, на кнопке оставался обрубок тега.
+                toggle_text = f'✅ {_LEADING_ICON_RE.sub("", base_text, count=1)}'
             else:
                 toggle_text = base_text
             row_buttons.append(InlineKeyboardButton(text=toggle_text, callback_data=f'btn_{button_key}'))

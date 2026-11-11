@@ -303,7 +303,6 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
             types.InlineKeyboardMarkup(
                 inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_referrals')]]
             ),
-            parse_mode=None,
         )
         await callback.answer()
         return
