@@ -388,3 +388,37 @@ async def test_already_punished_account_gets_no_friend_reward(monkeypatch):
         await quest._reward_is_suspicious(SimpleNamespace(id=5, remnawave_id=77), SimpleNamespace(remnawave_id=None))
         is True
     )
+
+
+async def test_simultaneous_webhooks_of_one_device_punish_each_account_once(monkeypatch):
+    """Оба аккаунта подключаются одновременно: две проверки не должны наказать людей дважды."""
+    import asyncio
+
+    users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=0.01, tg=222)]
+    svc = _realtime_service(monkeypatch, users, _index((10, [1], 111, False), (20, [2], 222, False)))
+
+    async def slow_apply(api, target):
+        await asyncio.sleep(0)  # даём соседней проверке вклиниться
+        return True, 'expired'
+
+    svc._apply_action = AsyncMock(side_effect=slow_apply)
+    await asyncio.gather(svc.check_new_device(2, HWID), svc.check_new_device(1, HWID))
+
+    punished = [call.args[1].id for call in svc._apply_action.await_args_list]
+    assert sorted(punished) == [1, 2]
+    assert svc._notify_admin.await_count == 1
+
+
+async def test_account_whose_trial_is_already_gone_gets_no_warning(monkeypatch):
+    users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=0.01, tg=222)]
+    svc = _realtime_service(monkeypatch, users, _index((10, [1], 111, False), (20, [2], 222, False)))
+    monkeypatch.setattr(settings, 'TRIAL_ABUSE_NOTIFY', True)
+    svc._send_warning = AsyncMock(return_value=True)
+
+    async def trials(db, target):
+        return [] if target.id == 1 else [object()]
+
+    svc._find_bot_trials = AsyncMock(side_effect=trials)
+    assert await svc.check_new_device(2, HWID) is True
+    assert [call.args[1].id for call in svc._apply_action.await_args_list] == [2]
+    svc._send_warning.assert_awaited_once_with(222)

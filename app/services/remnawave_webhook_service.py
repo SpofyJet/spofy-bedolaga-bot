@@ -39,6 +39,7 @@ from app.database.crud.user import (
     get_user_by_remnawave_id,
     get_user_by_telegram_id,
     lock_user_for_update,
+    lock_user_for_update_if_exists,
 )
 from app.database.models import Subscription, SubscriptionServer, SubscriptionStatus, User
 from app.external.remnawave_api import RemnaWaveAPIError, RemnaWaveInvalidUserIdError
@@ -396,7 +397,10 @@ class RemnaWaveWebhookService:
             # A merge may commit after the first lookup, transferring identity
             # and deleting the selected row. Serialize with merge, refresh, then
             # resolve again before any destructive handler side effects.
-            await lock_user_for_update(db, user)
+            if await lock_user_for_update_if_exists(db, user) is None:
+                # Строку уже удалили (бот или слияние аккаунтов успели раньше) — удалять нечего.
+                logger.info('RemnaWave webhook: user.deleted для уже удалённого пользователя', user_id=user.id)
+                return False
             user, subscription = await self._resolve_user_and_subscription(db, data)
         if not user:
             panel_user_id, short_uuid = self._extract_panel_identity(data)

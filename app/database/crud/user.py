@@ -563,6 +563,23 @@ async def lock_user_for_update(db: AsyncSession, user: User) -> User:
     return result.scalar_one()
 
 
+async def lock_user_for_update_if_exists(db: AsyncSession, user: User) -> User | None:
+    """Как lock_user_for_update, но None, если строку пользователя уже удалили."""
+    result = await db.execute(
+        select(User)
+        .where(User.id == user.id)
+        .options(
+            selectinload(User.subscriptions).selectinload(Subscription.tariff),
+            selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
+            selectinload(User.promo_group),
+            selectinload(User.referrer),
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return result.scalar_one_or_none()
+
+
 async def add_user_balance(
     db: AsyncSession,
     user: User,

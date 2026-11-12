@@ -82,6 +82,10 @@ class TrialAbuseService:
         self._punished: set[int] = set()
         # Фоновые проверки новых устройств: ссылки держим, чтобы задачи не собрал GC
         self._device_tasks: set[asyncio.Task] = set()
+        # Проверки новых устройств идут по одной: вебхуки двух аккаунтов одного
+        # устройства приходят одновременно, и без замка оба наказывали одних и тех же
+        # людей (двойное предупреждение, ложная «ошибка наказания» в админ-чат).
+        self._device_lock = asyncio.Lock()
 
     def set_bot(self, bot: Bot) -> None:
         self.bot = bot
@@ -496,6 +500,12 @@ class TrialAbuseService:
         """
         if panel_user_id in self._punished:
             return False
+        async with self._device_lock:
+            return await self._check_new_device_locked(panel_user_id, hwid)
+
+    async def _check_new_device_locked(self, panel_user_id: int, hwid: str) -> bool:
+        if panel_user_id in self._punished:
+            return False  # пока ждали замок, соседняя проверка уже наказала
         done: list[tuple[str, str, bool]] = []  # (подпись админу, обычный текст, предупреждён ли)
         failed: list[str] = []
         try:
@@ -532,6 +542,9 @@ class TrialAbuseService:
                     target = users_by_id[target_id]
                     if target_id in self._punished or (target.telegram_id and target.telegram_id in excluded):
                         continue
+                    async with AsyncSessionLocal() as db:
+                        if not await self._find_bot_trials(db, target):
+                            continue  # живого триала уже нет (погашен раньше) — не предупреждаем и не наказываем
                     notified = False
                     if self.is_notify_enabled() and target.telegram_id and self.bot:
                         notified = await self._send_warning(target.telegram_id)
