@@ -1129,7 +1129,12 @@ class MonitoringService:
         if not self.bot:
             return False
 
-        success = await self._send_subscription_expiring_notification(user, subscription, days)
+        renewal_price = (
+            await self._autopay_renewal_price(db, user, subscription) if subscription.autopay_enabled else None
+        )
+        # Цену передаём, только когда она посчитана: без неё напоминание работает по-прежнему.
+        price_kwargs = {'renewal_price': renewal_price} if renewal_price is not None else {}
+        success = await self._send_subscription_expiring_notification(user, subscription, days, **price_kwargs)
         if not success:
             logger.warning('❌ Не удалось отправить уведомление пользователю', telegram_id=user.telegram_id)
             return False
@@ -2179,8 +2184,42 @@ class MonitoringService:
             )
             return False
 
+    async def _autopay_renewal_price(self, db: AsyncSession, user: User, subscription: Subscription) -> int | None:
+        """Сколько спишет автопродление: тот же срок и тот же расчёт, что в ``_process_autopayments``.
+
+        Нужен напоминанию об истечении: цена срока из тарифа не учитывает докупленные
+        устройства, и человек с балансом между «ценой тарифа» и реальной ценой получал
+        «ничего делать не нужно», а списание потом не проходило.
+        """
+        tariff = getattr(subscription, 'tariff', None)
+        period = (
+            resolve_autopay_period_candidate(getattr(subscription, 'autopay_period_days', None), tariff)
+            or resolve_autopay_period_candidate(settings.DEFAULT_AUTOPAY_PERIOD_DAYS, tariff)
+            or (tariff.get_shortest_period() if tariff else None)
+            or 30
+        )
+        try:
+            from app.services.pricing_engine import pricing_engine
+
+            pricing = await pricing_engine.calculate_renewal_price(db, subscription, period, user=user)
+        except Exception as error:
+            logger.warning(
+                'Не удалось посчитать цену автопродления для напоминания, беру цену срока из тарифа',
+                subscription_id=getattr(subscription, 'id', None),
+                error=str(error),
+            )
+            return None
+        total = getattr(pricing, 'final_total', None)
+        return total if isinstance(total, int) and total > 0 else None
+
     async def _send_subscription_expiring_notification(
-        self, user: User, subscription: Subscription, days: int, *, has_saved_card: bool = False
+        self,
+        user: User,
+        subscription: Subscription,
+        days: int,
+        *,
+        has_saved_card: bool = False,
+        renewal_price: int | None = None,
     ) -> bool:
         try:
             from app.utils.formatters import format_days_declension
@@ -2188,30 +2227,32 @@ class MonitoringService:
             texts = get_texts(user.language)
             days_text = format_days_declension(days, user.language)
 
-            # Если автоплатёж включен, но баланса заведомо не хватит — говорим прямо,
-            # пока есть время пополниться: постфактум (при отказе списания) люди
-            # узнают слишком поздно. Базовая цена периода — верхняя граница: скидки
-            # только уменьшают итог, поэтому «баланс < базовой цены» = точный сигнал,
-            # а ложных тревог не будет.
+            # Если автоплатёж включен, но баланса не хватит — говорим прямо, пока есть
+            # время пополниться: постфактум (при отказе списания) люди узнают слишком
+            # поздно. Цена — та, что спишет автопродление (renewal_price): с докупленными
+            # устройствами и скидками. Цена срока из тарифа остаётся запасной: она ниже
+            # реальной, когда есть доп. устройства, и давала ложное «ничего делать не нужно».
             low_balance_action = None
             base_price = None
             if subscription.autopay_enabled:
-                tariff_for_price = getattr(subscription, 'tariff', None)
-                prices = getattr(tariff_for_price, 'period_prices', None) or {}
-                if prices:
-                    period_days = (
-                        getattr(subscription, 'autopay_period_days', None)
-                        or settings.DEFAULT_AUTOPAY_PERIOD_DAYS
-                        or (tariff_for_price.get_shortest_period() if tariff_for_price else None)
-                        or 30
-                    )
-                    base_price = prices.get(str(period_days)) or None
-                    if base_price and (user.balance_kopeks or 0) < base_price:
-                        low_balance_action = texts.t(
-                            'AUTOPAY_ACTION_LOW_BALANCE',
-                            '⚠️ Для автопродления нужно {cost}, на балансе {balance}. '
-                            'Пополните заранее — иначе подписка остановится.',
-                        ).format(cost=texts.format_price(base_price), balance=texts.format_price(user.balance_kopeks))
+                base_price = renewal_price
+                if base_price is None:
+                    tariff_for_price = getattr(subscription, 'tariff', None)
+                    prices = getattr(tariff_for_price, 'period_prices', None) or {}
+                    if prices:
+                        period_days = (
+                            getattr(subscription, 'autopay_period_days', None)
+                            or settings.DEFAULT_AUTOPAY_PERIOD_DAYS
+                            or (tariff_for_price.get_shortest_period() if tariff_for_price else None)
+                            or 30
+                        )
+                        base_price = prices.get(str(period_days)) or None
+                if base_price and (user.balance_kopeks or 0) < base_price:
+                    low_balance_action = texts.t(
+                        'AUTOPAY_ACTION_LOW_BALANCE',
+                        '⚠️ Для автопродления нужно {cost}, на балансе {balance}. '
+                        'Пополните заранее — иначе подписка остановится.',
+                    ).format(cost=texts.format_price(base_price), balance=texts.format_price(user.balance_kopeks))
 
             if subscription.autopay_enabled:
                 autopay_status = texts.t(
