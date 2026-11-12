@@ -38,7 +38,6 @@ from app.database.crud.user import (
     get_user_by_id,
     get_user_by_remnawave_id,
     get_user_by_telegram_id,
-    lock_user_for_update,
     lock_user_for_update_if_exists,
 )
 from app.database.models import Subscription, SubscriptionServer, SubscriptionStatus, User
