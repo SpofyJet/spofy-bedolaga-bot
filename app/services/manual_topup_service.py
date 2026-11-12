@@ -310,23 +310,27 @@ async def _notify_user(
         return
 
     if bot is not None and user.telegram_id:
+        text = (
+            '✅ <b>Баланс пополнен</b>\n\n'
+            f'💰 Сумма: {settings.format_price(amount_kopeks)}\n'
+            f'💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n'
+            f'🆔 Транзакция: {transaction.id}'
+        )
         keyboard = None
         try:
             from app.services.payment.common import PaymentCommonMixin
+            from app.services.topup_checkout_offer import apply_topup_checkout_offer
 
             keyboard = await PaymentCommonMixin().build_topup_success_keyboard(user)
+            # Пополнили под сохранённую покупку и денег теперь хватает — сразу кнопка «Подтвердить».
+            text, keyboard = await apply_topup_checkout_offer(user, text, keyboard)
         except Exception as error:
             logger.warning('Не удалось собрать клавиатуру уведомления о пополнении', user_id=user.id, error=error)
 
         try:
             await bot.send_message(
                 user.telegram_id,
-                (
-                    '✅ <b>Баланс пополнен</b>\n\n'
-                    f'💰 Сумма: {settings.format_price(amount_kopeks)}\n'
-                    f'💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n'
-                    f'🆔 Транзакция: {transaction.id}'
-                ),
+                text,
                 parse_mode='HTML',
                 reply_markup=keyboard,
             )

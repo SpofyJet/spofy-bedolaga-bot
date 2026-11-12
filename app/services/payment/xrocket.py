@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, TransactionType
-from app.services.payment.common import topup_success_text
+from app.services.payment.common import build_topup_success_message
 from app.services.payment_problem_alert import alert_invoice_failed, alert_payment_not_applied, note_invoice_created
 from app.services.pricing_engine import RenewalPricing, pricing_engine
 from app.services.subscription_renewal_service import (
@@ -455,8 +455,7 @@ class XRocketPaymentMixin:
                     )
 
                     try:
-                        keyboard = await self.build_topup_success_keyboard(user)
-                        message_text = topup_success_text(user, amount_kopeks)
+                        message_text, keyboard = await build_topup_success_message(self, user, amount_kopeks)
                         user_notification = _XRocketUserNotificationPayload(
                             telegram_id=user.telegram_id,
                             text=message_text,

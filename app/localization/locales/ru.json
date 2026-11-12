@@ -2327,6 +2327,8 @@
   "DISCOUNT_CLAIM_TOAST": "✅ Скидка активирована",
   "TOPUP_SUCCESS_MESSAGE": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>Зачислено {amount}</b>",
   "TOPUP_SUCCESS_BALANCE": "<tg-emoji emoji-id='5967548335542767952'>💳</tg-emoji> Баланс: {balance}",
+  "TOPUP_CONFIRM_RENEW_LINE": "Продление: <b>{tariff}</b>, {period} — <b>{price}</b>",
+  "TOPUP_CONFIRM_PURCHASE_LINE": "Покупка: <b>{tariff}</b>, {period} — <b>{price}</b>",
   "PAYMENT_METHODS_AMOUNT_TITLE": "<tg-emoji emoji-id='5967548335542767952'>💳</tg-emoji> <b>К оплате: {amount}</b>",
   "SUPPORT_TOPUP_TEXT": "💬 <b>Пополнение через поддержку</b>\n\nНапишите в поддержку {contact} и укажите ваш ID <code>{user_id}</code>, сумму и удобный способ оплаты.",
   "SUPPORT_TOPUP_WRITE_BUTTON": "💬 Написать в поддержку",

@@ -24,6 +24,7 @@ from app.config import settings
 from app.database.models import User
 from app.localization.texts import get_texts
 from app.services.spofy_subpage_context import subpage_purchase_context
+from app.services.topup_checkout_offer import consume_recent_offer
 from app.services.user_cart_service import user_cart_service
 from app.utils.miniapp_buttons import build_main_menu_button, build_miniapp_or_callback_button
 
@@ -275,6 +276,10 @@ async def complete_subpage_carts_after_topup(
         carts.append(global_cart)
 
     if not carts:
+        # Сообщение о пополнении уже ушло с кнопкой «Подтвердить» для этой корзины — второе
+        # сообщение с «Продолжить оформление» про неё же вело бы длинным путём мимо кнопки.
+        if consume_recent_offer(user.id) and global_cart:
+            return False
         # Платёж не встретил НИ ОДНОЙ корзины страницы: деньги уже на балансе, покупки нет.
         # Говорим об этом вместо тишины (иначе «оплатил — а подписки нет и никто не отвечает»).
         await _notify_orphan_topup(user, bot=bot, credited_kopeks=credited_kopeks, has_saved_cart=bool(global_cart))

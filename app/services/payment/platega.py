@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, Subscription, TransactionType
-from app.services.payment.common import topup_success_text
+from app.services.payment.common import build_topup_success_message
 from app.services.payment.payer_identity import PayerIdentity, payer_from_guest, resolve_user_payer
 from app.services.payment_problem_alert import alert_invoice_failed, alert_payment_not_applied, note_invoice_created
 from app.services.payment_reversal_alert import alert_paid_payment_reversed
@@ -1474,10 +1474,10 @@ class PlategaPaymentMixin:
 
         if getattr(self, 'bot', None) and user.telegram_id and settings.is_notifications_enabled():
             try:
-                keyboard = await self.build_topup_success_keyboard(user)
+                text, keyboard = await build_topup_success_message(self, user, payment.amount_kopeks)
                 await self.bot.send_message(
                     user.telegram_id,
-                    topup_success_text(user, payment.amount_kopeks),
+                    text,
                     parse_mode='HTML',
                     reply_markup=keyboard,
                 )

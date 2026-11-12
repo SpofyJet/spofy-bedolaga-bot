@@ -21,6 +21,7 @@ from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import AsyncSessionLocal, get_db
 from app.database.models import Subscription
 from app.localization.texts import get_texts
+from app.services.topup_checkout_offer import apply_topup_checkout_offer
 from app.services.user_cart_service import user_cart_service
 from app.utils.miniapp_buttons import build_main_menu_button, build_miniapp_or_callback_button
 from app.utils.payment_logger import payment_logger as logger
@@ -195,8 +196,7 @@ class PaymentCommonMixin:
 
         try:
             # Стандартное сообщение с полной клавиатурой
-            keyboard = await self.build_topup_success_keyboard(user_snapshot)
-            message = topup_success_text(user_snapshot, amount_kopeks)
+            message, keyboard = await build_topup_success_message(self, user_snapshot, amount_kopeks)
 
             await self.bot.send_message(
                 chat_id=telegram_id,
@@ -606,6 +606,16 @@ async def try_fulfill_guest_purchase(
         except Exception:
             logger.exception('Failed to mark guest purchase as PAID for retry')
         return True
+
+
+async def build_topup_success_message(payment_service: Any, user: Any, amount_kopeks: int) -> tuple[str, Any]:
+    """Текст и клавиатура сообщения «Зачислено» — одни для всех платёжных систем.
+
+    Если человек пополнял ради сохранённой покупки и теперь её можно оформить, первой кнопкой
+    идёт «Подтвердить» (одно нажатие вместо «Продолжить оформление» → «Подтвердить»).
+    """
+    keyboard = await payment_service.build_topup_success_keyboard(user)
+    return await apply_topup_checkout_offer(user, topup_success_text(user, amount_kopeks), keyboard)
 
 
 def topup_success_text(user: Any, amount_kopeks: int) -> str:

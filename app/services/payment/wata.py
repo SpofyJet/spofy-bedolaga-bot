@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
-from app.services.payment.common import topup_success_text
+from app.services.payment.common import build_topup_success_message
 from app.services.payment_problem_alert import alert_invoice_failed, note_invoice_created
 from app.services.payment_reversal_alert import alert_paid_payment_reversed
 from app.services.wata_service import WataAPIError, WataService
@@ -662,10 +662,10 @@ class WataPaymentMixin:
 
         if getattr(self, 'bot', None) and user.telegram_id and settings.is_notifications_enabled():
             try:
-                keyboard = await self.build_topup_success_keyboard(user)
+                text, keyboard = await build_topup_success_message(self, user, payment.amount_kopeks)
                 await self.bot.send_message(
                     user.telegram_id,
-                    topup_success_text(user, payment.amount_kopeks),
+                    text,
                     parse_mode='HTML',
                     reply_markup=keyboard,
                 )

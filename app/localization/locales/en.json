@@ -2327,6 +2327,8 @@
   "DISCOUNT_CLAIM_TOAST": "✅ Discount activated",
   "TOPUP_SUCCESS_MESSAGE": "✅ <b>{amount} added</b>",
   "TOPUP_SUCCESS_BALANCE": "💳 Balance: {balance}",
+  "TOPUP_CONFIRM_RENEW_LINE": "Renewal: <b>{tariff}</b>, {period} — <b>{price}</b>",
+  "TOPUP_CONFIRM_PURCHASE_LINE": "Purchase: <b>{tariff}</b>, {period} — <b>{price}</b>",
   "PAYMENT_METHODS_AMOUNT_TITLE": "💳 <b>To pay: {amount}</b>",
   "SUPPORT_TOPUP_TEXT": "💬 <b>Top up via support</b>\n\nMessage support {contact} with your ID <code>{user_id}</code>, the amount and a convenient payment method.",
   "SUPPORT_TOPUP_WRITE_BUTTON": "💬 Message support",

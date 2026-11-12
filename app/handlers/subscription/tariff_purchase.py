@@ -6,6 +6,7 @@ from app.services.pricing_engine import TariffSwitchPricingUnavailableError
 """Покупка подписки по тарифам."""
 
 import html
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -28,7 +29,7 @@ from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.database import AsyncSessionLocal
-from app.database.models import PaymentMethod, Tariff, Transaction, TransactionType, User
+from app.database.models import PaymentMethod, Subscription, Tariff, Transaction, TransactionType, User
 from app.keyboards.inline import build_connect_button
 from app.localization.texts import Texts, get_texts
 from app.middlewares.banner_variant import show_banner_state
@@ -36,6 +37,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.panel_sync import should_create_panel_account
 from app.services.subscription_service import SubscriptionService
 from app.services.tariff_switch_policy import remaining_days_for_switch, should_reset_used_traffic
+from app.services.topup_checkout_offer import CONFIRM_CALLBACK_PREFIX, is_one_tap_cart, parse_confirm_callback
 from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
 from app.utils.formatting import format_period, format_price_kopeks, format_traffic
@@ -169,12 +171,16 @@ async def _resolve_switch_subscription(callback, db_user, db, state=None):
     return None, None
 
 
-async def _reject_unavailable_tariff(callback: types.CallbackQuery, tariff: Tariff, user: User, texts: Texts) -> bool:
-    """Запретить недоступный тариф до расчёта и списания, включая старые кнопки."""
+def _tariff_available_for_user(tariff: Tariff, user: User) -> bool:
     from app.services.pricing_engine import PricingEngine
 
     group = PricingEngine.resolve_promo_group(user)
-    if tariff.is_available_for_promo_group(group.id if group else None):
+    return tariff.is_available_for_promo_group(group.id if group else None)
+
+
+async def _reject_unavailable_tariff(callback: types.CallbackQuery, tariff: Tariff, user: User, texts: Texts) -> bool:
+    """Запретить недоступный тариф до расчёта и списания, включая старые кнопки."""
+    if _tariff_available_for_user(tariff, user):
         return False
     await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
     return True
@@ -5714,15 +5720,62 @@ async def confirm_instant_switch(
             pass
 
 
-async def return_to_saved_tariff_cart(
-    callback: types.CallbackQuery,
-    state: FSMContext,
-    db_user: User,
+@dataclass(slots=True)
+class SavedTariffCart:
+    """Сохранённая корзина тарифа после проверки и пересчёта по текущим ценам."""
+
+    user_id: int
+    cart_mode: str
+    cart_data: dict
+    checkout_identity: dict
+    tariff: Tariff
+    subscription: Subscription | None
+    period: int
+    custom_traffic_gb: int | None
+    traffic_limit_gb: int
+    device_limit: int
+    total_price: int
+    original_price: int
+
+    @property
+    def discount_amount(self) -> int:
+        return self.original_price - self.total_price
+
+    @property
+    def discount_percent(self) -> int:
+        return self.discount_amount * 100 // self.original_price if self.original_price else 0
+
+    @property
+    def checkout_token(self) -> str:
+        """Ключ этой покупки: другой тариф, срок или подписка в корзине — другой ключ."""
+        from app.services.subscription_auto_purchase_service import _saved_tariff_checkout_external_id
+
+        return _saved_tariff_checkout_external_id(self.user_id, self.checkout_identity).rsplit(':', 1)[-1][:24]
+
+
+@dataclass(frozen=True, slots=True)
+class SavedTariffCartRejection:
+    """Почему сохранённую корзину нельзя оформить: ключ локали и текст для человека."""
+
+    key: str
+    default: str
+    drop_cart: bool = False
+
+
+_CART_CORRUPTED = SavedTariffCartRejection('TARIFF_PURCHASE_CART_CORRUPTED', '❌ Данные корзины повреждены')
+_CART_SUBSCRIPTION_NOT_FOUND = SavedTariffCartRejection('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена')
+
+
+async def load_saved_tariff_cart(
     db: AsyncSession,
+    db_user: User,
     cart_data: dict,
-):
-    """Восстанавливает сохраненную корзину тарифа после пополнения баланса."""
-    texts = get_texts(db_user.language)
+) -> tuple[SavedTariffCart | None, SavedTariffCartRejection | None]:
+    """Проверяет сохранённую корзину тарифа и пересчитывает её цену. Ничего не списывает и не сохраняет.
+
+    Общая часть для «Продолжить оформление», для подтверждения из сообщения о пополнении и для
+    решения, показывать ли там кнопку подтверждения. ``cart_data`` получает свежую цену и параметры.
+    """
     cart_mode = cart_data.get('cart_mode')
     checkout_identity = dict(cart_data)
     try:
@@ -5731,50 +5784,32 @@ async def return_to_saved_tariff_cart(
         tariff_id = 0
 
     if not tariff_id:
-        await callback.answer(
-            texts.t('TARIFF_PURCHASE_CART_CORRUPTED', '❌ Данные корзины повреждены'), show_alert=True
-        )
-        return
+        return None, _CART_CORRUPTED
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not tariff.is_active:
-        await callback.answer(
-            texts.t('TARIFF_PURCHASE_NO_LONGER_AVAILABLE', '❌ Тариф больше недоступен'), show_alert=True
+        return None, SavedTariffCartRejection(
+            'TARIFF_PURCHASE_NO_LONGER_AVAILABLE', '❌ Тариф больше недоступен', drop_cart=True
         )
-        # Очищаем корзину (per-subscription в multi-tariff)
-        _cart_sub_id = cart_data.get('subscription_id')
-        if _cart_sub_id and settings.is_multi_tariff_enabled():
-            await user_cart_service.delete_subscription_cart(db_user.id, _cart_sub_id)
-        else:
-            await user_cart_service.delete_user_cart(db_user.id)
-        return
 
     if cart_mode not in ('tariff_purchase', 'daily_tariff_purchase', 'extend'):
-        await callback.answer(
-            texts.t('TARIFF_PURCHASE_CART_CORRUPTED', '❌ Данные корзины повреждены'), show_alert=True
-        )
-        return
-    if await _reject_unavailable_tariff(callback, tariff, db_user, texts):
-        return
+        return None, _CART_CORRUPTED
+    if not _tariff_available_for_user(tariff, db_user):
+        return None, SavedTariffCartRejection('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен')
 
     try:
         source_id = int(cart_data['subscription_id']) if cart_data.get('subscription_id') is not None else None
         period = 1 if cart_mode == 'daily_tariff_purchase' else int(cart_data.get('period_days', 30))
     except (TypeError, ValueError):
-        await callback.answer(
-            texts.t('TARIFF_PURCHASE_CART_CORRUPTED', '❌ Данные корзины повреждены'), show_alert=True
-        )
-        return
+        return None, _CART_CORRUPTED
     if source_id is not None:
         subscription = await get_subscription_by_id_for_user(db, source_id, db_user.id)
         if subscription is None:
-            await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
-            return
+            return None, _CART_SUBSCRIPTION_NOT_FOUND
     else:
         subscription = await _resolve_purchase_subscription(db, db_user, tariff)
     if cart_mode == 'extend' and (subscription is None or subscription.tariff_id != tariff_id):
-        await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
-        return
+        return None, _CART_SUBSCRIPTION_NOT_FOUND
     if (
         settings.is_multi_tariff_enabled()
         and subscription is not None
@@ -5783,11 +5818,9 @@ async def return_to_saved_tariff_cart(
         # An explicit saved source is part of the purchase intent. Do not
         # reinterpret an old cart as a purchase for a different subscription.
         if source_id is not None:
-            await callback.answer(
-                texts.t('TARIFF_PURCHASE_CONFIRMATION_EXPIRED', 'Подтверждение устарело. Выберите тариф заново.'),
-                show_alert=True,
+            return None, SavedTariffCartRejection(
+                'TARIFF_PURCHASE_CONFIRMATION_EXPIRED', 'Подтверждение устарело. Выберите тариф заново.'
             )
-            return
         subscription = await _resolve_purchase_subscription(db, db_user, tariff)
 
     fixed_price = tariff.get_price_for_period(period)
@@ -5796,11 +5829,9 @@ async def return_to_saved_tariff_cart(
         and not (fixed_price is not None and fixed_price >= 0)
         and (cart_mode != 'tariff_purchase' or tariff.get_price_for_custom_days(period) is None)
     ):
-        await callback.answer(
-            texts.t('TARIFF_PURCHASE_PERIOD_UNAVAILABLE_FOR_TARIFF', 'Выбранный период недоступен для этого тарифа'),
-            show_alert=True,
+        return None, SavedTariffCartRejection(
+            'TARIFF_PURCHASE_PERIOD_UNAVAILABLE_FOR_TARIFF', 'Выбранный период недоступен для этого тарифа'
         )
-        return
 
     try:
         traffic_cart = (
@@ -5810,10 +5841,7 @@ async def return_to_saved_tariff_cart(
         if custom_traffic_gb is not None and cart_mode != 'tariff_purchase':
             raise ValueError('Unsupported custom traffic cart mode')
     except ValueError:
-        await callback.answer(
-            texts.t('TARIFF_PURCHASE_CART_CORRUPTED', '❌ Данные корзины повреждены'), show_alert=True
-        )
-        return
+        return None, _CART_CORRUPTED
 
     from app.services.pricing_engine import pricing_engine
 
@@ -5825,36 +5853,104 @@ async def return_to_saved_tariff_cart(
         custom_traffic_gb=custom_traffic_gb,
         user=db_user,
     )
-    total_price = quote.final_total
-    original_price = quote.original_total
-    discount_amount = quote.original_total - total_price
-    discount_percent = discount_amount * 100 // quote.original_total if quote.original_total else 0
+    saved = SavedTariffCart(
+        user_id=db_user.id,
+        cart_mode=cart_mode,
+        cart_data=cart_data,
+        checkout_identity=checkout_identity,
+        tariff=tariff,
+        subscription=subscription,
+        period=period,
+        custom_traffic_gb=custom_traffic_gb,
+        traffic_limit_gb=traffic_limit_gb,
+        device_limit=effective_device_limit,
+        total_price=quote.final_total,
+        original_price=quote.original_total,
+    )
     cart_data.update(
-        total_price=total_price,
+        total_price=saved.total_price,
         period_days=period,
         custom_traffic_gb=custom_traffic_gb,
         traffic_limit_gb=traffic_limit_gb,
         device_limit=effective_device_limit,
         subscription_id=subscription.id if subscription else None,
-        discount_percent=discount_percent,
+        discount_percent=saved.discount_percent,
     )
     if cart_mode == 'daily_tariff_purchase':
-        cart_data['daily_price_kopeks'] = total_price
+        cart_data['daily_price_kopeks'] = saved.total_price
+    return saved, None
+
+
+async def _restore_saved_tariff_cart(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    db_user: User,
+    db: AsyncSession,
+    cart_data: dict,
+) -> SavedTariffCart | None:
+    """Проверенная корзина с восстановленным состоянием оформления; при отказе говорит причину."""
+    saved, rejection = await load_saved_tariff_cart(db, db_user, cart_data)
+    if saved is None:
+        texts = get_texts(db_user.language)
+        await callback.answer(texts.t(rejection.key, rejection.default), show_alert=True)
+        if rejection.drop_cart:
+            # Очищаем корзину (per-subscription в multi-tariff)
+            _cart_sub_id = cart_data.get('subscription_id')
+            if _cart_sub_id and settings.is_multi_tariff_enabled():
+                await user_cart_service.delete_subscription_cart(db_user.id, _cart_sub_id)
+            else:
+                await user_cart_service.delete_user_cart(db_user.id)
+        return None
+
     await state.update_data(
-        restored_tariff_checkout={'cart': dict(cart_data), 'identity': checkout_identity}
-        if cart_mode == 'tariff_purchase'
+        restored_tariff_checkout={'cart': dict(saved.cart_data), 'identity': saved.checkout_identity}
+        if saved.cart_mode == 'tariff_purchase'
         else None,
-        selected_tariff_id=tariff_id,
-        selected_period=period,
-        final_price=total_price,
-        tariff_discount_percent=discount_percent,
-        target_subscription_id=subscription.id if subscription else None,
+        selected_tariff_id=saved.tariff.id,
+        selected_period=saved.period,
+        final_price=saved.total_price,
+        tariff_discount_percent=saved.discount_percent,
+        target_subscription_id=saved.subscription.id if saved.subscription else None,
         active_subscription_id=None,
-        custom_days=period,
-        custom_traffic_gb=custom_traffic_gb,
+        custom_days=saved.period,
+        custom_traffic_gb=saved.custom_traffic_gb,
     )
+    return saved
+
+
+async def return_to_saved_tariff_cart(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    db_user: User,
+    db: AsyncSession,
+    cart_data: dict,
+):
+    """Восстанавливает сохраненную корзину тарифа после пополнения баланса."""
+    saved = await _restore_saved_tariff_cart(callback, state, db_user, db, cart_data)
+    if saved is not None:
+        await _show_restored_tariff_cart(callback, db_user, saved)
+
+
+async def _show_restored_tariff_cart(
+    callback: types.CallbackQuery,
+    db_user: User,
+    saved: SavedTariffCart,
+):
+    """Экран оформления по восстановленной корзине: подтверждение или «всё ещё не хватает»."""
+    texts = get_texts(db_user.language)
+    cart_mode = saved.cart_mode
+    cart_data = saved.cart_data
+    tariff = saved.tariff
+    tariff_id = tariff.id
+    period = saved.period
+    total_price = saved.total_price
+    original_price = saved.original_price
+    discount_amount = saved.discount_amount
+    discount_percent = saved.discount_percent
+    custom_traffic_gb = saved.custom_traffic_gb
+    effective_device_limit = saved.device_limit
     user_balance = db_user.balance_kopeks or 0
-    traffic = format_traffic(traffic_limit_gb)
+    traffic = format_traffic(saved.traffic_limit_gb)
 
     # Проверяем баланс (при 100% скидке — пропускаем)
     if total_price > 0 and user_balance < total_price:
@@ -6029,10 +6125,7 @@ async def return_to_saved_tariff_cart(
         )
         if custom_traffic_gb is not None or str(period) not in (tariff.period_prices or {}):
             confirm_keyboard.inline_keyboard[0][0].callback_data = f'custom_confirm:{tariff_id}'
-        from app.services.subscription_auto_purchase_service import _saved_tariff_checkout_external_id
-
-        checkout_token = _saved_tariff_checkout_external_id(db_user.id, checkout_identity).rsplit(':', 1)[-1][:24]
-        confirm_keyboard.inline_keyboard[0][0].callback_data += f':{checkout_token}'
+        confirm_keyboard.inline_keyboard[0][0].callback_data += f':{saved.checkout_token}'
 
         discount_text = ''
         if discount_percent > 0:
@@ -6067,6 +6160,88 @@ async def return_to_saved_tariff_cart(
         )
 
     await callback.answer(texts.t('TARIFF_PURCHASE_CART_RESTORED', '✅ Корзина восстановлена!'))
+
+
+def one_tap_confirm_callback(saved: SavedTariffCart) -> str | None:
+    """callback_data существующей кнопки «Подтвердить» для этой корзины; None — нужен экран оформления.
+
+    Одним нажатием оформляются только покупка и продление на срок из прайса тарифа, с оплатой
+    с баланса. Суточный тариф, свой трафик, свой срок и бесплатное оформление идут через экран.
+    """
+    if (
+        saved.custom_traffic_gb is not None
+        or saved.total_price <= 0
+        or str(saved.period) not in (saved.tariff.period_prices or {})
+    ):
+        return None
+    if saved.cart_mode == 'extend' and saved.subscription is not None:
+        return f'tariff_ext_confirm:{saved.subscription.id}:{saved.tariff.id}:{saved.period}'
+    if saved.cart_mode == 'tariff_purchase':
+        return f'tariff_confirm:{saved.tariff.id}:{saved.period}:{saved.checkout_token}'
+    return None
+
+
+# Чьё нажатие «Подтвердить» из сообщения о пополнении сейчас оформляется (users.id). Второе
+# нажатие того же человека не встаёт в очередь на списание, а получает «уже оформляется».
+_cart_confirms_in_flight: set[int] = set()
+
+
+@error_handler
+async def confirm_saved_cart_after_topup(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    db_user: User,
+    db: AsyncSession,
+):
+    """«Подтвердить» прямо в сообщении о пополнении: одно нажатие вместо двух.
+
+    Кнопка несёт ключ корзины, цену и баланс, которые человек видел в сообщении. Если всё это
+    по-прежнему так, зовём тот же обработчик, что и кнопка «Подтвердить» на экране оформления —
+    он сам пересчитывает цену под блокировкой и списывает. Если корзина, цена или баланс уже
+    другие — открываем прежний экран оформления, без списания.
+    """
+    expected = parse_confirm_callback(callback.data)
+    cart_data = await user_cart_service.get_user_cart(db_user.id)
+    # Сообщение, которое Telegram уже не даёт редактировать, не покажет итог списания — без него не списываем.
+    stale_message = isinstance(callback.message, types.InaccessibleMessage)
+    if expected is None or stale_message or not is_one_tap_cart(cart_data):
+        # Корзины нет или она другого вида — прежний путь «Продолжить оформление» со своими сообщениями.
+        from .purchase import return_to_saved_cart
+
+        await return_to_saved_cart(callback, state, db_user, db)
+        return
+
+    user_id = db_user.id
+    if user_id in _cart_confirms_in_flight:
+        await callback.answer(
+            get_texts(db_user.language).t(
+                'TARIFF_PURCHASE_IN_PROGRESS', '⏳ Покупка уже обрабатывается. Повторное списание не требуется.'
+            ),
+            show_alert=True,
+        )
+        return
+
+    _cart_confirms_in_flight.add(user_id)
+    try:
+        saved = await _restore_saved_tariff_cart(callback, state, db_user, db, cart_data)
+        if saved is None:
+            return
+
+        token, price, balance = expected
+        confirm_data = one_tap_confirm_callback(saved)
+        if (
+            confirm_data is None
+            or saved.checkout_token != token
+            or saved.total_price != price
+            or (db_user.balance_kopeks or 0) != balance
+        ):
+            await _show_restored_tariff_cart(callback, db_user, saved)
+            return
+
+        confirm = confirm_tariff_extend if saved.cart_mode == 'extend' else confirm_tariff_purchase
+        await confirm(callback.model_copy(update={'data': confirm_data}), db_user, db, state)
+    finally:
+        _cart_confirms_in_flight.discard(user_id)
 
 
 async def purchase_tariff_with_sbp(
@@ -6197,6 +6372,9 @@ def register_tariff_purchase_handlers(dp: Dispatcher):
     # Продление по тарифу
     dp.callback_query.register(select_tariff_extend_period, F.data.startswith('tariff_extend:'))
     dp.callback_query.register(confirm_tariff_extend, F.data.startswith('tariff_ext_confirm:'))
+
+    # «Подтвердить» из сообщения о пополнении (кнопку ставит app/services/topup_checkout_offer.py)
+    dp.callback_query.register(confirm_saved_cart_after_topup, F.data.startswith(f'{CONFIRM_CALLBACK_PREFIX}:'))
 
     # Переключение тарифов (с выбором периода)
     dp.callback_query.register(show_tariff_switch_list, F.data == 'tariff_switch')

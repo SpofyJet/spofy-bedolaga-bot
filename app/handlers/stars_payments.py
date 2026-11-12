@@ -14,6 +14,7 @@ from app.keyboards.inline import get_payment_error_keyboard
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
+from app.services.topup_checkout_offer import apply_topup_checkout_offer
 
 
 logger = structlog.get_logger(__name__)
@@ -651,19 +652,25 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
 
             transaction_id_short = payment.telegram_payment_charge_id[:8]
 
+            success_text = texts.t(
+                'STARS_PAYMENT_SUCCESS',
+                '🎉 <b>Платеж успешно обработан!</b>\n\n'
+                '⭐ Потрачено звезд: {stars_spent}\n'
+                '💰 Зачислено на баланс: {amount} ₽\n'
+                '🆔 ID транзакции: {transaction_id}...\n\n'
+                'Спасибо за пополнение! 🚀',
+            ).format(
+                stars_spent=payment.total_amount,
+                amount=amount_text,
+                transaction_id=transaction_id_short,
+            )
+            # Пополнял ради сохранённой покупки и денег теперь хватает — сразу кнопка «Подтвердить».
+            success_text, keyboard = await apply_topup_checkout_offer(
+                user, success_text, keyboard, cart_notice_follows=False
+            )
+
             await message.answer(
-                texts.t(
-                    'STARS_PAYMENT_SUCCESS',
-                    '🎉 <b>Платеж успешно обработан!</b>\n\n'
-                    '⭐ Потрачено звезд: {stars_spent}\n'
-                    '💰 Зачислено на баланс: {amount} ₽\n'
-                    '🆔 ID транзакции: {transaction_id}...\n\n'
-                    'Спасибо за пополнение! 🚀',
-                ).format(
-                    stars_spent=payment.total_amount,
-                    amount=amount_text,
-                    transaction_id=transaction_id_short,
-                ),
+                success_text,
                 parse_mode='HTML',
                 reply_markup=keyboard,
             )

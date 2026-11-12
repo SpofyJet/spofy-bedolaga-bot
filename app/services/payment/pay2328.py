@@ -19,7 +19,7 @@ from app.database.models import (
     PaymentMethod,
     TransactionType,
 )
-from app.services.payment.common import topup_success_text
+from app.services.payment.common import build_topup_success_message
 from app.services.payment_problem_alert import alert_invoice_failed, alert_payment_not_applied, note_invoice_created
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
@@ -462,11 +462,11 @@ class Pay2328PaymentMixin:
             # Отправляем уведомление только Telegram-пользователям
             if user.telegram_id and settings.is_notifications_enabled():
                 try:
-                    keyboard = await self.build_topup_success_keyboard(user)
+                    text, keyboard = await build_topup_success_message(self, user, amount_kopeks)
 
                     await self.bot.send_message(
                         chat_id=user.telegram_id,
-                        text=topup_success_text(user, amount_kopeks),
+                        text=text,
                         parse_mode='HTML',
                         reply_markup=keyboard,
                     )
