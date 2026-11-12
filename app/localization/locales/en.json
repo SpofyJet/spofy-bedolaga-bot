@@ -1029,6 +1029,7 @@
   "DAILY_SUBSCRIPTION_RESUMED_AFTER_TOPUP": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>Subscription resumed!</b>\n\nYour daily plan «{tariff_name}» has been resumed after balance top-up.\n\n<tg-emoji emoji-id='5967548335542767952'>💳</tg-emoji> Charged: {amount}\n<tg-emoji emoji-id='5811989245761426317'>💰</tg-emoji> Remaining: {balance}",
   "DAILY_SWITCH_WARNING": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> <b>Warning!</b> You have {days} days left.\nThey will be lost when switching to daily tariff!",
   "DAYS": "days subscription",
+  "DEEPLINK_BUY_TEXT": "💎 <b>Choose a plan</b>\n\nTap the button below to choose a plan and a period.",
   "DEEPLINK_RENEW_TEXT": "<tg-emoji emoji-id='5985616167740379273'>⏰</tg-emoji> <b>Renew your subscription</b>\n\nTap the button below to choose a period.",
   "DEEPLINK_TRAFFIC_TEXT": "<tg-emoji emoji-id='5776219138917668486'>📈</tg-emoji> <b>Buy more traffic</b>\n\nTap the button below to choose a package.",
   "DELETE_MESSAGE": "🗑 Delete",

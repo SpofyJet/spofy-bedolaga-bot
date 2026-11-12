@@ -27,7 +27,11 @@ from app.database.crud.user import (
 )
 from app.database.models import GuestPurchase, PinnedMessage, SubscriptionStatus, User, UserStatus
 from app.handlers.promo_deeplink import claim_promo_link, is_promo_deeplink
-from app.handlers.subscription_deeplinks import SUBSCRIPTION_DEEPLINKS, open_subscription_deeplink
+from app.handlers.subscription_deeplinks import (
+    open_subscription_deeplink,
+    subscription_deeplink_action,
+    subscription_deeplink_source,
+)
 from app.handlers.ultima_deeplink import is_ultima_deeplink, link_source, open_ultima_offer
 from app.keyboards.inline import (
     get_back_keyboard,
@@ -1327,12 +1331,15 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             return
         start_parameter = None  # Invalid token, ignore
 
-    # Spofy: /start renew | /start traffic — со страницы подписки и из уведомления
-    # «обходы отключены». Без подписки или без аккаунта — обычный /start.
-    if start_parameter in SUBSCRIPTION_DEEPLINKS:
+    # Spofy: /start renew | renew_<источник> | traffic — со страницы подписки, из уведомления
+    # «обходы отключены» и из-под постов в канале. Без аккаунта — обычный /start.
+    deeplink_action = subscription_deeplink_action(start_parameter)
+    if deeplink_action:
         user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
         if user and user.status != UserStatus.DELETED.value:
-            if await open_subscription_deeplink(message, user, db, start_parameter):
+            if await open_subscription_deeplink(
+                message, user, db, deeplink_action, source=subscription_deeplink_source(start_parameter)
+            ):
                 await _drop_leftover_input_state(state)
                 return
         start_parameter = None

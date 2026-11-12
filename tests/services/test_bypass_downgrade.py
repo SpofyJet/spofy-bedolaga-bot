@@ -371,7 +371,8 @@ def test_deeplinks_answer_with_one_button(monkeypatch, action, callback):
     assert [row[0].callback_data for row in markup.inline_keyboard] == [callback]
 
 
-def test_deeplink_without_subscription_falls_through(monkeypatch):
+def test_traffic_deeplink_without_subscription_falls_through(monkeypatch):
+    # renew без подписки теперь ведёт к выбору тарифа: tests/handlers/test_subscription_deeplinks.py
     import asyncio
 
     from app.handlers import subscription_deeplinks
@@ -380,5 +381,5 @@ def test_deeplink_without_subscription_falls_through(monkeypatch):
     message = MagicMock()
     message.answer = AsyncMock()
 
-    assert asyncio.run(subscription_deeplinks.open_subscription_deeplink(message, _user(), _db(), 'renew')) is False
+    assert asyncio.run(subscription_deeplinks.open_subscription_deeplink(message, _user(), _db(), 'traffic')) is False
     message.answer.assert_not_awaited()

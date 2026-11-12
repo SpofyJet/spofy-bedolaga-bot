@@ -1029,6 +1029,7 @@
   "DAILY_SUBSCRIPTION_RESUMED_AFTER_TOPUP": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> <b>Подписка возобновлена!</b>\n\nВаш суточный тариф «{tariff_name}» возобновлён после пополнения баланса.\n\n<tg-emoji emoji-id='5967548335542767952'>💳</tg-emoji> Списано: {amount}\n<tg-emoji emoji-id='5811989245761426317'>💰</tg-emoji> Остаток: {balance}",
   "DAILY_SWITCH_WARNING": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> <b>Внимание!</b> У вас осталось {days} дн. подписки.\nПри смене на суточный тариф они будут утеряны!",
   "DAYS": "дн. подписки",
+  "DEEPLINK_BUY_TEXT": "💎 <b>Выбор тарифа</b>\n\nНажмите кнопку ниже, чтобы выбрать тариф и срок.",
   "DEEPLINK_RENEW_TEXT": "<tg-emoji emoji-id='5985616167740379273'>⏰</tg-emoji> <b>Продление подписки</b>\n\nНажмите кнопку ниже, чтобы выбрать срок.",
   "DEEPLINK_TRAFFIC_TEXT": "<tg-emoji emoji-id='5776219138917668486'>📈</tg-emoji> <b>Докупка трафика</b>\n\nНажмите кнопку ниже, чтобы выбрать пакет.",
   "DELETE_MESSAGE": "🗑 Удалить",
