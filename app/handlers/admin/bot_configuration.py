@@ -1209,7 +1209,7 @@ def _build_settings_keyboard(
         )
 
     if category_key == 'WATA':
-        label = texts.t('PAYMENT_CARD_WATA', '💳 Банковская карта (WATA)')
+        label = texts.t('PAYMENT_CARD_WATA', '🏦 СБП (WATA)')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'wata')])
     elif category_key == 'TELEGRAM':
         label = texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars')

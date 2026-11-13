@@ -1820,7 +1820,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('PAYMENT_CARD_WATA', 'Банковская карта (WATA)'),
+                    text=texts.t('PAYMENT_CARD_WATA', 'СБП (WATA)'),
                     callback_data=_build_callback('wata'),
                 )
             ]

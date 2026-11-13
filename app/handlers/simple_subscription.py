@@ -311,7 +311,7 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('PAYMENT_CARD_WATA', '💳 Банковская карта (WATA)'),
+                    text=texts.t('PAYMENT_CARD_WATA', '🏦 СБП (WATA)'),
                     callback_data='simple_subscription_wata',
                 )
             ]
