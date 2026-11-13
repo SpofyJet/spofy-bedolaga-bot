@@ -35,6 +35,7 @@ SYNONYMS = [
     {'🛡️', '🛡'},
     {'🏆', '🥇'},
     {'🍏', '🍎'},
+    {'🏴\u200d☠️', '🏴\u200d☠'},
 ]
 
 
@@ -115,6 +116,17 @@ def test_payment_methods_of_one_kind_share_an_icon_and_kinds_differ() -> None:
         )
     ]
     assert len(set(kinds)) == len(kinds)
+
+
+def test_bypass_tariff_button_carries_the_bypass_sign() -> None:
+    # Название тарифа приходит из базы. Рядом «⭐️ Стандартный» и «👑 ULTIMA» со значками, а «🏴‍☠️ С Обходами»
+    # (433 нажатия за 30 дней до 13.11.2026) оставался с обычным флагом. Знак обходов — щит Spofy, как в текстах.
+    values = json.loads((ROOT / 'app/localization/locales/ru.json').read_text(encoding='utf-8'))
+    in_texts = re.search(r"<tg-emoji emoji-id='(\d+)'>🏴\u200d☠️</tg-emoji>", values['BYPASS_SUSPENDED']).group(1)
+    assert _icon_for('🏴\u200d☠️ С Обходами') == ('С Обходами', in_texts)
+    assert _icon_for('🏴\u200d☠️ С Обходами (+44₽)') == ('С Обходами (+44₽)', in_texts)
+    assert _icon_for('⭐️ Стандартный')[0] == 'Стандартный'
+    assert _icon_for('👑 ULTIMA')[0] == 'ULTIMA'
 
 
 def test_check_status_is_not_a_chart() -> None:
