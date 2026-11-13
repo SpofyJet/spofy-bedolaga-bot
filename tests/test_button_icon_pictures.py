@@ -75,6 +75,48 @@ def test_most_pressed_buttons_have_icons() -> None:
     assert without == {}
 
 
+def test_payment_method_buttons_have_icons() -> None:
+    # До 13.11.2026 значок был у «Карта / СБП», «Telegram Stars» и «СБП (WATA)», а «Международные карты»,
+    # «Криптовалюта (xRocket)», «Криптовалюта (2328.io)» и «Другие способы» в том же списке стояли без него.
+    keys = [
+        'PAYMENT_PLATEGA_M2',
+        'PAYMENT_PLATEGA_M11',
+        'PAYMENT_PLATEGA_M12',
+        'PAYMENT_PLATEGA_M13',
+        'PAYMENT_TELEGRAM_STARS',
+        'PAYMENT_CARD_WATA',
+        'PAYMENT_XROCKET',
+        'PAYMENT_PAY2328',
+        'PAYMENT_CRYPTOBOT',
+        'PAYMENT_VIA_SUPPORT',
+    ]
+    for locale in ('ru', 'en'):
+        values = json.loads((ROOT / f'app/localization/locales/{locale}.json').read_text(encoding='utf-8'))
+        without = {key: values[key] for key in keys if _icon_for(values[key]) is None}
+        assert without == {}, locale
+
+
+def test_payment_methods_of_one_kind_share_an_icon_and_kinds_differ() -> None:
+    values = json.loads((ROOT / 'app/localization/locales/ru.json').read_text(encoding='utf-8'))
+
+    def icon(key: str) -> str:
+        return _icon_for(values[key])[1]
+
+    assert icon('PAYMENT_XROCKET') == icon('PAYMENT_PAY2328') == icon('PAYMENT_CRYPTOBOT')
+    kinds = [
+        icon(key)
+        for key in (
+            'PAYMENT_PLATEGA_M2',
+            'PAYMENT_PLATEGA_M12',
+            'PAYMENT_TELEGRAM_STARS',
+            'PAYMENT_CARD_WATA',
+            'PAYMENT_XROCKET',
+            'PAYMENT_VIA_SUPPORT',
+        )
+    ]
+    assert len(set(kinds)) == len(kinds)
+
+
 def test_check_status_is_not_a_chart() -> None:
     values = json.loads((ROOT / 'app/localization/locales/ru.json').read_text(encoding='utf-8'))
     text, icon = _icon_for(values['CHECK_STATUS_BUTTON'])
