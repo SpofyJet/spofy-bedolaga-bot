@@ -2076,6 +2076,7 @@
   "TARIFF_PURCHASE_PERIOD_DISCOUNTS_HINT": "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> <i>Скидки по периодам</i>",
   "TARIFF_PURCHASE_PERIOD_UNAVAILABLE": "Период недоступен",
   "TARIFF_PURCHASE_PERIOD_UNAVAILABLE_FOR_TARIFF": "Выбранный период недоступен для этого тарифа",
+  "TARIFF_PURCHASE_PRICE_30_DAYS": "{price}{icon} за 30 дней",
   "TARIFF_PURCHASE_PRICE_FROM": "от {price}{icon}",
   "TARIFF_PURCHASE_PRICE_PER_DAY": "<tg-emoji emoji-id='5839200986022812209'>🔄</tg-emoji> {price}/день{icon}",
   "TARIFF_PURCHASE_SELECT_SUBSCRIPTION": "Выберите подписку",

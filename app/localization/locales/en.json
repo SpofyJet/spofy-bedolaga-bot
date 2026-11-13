@@ -2076,6 +2076,7 @@
   "TARIFF_PURCHASE_PERIOD_DISCOUNTS_HINT": "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> <i>Period discounts</i>",
   "TARIFF_PURCHASE_PERIOD_UNAVAILABLE": "Period unavailable",
   "TARIFF_PURCHASE_PERIOD_UNAVAILABLE_FOR_TARIFF": "The selected period is not available for this plan",
+  "TARIFF_PURCHASE_PRICE_30_DAYS": "{price}{icon} for 30 days",
   "TARIFF_PURCHASE_PRICE_FROM": "from {price}{icon}",
   "TARIFF_PURCHASE_PRICE_PER_DAY": "<tg-emoji emoji-id='5839200986022812209'>🔄</tg-emoji> {price}/day{icon}",
   "TARIFF_PURCHASE_SELECT_SUBSCRIPTION": "Choose a subscription",

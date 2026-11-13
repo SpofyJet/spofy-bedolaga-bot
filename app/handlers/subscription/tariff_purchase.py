@@ -230,6 +230,10 @@ def _get_user_period_discount(db_user: User, period_days: int, tariff_id: int | 
     return group_discount, personal_discount, display_combined
 
 
+# Цена какого периода стоит в списке тарифов: по ней тарифы сравнивают между собой.
+LIST_PRICE_PERIOD_DAYS = 30
+
+
 def tariff_has_bypass_quota(tariff) -> bool:
     """Лимит тарифа — квота на обходы (как has_bypass_quota у подписки, но по сквадам тарифа)."""
     squad = settings.BYPASS_SQUAD_UUID
@@ -297,24 +301,32 @@ def format_tariffs_list_text(
                 price=format_price_kopeks(daily_price, compact=True), icon=discount_icon
             )
         else:
-            # Для периодных тарифов показываем минимальную цену
+            # Цена за 30 дней: «от 159₽» было ценой самого короткого периода (14 дней), и человек
+            # возвращался со списка периодов сравнивать тарифы (150 из 441 новичков за 30 дней).
+            # Нет периода на 30 дней — как раньше, минимальная цена с «от».
             prices = tariff.period_prices or {}
             if prices:
-                min_period = min(prices.keys(), key=int)
-                min_price = prices[min_period]
+                month_period = next((period for period in prices if int(period) == LIST_PRICE_PERIOD_DAYS), None)
+                shown_period = month_period if month_period is not None else min(prices.keys(), key=int)
+                shown_price = prices[shown_period]
                 group_pct, offer_pct, discount_percent = 0, 0, 0
                 if db_user:
                     group_pct, offer_pct, discount_percent = _get_user_period_discount(
-                        db_user, int(min_period), tariff.id
+                        db_user, int(shown_period), tariff.id
                     )
                 if discount_percent > 0:
-                    min_price = _apply_promo_discount(min_price, group_pct, offer_pct)
+                    shown_price = _apply_promo_discount(shown_price, group_pct, offer_pct)
                     discount_icon = '🔥'
-                price_text = texts.t('TARIFF_PURCHASE_PRICE_FROM', 'от {price}{icon}').format(
-                    price=format_price_kopeks(min_price, compact=True), icon=discount_icon
-                )
+                if month_period is not None:
+                    price_text = texts.t('TARIFF_PURCHASE_PRICE_30_DAYS', '{price}{icon} за 30 дней').format(
+                        price=format_price_kopeks(shown_price), icon=discount_icon
+                    )
+                else:
+                    price_text = texts.t('TARIFF_PURCHASE_PRICE_FROM', 'от {price}{icon}').format(
+                        price=format_price_kopeks(shown_price, compact=True), icon=discount_icon
+                    )
 
-        # Компактный формат: Название — 250 ГБ / 10 📱 от 179₽🔥
+        # Компактный формат: Название — 250 ГБ / 10 📱 179 ₽🔥 за 30 дней
         purchased_mark = ' ✅' if tariff.id in purchased_tariff_ids else ''
         lines.append(
             f'<b>{html.escape(tariff.name)}</b>{purchased_mark} — {traffic} / {tariff.device_limit} 📱 {price_text}'
