@@ -1130,10 +1130,14 @@ class SubscriptionService:
         Returns:
             Tuple[bool, Optional[str]]: (успех, сообщение об ошибке)
         """
+        # До панели: её сбой откатывает сессию, и подписка протухает — чтение subscription.id
+        # в логе ошибки падало, а с ним весь экран «Моя подписка».
+        subscription_id = subscription.id
+        user = None
         try:
             user = await get_user_by_id(db, subscription.user_id)
             if not user:
-                logger.error('Пользователь не найден для подписки', subscription_id=subscription.id)
+                logger.error('Пользователь не найден для подписки', subscription_id=subscription_id)
                 return False, 'user_not_found'
 
             # Проверяем, нужна ли синхронизация
@@ -1212,16 +1216,19 @@ class SubscriptionService:
                     subscription_id=subscription.id,
                 )
                 return True, None
-            logger.error('Не удалось синхронизировать подписку с RemnaWave', subscription_id=subscription.id)
+            await reload_after_panel_failure(db, subscription, user)
+            logger.error('Не удалось синхронизировать подписку с RemnaWave', subscription_id=subscription_id)
             return False, 'sync_failed'
 
         except RemnaWaveAPIError as api_error:
+            await reload_after_panel_failure(db, subscription, user)
             logger.error(
-                'Ошибка RemnaWave API при синхронизации подписки', subscription_id=subscription.id, api_error=api_error
+                'Ошибка RemnaWave API при синхронизации подписки', subscription_id=subscription_id, api_error=api_error
             )
             return False, 'api_error'
         except Exception as e:
-            logger.error('Ошибка синхронизации подписки', subscription_id=subscription.id, error=e)
+            await reload_after_panel_failure(db, subscription, user)
+            logger.error('Ошибка синхронизации подписки', subscription_id=subscription_id, error=e)
             return False, 'unknown_error'
 
     async def validate_and_clean_subscription(self, db: AsyncSession, subscription: Subscription, user: User) -> bool:

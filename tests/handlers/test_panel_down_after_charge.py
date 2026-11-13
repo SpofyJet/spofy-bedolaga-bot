@@ -375,3 +375,49 @@ async def test_nothing_is_reloaded_when_the_session_was_not_rolled_back(monkeypa
 
         assert [call.args[0] for call in refresh.await_args_list] == [user, subscription]
         assert (user.balance_kopeks, subscription.tariff_id) == (100, STANDARD_ID)
+
+
+# ── «Моя подписка» ──────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('panel_id', [None, PANEL_ID])
+async def test_my_subscription_sync_survives_panel_outage(monkeypatch, panel_down, panel_id):
+    """Ссылки ещё нет (купил во время сбоя): экран «Моя подписка» не должен падать на синхронизации.
+
+    02.11.2026 — 54 нажатия «Моя подписка» у 5 человек закончились ничем: лог ошибки читал
+    subscription.id у протухшей подписки и ронял весь обработчик.
+    """
+    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
+        end = await _seed(db, balance=0, panel_id=panel_id)
+        subscription = await db.get(Subscription, SUB_ID)
+        subscription.subscription_url = None
+        await db.commit()
+        user = await db.get(User, USER_ID)
+
+        result = await SubscriptionService().ensure_subscription_synced(db, subscription)
+
+        # Обработчик сразу после этого читает поля подписки и человека.
+        seen = (subscription.id, subscription.end_date.replace(tzinfo=UTC), user.telegram_id, user.remnawave_id)
+
+    assert panel_down, 'до панели дошли — и она не ответила'
+    assert result == (False, 'sync_failed')
+    assert seen == (SUB_ID, end, TELEGRAM_ID, panel_id), 'панель недоступна — показываем то, что в базе'
+
+
+@pytest.mark.asyncio
+async def test_my_subscription_screen_opens_while_panel_is_down(monkeypatch, panel_down):
+    """Тот же случай целиком: нажатие «Моя подписка» заканчивается экраном, а не тишиной."""
+    from app.database.crud.user import get_user_by_id
+
+    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
+        await _seed(db, balance=0, panel_id=None)
+        (await db.get(Subscription, SUB_ID)).subscription_url = None
+        await db.commit()
+        callback = _Callback('menu_subscription')
+
+        await purchase_handlers.show_subscription_info(callback, await get_user_by_id(db, USER_ID), db)
+
+    assert panel_down, 'до панели дошли — и она не ответила'
+    assert '⭐️ Стандартный' in callback.shown, 'экран подписки показан'
+    callback.answer.assert_awaited_once()
