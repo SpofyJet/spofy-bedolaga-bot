@@ -464,7 +464,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         # одна строка «Срок: навсегда». По плейсхолдерам — работает в любой локали.
         _lifetime_line = texts.t(
             'SUBSCRIPTION_OVERVIEW_LIFETIME_LINE',
-            "<tg-emoji emoji-id='5908972566537572230'>♾️</tg-emoji> Срок: <b>навсегда</b>",
+            "<tg-emoji emoji-id='5271934788037517525'>♾️</tg-emoji> Срок: <b>навсегда</b>",
         )
         _tpl_lines = []
         for _tpl_line in message_template.split('\n'):
