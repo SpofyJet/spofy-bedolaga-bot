@@ -13,6 +13,11 @@ off for every other purchase path. Prices, payment methods and top-ups all come 
 the cabinet's own functions, so promo groups, discounts and every payment provider
 behave exactly as in the cabinet.
 
+After the payment the provider sends the customer back to the page, not to the cabinet
+(they never logged in there): the page passes ``return_url`` — a neutral address on its
+own domain WITHOUT the subscription token — and the top-up is created with it. A URL that
+is not plain https, carries a query, or contains the short UUID is ignored (cabinet URL).
+
 Server-to-server only: the caller must send ``X-Spofy-Subpage-Key`` equal to the
 ``SPOFY_SUBPAGE_API_KEY`` environment variable (≥ 32 chars). Without the variable the
 whole router answers 404.
@@ -45,6 +50,7 @@ from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
 from app.database.crud.user import get_user_by_id
 from app.database.models import Subscription, SubscriptionStatus, User, UserStatus
 from app.services.pricing_engine import pricing_engine
+from app.services.spofy_subpage_context import subpage_return_context
 from app.services.spofy_subpage_service import (
     SUBPAGE_SOURCE,
     bind_cart_to_payment,
@@ -77,6 +83,9 @@ SHORT_UUID_RE = re.compile(r'^[A-Za-z0-9_-]{6,64}$')
 # повесил бы второй (та же вкладка, тот же fingerprint) до разрыва соединения
 # клиентом. По таймауту второй получает тот же 409, что и ветка 'busy'.
 CHECKOUT_WAIT_TIMEOUT_S = 60
+RETURN_URL_MAX_LENGTH = 200
+# https://host[:port]/plain/path — nothing a browser or a provider could read differently.
+RETURN_URL_RE = re.compile(r'^https://[A-Za-z0-9.-]+(:\d{1,5})?(/[A-Za-z0-9._~/-]*)?$')
 
 _key_header = APIKeyHeader(name='X-Spofy-Subpage-Key', auto_error=False)
 
@@ -494,6 +503,21 @@ class CheckoutRequest(BaseModel):
     tariff_id: int | None = Field(None, ge=1)
     payment_method: str = Field(..., min_length=1, max_length=64)
     payment_option: str | None = Field(None, max_length=64)
+    # Where the provider sends the customer after the payment: the page's neutral return
+    # route. Optional — without it (or when it fails safe_return_url) the cabinet URL is used.
+    return_url: str | None = Field(None, max_length=RETURN_URL_MAX_LENGTH)
+
+
+def safe_return_url(url: str | None, short_uuid: str) -> str | None:
+    """The page's return address, or None when it must not be handed to a payment provider.
+
+    The subscription link is a credential, so the address may not contain the short UUID
+    anywhere; it is a bare https URL — no credentials, percent-escapes, query or fragment
+    (``create_topup`` appends ``?method=…&status=…`` itself).
+    """
+    if not url or not RETURN_URL_RE.match(url) or short_uuid.lower() in url.lower():
+        return None
+    return url
 
 
 @router.post('/{short_uuid}/checkout')
@@ -548,7 +572,7 @@ async def _checkout(short_uuid: str, body: CheckoutRequest, db: AsyncSession) ->
         replayed = checkout_serializer.replay(user.id, fingerprint)
         if replayed is not None:
             return replayed
-        result = await _checkout_payment(user, subscription, body, db)
+        result = await _checkout_payment(user, subscription, body, db, short_uuid)
         checkout_serializer.remember(user.id, fingerprint, result)
         return result
     finally:
@@ -559,7 +583,7 @@ _CART_CHANGED = 'Cart changed concurrently — please retry'
 
 
 async def _checkout_payment(
-    user: User, subscription: Subscription, body: CheckoutRequest, db: AsyncSession
+    user: User, subscription: Subscription, body: CheckoutRequest, db: AsyncSession, short_uuid: str
 ) -> dict[str, Any]:
     before = snapshot(subscription)
 
@@ -617,11 +641,16 @@ async def _checkout_payment(
         # The slot no longer holds the page's cart: paying now would leave an orphan top-up.
         raise HTTPException(status.HTTP_409_CONFLICT, _CART_CHANGED)
 
-    topup = await create_topup(
-        request=TopUpRequest(amount_kopeks=amount, payment_method=method.id, payment_option=body.payment_option),
-        user=user,
-        db=db,
-    )
+    # Only this invoice returns to the page; cabinet and bot top-ups keep the cabinet URL.
+    return_url = safe_return_url(body.return_url, short_uuid)
+    if body.return_url and not return_url:
+        logger.warning('spofy subpage: return_url rejected, cabinet URL is used', user_id=user.id)
+    with subpage_return_context(return_url):
+        topup = await create_topup(
+            request=TopUpRequest(amount_kopeks=amount, payment_method=method.id, payment_option=body.payment_option),
+            user=user,
+            db=db,
+        )
     logger.info(
         'spofy subpage checkout',
         user_id=user.id,

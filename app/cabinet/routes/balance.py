@@ -30,6 +30,7 @@ from app.services.payment_verification_service import (
     method_display_name,
     run_manual_check,
 )
+from app.services.spofy_subpage_context import subpage_return_url
 from app.utils.currency_converter import currency_converter
 from app.utils.miniapp_buttons import strip_leading_emoji, tg_emoji_to_unicode
 
@@ -385,7 +386,9 @@ async def create_topup(
     payment_url = None
     payment_id = None
     qr_payload: str | None = None
-    cabinet_return_url = f'{settings.CABINET_URL.rstrip("/")}/balance/top-up/result?method={request.payment_method}'
+    # Счёт со страницы подписки возвращает человека на неё (адрес ставит мост), остальные — в кабинет.
+    return_base = subpage_return_url() or f'{settings.CABINET_URL.rstrip("/")}/balance/top-up/result'
+    cabinet_return_url = f'{return_base}?method={request.payment_method}'
     cabinet_success_url = f'{cabinet_return_url}&status=success'
     cabinet_failed_url = f'{cabinet_return_url}&status=failed'
 

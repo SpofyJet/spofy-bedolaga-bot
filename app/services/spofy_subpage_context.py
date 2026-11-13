@@ -42,6 +42,29 @@ def mark_subpage_text(text: str) -> str:
     return mark_title(text, SUBPAGE_MARK)
 
 
+# ── Куда платёжка возвращает человека после оплаты со страницы подписки ────────
+# Кабинет шлёт всех на свой /balance/top-up/result; человек, плативший со страницы
+# подписки, в кабинет не входил и попадал на экран входа. Мост на время создания
+# счёта кладёт сюда адрес возврата страницы (без токена подписки — см.
+# spofy_subpage.safe_return_url); create_topup берёт его вместо адреса кабинета.
+# Вне моста значение пустое, и адрес остаётся прежним.
+
+_subpage_return_url: ContextVar[str | None] = ContextVar('spofy_subpage_return_url', default=None)
+
+
+def subpage_return_url() -> str | None:
+    return _subpage_return_url.get()
+
+
+@contextmanager
+def subpage_return_context(url: str | None) -> Iterator[None]:
+    token = _subpage_return_url.set(url or None)
+    try:
+        yield
+    finally:
+        _subpage_return_url.reset(token)
+
+
 # ── Откуда покупка: бот / кабинет / страница подписки ──────────────────────────
 # Страница подписки помечается флагом выше. Бот и кабинет — этим значением:
 # бот ставит его на время обработки апдейта (middleware), автопокупка после
