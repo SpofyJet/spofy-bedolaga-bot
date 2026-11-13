@@ -421,3 +421,73 @@ async def test_my_subscription_screen_opens_while_panel_is_down(monkeypatch, pan
     assert panel_down, 'до панели дошли — и она не ответила'
     assert '⭐️ Стандартный' in callback.shown, 'экран подписки показан'
     callback.answer.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_my_subscription_asks_the_panel_once_while_it_is_down(monkeypatch, panel_down):
+    """Обычный человек со ссылкой: панель не ответила на первый запрос — остальные не делаем.
+
+    02.11.2026 экран делал до четырёх запросов подряд (трафик, проверка, устройства и ещё раз
+    устройства), каждый до двух минут: 35 человек ждали экран минутами, а соединение с базой
+    за это время обрывалось. После первого сбоя экран собирается из базы.
+    """
+    from app.database.crud.user import get_user_by_id
+    from app.services.remnawave_service import RemnaWaveService
+
+    @contextlib.asynccontextmanager
+    async def no_panel(self):
+        panel_down.append('devices request')
+        raise RemnaWaveAPIError('Bad Gateway', 502)
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(RemnaWaveService, 'get_api_client', no_panel)
+    monkeypatch.setattr(settings, 'DEVICES_SELECTION_ENABLED', True)
+
+    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
+        await _seed(db, balance=0)
+        callback = _Callback('menu_subscription')
+
+        await purchase_handlers.show_subscription_info(callback, await get_user_by_id(db, USER_ID), db)
+
+    assert panel_down == ['request'], 'один запрос к панели, а не четыре'
+    assert '⭐️ Стандартный' in callback.shown, 'экран подписки показан по данным базы'
+    assert 'Устройства: — / 3' in callback.shown, 'число устройств неизвестно — прочерк, а не ноль'
+    callback.answer.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_my_subscription_does_not_repeat_a_failed_devices_request(monkeypatch):
+    """Панель ответила на первые запросы и упала на устройствах: тот же запрос второй раз не шлём."""
+    from app.database.crud.user import get_user_by_id
+    from app.services.remnawave_service import RemnaWaveService
+
+    requests: list[str] = []
+
+    class _Api:
+        async def get_user_by_id(self, panel_id):
+            requests.append('user')
+            return SimpleNamespace(used_traffic_bytes=0)
+
+    @contextlib.asynccontextmanager
+    async def panel(self):
+        yield _Api()
+
+    @contextlib.asynccontextmanager
+    async def no_devices(self):
+        requests.append('devices')
+        raise RemnaWaveAPIError('Bad Gateway', 502)
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(SubscriptionService, 'get_api_client', panel)
+    monkeypatch.setattr(RemnaWaveService, 'get_api_client', no_devices)
+    monkeypatch.setattr(settings, 'DEVICES_SELECTION_ENABLED', True)
+
+    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
+        await _seed(db, balance=0)
+        callback = _Callback('menu_subscription')
+
+        await purchase_handlers.show_subscription_info(callback, await get_user_by_id(db, USER_ID), db)
+
+    assert requests == ['user', 'user', 'devices'], 'панель работала: обычные три запроса, без четвёртого'
+    assert 'Устройства: — / 3' in callback.shown
+    callback.answer.assert_awaited_once()

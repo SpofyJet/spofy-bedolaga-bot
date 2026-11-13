@@ -85,6 +85,9 @@ class SubscriptionService:
         self._config_error: str | None = None
         self.api: RemnaWaveAPI | None = None
         self._last_config_signature: tuple[str, ...] | None = None
+        # Панель не ответила на запрос этого сервиса. Экран «Моя подписка» после первого сбоя
+        # к панели больше не ходит: каждый следующий запрос — ещё до двух минут ожидания.
+        self.panel_failed = False
 
         self._refresh_configuration()
 
@@ -1112,6 +1115,10 @@ class SubscriptionService:
                 logger.debug('Синхронизирован трафик для подписки ГБ', subscription_id=subscription.id, used_gb=used_gb)
                 return True
 
+        except RemnaWaveAPIError as e:
+            self.panel_failed = True
+            logger.error('Ошибка синхронизации трафика', error=e)
+            return False
         except Exception as e:
             logger.error('Ошибка синхронизации трафика', error=e)
             return False
@@ -1156,6 +1163,7 @@ class SubscriptionService:
                                 remnawave_id=panel_user_id,
                             )
                 except Exception as check_error:
+                    self.panel_failed = True
                     logger.warning('Не удалось проверить пользователя в RemnaWave', check_error=check_error)
                     # Продолжаем, возможно проблема временная
 
@@ -1216,11 +1224,13 @@ class SubscriptionService:
                     subscription_id=subscription.id,
                 )
                 return True, None
+            self.panel_failed = True
             await reload_after_panel_failure(db, subscription, user)
             logger.error('Не удалось синхронизировать подписку с RemnaWave', subscription_id=subscription_id)
             return False, 'sync_failed'
 
         except RemnaWaveAPIError as api_error:
+            self.panel_failed = True
             await reload_after_panel_failure(db, subscription, user)
             logger.error(
                 'Ошибка RemnaWave API при синхронизации подписки', subscription_id=subscription_id, api_error=api_error

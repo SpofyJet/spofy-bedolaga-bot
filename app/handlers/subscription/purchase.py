@@ -167,12 +167,20 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     subscription_service = SubscriptionService()
     await subscription_service.sync_subscription_usage(db, subscription)
 
-    # Проверяем и синхронизируем подписку с RemnaWave если необходимо
-    sync_success, sync_error = await subscription_service.ensure_subscription_synced(db, subscription)
-    if not sync_success:
-        logger.warning(
-            'Не удалось синхронизировать подписку с RemnaWave', subscription_id=subscription.id, sync_error=sync_error
-        )
+    # Панель не ответила — дальше к ней не ходим, экран собирается из базы. При сбое 02.11.2026
+    # запросов было до четырёх подряд (трафик, проверка, устройства и ещё раз устройства), каждый
+    # до двух минут: человек ждал экран минутами, а соединение с базой за это время обрывалось.
+    if subscription_service.panel_failed:
+        logger.warning('Панель не отвечает: «Моя подписка» показана по данным базы', subscription_id=subscription.id)
+    else:
+        # Проверяем и синхронизируем подписку с RemnaWave если необходимо
+        sync_success, sync_error = await subscription_service.ensure_subscription_synced(db, subscription)
+        if not sync_success:
+            logger.warning(
+                'Не удалось синхронизировать подписку с RemnaWave',
+                subscription_id=subscription.id,
+                sync_error=sync_error,
+            )
 
     await db.refresh(subscription)
     await db.refresh(db_user)
@@ -256,7 +264,9 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     devices_used_str = ''
     devices_list: list[dict[str, Any]] = []
 
-    if show_devices:
+    if show_devices and subscription_service.panel_failed:
+        devices_used_str = '—'
+    elif show_devices:
         try:
             _device_panel_id = (
                 getattr(subscription, 'remnawave_id', None)
@@ -286,9 +296,9 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                         )
 
         except Exception as e:
+            # Повторять тот же запрос (get_current_devices_count) незачем: он упадёт так же.
             logger.error('Ошибка получения устройств для отображения', error=e)
-            devices_used = await get_current_devices_count(db_user)
-            devices_used_str = str(devices_used)
+            devices_used_str = '—'
 
     servers_names = await get_servers_display_names(subscription.connected_squads)
     servers_display = servers_names or texts.t('SUBSCRIPTION_NO_SERVERS', 'Нет серверов')
