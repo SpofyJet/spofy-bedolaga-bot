@@ -15,6 +15,12 @@ from app.config import settings
 from app.database.models import PaymentMethod, Subscription, TransactionType
 from app.services.payment.common import build_topup_success_message
 from app.services.payment.payer_identity import PayerIdentity, payer_from_guest, resolve_user_payer
+from app.services.payment_decline_notice import (
+    DECLINE_NOTICE_KEY,
+    NOTICE_SENT,
+    decide_platega_decline_notice,
+    send_platega_decline_notice,
+)
 from app.services.payment_problem_alert import alert_invoice_failed, alert_payment_not_applied, note_invoice_created
 from app.services.payment_reversal_alert import alert_paid_payment_reversed
 from app.services.platega_service import PlategaService
@@ -1175,6 +1181,17 @@ class PlategaPaymentMixin:
             return True
 
         if status_raw in self._FAILED_STATUSES:
+            # Отказ банка: решаем один раз, под блокировкой строки, и записываем решение вместе
+            # со статусом — повтор вебхука второго сообщения не даст.
+            bot = getattr(self, 'bot', None)
+            try:
+                notice, notice_user = await decide_platega_decline_notice(db, payment, status_raw, bot=bot)
+            except Exception as error:  # сообщение человеку не должно мешать записи статуса
+                logger.warning('Platega: не удалось решить, писать ли об отказе', payment_id=payment.id, error=error)
+                notice, notice_user = None, None
+            metadata = None
+            if notice is not None:
+                metadata = {**(getattr(payment, 'metadata_json', None) or {}), DECLINE_NOTICE_KEY: notice}
             await payment_module.update_platega_payment(
                 db,
                 payment=payment,
@@ -1182,8 +1199,11 @@ class PlategaPaymentMixin:
                 callback_payload=payload,
                 platega_transaction_id=transaction_id or None,
                 is_paid=False,
+                metadata=metadata,
             )
             logger.info('Platega платеж перешёл в статус', correlation_id=payment.correlation_id, status_raw=status_raw)
+            if notice == NOTICE_SENT and notice_user is not None:
+                await send_platega_decline_notice(db, bot, notice_user, payment)
             return True
 
         await payment_module.update_platega_payment(
