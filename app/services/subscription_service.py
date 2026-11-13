@@ -2,10 +2,10 @@ import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import inspect as sa_inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -40,6 +40,29 @@ from app.utils.subscription_utils import (
 
 
 logger = structlog.get_logger(__name__)
+
+
+async def reload_after_panel_failure(db: AsyncSession, *objects: Any) -> None:
+    """Перечитать объекты, которые откат сессии пометил протухшими.
+
+    create_remnawave_user и update_remnawave_user при сбое панели делают db.rollback() и
+    возвращают None. Откат помечает протухшими ВСЕ объекты сессии, и первое же чтение поля
+    (tariff.name, user.id) в async-коде падает с MissingGreenlet. Оплата к этому моменту уже
+    закоммичена, поэтому человек после списания видел «Не получилось продлить подписку.
+    Попробуйте ещё раз» (сбой панели 02.11.2026: 9 из 12 плативших, один оплатил дважды).
+
+    Вызывать после обращения к панели и только там, где деньги и подписка уже закоммичены:
+    несохранённые правки откат стёр, перечитанный объект покажет то, что лежит в базе.
+    Панель ответила — объекты не протухли, запросов в базу нет.
+    """
+    for obj in objects:
+        state = sa_inspect(obj, raiseerr=False) if obj is not None else None
+        if state is None or not getattr(state, 'persistent', False) or not state.expired:
+            continue
+        try:
+            await db.refresh(obj)
+        except Exception as error:
+            logger.warning('Не удалось перечитать объект после сбоя панели', kind=type(obj).__name__, error=error)
 
 
 @dataclass

@@ -56,7 +56,7 @@ from app.services.subscription_purchase_service import (
     PurchaseSelection,
     PurchaseValidationError,
 )
-from app.services.subscription_service import SubscriptionService
+from app.services.subscription_service import SubscriptionService, reload_after_panel_failure
 from app.services.traffic_reset_policy import (
     should_reset_traffic_on_daily_charge,
     should_reset_traffic_on_tariff_purchase,
@@ -1207,6 +1207,10 @@ async def _auto_purchase_tariff(
                 user_id=subscription.user_id,
                 action='create',
             )
+
+    # Панель не ответила — её сервис откатил сессию. Покупка уже оплачена и записана: без этого
+    # user.id ниже падал, и человек после списания видел ошибку вместо «Оплата принята».
+    await reload_after_panel_failure(db, user, subscription, tariff, transaction)
 
     # Очищаем корзину (per-subscription if subscription_id is in cart)
     await _delete_cart_for_subscription(user.id, cart_data)

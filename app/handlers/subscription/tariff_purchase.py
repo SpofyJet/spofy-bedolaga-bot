@@ -35,7 +35,7 @@ from app.localization.texts import Texts, get_texts
 from app.middlewares.banner_variant import show_banner_state
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.panel_sync import should_create_panel_account
-from app.services.subscription_service import SubscriptionService
+from app.services.subscription_service import SubscriptionService, reload_after_panel_failure
 from app.services.tariff_switch_policy import remaining_days_for_switch, should_reset_used_traffic
 from app.services.topup_checkout_offer import CONFIRM_CALLBACK_PREFIX, is_one_tap_cart, parse_confirm_callback
 from app.services.user_cart_service import user_cart_service
@@ -3301,6 +3301,9 @@ async def confirm_tariff_extend(
                 action='create',
             )
 
+        # Панель не ответила — её сервис откатил сессию. Деньги уже списаны: дальше экран успеха.
+        await reload_after_panel_failure(db, db_user, subscription, tariff)
+
         # Отправляем уведомление админу
         try:
             admin_notification_service = AdminNotificationService(callback.bot)
@@ -5572,6 +5575,10 @@ async def confirm_instant_switch(
                 user_id=db_user.id,
                 action='create',
             )
+
+        # Панель не ответила — её сервис откатил сессию. Доплата уже списана: без этого запись
+        # о платеже ниже не создавалась (new_tariff.name падал), а человек видел ошибку.
+        await reload_after_panel_failure(db, subscription, new_tariff)
 
         # Гарантированный сброс устройств при смене тарифа
         await db.refresh(db_user)
