@@ -128,6 +128,16 @@ def has_bypass_quota(subscription) -> bool:
     )
 
 
+def tariff_has_bypass_quota(tariff) -> bool:
+    """Лимит тарифа — квота на обходы (как has_bypass_quota у подписки, но по сквадам тарифа)."""
+    squad = settings.BYPASS_SQUAD_UUID
+    return (
+        bool(squad)
+        and squad in (getattr(tariff, 'allowed_squads', None) or [])
+        and (getattr(tariff, 'traffic_limit_gb', 0) or 0) > 0
+    )
+
+
 def is_suspended_snapshot(squads: Iterable[str]) -> bool:
     """Сквады из панели — это форма «обходы отключены», а не смена тарифа.
 

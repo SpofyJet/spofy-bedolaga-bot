@@ -28,6 +28,8 @@ class GiftConfigTariff(BaseModel):
     name: str
     description: str | None = None
     traffic_limit_gb: int
+    # Лимит — квота только на обходы, обычные серверы без лимита («Безлимит + 50 ГБ обходов»).
+    bypass_quota: bool = False
     device_limit: int
     periods: list[GiftConfigTariffPeriod]
     # Тариф, отмеченный оператором как выгодный.

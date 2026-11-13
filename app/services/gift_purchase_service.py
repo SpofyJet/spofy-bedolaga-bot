@@ -24,6 +24,7 @@ from app.database.models import (
     TransactionType,
     User,
 )
+from app.services.bypass_downgrade import tariff_has_bypass_quota
 from app.services.guest_purchase_service import create_purchase
 from app.services.pricing_engine import RenewalPricing, pricing_engine
 
@@ -79,6 +80,8 @@ class GiftTariffOffer:
     # Отметки оператора: выгодный тариф и выгодный период внутри него.
     is_highlighted: bool = False
     highlight_period_days: int | None = None
+    # Лимит тарифа — квота только на обходы, обычные серверы без лимита.
+    bypass_quota: bool = False
 
 
 @dataclass(frozen=True)
@@ -291,6 +294,7 @@ async def list_gift_offers(db: AsyncSession, buyer: User | None = None) -> list[
                 quotes=tuple(quotes),
                 is_highlighted=bool(tariff.is_highlighted),
                 highlight_period_days=tariff.highlight_period_days,
+                bypass_quota=tariff_has_bypass_quota(tariff),
             )
         )
 

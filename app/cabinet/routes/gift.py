@@ -133,6 +133,7 @@ async def get_gift_config(
                 name=offer.tariff_name,
                 description=offer.tariff_description,
                 traffic_limit_gb=offer.traffic_limit_gb if offer.traffic_limit_gb is not None else 0,
+                bypass_quota=offer.bypass_quota,
                 device_limit=offer.device_limit,
                 periods=periods,
                 is_highlighted=offer.is_highlighted,

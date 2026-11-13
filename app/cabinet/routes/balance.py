@@ -205,7 +205,9 @@ async def get_payment_methods(
 
             _texts = _get_texts(user.language or settings.DEFAULT_LANGUAGE)
             _PLATEGA_OPTION_DESCRIPTIONS = {
-                2: 'Система быстрых платежей (QR)',
+                # Название способа — «Карта / СБП»; описание про одну СБП ему противоречило.
+                # За 30 дней до 13.11.2026: 1 369 оплат по СБП и 119 картой РФ.
+                2: 'СБП или карта российского банка',
                 11: 'Банковская карта РФ (RUB)',
                 12: 'Visa / Mastercard (EUR)',
                 13: 'Криптовалюта',

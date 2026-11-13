@@ -37,6 +37,7 @@ from app.database.crud.user import add_user_balance, get_user_by_id, subtract_us
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, Subscription, Tariff, Transaction, TransactionType, User
 from app.localization.texts import get_texts
+from app.services.bypass_downgrade import tariff_has_bypass_quota
 from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
@@ -321,6 +322,9 @@ async def _build_tariff_response(
         'traffic_limit_gb': tariff.traffic_limit_gb,
         'traffic_limit_label': traffic_label,
         'is_unlimited_traffic': tariff.traffic_limit_gb == 0,
+        # Лимит — квота только на обходы, обычные серверы без лимита: кабинет пишет
+        # «Безлимит + 50 ГБ обходов», а не «50 ГБ» (так тариф выглядел хуже «Стандартного»).
+        'bypass_quota': tariff_has_bypass_quota(tariff),
         'device_limit': actual_device_limit,
         'base_device_limit': tariff.device_limit,
         'extra_devices_count': extra_devices_count,

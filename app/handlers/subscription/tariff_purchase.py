@@ -34,6 +34,7 @@ from app.keyboards.inline import build_connect_button
 from app.localization.texts import Texts, get_texts
 from app.middlewares.banner_variant import show_banner_state
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.bypass_downgrade import tariff_has_bypass_quota
 from app.services.panel_sync import should_create_panel_account
 from app.services.subscription_service import SubscriptionService, reload_after_panel_failure
 from app.services.tariff_switch_policy import remaining_days_for_switch, should_reset_used_traffic
@@ -232,16 +233,6 @@ def _get_user_period_discount(db_user: User, period_days: int, tariff_id: int | 
 
 # Цена какого периода стоит в списке тарифов: по ней тарифы сравнивают между собой.
 LIST_PRICE_PERIOD_DAYS = 30
-
-
-def tariff_has_bypass_quota(tariff) -> bool:
-    """Лимит тарифа — квота на обходы (как has_bypass_quota у подписки, но по сквадам тарифа)."""
-    squad = settings.BYPASS_SQUAD_UUID
-    return (
-        bool(squad)
-        and squad in (getattr(tariff, 'allowed_squads', None) or [])
-        and (getattr(tariff, 'traffic_limit_gb', 0) or 0) > 0
-    )
 
 
 def tariff_traffic_text(tariff, texts) -> str:
