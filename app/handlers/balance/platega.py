@@ -30,6 +30,27 @@ def _format_amount_label(amount_kopeks: int, method_code: int) -> str:
     return label
 
 
+# Статусы Platega, после которых платёж уже не пройдёт (CANCELED приходит и при отказе банка,
+# и когда счёт просто истёк).
+_PLATEGA_FAILED_STATUSES = frozenset({'CANCELED', 'CANCELLED', 'FAILED', 'EXPIRED'})
+
+
+def platega_status_answer(texts, status: str | None, is_paid: bool | None) -> str:
+    """Ответ на «Проверить статус» словами, а не словом провайдера.
+
+    Раньше человек видел «Текущий статус платежа: PENDING» или «…: CANCELED» — около 350 из
+    797 ответов за 30 дней.
+    """
+    if is_paid:
+        return texts.t('PLATEGA_PAYMENT_ALREADY_CONFIRMED', '✅ Платёж уже зачислен')
+    if str(status or '').upper() in _PLATEGA_FAILED_STATUSES:
+        return texts.t('PAYMENT_STATUS_FAILED', 'Платёж не прошёл, деньги не списаны.')
+    return texts.t(
+        'PAYMENT_STATUS_NOT_RECEIVED',
+        'Платёж ещё не поступил. Если вы оплатили — подождите минуту и проверьте снова.',
+    )
+
+
 def _get_active_methods() -> list[int]:
     return settings.get_platega_active_methods()
 
@@ -496,10 +517,4 @@ async def check_platega_payment_status(
 
     texts = get_texts(language)
 
-    if is_paid:
-        await callback.answer(texts.t('PLATEGA_PAYMENT_ALREADY_CONFIRMED', '✅ Платёж уже зачислен'), show_alert=True)
-    else:
-        await callback.answer(
-            texts.t('PLATEGA_PAYMENT_STATUS', 'Текущий статус платежа: {status}').format(status=status),
-            show_alert=True,
-        )
+    await callback.answer(platega_status_answer(texts, status, is_paid), show_alert=True)

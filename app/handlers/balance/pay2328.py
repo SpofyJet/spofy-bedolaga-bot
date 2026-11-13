@@ -340,11 +340,10 @@ async def check_pay2328_payment_status(
 
     message = status_messages.get(status_normalized)
     if message is None:
-        template = texts.t('PAY2328_STATUS_UNKNOWN', 'ℹ️ Статус платежа: {status}')
-        status_value = payment.status or status_normalized or '—'
-        try:
-            message = template.format(status=status_value)
-        except Exception:  # pragma: no cover - defensive formatting
-            message = f'ℹ️ Статус платежа: {status_value}'
+        # Незнакомый статус провайдера человеку не показываем: платёж не зачислен — так и говорим.
+        message = texts.t(
+            'PAYMENT_STATUS_NOT_RECEIVED',
+            'Платёж ещё не поступил. Если вы оплатили — подождите минуту и проверьте снова.',
+        )
 
     await callback.answer(message, show_alert=True)
