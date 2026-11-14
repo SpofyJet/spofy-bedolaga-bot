@@ -2689,39 +2689,6 @@ def get_specific_app_keyboard(
     )
 
 
-def get_cryptobot_payment_keyboard(
-    payment_id: str,
-    local_payment_id: int,
-    amount_usd: float,
-    asset: str,
-    bot_invoice_url: str,
-    language: str = DEFAULT_LANGUAGE,
-) -> InlineKeyboardMarkup:
-    from app.utils.miniapp_buttons import strip_leading_emoji
-
-    texts = get_texts(language)
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=texts.t('PAY_WITH_COINS_BUTTON', 'Оплатить'), url=bot_invoice_url, style='success'
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text=strip_leading_emoji(texts.t('CHECK_STATUS_BUTTON', 'Проверить статус')),
-                    callback_data=f'check_cryptobot_{local_payment_id}',
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text=strip_leading_emoji(texts.t('MY_BALANCE_BUTTON', 'Мой баланс')), callback_data='menu_balance'
-                )
-            ],
-        ]
-    )
-
-
 def get_devices_management_keyboard(
     devices: list[dict],
     pagination,

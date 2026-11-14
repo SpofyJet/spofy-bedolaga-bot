@@ -38,7 +38,7 @@ from app.services.reachability.geo_result import (
     row_key,
     running_rechecks,
 )
-from app.services.reachability.jobs import JobNotCancellable, JobRunner
+from app.services.reachability.jobs import JobRunner
 from app.services.reachability.kinds import KIND_GEO, KIND_PROBE, KIND_SCAN, KIND_VLESS
 from app.services.reachability.links import RejectedLink, expand_raw_input, parse_links
 from app.services.reachability.notes import note_for_panel_user
@@ -661,16 +661,6 @@ class ReachabilityService:
         self._ensure_enabled()
         job = await self.get_job(db, job_id)
         await self.runner.cancel(db, job)
-        if not self.runner.is_active(job.id):
-            self.runner.spawn_resume(job.id)
-        return job
-
-    async def retrieve_job(self, db: AsyncSession, job_id: int) -> ReachabilityJob:
-        """Кнопка «Забрать результат»: поднять зависшую задачу, не дожидаясь обходчика."""
-        self._ensure_enabled()
-        job = await self.get_job(db, job_id)
-        if job.status not in crud.ACTIVE_STATUSES:
-            raise JobNotCancellable('Задача уже завершена, забирать нечего')
         if not self.runner.is_active(job.id):
             self.runner.spawn_resume(job.id)
         return job

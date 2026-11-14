@@ -191,42 +191,6 @@ class VersionService:
         except Exception as e:
             logger.error('Ошибка отправки уведомления об обновлении', error=e)
 
-    async def get_version_info(self) -> dict:
-        try:
-            has_updates, newer_releases = await self.check_for_updates()
-            all_releases = await self._fetch_releases()
-
-            current_release = None
-            current_ver = self._parse_version(self.current_version)
-
-            for release in all_releases:
-                if release.version_obj == current_ver:
-                    current_release = release
-                    break
-
-            return {
-                'current_version': self.current_version,
-                'current_release': current_release,
-                'has_updates': has_updates,
-                'newer_releases': newer_releases[:5],
-                'total_newer': len(newer_releases),
-                'last_check': self._last_check,
-                'repo_url': f'https://github.com/{self.repo}',
-            }
-
-        except Exception as e:
-            logger.error('Ошибка получения информации о версиях', error=e)
-            return {
-                'current_version': self.current_version,
-                'current_release': None,
-                'has_updates': False,
-                'newer_releases': [],
-                'total_newer': 0,
-                'last_check': None,
-                'repo_url': f'https://github.com/{self.repo}',
-                'error': str(e),
-            }
-
     async def start_periodic_check(self):
         if not self.enabled:
             logger.info('Проверка версий отключена')
@@ -246,17 +210,6 @@ class VersionService:
             except Exception as e:
                 logger.error('Ошибка в периодической проверке обновлений', error=e)
                 await asyncio.sleep(300)
-
-    def format_version_display(self, version_info: VersionInfo) -> str:
-        status_icon = ''
-        if version_info.prerelease:
-            status_icon = '🧪'
-        elif version_info.is_dev:
-            status_icon = '🔧'
-        else:
-            status_icon = '📦'
-
-        return f'{status_icon} {version_info.tag_name}'
 
 
 version_service = VersionService()

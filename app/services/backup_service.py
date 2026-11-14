@@ -1909,23 +1909,6 @@ class BackupService:
     async def get_backup_settings(self) -> BackupSettings:
         return self._settings
 
-    async def update_backup_settings(self, **kwargs) -> bool:
-        try:
-            for key, value in kwargs.items():
-                if hasattr(self._settings, key):
-                    setattr(self._settings, key, value)
-
-            if self._settings.auto_backup_enabled:
-                await self.start_auto_backup()
-            else:
-                await self.stop_auto_backup()
-
-            return True
-
-        except Exception as e:
-            logger.error('Ошибка обновления настроек бекапов', error=e)
-            return False
-
     async def start_auto_backup(self):
         # Лок обязателен: без него конкурентные вызовы (6 штук на холодном
         # старте) интерливятся на await отмены старой таски, каждый создаёт

@@ -741,8 +741,6 @@ class Settings(BaseSettings):
     WATA_MAX_AMOUNT_KOPEKS: int = 100000000
     WATA_REQUEST_TIMEOUT: int = 30
     WATA_WEBHOOK_PATH: str = '/wata-webhook'
-    # Дополнительные доверенные прокси перед платёжными вебхуками (CIDR через запятую).
-    WEBHOOK_TRUSTED_PROXY_NETWORKS: str = ''
     WATA_PUBLIC_KEY_URL: str | None = None
     WATA_PUBLIC_KEY_CACHE_SECONDS: int = 3600
 
@@ -1898,16 +1896,6 @@ class Settings(BaseSettings):
             return None
         return cabinet_url
 
-    def get_referral_link(self, referral_code: str, bot_username: str | None = None) -> str:
-        """Build a referral link pointing to the web cabinet.
-
-        Falls back to a Telegram bot deep link when CABINET_URL is not configured.
-        """
-        cabinet_link = self.get_cabinet_referral_link(referral_code)
-        if cabinet_link:
-            return cabinet_link
-        return self.get_bot_referral_link(referral_code, bot_username)
-
     def get_bot_referral_link(self, referral_code: str, bot_username: str | None = None) -> str:
         """Always return the Telegram bot deep link for a referral code."""
         safe_code = self._encode_referral_code(referral_code)
@@ -2110,9 +2098,6 @@ class Settings(BaseSettings):
         if not name:
             return 'Platega'
         return name
-
-    def get_platega_display_name_html(self) -> str:
-        return html.escape(self.get_platega_display_name())
 
     def get_platega_return_url(self) -> str | None:
         if self.PLATEGA_RETURN_URL:
@@ -2410,44 +2395,6 @@ class Settings(BaseSettings):
         periods = sorted(allowed_periods)
 
         return periods or [30, 90, 180]
-
-    def get_configured_subscription_periods(self) -> list[int]:
-        """
-        Возвращает настроенные периоды подписки из AVAILABLE_SUBSCRIPTION_PERIODS.
-        БЕЗ фильтрации по ценам - используется для админки.
-        """
-        try:
-            periods_str = self.AVAILABLE_SUBSCRIPTION_PERIODS
-            if not periods_str or not periods_str.strip():
-                return [14, 30, 60, 90, 180, 360]
-
-            periods = []
-            for period_str in periods_str.split(','):
-                period_str = period_str.strip()
-                if period_str:
-                    periods.append(int(period_str))
-            return sorted(periods) if periods else [14, 30, 60, 90, 180, 360]
-        except (ValueError, AttributeError):
-            return [14, 30, 60, 90, 180, 360]
-
-    def get_configured_renewal_periods(self) -> list[int]:
-        """
-        Возвращает настроенные периоды продления из AVAILABLE_RENEWAL_PERIODS.
-        БЕЗ фильтрации по ценам - используется для админки.
-        """
-        try:
-            periods_str = self.AVAILABLE_RENEWAL_PERIODS
-            if not periods_str or not periods_str.strip():
-                return [30, 60, 90, 180, 360]
-
-            periods = []
-            for period_str in periods_str.split(','):
-                period_str = period_str.strip()
-                if period_str:
-                    periods.append(int(period_str))
-            return sorted(periods) if periods else [30, 60, 90, 180, 360]
-        except (ValueError, AttributeError):
-            return [30, 60, 90, 180, 360]
 
     def get_balance_payment_description(
         self, amount_kopeks: int, telegram_user_id: int | None = None, user_db_id: int | None = None
@@ -3115,12 +3062,6 @@ def set_period_prices_from_db(period_prices: dict[int, int]) -> None:
     global _DB_PERIOD_PRICES
     _DB_PERIOD_PRICES = period_prices.copy() if period_prices else None
     refresh_period_prices()
-
-
-def clear_db_period_prices() -> None:
-    """Очищает кеш цен из тарифов (при переключении в classic mode)."""
-    global _DB_PERIOD_PRICES
-    _DB_PERIOD_PRICES = None
 
 
 def refresh_period_prices() -> None:

@@ -1340,18 +1340,3 @@ class PartnerStatsService:
 
         result = await db.execute(query)
         return int(result.scalar() or 0)
-
-    @classmethod
-    async def _get_total_earnings(
-        cls,
-        db: AsyncSession,
-        start_date: datetime | None,
-    ) -> int:
-        """Получить общие выплаты за период."""
-        query = select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0))
-
-        if start_date:
-            query = query.where(ReferralEarning.created_at >= start_date)
-
-        result = await db.execute(query)
-        return int(result.scalar() or 0)

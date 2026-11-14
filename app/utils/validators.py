@@ -167,29 +167,3 @@ def validate_html_structure(text: str) -> tuple[bool, str]:
         return False, f'Незакрытый тег: <{tag_stack[-1]}>'
 
     return True, ''
-
-
-def get_html_help_text() -> str:
-    return """<b>Поддерживаемые HTML теги:</b>
-
-• <code>&lt;b&gt;жирный&lt;/b&gt;</code> или <code>&lt;strong&gt;&lt;/strong&gt;</code>
-• <code>&lt;i&gt;курсив&lt;/i&gt;</code> или <code>&lt;em&gt;&lt;/em&gt;</code>
-• <code>&lt;u&gt;подчёркнутый&lt;/u&gt;</code>
-• <code>&lt;s&gt;зачёркнутый&lt;/s&gt;</code>
-• <code>&lt;code&gt;моноширинный&lt;/code&gt;</code>
-• <code>&lt;pre&gt;блок кода&lt;/pre&gt;</code>
-• <code>&lt;a href="url"&gt;ссылка&lt;/a&gt;</code>
-• <code>&lt;blockquote&gt;цитата&lt;/blockquote&gt;</code>
-• <code>&lt;tg-spoiler&gt;спойлер&lt;/tg-spoiler&gt;</code>
-• <code>&lt;tg-emoji emoji-id="123"&gt;😀&lt;/tg-emoji&gt;</code>
-
-<b>⚠️ Важные правила:</b>
-• Каждый открывающий тег должен быть закрыт
-• Теги должны быть правильно вложены
-• Атрибуты ссылок берите в кавычки
-
-<b>❌ Неправильно:</b>
-<code>&lt;b&gt;жирный &lt;i&gt;курсив&lt;/b&gt;&lt;/i&gt;</code>
-
-<b>✅ Правильно:</b>
-<code>&lt;b&gt;жирный &lt;i&gt;курсив&lt;/i&gt;&lt;/b&gt;</code>"""

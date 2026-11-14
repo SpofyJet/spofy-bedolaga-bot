@@ -26,7 +26,6 @@ from app.database.models import (
 )
 from app.services.traffic_cycle import begin_traffic_cycle, keep_traffic_cycle
 from app.utils.lifetime import LIFETIME_MIN_DAYS
-from app.utils.subscription_time import ends_within_days
 from app.utils.timezone import format_local_datetime, local_day_start
 
 
@@ -2163,42 +2162,6 @@ async def get_expired_subscriptions(db: AsyncSession) -> list[Subscription]:
     return result.scalars().all()
 
 
-async def get_subscriptions_for_autopay(db: AsyncSession) -> list[Subscription]:
-    current_time = datetime.now(UTC)
-
-    result = await db.execute(
-        select(Subscription)
-        .join(User, Subscription.user_id == User.id)
-        .options(
-            selectinload(Subscription.user),
-            selectinload(Subscription.tariff),
-        )
-        .where(
-            and_(
-                Subscription.status == SubscriptionStatus.ACTIVE.value,
-                User.status == UserStatus.ACTIVE.value,
-                Subscription.autopay_enabled == True,
-                Subscription.is_trial == False,
-            )
-        )
-    )
-    all_autopay_subscriptions = result.scalars().all()
-
-    ready_for_autopay = []
-    for subscription in all_autopay_subscriptions:
-        # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
-        # глобальный autopay на них не распространяется
-        if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
-            continue
-
-        if subscription.end_date > current_time and ends_within_days(
-            subscription.end_date, subscription.autopay_days_before, current_time
-        ):
-            ready_for_autopay.append(subscription)
-
-    return ready_for_autopay
-
-
 async def get_subscriptions_statistics(db: AsyncSession) -> dict:
     total_result = await db.execute(select(func.count(Subscription.id)))
     total_subscriptions = total_result.scalar()
@@ -2506,43 +2469,6 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
                 )
 
     return len(to_reset)
-
-
-async def reset_trials_for_users_without_paid_subscription(db: AsyncSession) -> int:
-    """Bulk-сброс истёкших триалов у неплативших (кнопка «Сбросить триалы» в боте).
-
-    Выбирает истёкшие триалы неплативших и делегирует снос в `wipe_trial_subscriptions`
-    (общий код с кабинетным per-user сбросом), затем коммитит.
-    """
-    now = datetime.now(UTC)
-
-    result = await db.execute(
-        select(Subscription)
-        .options(selectinload(Subscription.user))
-        .join(User, Subscription.user_id == User.id)
-        .where(
-            Subscription.is_trial.is_(True),
-            Subscription.end_date <= now,
-            User.has_had_paid_subscription.is_(False),
-        )
-    )
-
-    subscriptions = result.scalars().unique().all()
-    if not subscriptions:
-        return 0
-
-    reset_count = await wipe_trial_subscriptions(db, subscriptions)
-
-    if reset_count:
-        try:
-            await db.commit()
-        except Exception as error:  # pragma: no cover - defensive logging
-            await db.rollback()
-            logger.error('Ошибка сохранения сброса триалов', error=error)
-            raise
-
-    logger.info('♻️ Сброшено триальных подписок (удалены из панели)', reset_count=reset_count)
-    return reset_count
 
 
 async def update_subscription_usage(db: AsyncSession, subscription: Subscription, used_gb: float) -> Subscription:
@@ -2858,113 +2784,6 @@ async def create_subscription(
     return subscription
 
 
-async def create_pending_subscription(
-    db: AsyncSession,
-    user_id: int,
-    duration_days: int,
-    traffic_limit_gb: int = 0,
-    device_limit: int = 1,
-    connected_squads: list[str] = None,
-    payment_method: str = 'pending',
-    total_price_kopeks: int = 0,
-    is_trial: bool = False,
-    tariff_id: int | None = None,
-) -> Subscription:
-    """Creates a pending subscription that will be activated after payment.
-
-    Args:
-        is_trial: If True, marks the subscription as a trial subscription.
-    """
-    trial_label = 'триальная ' if is_trial else ''
-    current_time = datetime.now(UTC)
-    end_date = current_time + timedelta(days=duration_days)
-
-    if settings.is_multi_tariff_enabled() and tariff_id:
-        active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-        existing_subscription = next((s for s in active_subs if s.tariff_id == tariff_id), None)
-        if not existing_subscription:
-            # Also check non-active subs for this tariff
-            result = await db.execute(
-                select(Subscription)
-                .where(
-                    Subscription.user_id == user_id,
-                    Subscription.tariff_id == tariff_id,
-                )
-                .order_by(Subscription.created_at.desc())
-                .limit(1)
-            )
-            existing_subscription = result.scalar_one_or_none()
-    else:
-        existing_subscription = await get_subscription_by_user_id(db, user_id)
-
-    if existing_subscription:
-        if (
-            existing_subscription.status == SubscriptionStatus.ACTIVE.value
-            and existing_subscription.end_date > current_time
-        ):
-            logger.warning(
-                '⚠️ Попытка создать pending подписку для активного пользователя . Возвращаем существующую запись.',
-                trial_label=trial_label,
-                user_id=user_id,
-            )
-            return existing_subscription
-
-        existing_subscription.status = SubscriptionStatus.PENDING.value
-        existing_subscription.is_trial = is_trial
-        existing_subscription.start_date = current_time
-        begin_traffic_cycle(existing_subscription, current_time)
-        existing_subscription.end_date = end_date
-        existing_subscription.traffic_limit_gb = traffic_limit_gb
-        existing_subscription.device_limit = device_limit
-        existing_subscription.connected_squads = connected_squads or []
-        existing_subscription.traffic_used_gb = 0.0
-        existing_subscription.updated_at = current_time
-        if tariff_id is not None:
-            existing_subscription.tariff_id = tariff_id
-
-        await db.commit()
-        await db.refresh(existing_subscription)
-
-        logger.info(
-            '♻️ Обновлена ожидающая подписка',
-            trial_label=trial_label,
-            user_id=user_id,
-            existing_subscription_id=existing_subscription.id,
-            payment_method=payment_method,
-        )
-        return existing_subscription
-
-    short_id = await generate_unique_short_id(db)
-    subscription = Subscription(
-        user_id=user_id,
-        status=SubscriptionStatus.PENDING.value,
-        is_trial=is_trial,
-        start_date=current_time,
-        end_date=end_date,
-        traffic_limit_gb=traffic_limit_gb,
-        device_limit=device_limit,
-        connected_squads=connected_squads or [],
-        tariff_id=tariff_id,
-        autopay_enabled=settings.is_autopay_enabled_by_default(),
-        autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
-        remnawave_short_id=short_id,
-    )
-
-    db.add(subscription)
-    await db.commit()
-    await db.refresh(subscription)
-
-    logger.info(
-        '💳 Создана ожидающая подписка',
-        trial_label=trial_label,
-        user_id=user_id,
-        subscription_id=subscription.id,
-        payment_method=payment_method,
-    )
-
-    return subscription
-
-
 async def create_sbp_pending_subscription(
     db: AsyncSession,
     user_id: int,
@@ -3016,69 +2835,6 @@ async def create_sbp_pending_subscription(
         tariff_id=tariff.id,
     )
     return subscription
-
-
-async def activate_pending_subscription(
-    db: AsyncSession,
-    user_id: int,
-    period_days: int = None,
-    subscription_id: int | None = None,
-) -> Subscription | None:
-    """Активирует pending подписку пользователя, меняя её статус на ACTIVE."""
-    logger.info(
-        'Активация pending подписки: пользователь период дней',
-        user_id=user_id,
-        period_days=period_days,
-        subscription_id=subscription_id,
-    )
-
-    # Находим pending подписку пользователя (последнюю созданную при наличии нескольких)
-    conditions = [
-        Subscription.user_id == user_id,
-        Subscription.status == SubscriptionStatus.PENDING.value,
-    ]
-    if subscription_id is not None:
-        conditions.append(Subscription.id == subscription_id)
-
-    result = await db.execute(
-        select(Subscription).where(and_(*conditions)).order_by(Subscription.created_at.desc()).limit(1)
-    )
-    pending_subscription = result.scalar_one_or_none()
-
-    if not pending_subscription:
-        logger.warning('Не найдена pending подписка для пользователя', user_id=user_id)
-        return None
-
-    logger.info(
-        'Найдена pending подписка для пользователя статус',
-        pending_subscription_id=pending_subscription.id,
-        user_id=user_id,
-        status=pending_subscription.status,
-    )
-
-    # Обновляем статус подписки на ACTIVE
-    current_time = datetime.now(UTC)
-    pending_subscription.status = SubscriptionStatus.ACTIVE.value
-
-    # Если указан период, обновляем дату окончания
-    if period_days is not None:
-        effective_start = pending_subscription.start_date or current_time
-        effective_start = max(effective_start, current_time)
-        pending_subscription.end_date = effective_start + timedelta(days=period_days)
-
-    # Обновляем дату начала, если она не установлена или в прошлом
-    if not pending_subscription.start_date or pending_subscription.start_date < current_time:
-        pending_subscription.start_date = current_time
-
-    pending_subscription.pending_panel_expire_at = pending_subscription.end_date
-    await db.commit()
-    await db.refresh(pending_subscription)
-
-    logger.info(
-        'Подписка пользователя активирована, ID', user_id=user_id, pending_subscription_id=pending_subscription.id
-    )
-
-    return pending_subscription
 
 
 # ==================== СУТОЧНЫЕ ПОДПИСКИ ====================

@@ -44,11 +44,9 @@ async def test_cabinet_save_updates_warm_bot_rules(monkeypatch, language, new_co
         if new_content:
             assert public_rules.content == '<b>New rules</b>'
             assert await texts.get_rules(language) == '<b>New rules</b>'
-            assert texts.get_rules_sync(language) == '<b>New rules</b>'
         else:
             assert '<b>Old rules</b>' not in public_rules.content
             assert '<b>Old rules</b>' not in await texts.get_rules(language)
-            assert '<b>Old rules</b>' not in texts.get_rules_sync(language)
         assert await texts.get_rules(other_language) == '<b>Other language</b>'
 
 
@@ -64,7 +62,6 @@ async def test_restore_rules_updates_warm_cache(monkeypatch):
         await restore_rules_version(db, original.id, 'ru')
 
         assert await texts.get_rules('ru') == 'Original rules'
-        assert texts.get_rules_sync('ru') == 'Original rules'
 
 
 @pytest.mark.asyncio

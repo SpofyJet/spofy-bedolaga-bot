@@ -106,52 +106,6 @@ def test_support_info_text_per_language_with_locale_fallback(monkeypatch) -> Non
 
 
 @pytest.mark.asyncio
-async def test_setters_persist_to_db_and_apply_live(monkeypatch) -> None:
-    async with memory_session(monkeypatch, TABLES) as db:
-        assert await SupportSettingsService.set_system_mode(db, ' Contact ') is True
-        assert await SupportSettingsService.set_system_mode(db, 'nonsense') is False
-        assert await SupportSettingsService.set_support_menu_enabled(db, False) is True
-        assert await SupportSettingsService.set_sla_enabled(db, True) is True
-        assert await SupportSettingsService.set_sla_minutes(db, 45) is True
-        assert await SupportSettingsService.set_sla_minutes(db, 0) is False
-        assert await SupportSettingsService.set_sla_minutes(db, 'abc') is False
-        assert await SupportSettingsService.set_admin_ticket_notifications_enabled(db, False) is True
-        assert await SupportSettingsService.set_user_ticket_notifications_enabled(db, False) is True
-        assert await SupportSettingsService.set_cabinet_user_notifications_enabled(db, False) is True
-        assert await SupportSettingsService.set_cabinet_admin_notifications_enabled(db, False) is True
-        assert await SupportSettingsService.set_support_info_text(db, 'ru', '<i>текст</i>') is True
-        assert await SupportSettingsService.set_support_info_text(db, 'xx', 'нет такого языка') is False
-        # Сессия кабинета закрывается без коммита — запись обязана коммитить сама.
-        await db.rollback()
-        assert await get_setting_value(db, 'SUPPORT_SYSTEM_MODE') == 'contact'
-        assert await get_setting_value(db, 'SUPPORT_TICKET_SLA_MINUTES') == '45'
-        assert await get_setting_value(db, 'SUPPORT_INFO_TEXT_RU') == '<i>текст</i>'
-    assert settings.SUPPORT_SYSTEM_MODE == 'contact' and settings.is_support_tickets_enabled() is False
-    assert SupportSettingsService.is_support_menu_enabled() is False
-    assert SupportSettingsService.get_sla_enabled() is True and SupportSettingsService.get_sla_minutes() == 45
-    assert SupportSettingsService.get_admin_ticket_notifications_enabled() is False
-    assert SupportSettingsService.get_user_ticket_notifications_enabled() is False
-    assert SupportSettingsService.get_cabinet_user_notifications_enabled() is False
-    assert SupportSettingsService.get_cabinet_admin_notifications_enabled() is False
-    assert SupportSettingsService.get_support_info_text('ru') == '<i>текст</i>'
-
-
-@pytest.mark.asyncio
-async def test_moderators_are_added_and_removed_in_the_db(monkeypatch) -> None:
-    monkeypatch.setattr(settings, 'SUPPORT_MODERATOR_IDS', '')
-    async with memory_session(monkeypatch, TABLES) as db:
-        assert await SupportSettingsService.add_moderator(db, 20) is True
-        assert await SupportSettingsService.add_moderator(db, '10') is True
-        assert await SupportSettingsService.add_moderator(db, 'abc') is False
-        assert SupportSettingsService.get_moderators() == [10, 20]
-        assert await SupportSettingsService.remove_moderator(db, 20) is True
-        assert await SupportSettingsService.remove_moderator(db, 99) is True, 'нет такого — не ошибка'
-        await db.rollback()
-        assert await get_setting_value(db, 'SUPPORT_MODERATOR_IDS') == '10'
-    assert SupportSettingsService.get_moderators() == [10]
-
-
-@pytest.mark.asyncio
 async def test_legacy_file_is_imported_once_and_never_overrides_the_db(monkeypatch, tmp_path) -> None:
     legacy = tmp_path / 'support_settings.json'
     legacy.write_text(

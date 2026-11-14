@@ -8,7 +8,6 @@ import pytest
 
 from app.config import Settings, settings
 from app.keyboards.inline import (
-    get_cryptobot_payment_keyboard,
     get_payment_methods_keyboard,
 )
 from app.localization.texts import get_texts
@@ -59,13 +58,6 @@ def test_methods_keyboard_has_no_emoji_except_back(monkeypatch):
     for label in labels:
         if label != get_texts('ru').BACK:
             assert not re.search(EMOJI, label), label
-
-
-def test_crypto_payment_keyboard_has_no_emoji_in_its_buttons():
-    keyboard = get_cryptobot_payment_keyboard('inv1', 1, 1.0, 'USDT', 'https://t.me/x', 'ru')
-    for row in keyboard.inline_keyboard:
-        for button in row:
-            assert not re.search(EMOJI, button.text), button.text
 
 
 @pytest.mark.parametrize('name', ['cryptobot', 'xrocket', 'pay2328', 'platega', 'wata', 'stars'])

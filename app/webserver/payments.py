@@ -17,7 +17,6 @@ from app.database.database import get_db
 from app.external.pay2328 import Pay2328Service
 from app.external.wata_webhook import WataWebhookHandler
 from app.services.payment_service import PaymentService
-from app.utils.webhook_client_ip import resolve_webhook_client_ip
 
 
 logger = structlog.get_logger(__name__)
@@ -32,22 +31,6 @@ def _create_cors_response() -> Response:
             'Access-Control-Allow-Headers': 'Content-Type, Crypto-Pay-API-Signature, Authorization',
         },
     )
-
-
-def _resolve_proxied_client_ip(request: Request) -> str | None:
-    """Адрес отправителя вебхука без доверия к клиентским заголовкам.
-
-    Правила ``resolve_webhook_client_ip``: публичный peer — он и есть отправитель; за локальным/доверенным прокси читается только ``X-Forwarded-For``
-    справа налево, ``X-Real-IP`` — лишь когда ``X-Forwarded-For`` нет; ``Cf-Connecting-Ip``
-    — только от peer из сетей Cloudflare; неизвестный peer → ``None``.
-    """
-    client_ip = resolve_webhook_client_ip(
-        request.client.host if request.client else None,
-        forwarded_for=request.headers.get('x-forwarded-for'),
-        real_ip=request.headers.get('x-real-ip'),
-        cf_connecting_ip=request.headers.get('cf-connecting-ip'),
-    )
-    return str(client_ip) if client_ip is not None else None
 
 
 # Bound concurrent payment-callback processing. Each callback holds a DB session

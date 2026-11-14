@@ -33,31 +33,11 @@ def test_format_days_declension_handles_russian_rules() -> None:
     assert formatters.format_days_declension(10) == '10 дней'
 
 
-def test_format_duration_switches_units() -> None:
-    """В зависимости от длины интервала выбирается подходящая единица измерения."""
-    assert formatters.format_duration(45) == '45 сек.'
-    assert formatters.format_duration(120) == '2 мин.'
-    assert formatters.format_duration(7200) == '2 ч.'
-    assert formatters.format_duration(172800) == '2 дн.'
-
-
 def test_format_bytes_scales_value() -> None:
     """Размер должен выражаться в наиболее подходящей единице."""
     assert formatters.format_bytes(0) == '0 B'
     assert formatters.format_bytes(1024) == '1 KB'
     assert formatters.format_bytes(1024 * 1024) == '1 MB'
-
-
-def test_format_percentage_respects_precision() -> None:
-    """Проценты форматируются с нужным количеством знаков."""
-    assert formatters.format_percentage(12.3456, decimals=2) == '12.35%'
-
-
-def test_format_username_prefers_full_name() -> None:
-    """Полное имя имеет приоритет, затем username, затем ID."""
-    assert formatters.format_username('nickname', 1, full_name='Имя') == 'Имя'
-    assert formatters.format_username('nickname', 1, full_name=None) == '@nickname'
-    assert formatters.format_username(None, 42, full_name=None) == 'ID42'
 
 
 def test_format_username_link_wraps_telegram_handle_in_anchor() -> None:

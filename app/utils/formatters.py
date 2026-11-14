@@ -104,22 +104,6 @@ def format_days_declension(days: int, language: str = 'ru') -> str:
     return f'{days} дней'
 
 
-def format_duration(seconds: int) -> str:
-    if seconds < 60:
-        return f'{seconds} сек.'
-
-    minutes = seconds // 60
-    if minutes < 60:
-        return f'{minutes} мин.'
-
-    hours = minutes // 60
-    if hours < 24:
-        return f'{hours} ч.'
-
-    days = hours // 24
-    return f'{days} дн.'
-
-
 def format_bytes(bytes_value: int) -> str:
     if bytes_value == 0:
         return '0 B'
@@ -135,18 +119,6 @@ def format_bytes(bytes_value: int) -> str:
     if size == int(size):
         return f'{int(size)} {units[unit_index]}'
     return f'{size:.1f} {units[unit_index]}'
-
-
-def format_percentage(value: float, decimals: int = 1) -> str:
-    return f'{value:.{decimals}f}%'
-
-
-def format_username(username: str | None, user_id: int, full_name: str | None = None) -> str:
-    if full_name:
-        return full_name
-    if username:
-        return f'@{username}'
-    return f'ID{user_id}'
 
 
 def format_username_link(username: str | None, fallback: str = '') -> str:

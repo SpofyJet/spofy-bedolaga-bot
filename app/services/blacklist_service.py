@@ -203,17 +203,6 @@ class BlacklistService:
         self._check_cache[telegram_id] = (False, None, now)
         return False, None
 
-    async def get_all_blacklisted_users(self) -> list[tuple[int, str, str]]:
-        """
-        Возвращает весь черный список
-        """
-        interval_hours = self.get_blacklist_update_interval_hours()
-        required_interval = timedelta(hours=interval_hours)
-        if not self.blacklist_data or (self.last_update and datetime.now(UTC) - self.last_update > required_interval):
-            await self.update_blacklist()
-
-        return self.blacklist_data.copy()
-
     async def get_user_by_telegram_id(self, telegram_id: int) -> tuple[int, str, str] | None:
         """
         Возвращает информацию о пользователе из черного списка по Telegram ID
@@ -247,18 +236,6 @@ class BlacklistService:
             if bl_username == username_with_at or bl_username.lstrip('@') == username_without_at:
                 return (bl_id, bl_username, bl_reason)
         return None
-
-    async def force_update_blacklist(self) -> tuple[bool, str]:
-        """
-        Принудительно обновляет черный список
-
-        Returns:
-            Кортеж (успешно, сообщение)
-        """
-        success = await self.update_blacklist()
-        if success:
-            return True, f'Черный список обновлен успешно. Записей: {len(self.blacklist_data)}'
-        return False, 'Ошибка обновления черного списка'
 
 
 # Глобальный экземпляр сервиса

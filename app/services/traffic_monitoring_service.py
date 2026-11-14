@@ -941,10 +941,6 @@ class TrafficMonitoringSchedulerV2:
                 logger.error('❌ Ошибка в цикле суточной проверки', error=e)
                 await asyncio.sleep(3600)  # Ждём час при ошибке
 
-    async def run_fast_check_now(self) -> list[TrafficViolation]:
-        """Запускает быструю проверку немедленно"""
-        return await self.service.run_fast_check(self.bot)
-
 
 # ============== Обратная совместимость ==============
 

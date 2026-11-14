@@ -2871,16 +2871,6 @@ class WheelSpin(Base):
     prize = relationship('WheelPrize', back_populates='spins')
     generated_promocode = relationship('PromoCode')
 
-    @property
-    def prize_value_rubles(self) -> float:
-        """Стоимость приза в рублях."""
-        return self.prize_value_kopeks / 100
-
-    @property
-    def payment_value_rubles(self) -> float:
-        """Стоимость оплаты в рублях."""
-        return self.payment_value_kopeks / 100
-
     def __repr__(self) -> str:
         return f"<WheelSpin id={self.id} user_id={self.user_id} prize='{self.prize_display_name}'>"
 

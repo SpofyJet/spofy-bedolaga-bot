@@ -5,7 +5,6 @@ from app.config import settings
 from app.database.crud.recurrent_payments import (
     get_recurrent_payments,
     set_recurrent_payments_enabled,
-    upsert_recurrent_payments,
 )
 from app.database.models import RecurrentPayments
 
@@ -73,18 +72,6 @@ class RecurrentPaymentsService:
     async def is_enabled(cls, db: AsyncSession, language: str) -> bool:
         document = await cls.get_active_document(db, language)
         return document is not None
-
-    @classmethod
-    async def save_document(
-        cls,
-        db: AsyncSession,
-        language: str,
-        content: str,
-    ) -> RecurrentPayments:
-        lang = cls._normalize_language(language)
-        document = await upsert_recurrent_payments(db, lang, content, enable_if_new=True)
-        logger.info('✅ Документ о рекуррентных платежах обновлён для языка', lang=lang)
-        return document
 
     @classmethod
     async def set_enabled(

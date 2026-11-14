@@ -23,7 +23,6 @@ from app.services.user_action_log_service import (
     MINIAPP_ACTION_PATHS,
     MINIAPP_READ_PATHS,
     normalize_cabinet_path,
-    should_log_miniapp_action,
 )
 
 
@@ -53,23 +52,6 @@ def test_classification_has_no_stale_paths():
     stale = sorted((MINIAPP_ACTION_PATHS | MINIAPP_READ_PATHS) - _router_paths())
 
     assert not stale, f'пути исчезли из роутера, уберите их из списков: {stale}'
-
-
-def test_actions_are_logged_and_reads_are_not(monkeypatch):
-    """Покупка — действие, просмотр подписки — нет."""
-    monkeypatch.setattr(settings, 'USER_ACTION_LOG_ENABLED', True, raising=False)
-
-    assert should_log_miniapp_action('/miniapp/subscription/purchase') is True
-    assert should_log_miniapp_action('/miniapp/subscription/traffic-topup') is True
-    assert should_log_miniapp_action('/miniapp/promo-offers/42/claim') is True
-
-    assert should_log_miniapp_action('/miniapp/subscription') is False
-    assert should_log_miniapp_action('/miniapp/subscription/tariffs') is False
-    assert should_log_miniapp_action('/miniapp/subscription/purchase/preview') is False
-    assert should_log_miniapp_action('/miniapp/payments/status') is False
-
-    monkeypatch.setattr(settings, 'USER_ACTION_LOG_ENABLED', False, raising=False)
-    assert should_log_miniapp_action('/miniapp/subscription/purchase') is False
 
 
 def test_path_normalization_keeps_prefix():

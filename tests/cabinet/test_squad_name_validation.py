@@ -13,7 +13,6 @@ from pydantic import ValidationError
 from app.external.remnawave_api import (
     INTERNAL_SQUAD_NAME_MAX_LENGTH,
     INTERNAL_SQUAD_NAME_MIN_LENGTH,
-    is_valid_internal_squad_name,
 )
 from app.webapi.schemas.remnawave import (
     RemnaWaveSquadActionRequest,
@@ -28,16 +27,6 @@ GOOD_NAMES = ['EU', 'My Squad-1_x', 'a' * 30]
 
 def test_limits_match_panel_contract() -> None:
     assert (INTERNAL_SQUAD_NAME_MIN_LENGTH, INTERNAL_SQUAD_NAME_MAX_LENGTH) == (2, 30)
-
-
-@pytest.mark.parametrize('name', BAD_NAMES)
-def test_helper_rejects_names_the_panel_rejects(name: str) -> None:
-    assert is_valid_internal_squad_name(name) is False
-
-
-@pytest.mark.parametrize('name', GOOD_NAMES)
-def test_helper_accepts_panel_valid_names(name: str) -> None:
-    assert is_valid_internal_squad_name(name) is True
 
 
 @pytest.mark.parametrize('name', BAD_NAMES)

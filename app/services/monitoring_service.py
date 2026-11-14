@@ -27,8 +27,6 @@ from app.database.crud.subscription import (
     deactivate_subscription,
     extend_subscription,
     get_expired_subscriptions,
-    get_expiring_subscriptions,
-    get_subscriptions_for_autopay,
     reactivate_subscription,
 )
 from app.database.crud.user import (
@@ -3983,92 +3981,6 @@ class MonitoringService:
             logger.error('Ошибка логирования события мониторинга', error=e)
             await _rollback_quietly(db, step='monitoring_log')
 
-    async def get_monitoring_status(self, db: AsyncSession) -> dict[str, Any]:
-        try:
-            from sqlalchemy import desc, select
-
-            recent_events_result = await db.execute(
-                select(MonitoringLog).order_by(desc(MonitoringLog.created_at)).limit(10)
-            )
-            recent_events = recent_events_result.scalars().all()
-
-            yesterday = datetime.now(UTC) - timedelta(days=1)
-
-            events_24h_result = await db.execute(select(MonitoringLog).where(MonitoringLog.created_at >= yesterday))
-            events_24h = events_24h_result.scalars().all()
-
-            successful_events = sum(1 for event in events_24h if event.is_success)
-            failed_events = sum(1 for event in events_24h if not event.is_success)
-
-            return {
-                'is_running': self.is_running,
-                'last_update': datetime.now(UTC),
-                'recent_events': [
-                    {
-                        'type': event.event_type,
-                        'message': event.message,
-                        'success': event.is_success,
-                        'created_at': event.created_at,
-                    }
-                    for event in recent_events
-                ],
-                'stats_24h': {
-                    'total_events': len(events_24h),
-                    'successful': successful_events,
-                    'failed': failed_events,
-                    'success_rate': round(successful_events / len(events_24h) * 100, 1) if events_24h else 0,
-                },
-            }
-
-        except Exception as e:
-            logger.error('Ошибка получения статуса мониторинга', error=e)
-            return {
-                'is_running': self.is_running,
-                'last_update': datetime.now(UTC),
-                'recent_events': [],
-                'stats_24h': {'total_events': 0, 'successful': 0, 'failed': 0, 'success_rate': 0},
-            }
-
-    async def force_check_subscriptions(self, db: AsyncSession) -> dict[str, int]:
-        from app.database.crud.subscription import is_recently_updated_by_webhook
-
-        try:
-            expired_subscriptions = await get_expired_subscriptions(db)
-            expired_count = 0
-
-            for subscription in expired_subscriptions:
-                if is_recently_updated_by_webhook(subscription):
-                    logger.debug(
-                        'Пропуск force-check подписки : обновлена вебхуком недавно', subscription_id=subscription.id
-                    )
-                    continue
-                await deactivate_subscription(db, subscription)
-                expired_count += 1
-
-            expiring_subscriptions = await get_expiring_subscriptions(db, 1)
-            expiring_count = len(expiring_subscriptions)
-
-            autopay_subscriptions = await get_subscriptions_for_autopay(db)
-            autopay_processed = 0
-
-            for subscription in autopay_subscriptions:
-                user = await get_user_by_id(db, subscription.user_id)
-                if user and user.balance_kopeks >= settings.PRICE_30_DAYS:
-                    autopay_processed += 1
-
-            await self._log_monitoring_event(
-                db,
-                'manual_check_subscriptions',
-                f'Принудительная проверка: истекло {expired_count}, истекает {expiring_count}, автоплатежей {autopay_processed}',
-                {'expired': expired_count, 'expiring': expiring_count, 'autopay_ready': autopay_processed},
-            )
-
-            return {'expired': expired_count, 'expiring': expiring_count, 'autopay_ready': autopay_processed}
-
-        except Exception as e:
-            logger.error('Ошибка принудительной проверки подписок', error=e)
-            return {'expired': 0, 'expiring': 0, 'autopay_ready': 0}
-
     async def get_monitoring_logs(
         self, db: AsyncSession, limit: int = 50, event_type: str | None = None, page: int = 1, per_page: int = 20
     ) -> list[dict[str, Any]]:
@@ -4139,31 +4051,6 @@ class MonitoringService:
         except Exception as e:
             logger.error('Ошибка получения списка типов событий мониторинга', error=e)
             return []
-
-    async def cleanup_old_logs(self, db: AsyncSession, days: int = 30) -> int:
-        try:
-            from sqlalchemy import delete
-
-            if days == 0:
-                result = await db.execute(delete(MonitoringLog))
-            else:
-                cutoff_date = datetime.now(UTC) - timedelta(days=days)
-                result = await db.execute(delete(MonitoringLog).where(MonitoringLog.created_at < cutoff_date))
-
-            deleted_count = result.rowcount
-            await db.commit()
-
-            if days == 0:
-                logger.info('🗑️ Удалены все логи мониторинга ( записей)', deleted_count=deleted_count)
-            else:
-                logger.info('🗑️ Удалено старых записей логов (старше дней)', deleted_count=deleted_count, days=days)
-
-            return deleted_count
-
-        except Exception as e:
-            logger.error('Ошибка очистки логов', error=e)
-            await db.rollback()
-            return 0
 
 
 monitoring_service = MonitoringService()

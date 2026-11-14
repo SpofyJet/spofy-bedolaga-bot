@@ -290,23 +290,16 @@ async def test_trial_bonus_keeps_complete_expiry_pending(postgres_database, monk
         assert len(list(await db.scalars(select(Transaction).where(Transaction.type == 'subscription_payment')))) == 1
 
 
-@pytest.mark.parametrize('flow', ['pending', 'daily-charge'])
-async def test_activation_and_daily_charge_persist_recoverable_expiry(postgres_database, flow):
-    from app.database.crud.subscription import (
-        activate_pending_subscription,
-        update_daily_charge_time,
-    )
+async def test_daily_charge_persists_recoverable_expiry(postgres_database):
+    from app.database.crud.subscription import update_daily_charge_time
 
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
-        user, subscription, _ = await _seed(db, datetime.now(UTC))
-        subscription.status = 'pending' if flow != 'daily-charge' else 'active'
+        _user, subscription, _ = await _seed(db, datetime.now(UTC))
+        subscription.status = 'active'
         subscription.is_trial = False
         subscription.end_date = datetime.now(UTC) - timedelta(days=2)
         await db.commit()
-        if flow == 'pending':
-            await activate_pending_subscription(db, user.id, period_days=30, subscription_id=subscription.id)
-        else:
-            await update_daily_charge_time(db, subscription)
+        await update_daily_charge_time(db, subscription)
         await db.refresh(subscription)
         assert subscription.pending_panel_expire_at == subscription.end_date
         assert subscription.end_date > datetime.now(UTC)

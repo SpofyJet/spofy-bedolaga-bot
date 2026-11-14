@@ -16,7 +16,12 @@ from app.cabinet.services.email_type_switch import (
 from app.config import settings
 from app.database.models import SystemSetting
 from app.services import system_settings_service
-from app.services.notification_settings_service import NotificationSettingsService
+from app.services.notification_settings_service import (
+    KEY_EXPIRED_1D,
+    KEY_WAVE2_ENABLED,
+    KEY_WAVE3_ENABLED,
+    NotificationSettingsService,
+)
 from app.services.system_settings_service import bot_configuration_service
 from tests.fixtures.sqlite_memory import memory_session
 
@@ -55,9 +60,8 @@ async def test_cabinet_switches_remain_effective_after_loading_committed_db(monk
         await bot_configuration_service.set_value(db, 'REFERRAL_REWARD_SCHEME', 'levels')
         await bot_configuration_service.set_value(db, 'REFERRAL_LEVELS_MODE', 'tiers')
         await set_email_type_enabled(db, 'promo_offer', False)
-        assert await NotificationSettingsService.set_expired_1d_enabled(db, False)
-        assert await NotificationSettingsService.set_second_wave_enabled(db, False)
-        assert await NotificationSettingsService.set_third_wave_enabled(db, False)
+        for key in (KEY_EXPIRED_1D, KEY_WAVE2_ENABLED, KEY_WAVE3_ENABLED):
+            assert await NotificationSettingsService._store(db, key, False)
         await db.rollback()
 
         assert settings.REFERRAL_WITHDRAWAL_ENABLED is False

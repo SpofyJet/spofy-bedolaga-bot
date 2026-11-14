@@ -24,16 +24,6 @@ _SYNC_CONCURRENCY = 5
 _background_tasks: set[asyncio.Task[None]] = set()
 
 
-def schedule_tariff_squad_sync(tariff_id: int, admin_id: int) -> asyncio.Task[None]:
-    """Запустить синхронизацию в фоне; ссылка на задачу держится до её конца."""
-    task = asyncio.create_task(
-        sync_tariff_squads_in_background(tariff_id, admin_id), name=f'sync-squads-tariff-{tariff_id}'
-    )
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-    return task
-
-
 async def sync_tariff_squads_in_background(tariff_id: int, admin_id: int) -> None:
     """Прогнать сквады тарифа по всем его живым подпискам со своей сессией БД."""
     from app.database.database import AsyncSessionLocal

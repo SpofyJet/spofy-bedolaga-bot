@@ -24,10 +24,10 @@ def test_mark_goes_to_the_title_line():
 
 
 def test_context_is_off_by_default_and_resets():
-    assert not ctx.is_subpage_purchase_context()
+    assert not ctx._subpage_purchase.get()
     with ctx.subpage_purchase_context():
-        assert ctx.is_subpage_purchase_context()
-    assert not ctx.is_subpage_purchase_context()
+        assert ctx._subpage_purchase.get()
+    assert not ctx._subpage_purchase.get()
 
 
 def _service(monkeypatch):
@@ -66,7 +66,7 @@ async def test_cart_completion_runs_inside_the_context(monkeypatch):
     seen = []
 
     async def fake_process(db, user, cart, *, bot=None, bound_price_kopeks=None):
-        seen.append((ctx.is_subpage_purchase_context(), bound_price_kopeks))
+        seen.append((ctx._subpage_purchase.get(), bound_price_kopeks))
         return True
 
     monkeypatch.setattr('app.services.subscription_auto_purchase_service._process_single_cart', fake_process)
@@ -86,7 +86,7 @@ async def test_cart_completion_runs_inside_the_context(monkeypatch):
         MagicMock(), SimpleNamespace(id=5), credited_kopeks=49900
     )
     assert seen == [(True, 49900)]
-    assert not ctx.is_subpage_purchase_context()
+    assert not ctx._subpage_purchase.get()
 
 
 async def test_topup_notification_is_marked_when_a_subpage_purchase_is_pending(monkeypatch):
@@ -94,7 +94,7 @@ async def test_topup_notification_is_marked_when_a_subpage_purchase_is_pending(m
     seen = []
 
     async def inner(user, *args, **kwargs):
-        seen.append(ctx.is_subpage_purchase_context())
+        seen.append(ctx._subpage_purchase.get())
         return True
 
     monkeypatch.setattr(svc, '_send_balance_topup_notification', inner)

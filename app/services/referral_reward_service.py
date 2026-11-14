@@ -205,10 +205,6 @@ class ReferralRewardLevelService:
     async def get_all(cls, db: AsyncSession) -> dict[int, LevelConfig]:
         return dict(await cls._load(db))
 
-    @classmethod
-    async def has_any_active(cls, db: AsyncSession) -> bool:
-        return any(cfg.is_active for cfg in (await cls._load(db)).values())
-
 
 async def resolve_referrer_chain(db: AsyncSession, user: User, max_depth: int) -> list[tuple[int, User]]:
     """Цепочка пригласивших снизу вверх: [(1, прямой), (2, его пригласивший), ...].
@@ -976,16 +972,6 @@ REASON_DAYS_REFEREE = 'referral_days_bonus'
 # отдельно. При зеркалировании чинить нужно ровно те запросы, что считают
 # ``DISTINCT referral_id`` как «мои рефералы» — их два, и оба ниже помечены.
 REFEREE_DIRECTED_REASONS = frozenset({REASON_DAYS_REFEREE})
-
-
-def is_referee_directed(reason: str) -> bool:
-    """Строка описывает награду приглашённому: ``referral_id`` в ней — пригласивший.
-
-    Выборки, трактующие ``referral_id`` как «приглашённый мной», обязаны такие
-    строки исключать, иначе пользователь получит в свои рефералы собственного
-    пригласившего.
-    """
-    return reason in REFEREE_DIRECTED_REASONS
 
 
 def _money_reason(event: str) -> str:

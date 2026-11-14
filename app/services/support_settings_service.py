@@ -94,10 +94,6 @@ class SupportSettingsService:
         return bool(settings.SUPPORT_MENU_ENABLED)
 
     @classmethod
-    async def set_support_menu_enabled(cls, db: AsyncSession, enabled: bool) -> bool:
-        return await store_setting(db, KEY_MENU, bool(enabled))
-
-    @classmethod
     def is_tickets_enabled(cls) -> bool:
         return cls.get_system_mode() in {'tickets', 'both'}
 
@@ -117,14 +113,6 @@ class SupportSettingsService:
         lang = (language or settings.DEFAULT_LANGUAGE).split('-')[0].lower()
         return get_texts(lang).SUPPORT_INFO
 
-    @classmethod
-    async def set_support_info_text(cls, db: AsyncSession, language: str, text: str) -> bool:
-        key = _language_key(language)
-        if not hasattr(settings, key):
-            logger.warning('Для языка нет поля текста поддержки', language=language, key=key)
-            return False
-        return await store_setting(db, key, text or '')
-
     # ------------------------------------------------------------ уведомления и SLA
 
     @classmethod
@@ -132,25 +120,13 @@ class SupportSettingsService:
         return bool(settings.SUPPORT_ADMIN_TICKET_NOTIFICATIONS_ENABLED)
 
     @classmethod
-    async def set_admin_ticket_notifications_enabled(cls, db: AsyncSession, enabled: bool) -> bool:
-        return await store_setting(db, KEY_ADMIN_TICKET_NOTIFICATIONS, bool(enabled))
-
-    @classmethod
     def get_user_ticket_notifications_enabled(cls) -> bool:
         # Общий выключатель уведомлений пользователям главнее.
         return bool(settings.SUPPORT_USER_TICKET_NOTIFICATIONS_ENABLED) and bool(settings.ENABLE_NOTIFICATIONS)
 
     @classmethod
-    async def set_user_ticket_notifications_enabled(cls, db: AsyncSession, enabled: bool) -> bool:
-        return await store_setting(db, KEY_USER_TICKET_NOTIFICATIONS, bool(enabled))
-
-    @classmethod
     def get_sla_enabled(cls) -> bool:
         return bool(settings.SUPPORT_TICKET_SLA_ENABLED)
-
-    @classmethod
-    async def set_sla_enabled(cls, db: AsyncSession, enabled: bool) -> bool:
-        return await store_setting(db, KEY_SLA_ENABLED, bool(enabled))
 
     @classmethod
     def get_sla_minutes(cls) -> int:
@@ -159,16 +135,6 @@ class SupportSettingsService:
         except (TypeError, ValueError):
             return SLA_MINUTES_DEFAULT
         return minutes if minutes > 0 else SLA_MINUTES_DEFAULT
-
-    @classmethod
-    async def set_sla_minutes(cls, db: AsyncSession, minutes: Any) -> bool:
-        try:
-            minutes_int = int(minutes)
-        except (TypeError, ValueError):
-            return False
-        if minutes_int <= 0:
-            return False
-        return await store_setting(db, KEY_SLA_MINUTES, minutes_int)
 
     # ------------------------------------------------------------ модераторы
 
@@ -182,26 +148,6 @@ class SupportSettingsService:
             return int(telegram_id) in cls.get_moderators()
         except (TypeError, ValueError):
             return False
-
-    @classmethod
-    async def add_moderator(cls, db: AsyncSession, telegram_id: Any) -> bool:
-        try:
-            tid = int(telegram_id)
-        except (TypeError, ValueError):
-            return False
-        return await store_setting(db, KEY_MODERATORS, _ids_csv({*cls.get_moderators(), tid}))
-
-    @classmethod
-    async def remove_moderator(cls, db: AsyncSession, telegram_id: Any) -> bool:
-        try:
-            tid = int(telegram_id)
-        except (TypeError, ValueError):
-            return False
-        moderators = set(cls.get_moderators())
-        if tid not in moderators:
-            return True
-        moderators.discard(tid)
-        return await store_setting(db, KEY_MODERATORS, _ids_csv(moderators))
 
     # ------------------------------------------------------------ уведомления в кабинет
 

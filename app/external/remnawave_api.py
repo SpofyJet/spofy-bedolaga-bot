@@ -2,7 +2,6 @@ import asyncio
 import base64
 import ipaddress
 import json
-import re
 import ssl
 import time
 from collections import deque
@@ -45,14 +44,6 @@ class TrafficLimitStrategy(Enum):
 INTERNAL_SQUAD_NAME_MIN_LENGTH = 2
 INTERNAL_SQUAD_NAME_MAX_LENGTH = 30
 INTERNAL_SQUAD_NAME_PATTERN = r'^[A-Za-z0-9_\s-]+$'
-_INTERNAL_SQUAD_NAME_RE = re.compile(INTERNAL_SQUAD_NAME_PATTERN)
-
-
-def is_valid_internal_squad_name(name: str) -> bool:
-    """Имя сквада, которое примет панель."""
-    if not INTERNAL_SQUAD_NAME_MIN_LENGTH <= len(name) <= INTERNAL_SQUAD_NAME_MAX_LENGTH:
-        return False
-    return _INTERNAL_SQUAD_NAME_RE.fullmatch(name) is not None
 
 
 @dataclass

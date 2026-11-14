@@ -147,10 +147,6 @@ def validate_cidr24(value: str) -> str:
     return str(network)
 
 
-def cidr24_for_ip(ip: str) -> str:
-    return validate_cidr24(f'{ip}/24')
-
-
 def hosts_for_node(
     hosts: list[RemnaWaveHost], *, node_active_inbounds: list[str], node_address: str, node_ips: list[str]
 ) -> list[RemnaWaveHost]:

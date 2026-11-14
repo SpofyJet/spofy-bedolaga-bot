@@ -604,39 +604,6 @@ async def show_button_selector_callback(callback: types.CallbackQuery, db_user: 
 
 @admin_required
 @error_handler
-async def show_button_selector(message: types.Message, db_user: User, state: FSMContext):
-    data = await state.get_data()
-    selected_buttons = data.get('selected_buttons')
-    if selected_buttons is None:
-        selected_buttons = list(DEFAULT_SELECTED_BUTTONS)
-        await state.update_data(selected_buttons=selected_buttons)
-
-    has_media = data.get('has_media', False)
-
-    text = """
-📘 <b>Выбор дополнительных кнопок</b>
-
-Выберите кнопки, которые будут добавлены к сообщению рассылки:
-
-💰 <b>Пополнить баланс</b> — откроет методы пополнения
-🤝 <b>Партнерка</b> — откроет реферальную программу
-🎫 <b>Промокод</b> — откроет форму ввода промокода
-🔗 <b>Подключиться</b> — поможет подключить приложение
-📱 <b>Подписка</b> — покажет состояние подписки
-🛠️ <b>Техподдержка</b> — свяжет с поддержкой
-
-🏠 <b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.
-
-Выберите нужные кнопки и нажмите "Продолжить":
-"""
-
-    keyboard = get_updated_message_buttons_selector_keyboard_with_media(selected_buttons, has_media, db_user.language)
-
-    await message.answer(text, reply_markup=keyboard, parse_mode='HTML')
-
-
-@admin_required
-@error_handler
 async def toggle_button_selection(callback: types.CallbackQuery, db_user: User, state: FSMContext):
     button_type = callback.data.replace('btn_', '')
     data = await state.get_data()

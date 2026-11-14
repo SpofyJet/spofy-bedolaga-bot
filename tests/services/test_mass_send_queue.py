@@ -214,10 +214,9 @@ async def test_decision_log_records_counts_and_never_breaks_the_caller(monkeypat
         await decision_log.record_decision('abuse_trial_removed', 'ещё один')
         await decision_log.record_decision('friend_reward_blocked', 'общее устройство', details={'inviter_id': 2})
         async with factory() as db:
-            counts = dict(await decision_log.decision_counts(db, days=7))
-            last = await decision_log.recent_decisions(db, limit=5, kind='friend_reward_blocked')
-        assert counts == {'abuse_trial_removed': 2, 'friend_reward_blocked': 1}
-        assert last[0].details == {'inviter_id': 2}
+            rows = (await db.execute(select(DecisionLog))).scalars().all()
+        assert sorted(r.kind for r in rows) == ['abuse_trial_removed', 'abuse_trial_removed', 'friend_reward_blocked']
+        assert next(r for r in rows if r.kind == 'friend_reward_blocked').details == {'inviter_id': 2}
 
     monkeypatch.setattr(decision_log, 'AsyncSessionLocal', MagicMock(side_effect=RuntimeError('база недоступна')))
     await decision_log.record_decision('x', 'не должно бросать')  # журнал не ломает то, что журналирует

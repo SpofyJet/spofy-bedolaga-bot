@@ -10,7 +10,6 @@ from app.services.reachability.targets import (
     PURPOSE_REGULAR,
     Target,
     TargetValidationError,
-    cidr24_for_ip,
     guess_purpose,
     hosts_for_node,
     is_reality_like,
@@ -102,7 +101,6 @@ def test_cidr_helpers() -> None:
     """Документационные диапазоны (192.0.2.0/24 и т. п.) не глобальные — их тоже режем."""
     assert validate_cidr24('8.8.8.0/24') == '8.8.8.0/24'
     assert validate_cidr24('8.8.8.77/24') == '8.8.8.0/24'
-    assert cidr24_for_ip('8.8.8.142') == '8.8.8.0/24'
     for bad in ('8.8.8.0/23', '8.8.8.0/25', '10.0.0.0/24', '192.0.2.0/24', 'nope', '2001:db8::/24'):
         with pytest.raises(TargetValidationError):
             validate_cidr24(bad)

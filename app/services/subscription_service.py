@@ -5,11 +5,10 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 import structlog
-from sqlalchemy import inspect as sa_inspect, select
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.server_squad import get_all_server_squads
 from app.database.crud.user import get_user_by_id
 from app.database.models import Subscription, SubscriptionStatus, User
 from app.external.remnawave_api import (
@@ -1371,155 +1370,6 @@ class SubscriptionService:
         if bytes_value == 0:
             return 0.0
         return bytes_value / (1024 * 1024 * 1024)
-
-    async def propagate_tariff_squads(
-        self, db: AsyncSession, tariff_id: int, new_squads: list[str], *, concurrency: int = 5
-    ) -> PropagateSquadsResult:
-        """Применяет изменение серверов тарифа к активным подпискам и синхронизирует с RemnaWave.
-
-        Если new_squads пустой — означает "все серверы", будут подставлены все доступные.
-        Синхронизация с RemnaWave выполняется параллельно с ограничением concurrency.
-        Паттерн: предзагрузка данных → параллельные API-вызовы → один commit.
-        """
-        squads_to_set = list(new_squads)
-        if not squads_to_set:
-            all_servers, _ = await get_all_server_squads(db, available_only=True, limit=10000)
-            squads_to_set = [s.squad_uuid for s in all_servers if s.squad_uuid]
-
-        result = await db.execute(
-            select(Subscription).where(
-                Subscription.tariff_id == tariff_id,
-                Subscription.status.in_([SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]),
-            )
-        )
-        subscriptions = result.scalars().all()
-
-        if not subscriptions:
-            return PropagateSquadsResult(total=0, synced=0)
-
-        for sub in subscriptions:
-            sub.connected_squads = squads_to_set
-        await db.commit()
-
-        # Предзагружаем пользователей и тарифы — никаких DB-операций внутри gather
-        user_ids = [sub.user_id for sub in subscriptions]
-        users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
-        users_map = {u.id: u for u in users_result.scalars().all()}
-
-        for sub in subscriptions:
-            try:
-                await db.refresh(sub, ['tariff'])
-            except Exception as exc:
-                logger.warning('Не удалось предзагрузить тариф подписки', subscription_id=sub.id, error=exc)
-
-        # Параллельная синхронизация: один API-клиент, только HTTP-вызовы внутри gather
-        failed_ids: list[int] = []
-        synced = 0
-
-        from app.services.grace_access_runtime import update_panel_user_grace_safe
-
-        async with self.get_api_client() as api:
-            semaphore = asyncio.Semaphore(concurrency)
-
-            async def _sync_one(sub: Subscription) -> bool:
-                async with semaphore:
-                    try:
-                        user = users_map.get(sub.user_id)
-                        if not user:
-                            return False
-                        if settings.is_multi_tariff_enabled():
-                            remnawave_id = sub.remnawave_id
-                            if not remnawave_id:
-                                logger.warning(
-                                    'Multi-tariff: subscription has no remnawave_id, skipping squad sync',
-                                    subscription_id=sub.id,
-                                    user_id=sub.user_id,
-                                )
-                                return False
-                        else:
-                            remnawave_id = user.remnawave_id
-                        if not remnawave_id:
-                            return False
-
-                        ext_squad_uuid = sub.tariff.external_squad_uuid if sub.tariff else None
-
-                        update_kwargs = dict(
-                            user_id=remnawave_id,
-                            description=settings.format_remnawave_user_description(
-                                full_name=user.full_name,
-                                username=user.username,
-                                telegram_id=user.telegram_id,
-                                email=user.email,
-                                user_id=user.id,
-                            ),
-                        )
-
-                        # Пустой список не шлём: [] снял бы у панель-юзера ВСЕ
-                        # сквады (у подписки без connected_squads это не намерение
-                        # «отключить», а просто отсутствие данных) — как в dev.
-                        if sub.connected_squads:
-                            update_kwargs['active_internal_squads'] = sub.connected_squads
-
-                        # Не отправляем null — RemnaWave API не принимает null для externalSquadUuid (A039)
-                        if ext_squad_uuid is not None:
-                            update_kwargs['external_squad_uuid'] = ext_squad_uuid
-
-                        updated_user = await update_panel_user_grace_safe(
-                            api,
-                            sub.id,
-                            **update_kwargs,
-                        )
-
-                        # Сохраняем в памяти — commit будет после gather
-                        sub.subscription_url = updated_user.subscription_url
-                        sub.subscription_crypto_link = updated_user.happ_crypto_link
-                        return True
-
-                    except Exception as e:
-                        logger.warning(
-                            'Не удалось обновить сквады в RemnaWave',
-                            subscription_id=sub.id,
-                            user_id=sub.user_id,
-                            error=e,
-                        )
-                        return False
-
-            results = await asyncio.gather(*[_sync_one(sub) for sub in subscriptions])
-
-        for i, success in enumerate(results):
-            if success:
-                synced += 1
-            else:
-                failed_ids.append(subscriptions[i].id)
-
-        # Один commit после всех API-вызовов
-        try:
-            await db.commit()
-        except Exception as commit_error:
-            logger.error('Ошибка фиксации транзакции при синхронизации скводов', error=commit_error)
-            await db.rollback()
-            failed_ids = [sub.id for sub in subscriptions]
-            synced = 0
-
-        propagate_result = PropagateSquadsResult(total=len(subscriptions), synced=synced, failed_ids=failed_ids)
-
-        if failed_ids:
-            logger.warning(
-                'Частичная синхронизация скводов с RemnaWave',
-                tariff_id=tariff_id,
-                total=propagate_result.total,
-                synced=synced,
-                failed_ids=failed_ids,
-            )
-        else:
-            logger.info(
-                'Обновлены сквады подписок для тарифа',
-                tariff_id=tariff_id,
-                total=propagate_result.total,
-                synced=synced,
-            )
-
-        return propagate_result
 
 
 async def reset_subscription_with_panel(db, user: User, subscription: Subscription) -> dict:

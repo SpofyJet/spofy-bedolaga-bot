@@ -408,34 +408,6 @@ class TestGranting:
         assert granting.earnings == []
 
     @pytest.mark.asyncio
-    async def test_referee_days_row_belongs_to_referee(self, granting, monkeypatch):
-        """Строка принадлежит ПОЛУЧАТЕЛЮ дней, иначе дни припишутся пригласившему.
-
-        Полсотни выборок фильтруют ledger по ``user_id = :я``. Оставь строку за
-        пригласившим — и каждая из них покажет ему дни, выданные другому человеку.
-        """
-        _install_levels(monkeypatch, {1: _level(1, reward_mode='days', referee_days=5, referee_tariff_id=9)})
-        await engine.award_referral_rewards(
-            _FakeSession(), granting.users[4], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=1000_00
-        )
-        row = granting.earnings[0]
-        assert (row['user_id'], row['referral_id']) == (4, 3)
-        assert row['reason'] == engine.REASON_DAYS_REFEREE
-        assert engine.is_referee_directed(row['reason']) is True
-        assert granting.day_grants == [{'user_id': 4, 'days': 5, 'tariff_id': 9}]
-
-    @pytest.mark.asyncio
-    async def test_referrer_days_row_keeps_classic_orientation(self, granting, monkeypatch):
-        """Награда пригласившему обязана лечь ровно как раньше: ничего не чинится."""
-        _install_levels(monkeypatch, {1: _level(1, reward_mode='days', referrer_days=3)})
-        await engine.award_referral_rewards(
-            _FakeSession(), granting.users[4], event=RewardEvent.REPEAT_TOPUP, topup_amount_kopeks=1000_00
-        )
-        row = granting.earnings[0]
-        assert (row['user_id'], row['referral_id']) == (3, 4)
-        assert engine.is_referee_directed(row['reason']) is False
-
-    @pytest.mark.asyncio
     async def test_days_granted_before_money(self, granting, monkeypatch):
         """Деньги умеют триггерить авто-продление — дни обязаны лечь раньше."""
         order: list[str] = []

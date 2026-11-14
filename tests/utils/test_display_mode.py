@@ -2,10 +2,8 @@ import pytest
 
 from app.services.system_settings_service import BotConfigurationService
 from app.utils.display_mode import (
-    display_mode_label,
     is_visible_in_bot,
     is_visible_in_web,
-    next_display_mode,
     normalize_display_mode,
 )
 
@@ -37,20 +35,6 @@ def test_visibility_matrix():
     assert is_visible_in_web('web')
     assert is_visible_in_web('both')
     assert not is_visible_in_web('bot')
-
-
-def test_next_display_mode_cycles_through_all_modes():
-    assert next_display_mode('both') == 'bot'
-    assert next_display_mode('bot') == 'web'
-    assert next_display_mode('web') == 'both'
-    assert next_display_mode('garbage') == 'bot'
-
-
-def test_display_mode_label_known_for_all_modes():
-    assert display_mode_label('bot')
-    assert display_mode_label('web')
-    assert display_mode_label('both')
-    assert display_mode_label(None) == display_mode_label('both')
 
 
 @pytest.mark.parametrize('key', DISPLAY_MODE_KEYS)

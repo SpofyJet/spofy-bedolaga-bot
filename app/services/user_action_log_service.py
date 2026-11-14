@@ -191,12 +191,6 @@ def should_log_cabinet_action(method: str, path: str) -> bool:
     return not path.startswith(_EXCLUDED_PREFIXES)
 
 
-def should_log_miniapp_action(path: str) -> bool:
-    if not settings.USER_ACTION_LOG_ENABLED:
-        return False
-    return normalize_cabinet_path(path) in MINIAPP_ACTION_PATHS
-
-
 def schedule_cabinet_action_log(user_id: int, method: str, path: str) -> None:
     """Fire-and-forget запись действия юзера в кабинете — не задерживает запрос."""
     if not should_log_cabinet_action(method, path):
@@ -329,13 +323,3 @@ async def _write_action(user_id: int, button_id: str, callback_data: str | None,
             )
     except Exception as error:
         logger.debug('Не удалось записать действие юзера', error=str(error))
-
-
-async def _write_cabinet_action(user_id: int, method: str, path: str) -> None:
-    """Совместимость: прежняя точка входа для записи действия в кабинете."""
-    await _write_action(
-        user_id,
-        f'{method.upper()} {normalize_cabinet_path(path)}'[:100],
-        path[:255],
-        CABINET_BUTTON_TYPE,
-    )

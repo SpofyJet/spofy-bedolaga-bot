@@ -1444,11 +1444,6 @@ class BotConfigurationService:
     }
 
     @classmethod
-    def get_category_description(cls, category_key: str) -> str:
-        description = cls.CATEGORY_DESCRIPTIONS.get(category_key, '')
-        return cls._format_dynamic_copy(category_key, description)
-
-    @classmethod
     def is_read_only(cls, key: str) -> bool:
         return key in cls.READ_ONLY_KEYS
 
@@ -1717,14 +1712,6 @@ class BotConfigurationService:
                 return str(value)
         return str(value)
 
-    @classmethod
-    def format_value_for_list(cls, key: str) -> str:
-        value = cls.get_current_value(key)
-        formatted = cls.format_value_human(key, value)
-        if formatted == '—':
-            return formatted
-        return _truncate(formatted)
-
     @staticmethod
     def as_choice_key(value: Any) -> str:
         """Значение в том виде, в котором его можно сравнить с ``ChoiceOption.value``.
@@ -1770,32 +1757,6 @@ class BotConfigurationService:
     @classmethod
     def _get_dynamic_choice_options(cls, key: str) -> list[ChoiceOption] | None:
         return None
-
-    @classmethod
-    def has_choices(cls, key: str) -> bool:
-        return bool(cls.get_choice_options(key))
-
-    @classmethod
-    def get_callback_token(cls, key: str) -> str:
-        cls.initialize_definitions()
-        return cls._callback_tokens[key]
-
-    @classmethod
-    def resolve_callback_token(cls, token: str) -> str:
-        cls.initialize_definitions()
-        return cls._token_to_key[token]
-
-    @classmethod
-    def get_choice_token(cls, key: str, value: Any) -> str | None:
-        cls.initialize_definitions()
-        cls._ensure_choice_tokens(key)
-        return cls._choice_tokens.get(key, {}).get(value)
-
-    @classmethod
-    def resolve_choice_token(cls, key: str, token: str) -> Any:
-        cls.initialize_definitions()
-        cls._ensure_choice_tokens(key)
-        return cls._choice_token_lookup.get(key, {})[token]
 
     @classmethod
     def _register_callback_token(cls, key: str) -> None:
@@ -1949,51 +1910,6 @@ class BotConfigurationService:
         return str(value)
 
     @classmethod
-    def parse_user_value(cls, key: str, user_input: str) -> Any:
-        definition = cls.get_definition(key)
-        text = (user_input or '').strip()
-
-        if text.lower() in {'отмена', 'cancel'}:
-            raise ValueError('Ввод отменен пользователем')
-
-        if definition.is_optional and text.lower() in {'none', 'null', 'пусто', ''}:
-            return None
-
-        python_type = definition.python_type
-
-        if python_type is bool:
-            lowered = text.lower()
-            if lowered in {'1', 'true', 'on', 'yes', 'да', 'вкл', 'enable', 'enabled'}:
-                return True
-            if lowered in {'0', 'false', 'off', 'no', 'нет', 'выкл', 'disable', 'disabled'}:
-                return False
-            raise ValueError("Введите 'true' или 'false' (или 'да'/'нет')")
-
-        if python_type is int:
-            parsed_value: Any = int(text)
-        elif python_type is float:
-            parsed_value = float(text.replace(',', '.'))
-        else:
-            parsed_value = text
-
-        choices = cls.get_choice_options(key)
-        if choices:
-            allowed_values = {option.value for option in choices}
-            if python_type is str:
-                lowered_map = {str(option.value).lower(): option.value for option in choices}
-                normalized = lowered_map.get(str(parsed_value).lower())
-                if normalized is not None:
-                    parsed_value = normalized
-                elif parsed_value not in allowed_values:
-                    readable = ', '.join(f'{option.label} ({cls.format_value(option.value)})' for option in choices)
-                    raise ValueError(f'Доступные значения: {readable}')
-            elif parsed_value not in allowed_values:
-                readable = ', '.join(f'{option.label} ({cls.format_value(option.value)})' for option in choices)
-                raise ValueError(f'Доступные значения: {readable}')
-
-        return parsed_value
-
-    @classmethod
     async def set_value(
         cls,
         db: AsyncSession,
@@ -2141,25 +2057,6 @@ class BotConfigurationService:
             logger.warning(
                 'Не удалось синхронизировать бутстрап токен веб-API после обновления настроек',
             )
-
-    @classmethod
-    def get_setting_summary(cls, key: str) -> dict[str, Any]:
-        definition = cls.get_definition(key)
-        current = cls.get_current_value(key)
-        original = cls.get_original_value(key)
-        has_override = cls.has_override(key)
-
-        return {
-            'key': key,
-            'name': definition.display_name,
-            'current': cls.format_value_human(key, current),
-            'original': cls.format_value_human(key, original),
-            'type': definition.type_label,
-            'category_key': definition.category_key,
-            'category_label': definition.category_label,
-            'has_override': has_override,
-            'is_read_only': cls.is_read_only(key),
-        }
 
 
 bot_configuration_service = BotConfigurationService

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import structlog
@@ -8,10 +7,8 @@ import structlog
 from app.config import settings
 from app.localization.loader import (
     DEFAULT_LANGUAGE,
-    clear_locale_cache,
     load_locale,
 )
-from app.utils.background import spawn_background_task
 
 
 _logger = structlog.get_logger(__name__)
@@ -235,19 +232,6 @@ def get_default_rules(language: str = DEFAULT_LANGUAGE) -> str:
     return _get_default_rules(language)
 
 
-def get_rules_sync(language: str = DEFAULT_LANGUAGE) -> str:
-    if language in _cached_rules:
-        return _cached_rules[language]
-
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(get_rules(language))
-
-    spawn_background_task(get_rules(language))
-    return _get_cached_rules_value(language)
-
-
 async def get_rules(language: str = DEFAULT_LANGUAGE) -> str:
     if language in _cached_rules:
         return _cached_rules[language]
@@ -258,7 +242,3 @@ async def get_rules(language: str = DEFAULT_LANGUAGE) -> str:
 async def refresh_rules_cache(language: str = DEFAULT_LANGUAGE) -> None:
     _cached_rules.pop(language, None)
     await get_rules_from_db(language)
-
-
-def reload_locales() -> None:
-    clear_locale_cache()

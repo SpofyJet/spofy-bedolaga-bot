@@ -97,38 +97,6 @@ def test_getters_clamp_bad_values(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_setters_persist_to_db_and_apply_live(monkeypatch) -> None:
-    async with memory_session(monkeypatch, TABLES) as db:
-        assert await NotificationSettingsService.set_second_wave_enabled(db, False) is True
-        assert await NotificationSettingsService.set_third_wave_trigger_days(db, 7) is True
-        assert await NotificationSettingsService.set_expired_1d_enabled(db, False) is True
-        assert await NotificationSettingsService.set_trial_channel_unsubscribed_enabled(db, False) is True
-        # Сессия кабинета закрывается без коммита — запись обязана коммитить сама.
-        await db.rollback()
-        assert await get_setting_value(db, 'NOTIFICATION_EXPIRED_WAVE2_ENABLED') == 'false'
-        assert await get_setting_value(db, 'NOTIFICATION_EXPIRED_WAVE3_TRIGGER_DAYS') == '7'
-    assert settings.NOTIFICATION_EXPIRED_WAVE2_ENABLED is False
-    assert NotificationSettingsService.is_second_wave_enabled() is False
-    assert NotificationSettingsService.is_expired_1d_enabled() is False
-    assert NotificationSettingsService.is_trial_channel_unsubscribed_enabled() is False
-    assert NotificationSettingsService.get_third_wave_trigger_days() == 7
-
-
-@pytest.mark.asyncio
-async def test_setters_clamp_and_reject_garbage(monkeypatch) -> None:
-    async with memory_session(monkeypatch, TABLES) as db:
-        assert await NotificationSettingsService.set_second_wave_discount_percent(db, 'abc') is False
-        assert await NotificationSettingsService.set_second_wave_valid_hours(db, 500) is True
-        assert await NotificationSettingsService.set_third_wave_discount_percent(db, -5) is True
-        assert await NotificationSettingsService.set_third_wave_valid_hours(db, 0) is True
-        assert await NotificationSettingsService.set_third_wave_trigger_days(db, 1) is True
-    assert NotificationSettingsService.get_second_wave_valid_hours() == 168
-    assert NotificationSettingsService.get_third_wave_discount_percent() == 0
-    assert NotificationSettingsService.get_third_wave_valid_hours() == 1
-    assert NotificationSettingsService.get_third_wave_trigger_days() == 2
-
-
-@pytest.mark.asyncio
 async def test_legacy_file_is_imported_once_and_never_overrides_the_db(monkeypatch, tmp_path) -> None:
     legacy = tmp_path / 'notification_settings.json'
     legacy.write_text(

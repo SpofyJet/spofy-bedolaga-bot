@@ -31,9 +31,6 @@ APP = pathlib.Path(__file__).resolve().parents[2] / 'app'
 #: Функции, которые двигают дату, но правило тарифа применять не должны — с причиной.
 KNOWN_WITHOUT_RULE: dict[str, str] = {
     'app/database/models.py::Subscription.extend_subscription': 'сам метод модели — правило зовут его вызывающие',
-    'app/database/crud/subscription.py::activate_pending_subscription': (
-        'активация оплаченной по счёту подписки: лимит тарифа задан при её оформлении'
-    ),
     'app/database/crud/subscription.py::resume_daily_subscription': 'суточное возобновление: лимит ведёт суточный сервис',
     'app/cabinet/routes/subscription_modules/daily.py::toggle_subscription_pause': (
         'суточная пауза/возобновление из кабинета: лимит ведёт суточный сервис'

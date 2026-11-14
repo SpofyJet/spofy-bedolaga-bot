@@ -25,10 +25,6 @@ SUBPAGE_MARK = '🔗 <b>СТРАНИЦА ПОДПИСКИ</b>'
 _subpage_purchase: ContextVar[bool] = ContextVar('spofy_subpage_purchase', default=False)
 
 
-def is_subpage_purchase_context() -> bool:
-    return _subpage_purchase.get()
-
-
 @contextmanager
 def subpage_purchase_context(active: bool = True) -> Iterator[None]:
     token = _subpage_purchase.set(active)

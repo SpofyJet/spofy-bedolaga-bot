@@ -60,15 +60,6 @@ def _clamped(value: Any, bounds: tuple[int, int], default: int) -> int:
     return max(bounds[0], min(bounds[1], number))
 
 
-def _bounded(value: Any, bounds: tuple[int, int]) -> int | None:
-    """Число в границах для записи; мусор — None (запись отклоняется)."""
-    try:
-        number = int(value)
-    except (TypeError, ValueError):
-        return None
-    return max(bounds[0], min(bounds[1], number))
-
-
 def _coerce_legacy(kind: type, value: Any) -> Any | None:
     if kind is bool:
         return value if isinstance(value, bool) else None
@@ -90,13 +81,6 @@ class NotificationSettingsService:
     @staticmethod
     async def _store(db: AsyncSession, key: str, value: Any) -> bool:
         return await store_setting(db, key, value)
-
-    @classmethod
-    async def _store_bounded(cls, db: AsyncSession, key: str, value: Any, bounds: tuple[int, int]) -> bool:
-        number = _bounded(value, bounds)
-        if number is None:
-            return False
-        return await cls._store(db, key, number)
 
     # ------------------------------------------------------------ чтение
 
@@ -123,72 +107,36 @@ class NotificationSettingsService:
         return bool(settings.NOTIFICATION_TRIAL_CHANNEL_UNSUBSCRIBED_ENABLED)
 
     @classmethod
-    async def set_trial_channel_unsubscribed_enabled(cls, db: AsyncSession, enabled: bool) -> bool:
-        return await cls._store(db, KEY_TRIAL_CHANNEL, bool(enabled))
-
-    @classmethod
     def is_expired_1d_enabled(cls) -> bool:
         return bool(settings.NOTIFICATION_EXPIRED_1D_ENABLED)
-
-    @classmethod
-    async def set_expired_1d_enabled(cls, db: AsyncSession, enabled: bool) -> bool:
-        return await cls._store(db, KEY_EXPIRED_1D, bool(enabled))
 
     @classmethod
     def is_second_wave_enabled(cls) -> bool:
         return bool(settings.NOTIFICATION_EXPIRED_WAVE2_ENABLED)
 
     @classmethod
-    async def set_second_wave_enabled(cls, db: AsyncSession, enabled: bool) -> bool:
-        return await cls._store(db, KEY_WAVE2_ENABLED, bool(enabled))
-
-    @classmethod
     def get_second_wave_discount_percent(cls) -> int:
         return _clamped(settings.NOTIFICATION_EXPIRED_WAVE2_DISCOUNT_PERCENT, PERCENT_RANGE, 10)
-
-    @classmethod
-    async def set_second_wave_discount_percent(cls, db: AsyncSession, percent: Any) -> bool:
-        return await cls._store_bounded(db, KEY_WAVE2_PERCENT, percent, PERCENT_RANGE)
 
     @classmethod
     def get_second_wave_valid_hours(cls) -> int:
         return _clamped(settings.NOTIFICATION_EXPIRED_WAVE2_VALID_HOURS, HOURS_RANGE, 24)
 
     @classmethod
-    async def set_second_wave_valid_hours(cls, db: AsyncSession, hours: Any) -> bool:
-        return await cls._store_bounded(db, KEY_WAVE2_HOURS, hours, HOURS_RANGE)
-
-    @classmethod
     def is_third_wave_enabled(cls) -> bool:
         return bool(settings.NOTIFICATION_EXPIRED_WAVE3_ENABLED)
-
-    @classmethod
-    async def set_third_wave_enabled(cls, db: AsyncSession, enabled: bool) -> bool:
-        return await cls._store(db, KEY_WAVE3_ENABLED, bool(enabled))
 
     @classmethod
     def get_third_wave_discount_percent(cls) -> int:
         return _clamped(settings.NOTIFICATION_EXPIRED_WAVE3_DISCOUNT_PERCENT, PERCENT_RANGE, 20)
 
     @classmethod
-    async def set_third_wave_discount_percent(cls, db: AsyncSession, percent: Any) -> bool:
-        return await cls._store_bounded(db, KEY_WAVE3_PERCENT, percent, PERCENT_RANGE)
-
-    @classmethod
     def get_third_wave_valid_hours(cls) -> int:
         return _clamped(settings.NOTIFICATION_EXPIRED_WAVE3_VALID_HOURS, HOURS_RANGE, 24)
 
     @classmethod
-    async def set_third_wave_valid_hours(cls, db: AsyncSession, hours: Any) -> bool:
-        return await cls._store_bounded(db, KEY_WAVE3_HOURS, hours, HOURS_RANGE)
-
-    @classmethod
     def get_third_wave_trigger_days(cls) -> int:
         return _clamped(settings.NOTIFICATION_EXPIRED_WAVE3_TRIGGER_DAYS, DAYS_RANGE, 5)
-
-    @classmethod
-    async def set_third_wave_trigger_days(cls, db: AsyncSession, days: Any) -> bool:
-        return await cls._store_bounded(db, KEY_WAVE3_DAYS, days, DAYS_RANGE)
 
     @classmethod
     def are_notifications_globally_enabled(cls) -> bool:

@@ -17,7 +17,7 @@ from app.external.bschek_api import BschekAPIError
 from app.external.remnawave_api import RemnaWaveHost
 from app.services.reachability.gate import PaidCallGate
 from app.services.reachability.geo_result import RECHECK_STALE_MESSAGE, recheck_started
-from app.services.reachability.jobs import JobNotCancellable, JobRunner, RunnerConfig
+from app.services.reachability.jobs import JobRunner, RunnerConfig
 from app.services.reachability.pricing import CostLimitExceeded
 from app.services.reachability.requests import RequestBuildError
 from app.services.reachability.resolver import TargetResolutionError
@@ -501,7 +501,7 @@ async def _coro(value):
 # ---------------------------------------------------------------- управление
 
 
-async def test_get_cancel_and_retrieve_jobs(session_factory) -> None:
+async def test_get_and_cancel_jobs(session_factory) -> None:
     client = FakeClient(
         {
             'cancel_vless': [load_bschek_fixture('vC_cancel')['body']],
@@ -532,32 +532,6 @@ async def test_get_cancel_and_retrieve_jobs(session_factory) -> None:
     await asyncio.gather(*service.runner._tasks.values())
     async with session_factory() as db:
         assert (await crud.get_job(db, job.id)).status == 'cancelled'
-        with pytest.raises(JobNotCancellable):
-            await service.retrieve_job(db, job.id)
-
-
-async def test_retrieve_job_resumes_stuck_probe(session_factory) -> None:
-    client = FakeClient({'probe': [load_bschek_fixture('p1_probe')['body']]})
-    service = make_service(session_factory, client=client)
-    async with session_factory() as db:
-        admin = await _admin(db)
-        job = await crud.create_job(
-            db,
-            kind='probe',
-            status='running',
-            phase='retrieving',
-            trigger='manual',
-            started_by_user_id=admin.id,
-            idempotency_key='r',
-            request=load_bschek_fixture('p1_probe')['request'],
-            targets=[],
-            dpi='on',
-        )
-        await db.commit()
-        await service.retrieve_job(db, job.id)
-    await asyncio.gather(*service.runner._tasks.values())
-    async with session_factory() as db:
-        assert (await crud.get_job(db, job.id)).status == 'done'
 
 
 async def test_summary_builds_matrix_from_latest_legs(session_factory) -> None:
