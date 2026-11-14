@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = ('app/handlers/simple_subscription.py', 'app/handlers/subscription/purchase.py')
+FILES = ('app/handlers/subscription/purchase.py',)
 
 
 def _callback_values(source: str) -> set[str]:

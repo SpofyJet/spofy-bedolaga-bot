@@ -15,7 +15,6 @@ import pytest
 
 import app.handlers.balance.cryptobot as cryptobot_handlers
 import app.handlers.balance.platega as platega_handlers
-from app.handlers import simple_subscription
 
 
 OWNER_ID = 1
@@ -84,18 +83,3 @@ async def test_cryptobot_foreign_payment_hidden() -> None:
 
     _assert_not_found_alert(callback)
     callback.message.edit_text.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_simple_wata_foreign_payment_is_not_checked_with_provider() -> None:
-    callback = _callback('check_simple_wata_5')
-    payment_service_cls = MagicMock()
-
-    with (
-        patch('app.database.crud.wata.get_wata_payment_by_id', AsyncMock(return_value=_foreign_payment())),
-        patch.object(simple_subscription, 'PaymentService', payment_service_cls),
-    ):
-        await simple_subscription.check_simple_wata_payment_status(callback, db_user=ATTACKER, db=AsyncMock())
-
-    _assert_not_found_alert(callback)
-    payment_service_cls.assert_not_called()

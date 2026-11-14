@@ -13,18 +13,16 @@ from app.config import settings
 from app.database.crud.subscription import (
     create_trial_subscription,
 )
-from app.database.models import PaymentMethod, Subscription, SubscriptionStatus, User
+from app.database.models import Subscription, SubscriptionStatus, User
 from app.keyboards.inline import (
     get_back_keyboard,
     get_happ_download_button_row,
-    get_insufficient_balance_keyboard,
     get_subscription_keyboard,
     get_updated_subscription_settings_keyboard,
 )
 from app.localization.texts import Texts, get_texts
 from app.middlewares.banner_variant import show_banner_state
 from app.services.admin_notification_service import AdminNotificationService
-from app.services.pricing_engine import pricing_engine
 from app.services.remnawave_service import RemnaWaveConfigurationError
 from app.services.subscription_auto_purchase_service import ADDON_CART_MODES
 from app.services.subscription_service import SubscriptionService
@@ -49,7 +47,6 @@ from app.utils.lifetime import is_lifetime_end
 from app.utils.subscription_time import format_expiry_warning, format_time_left
 from app.utils.subscription_utils import (
     get_display_subscription_link,
-    resolve_simple_subscription_device_limit,
 )
 from app.utils.timezone import format_local_datetime, to_local_datetime
 
@@ -1356,7 +1353,6 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
     subscription.tariff = tariff
 
     # Определяем, нужно ли возобновление: пауза пользователя ИЛИ остановка системой (disabled/expired)
-    from app.database.models import SubscriptionStatus
 
     was_paused = getattr(subscription, 'is_daily_paused', False)
     is_inactive = subscription.status in (
@@ -1737,148 +1733,4 @@ def register_handlers(dp: Dispatcher):
 
     register_tariff_purchase_handlers(dp)
 
-    # Регистрируем обработчик для простой покупки
-    dp.callback_query.register(handle_simple_subscription_purchase, F.data == 'simple_subscription_purchase')
-
-
-async def handle_simple_subscription_purchase(
-    callback: types.CallbackQuery,
-    state: FSMContext,
-    db_user: User,
-    db: AsyncSession,
-):
-    """Обрабатывает простую покупку подписки."""
-    get_texts(db_user.language)
-
-    if not settings.SIMPLE_SUBSCRIPTION_ENABLED:
-        await callback.answer('❌ Простая покупка подписки временно недоступна', show_alert=True)
-        return
-
-    # This callback carries no subscription id. Never choose an arbitrary
-    # primary subscription for a multi-subscription account.
-    if settings.is_multi_tariff_enabled():
-        await callback.answer('Выберите подписку через «Мои подписки»', show_alert=True)
-        return
-
-    if db_user.restriction_subscription:
-        await callback.answer('Покупка подписки ограничена администратором', show_alert=True)
-        return
-
-    # Определяем ограничение по устройствам для текущего режима
-    resolve_simple_subscription_device_limit()
-
-    # Проверяем, есть ли у пользователя активная подписка
-    from app.database.crud.subscription import get_subscription_by_user_id
-
-    current_subscription = await get_subscription_by_user_id(db, db_user.id)
-
-    if current_subscription and current_subscription.tariff_id:
-        await _extend_simple_tariff_subscription(callback, db_user, db, current_subscription)
-        return
-
-    from .tariff_purchase import show_tariffs_list
-
-    await show_tariffs_list(callback, db_user, db, state)
-    return
-
     # Если у пользователя уже есть активная подписка, продлеваем её
-
-
-async def _extend_simple_tariff_subscription(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    subscription: Subscription,
-):
-    """Renew the attached tariff without applying classic purchase defaults."""
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
-
-    from app.database.crud.user import lock_user_for_pricing
-    from app.services.subscription_renewal_service import SubscriptionRenewalChargeError, SubscriptionRenewalService
-
-    subscription_id = subscription.id
-    db_user = await lock_user_for_pricing(db, db_user.id)
-    subscription = await db.scalar(
-        select(Subscription)
-        .where(Subscription.id == subscription_id, Subscription.user_id == db_user.id)
-        .options(selectinload(Subscription.tariff))
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    tariff = subscription.tariff if subscription else None
-    period_days = settings.SIMPLE_SUBSCRIPTION_PERIOD_DAYS
-    # Missing periods are not zero-priced periods. Trial conversion and daily
-    # billing use their own existing flows instead of classic defaults.
-    if (
-        not tariff
-        or not tariff.is_active
-        or tariff.is_daily
-        or subscription.is_trial
-        or subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.PENDING.value)
-        or db_user.restriction_subscription
-        or period_days <= 0
-        or (tariff.period_prices or {}).get(str(period_days)) is None
-    ):
-        await db.rollback()
-        await callback.answer('Откройте продление подписки и выберите доступный тариф и период', show_alert=True)
-        return
-
-    pricing = await pricing_engine.calculate_renewal_price(db, subscription, period_days, user=db_user)
-    texts = get_texts(db_user.language)
-    price = pricing.final_total
-    if price > db_user.balance_kopeks:
-        missing = price - db_user.balance_kopeks
-        user_id = db_user.id
-        language = db_user.language
-        balance = db_user.balance_kopeks
-        cart = {
-            'cart_mode': 'extend',
-            'subscription_id': subscription.id,
-            'tariff_id': tariff.id,
-            'period_days': period_days,
-            'total_price': price,
-            'user_id': user_id,
-            'saved_cart': True,
-            'missing_amount': missing,
-            'return_to_cart': True,
-            'device_limit': subscription.device_limit,
-            'devices': subscription.device_limit,
-            'traffic_limit_gb': subscription.traffic_limit_gb,
-            'traffic_gb': subscription.traffic_limit_gb,
-            'countries': list(subscription.connected_squads or []),
-            'consume_promo_offer': pricing.promo_offer_discount > 0,
-        }
-        # Do not hold financial locks while contacting Redis or Telegram.
-        await db.rollback()
-        await user_cart_service.save_user_cart(user_id, cart)
-        message = texts.t(
-            'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
-            '⚠️ <b>Недостаточно средств</b>\n\nСтоимость услуги: {required}\n'
-            'На балансе: {balance}\nНе хватает: {missing}\n\nВыберите способ пополнения.',
-        ).format(
-            required=texts.format_price(price), balance=texts.format_price(balance), missing=texts.format_price(missing)
-        )
-        await callback.message.edit_text(
-            message,
-            reply_markup=get_insufficient_balance_keyboard(language, amount_kopeks=missing, has_saved_cart=True),
-            parse_mode='HTML',
-        )
-        await callback.answer()
-        return
-
-    try:
-        result = await SubscriptionRenewalService().finalize(
-            db, db_user, subscription, pricing, payment_method=PaymentMethod.BALANCE
-        )
-    except SubscriptionRenewalChargeError:
-        await callback.answer('⚠ Ошибка списания средств', show_alert=True)
-        return
-    await callback.message.edit_text(
-        '✅ Подписка успешно продлена!\n\n'
-        f'⏰ Добавлено: {period_days} дней\n'
-        f'Действует до: {format_local_datetime(result.subscription.end_date, "%d.%m.%Y %H:%M")}\n\n'
-        f'💰 Списано: {texts.format_price(price)}',
-        reply_markup=get_back_keyboard(db_user.language),
-    )
-    await callback.answer()

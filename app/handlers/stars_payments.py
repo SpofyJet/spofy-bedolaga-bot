@@ -475,7 +475,7 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
             invoice_payload=query.invoice_payload,
         )
 
-        allowed_prefixes = ('balance_', 'admin_stars_test_', 'simple_sub_', 'wheel_spin_', 'trial_', 'guest_purchase_')
+        allowed_prefixes = ('balance_', 'admin_stars_test_', 'wheel_spin_', 'trial_', 'guest_purchase_')
 
         if not query.invoice_payload or not query.invoice_payload.startswith(allowed_prefixes):
             logger.warning('Невалидный payload', invoice_payload=query.invoice_payload)
@@ -619,29 +619,6 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
             stars_invoice_message_id=None,
             stars_invoice_chat_id=None,
         )
-
-        if success and (payment.invoice_payload or '').startswith('simple_sub_'):
-            from app.database.crud.transaction import get_transaction_by_external_id
-            from app.database.models import PaymentMethod, TransactionType
-
-            transaction = await get_transaction_by_external_id(
-                db, payment.telegram_payment_charge_id, PaymentMethod.TELEGRAM_STARS
-            )
-            if transaction is not None and transaction.type == TransactionType.DEPOSIT.value:
-                # Подписку выдать не вышло — оплата ушла на баланс (сервис уже оповестил админов).
-                await _answer_credited_to_balance(
-                    message,
-                    user_language,
-                    texts,
-                    reason=texts.t('STARS_SUBSCRIPTION_NOT_ACTIVATED_REASON', '❌ Не удалось активировать подписку.'),
-                    stars_amount=payment.total_amount,
-                    amount_kopeks=abs(transaction.amount_kopeks),
-                )
-                return
-            if settings.is_notifications_enabled():
-                # Подписка активирована — сообщение «Подписка активирована» уже отправил
-                # сервис; «Баланс пополнен» здесь было бы неправдой.
-                return
 
         if success:
             rubles_amount = TelegramStarsService.calculate_rubles_from_stars(payment.total_amount)

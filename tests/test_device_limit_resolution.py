@@ -6,7 +6,6 @@ from app.utils.subscription_utils import (
     device_limit_needs_heal,
     resolve_hwid_device_limit,
     resolve_hwid_device_limit_for_payload,
-    resolve_simple_subscription_device_limit,
 )
 
 
@@ -137,37 +136,6 @@ def test_resolve_hwid_device_limit_for_payload_handles_zero(monkeypatch):
 
     assert resolve_hwid_device_limit(subscription) == 42
     assert resolve_hwid_device_limit_for_payload(subscription) == 42
-
-
-@pytest.mark.parametrize(
-    'enabled, simple_limit, disabled_amount, disabled_selection_amount, expected',
-    [
-        (True, 4, None, None, 4),
-        (False, 4, None, None, 4),
-        (False, 4, 0, 0, 0),
-        (False, 4, 7, 7, 7),
-    ],
-)
-def test_resolve_simple_subscription_device_limit(
-    monkeypatch,
-    enabled,
-    simple_limit,
-    disabled_amount,
-    disabled_selection_amount,
-    expected,
-):
-    monkeypatch.setattr(
-        subscription_utils,
-        'settings',
-        StubSettings(
-            enabled=enabled,
-            disabled_amount=disabled_amount,
-            simple_limit=simple_limit,
-            disabled_selection_amount=disabled_selection_amount,
-        ),
-    )
-
-    assert resolve_simple_subscription_device_limit() == expected
 
 
 @pytest.mark.parametrize(

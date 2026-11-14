@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.database.models import Transaction
 from app.handlers.subscription import tariff_purchase as telegram
-from tests.database.test_quick_tariff_renewal_postgres import checkout
+from tests.database.tariff_checkout import checkout
 
 
 pytestmark = pytest.mark.postgres

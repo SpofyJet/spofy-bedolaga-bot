@@ -2571,50 +2571,6 @@ class AdminNotificationService:
             )
             return False
 
-    async def send_bulk_ban_notification(
-        self,
-        admin_user_id: int,
-        successfully_banned: int,
-        not_found: int,
-        errors: int,
-        admin_name: str = 'Администратор',
-    ) -> bool:
-        """Отправляет уведомление о массовой блокировке пользователей"""
-        if not self._is_enabled():
-            return False
-
-        try:
-            message_lines = [
-                '🛑 <b>МАССОВАЯ БЛОКИРОВКА ПОЛЬЗОВАТЕЛЕЙ</b>',
-                '',
-                f'👮 <b>Администратор:</b> {html.escape(admin_name)}',
-                f'🆔 <b>ID администратора:</b> {admin_user_id}',
-                '',
-                '📊 <b>Результаты:</b>',
-                f'✅ Успешно заблокировано: {successfully_banned}',
-                f'❌ Не найдено: {not_found}',
-                f'💥 Ошибок: {errors}',
-            ]
-
-            total_processed = successfully_banned + not_found + errors
-            if total_processed > 0:
-                success_rate = (successfully_banned / total_processed) * 100
-                message_lines.append(f'📈 Успешность: {success_rate:.1f}%')
-
-            message_lines.extend(
-                [
-                    '',
-                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
-                ]
-            )
-
-            message = '\n'.join(message_lines)
-            return await self._send_message(message, category=NotificationCategory.PARTNERS)
-
-        except Exception as e:
-            logger.error('Ошибка отправки уведомления о массовой блокировке', error=e)
-            return False
-
     async def send_ticket_event_notification(
         self,
         text: str,

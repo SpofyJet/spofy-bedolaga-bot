@@ -274,16 +274,3 @@ def resolve_hwid_device_limit_for_payload(
             subscription_id=getattr(subscription, 'id', None),
         )
     return resolved_limit
-
-
-def resolve_simple_subscription_device_limit() -> int:
-    """Return the effective device limit for simple subscription flows."""
-
-    if settings.is_devices_selection_enabled():
-        return int(settings.SIMPLE_SUBSCRIPTION_DEVICE_LIMIT or 0)
-
-    forced_limit = settings.get_disabled_mode_device_limit()
-    if forced_limit is not None:
-        return forced_limit
-
-    return int(settings.SIMPLE_SUBSCRIPTION_DEVICE_LIMIT or 0)

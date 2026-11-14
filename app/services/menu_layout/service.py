@@ -775,11 +775,6 @@ class MenuLayoutService:
             if not settings.is_happ_download_button_enabled():
                 return False
 
-        # simple_subscription_enabled
-        if conditions.get('simple_subscription_enabled') is True:
-            if not settings.SIMPLE_SUBSCRIPTION_ENABLED:
-                return False
-
         # show_trial
         if conditions.get('show_trial') is True:
             if context.has_had_paid_subscription or context.has_active_subscription:

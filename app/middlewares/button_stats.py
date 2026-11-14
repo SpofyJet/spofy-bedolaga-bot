@@ -25,7 +25,6 @@ BUILTIN_CALLBACKS: set[str] = {
     'menu_balance',
     'menu_trial',
     'menu_buy',
-    'simple_subscription_purchase',
     'return_to_saved_cart',
     'menu_promocode',
     'menu_referrals',

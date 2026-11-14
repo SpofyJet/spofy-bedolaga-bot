@@ -19,7 +19,7 @@ from app.services.referral_withdrawal_service import referral_withdrawal_service
 from app.services.withdrawal_notifications import DEFAULT_BOT_REJECT_COMMENT, notify_user_about_withdrawal_status
 from app.utils.chat_scope import callback_from_group
 from app.utils.decorators import admin_required, error_handler
-from app.utils.timezone import format_local_datetime, local_day_bounds, local_day_start
+from app.utils.timezone import format_local_datetime
 
 
 logger = structlog.get_logger(__name__)
@@ -425,21 +425,6 @@ async def complete_withdrawal_request(callback: types.CallbackQuery, db_user: Us
         await view_withdrawal_request(callback, db_user, db)
     else:
         await callback.answer('❌ Ошибка выполнения', show_alert=True)
-
-
-def _get_period_dates(period: str) -> tuple[datetime, datetime]:
-    """Границы периода — календарные дни settings.TIMEZONE, как моменты в UTC."""
-    now = datetime.now(UTC)
-    today_start, tomorrow_start = local_day_bounds(now)
-
-    if period == 'yesterday':
-        return local_day_start(now, days_back=1), today_start
-    if period == 'week':
-        return local_day_start(now, days_back=7), tomorrow_start
-    if period == 'month':
-        return local_day_start(now, days_back=30), tomorrow_start
-    # 'today' и всё неизвестное — сегодня
-    return today_start, tomorrow_start
 
 
 # =============================================================================

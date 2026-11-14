@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -24,14 +23,6 @@ from app.database.models import PaymentMethod, TransactionType
 from app.external.telegram_stars import TelegramStarsService
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
-
-
-@dataclass(slots=True)
-class _SimpleSubscriptionPayload:
-    """Данные для простой подписки, извлечённые из payload звёздного платежа."""
-
-    subscription_id: int | None
-    period_days: int | None
 
 
 class TelegramStarsMixin:
@@ -140,22 +131,12 @@ class TelegramStarsMixin:
                     )
                 amount_kopeks = reconstructed_kopeks
 
-            simple_payload = self._parse_simple_subscription_payload(
-                payload,
-                user_id,
-            )
-
-            transaction_description = (
-                f'Оплата подписки через Telegram Stars ({stars_amount} ⭐)'
-                if simple_payload
-                else f'Пополнение через Telegram Stars ({stars_amount} ⭐)'
-            )
-            transaction_type = TransactionType.SUBSCRIPTION_PAYMENT if simple_payload else TransactionType.DEPOSIT
+            transaction_description = f'Пополнение через Telegram Stars ({stars_amount} ⭐)'
+            transaction_type = TransactionType.DEPOSIT
 
             # commit=False: транзакция флашится, но не коммитится здесь. Реальный
-            # коммит происходит атомарно вместе с целевым действием — активацией
-            # подписки (activate_pending_subscription) или зачислением баланса.
-            # Так нет окна, где транзакция записана, а подписка/баланс — нет.
+            # коммит происходит атомарно вместе с зачислением баланса —
+            # так нет окна, где транзакция записана, а баланс нет.
             transaction = await create_transaction(
                 db=db,
                 user_id=user_id,
@@ -173,17 +154,6 @@ class TelegramStarsMixin:
                 logger.error('Пользователь с ID не найден при обработке Stars платежа', user_id=user_id)
                 await db.rollback()
                 return False
-
-            if simple_payload:
-                return await self._finalize_simple_subscription_stars_payment(
-                    db=db,
-                    user=user,
-                    transaction=transaction,
-                    amount_kopeks=amount_kopeks,
-                    stars_amount=stars_amount,
-                    payload_data=simple_payload,
-                    telegram_payment_charge_id=telegram_payment_charge_id,
-                )
 
             return await self._finalize_stars_balance_topup(
                 db=db,
@@ -215,8 +185,7 @@ class TelegramStarsMixin:
           * ``balance_topup_{user_id}_{kopeks}_{ts}``            — cabinet/routes/balance.py
 
         Returns ``None`` for any payload that doesn't match a known
-        balance-topup shape (including subscription-payment payloads
-        that start with ``simple_sub_``). Callers should handle that
+        balance-topup shape. Callers should handle that
         case by falling back to the stars-to-rubles back-conversion.
         """
         if not payload or not payload.startswith('balance'):
@@ -267,333 +236,6 @@ class TelegramStarsMixin:
             return False
         tolerance = max(int(reconstructed_kopeks * 0.20), 100)
         return abs(payload_kopeks - reconstructed_kopeks) <= tolerance
-
-    @staticmethod
-    def _parse_simple_subscription_payload(
-        payload: str,
-        expected_user_id: int,
-    ) -> _SimpleSubscriptionPayload | None:
-        """Пытается извлечь параметры простой подписки из payload звёздного платежа."""
-
-        prefix = 'simple_sub_'
-        if not payload or not payload.startswith(prefix):
-            return None
-
-        tail = payload[len(prefix) :]
-        parts = tail.split('_', 2)
-        if len(parts) < 3:
-            logger.warning('Payload Stars simple subscription имеет некорректный формат', payload=payload)
-            return None
-
-        user_part, subscription_part, period_part = parts
-
-        try:
-            payload_user_id = int(user_part)
-        except ValueError:
-            logger.warning('Не удалось разобрать user_id в payload Stars simple subscription', payload=payload)
-            return None
-
-        if payload_user_id != expected_user_id:
-            logger.warning(
-                'Получен payload Stars simple subscription с чужим user_id: (ожидался)',
-                payload_user_id=payload_user_id,
-                expected_user_id=expected_user_id,
-            )
-            return None
-
-        try:
-            subscription_id = int(subscription_part)
-        except ValueError:
-            logger.warning('Не удалось разобрать subscription_id в payload Stars simple subscription', payload=payload)
-            return None
-
-        period_days: int | None = None
-        try:
-            period_days = int(period_part)
-        except ValueError:
-            logger.warning('Не удалось разобрать период в payload Stars simple subscription', payload=payload)
-
-        return _SimpleSubscriptionPayload(
-            subscription_id=subscription_id,
-            period_days=period_days,
-        )
-
-    async def _finalize_simple_subscription_stars_payment(
-        self,
-        db: AsyncSession,
-        user,
-        transaction,
-        amount_kopeks: int,
-        stars_amount: int,
-        payload_data: _SimpleSubscriptionPayload,
-        telegram_payment_charge_id: str,
-    ) -> bool:
-        """Активация простой подписки, оплаченной через Telegram Stars."""
-
-        period_days = payload_data.period_days or settings.SIMPLE_SUBSCRIPTION_PERIOD_DAYS
-        pending_subscription = None
-
-        if payload_data.subscription_id is not None:
-            try:
-                from sqlalchemy import select
-
-                from app.database.models import Subscription
-
-                result = await db.execute(
-                    select(Subscription).where(
-                        Subscription.id == payload_data.subscription_id,
-                        Subscription.user_id == user.id,
-                    )
-                )
-                pending_subscription = result.scalar_one_or_none()
-            except Exception as lookup_error:  # pragma: no cover - диагностический лог
-                logger.error(
-                    'Ошибка поиска pending подписки для пользователя',
-                    subscription_id=payload_data.subscription_id,
-                    user_id=user.id,
-                    lookup_error=lookup_error,
-                    exc_info=True,
-                )
-                pending_subscription = None
-
-            if not pending_subscription:
-                logger.error(
-                    'Не найдена pending подписка для пользователя',
-                    subscription_id=payload_data.subscription_id,
-                    user_id=user.id,
-                )
-                return await self._credit_unapplied_simple_subscription(
-                    db, user, stars_amount, telegram_payment_charge_id, payload_data, 'подписка для оплаты не найдена'
-                )
-
-            if payload_data.period_days is None:
-                start_point = pending_subscription.start_date or datetime.now(UTC)
-                end_point = pending_subscription.end_date or start_point
-                computed_days = max(1, (end_point - start_point).days or 0)
-                period_days = max(period_days, computed_days)
-
-        try:
-            from app.database.crud.subscription import activate_pending_subscription
-
-            subscription = await activate_pending_subscription(
-                db=db,
-                user_id=user.id,
-                period_days=period_days,
-                subscription_id=payload_data.subscription_id,
-            )
-        except Exception as error:
-            logger.error(
-                'Ошибка активации pending подписки для пользователя', user_id=user.id, error=error, exc_info=True
-            )
-            # Активация не удалась. Telegram successful_payment не повторяет, а звёзды
-            # уже списаны — откатываем незакоммиченную транзакцию оплаты (commit=False)
-            # и зачисляем оплату на баланс (идемпотентно по charge_id).
-            return await self._credit_unapplied_simple_subscription(
-                db, user, stars_amount, telegram_payment_charge_id, payload_data, 'ошибка активации подписки'
-            )
-
-        if not subscription:
-            logger.error('Не удалось активировать pending подписку пользователя', user_id=user.id)
-            return await self._credit_unapplied_simple_subscription(
-                db, user, stars_amount, telegram_payment_charge_id, payload_data, 'подписка не активировалась'
-            )
-
-        # Активация подписки уже закоммичена (activate_pending_subscription делает db.commit),
-        # и вместе с ней атомарно закоммичена транзакция (она создавалась с commit=False).
-        # Теперь шлём отложенные побочки: событие транзакции, автовыдачу промогруппы,
-        # запись в конкурс рефералов (для SUBSCRIPTION_PAYMENT).
-        await emit_transaction_side_effects(
-            db,
-            transaction,
-            amount_kopeks=amount_kopeks,
-            user_id=user.id,
-            type=TransactionType.SUBSCRIPTION_PAYMENT,
-            payment_method=PaymentMethod.TELEGRAM_STARS,
-            external_id=telegram_payment_charge_id,
-            is_completed=True,
-            description=transaction.description,
-        )
-
-        # Consume promo-offer discount (invoice was created with discounted price)
-        try:
-            from app.utils.promo_offer import consume_user_promo_offer
-
-            await consume_user_promo_offer(db, user.id)
-        except Exception as promo_error:
-            logger.warning('Ошибка потребления промо-оффера при Stars оплате', user_id=user.id, error=promo_error)
-
-        try:
-            from app.services.subscription_service import SubscriptionService
-
-            subscription_service = SubscriptionService()
-            remnawave_user = await subscription_service.create_remnawave_user(
-                db,
-                subscription,
-            )
-            if remnawave_user:
-                await db.refresh(subscription)
-        except Exception as sync_error:  # pragma: no cover - диагностический лог
-            logger.error(
-                'Ошибка синхронизации подписки с RemnaWave для пользователя',
-                user_id=user.id,
-                sync_error=sync_error,
-                exc_info=True,
-            )
-            from app.services.remnawave_retry_queue import remnawave_retry_queue
-
-            remnawave_retry_queue.enqueue(
-                subscription_id=subscription.id,
-                user_id=subscription.user_id,
-                action='create',
-            )
-
-        period_display = period_days
-        if not period_display and subscription.start_date and subscription.end_date:
-            period_display = max(1, (subscription.end_date - subscription.start_date).days or 0)
-        if not period_display:
-            period_display = settings.SIMPLE_SUBSCRIPTION_PERIOD_DAYS
-
-        # Отправляем уведомление только Telegram-пользователям (Stars требует Telegram)
-        if getattr(self, 'bot', None) and user.telegram_id and settings.is_notifications_enabled():
-            try:
-                from aiogram import types
-
-                from app.localization.texts import get_texts
-
-                get_texts(user.language)
-                traffic_limit = subscription.traffic_limit_gb or 0
-                traffic_label = 'Безлимит' if traffic_limit == 0 else f'{int(traffic_limit)} ГБ'
-
-                tariff_line = ''
-                if settings.is_multi_tariff_enabled() and subscription.tariff_id:
-                    try:
-                        from app.database.crud.tariff import get_tariff_by_id
-
-                        _t = await get_tariff_by_id(db, subscription.tariff_id)
-                        if _t:
-                            tariff_line = f'\n📦 Тариф: «{_t.name}»'
-                    except Exception:
-                        logger.warning('Ignored error in _finalize_simple_subscription_stars_payment', exc_info=True)
-                success_message = (
-                    '✅ <b>Подписка успешно активирована!</b>\n\n'
-                    f'📅 Период: {period_display} дней\n'
-                    f'📱 Устройства: {subscription.device_limit}\n'
-                    f'📊 Трафик: {traffic_label}\n'
-                    f'⭐ Оплата: {stars_amount} ⭐ ({settings.format_price(amount_kopeks)})'
-                    f'{tariff_line}\n\n'
-                    "🔗 Для подключения перейдите в раздел 'Моя подписка'"
-                )
-
-                keyboard = types.InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            types.InlineKeyboardButton(
-                                text='📱 Моя подписка',
-                                callback_data='menu_subscription',
-                            )
-                        ],
-                        [
-                            types.InlineKeyboardButton(
-                                text='🏠 В главное меню',
-                                callback_data='back_to_menu',
-                            )
-                        ],
-                    ]
-                )
-
-                await self.bot.send_message(
-                    chat_id=user.telegram_id,
-                    text=success_message,
-                    reply_markup=keyboard,
-                    parse_mode='HTML',
-                )
-                logger.info(
-                    '✅ Пользователь получил уведомление об оплате подписки через Stars', telegram_id=user.telegram_id
-                )
-            except Exception as error:  # pragma: no cover - диагностический лог
-                from aiogram.exceptions import TelegramForbiddenError, TelegramNetworkError, TelegramServerError
-
-                # Подписка уже активирована, уведомление — best-effort.
-                # Транзиентные сетевые ошибки не должны попадать в админ-чат.
-                if isinstance(error, (TelegramNetworkError, TelegramServerError, TelegramForbiddenError)):
-                    logger.warning(
-                        'Не доставлено Stars-уведомление о подписке (транзиент)',
-                        telegram_id=user.telegram_id,
-                        error=str(error)[:200],
-                        error_type=type(error).__name__,
-                    )
-                else:
-                    logger.error('Ошибка отправки уведомления о подписке через Stars', error=error, exc_info=True)
-
-        if getattr(self, 'bot', None):
-            try:
-                from app.services.admin_notification_service import AdminNotificationService
-
-                notification_service = AdminNotificationService(self.bot)
-                await notification_service.send_subscription_purchase_notification(
-                    db,
-                    user,
-                    subscription,
-                    transaction,
-                    period_display,
-                    was_trial_conversion=False,
-                    purchase_type='renewal' if user.has_had_paid_subscription else 'first_purchase',
-                )
-            except Exception as admin_error:  # pragma: no cover - диагностический лог
-                logger.error(
-                    'Ошибка уведомления администраторов о подписке через Stars', admin_error=admin_error, exc_info=True
-                )
-
-        # Начисляем реферальную комиссию за прямую покупку подписки
-        try:
-            from app.services.referral_service import process_referral_topup
-
-            await process_referral_topup(
-                db,
-                user.id,
-                amount_kopeks,
-                getattr(self, 'bot', None),
-            )
-        except Exception as ref_error:
-            logger.error('Ошибка реферального начисления при покупке подписки через Stars', ref_error=ref_error)
-
-        logger.info(
-            '✅ Обработан Stars платеж как покупка подписки',
-            user_id=user.id,
-            stars_amount=stars_amount,
-            format_price=settings.format_price(amount_kopeks),
-        )
-        return True
-
-    async def _credit_unapplied_simple_subscription(
-        self,
-        db: AsyncSession,
-        user,
-        stars_amount: int,
-        telegram_payment_charge_id: str,
-        payload_data: _SimpleSubscriptionPayload,
-        reason: str,
-    ) -> bool:
-        """Подписку по оплате Stars выдать не вышло — оплата уходит на баланс.
-
-        True — деньги на балансе (обработчик скажет об этом пользователю, найдя
-        DEPOSIT по charge_id), False — зачислить не удалось, админы оповещены.
-        """
-        user_id = user.id
-        await db.rollback()
-        user = await get_user_by_id(db, user_id)
-        if not user:
-            return False
-        credited = await credit_unapplied_stars_payment(
-            db,
-            user=user,
-            stars_amount=stars_amount,
-            telegram_payment_charge_id=telegram_payment_charge_id,
-            problem=f'Подписка за Stars не выдана ({reason})',
-            bot=getattr(self, 'bot', None),
-            details={'Подписка': f'#{payload_data.subscription_id}', 'Период': payload_data.period_days},
-        )
-        return credited is not None
 
     async def _finalize_stars_balance_topup(
         self,

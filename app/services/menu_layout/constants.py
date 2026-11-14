@@ -41,12 +41,6 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
             'max_per_row': 2,
         },
         {
-            'id': 'simple_subscription_row',
-            'buttons': ['simple_subscription'],
-            'conditions': {'simple_subscription_enabled': True},
-            'max_per_row': 1,
-        },
-        {
             'id': 'resume_row',
             'buttons': ['resume_checkout'],
             'conditions': {'has_saved_cart': True},
@@ -154,16 +148,6 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
             'enabled': True,
             'visibility': 'all',
             'conditions': {'show_buy': True},
-            'dynamic_text': False,
-        },
-        'simple_subscription': {
-            'type': 'builtin',
-            'builtin_id': 'simple_subscription',
-            'text': {'ru': '💳 Простая подписка', 'en': '💳 Simple subscription'},
-            'action': 'simple_subscription_purchase',
-            'enabled': True,
-            'visibility': 'all',
-            'conditions': None,
             'dynamic_text': False,
         },
         'resume_checkout': {
@@ -300,13 +284,6 @@ BUILTIN_BUTTONS_INFO: list[dict[str, Any]] = [
         'default_text': {'ru': '🛒 Купить подписку', 'en': '🛒 Buy subscription'},
         'callback_data': 'menu_buy',
         'default_conditions': {'show_buy': True},
-        'supports_dynamic_text': False,
-    },
-    {
-        'id': 'simple_subscription',
-        'default_text': {'ru': '💳 Простая подписка', 'en': '💳 Simple subscription'},
-        'callback_data': 'simple_subscription_purchase',
-        'default_conditions': {'simple_subscription_enabled': True},
         'supports_dynamic_text': False,
     },
     {

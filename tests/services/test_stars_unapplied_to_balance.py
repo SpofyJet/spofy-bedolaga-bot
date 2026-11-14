@@ -171,29 +171,6 @@ async def test_wheel_daily_limit_credit_is_deposit_not_refund(monkeypatch):
     assert 'лимит спинов' in message.answer.await_args.args[0]
 
 
-@pytest.mark.asyncio
-async def test_simple_subscription_not_activated_goes_to_balance(monkeypatch):
-    """Раньше: откат «Telegram повторит» — он не повторяет, звёзды терялись."""
-    from app.services.payment_service import PaymentService
-
-    with ExitStack() as stack:
-        alert = _settings_patches(stack)
-        async with memory_session(monkeypatch, TABLES) as db:
-            await _user(db)
-            service = PaymentService(None)
-            # Подписки #77 нет — выдать нечего.
-            result = await service.process_stars_payment(
-                db=db, user_id=1, stars_amount=100, payload='simple_sub_1_77_30', telegram_payment_charge_id=CHARGE
-            )
-            rows = await _transactions(db)
-            balance = (await db.get(User, 1)).balance_kopeks
-
-    assert result is True
-    assert balance == 15000
-    assert [(r.type, r.external_id) for r in rows] == [(TransactionType.DEPOSIT.value, CHARGE)]
-    alert.assert_awaited_once()
-
-
 def _successful_payment_message(payload: str):
     return SimpleNamespace(
         successful_payment=SimpleNamespace(
@@ -223,24 +200,3 @@ async def _run_handler(message, transaction, *, notifications: bool = True):
             )
         )
         await stars_payments.handle_successful_payment(message, AsyncMock(), state)
-
-
-@pytest.mark.asyncio
-async def test_handler_tells_user_subscription_payment_went_to_balance():
-    message = _successful_payment_message('simple_sub_1_77_30')
-    await _run_handler(message, SimpleNamespace(type=TransactionType.DEPOSIT.value, amount_kopeks=15000))
-
-    message.answer.assert_awaited_once()
-    text = message.answer.await_args.args[0]
-    assert 'Не удалось активировать подписку' in text
-    assert 'зачислена на баланс' in text
-    assert _callbacks(message.answer.await_args.kwargs['reply_markup']) == {'menu_balance', 'menu_support'}
-
-
-@pytest.mark.asyncio
-async def test_handler_does_not_claim_balance_topup_for_activated_subscription():
-    message = _successful_payment_message('simple_sub_1_77_30')
-    await _run_handler(message, SimpleNamespace(type=TransactionType.SUBSCRIPTION_PAYMENT.value, amount_kopeks=-15000))
-
-    # «Подписка активирована» шлёт сервис; «Баланс пополнен» здесь было бы неправдой.
-    message.answer.assert_not_awaited()

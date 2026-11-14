@@ -109,7 +109,6 @@ _NO_TARIFF_ALLOWED_COUNT = {'app/services/pricing_engine.py': 1}
 _NO_TARIFF_ALLOWED = {
     'app/cabinet/routes/gift.py',
     'app/handlers/menu.py',
-    'app/handlers/simple_subscription.py',
     'app/handlers/subscription/common.py',
     'app/handlers/subscription/purchase.py',
     'app/services/subscription_auto_purchase_service.py',  # только суточный тариф

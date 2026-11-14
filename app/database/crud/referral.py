@@ -3,7 +3,6 @@ from datetime import UTC, datetime, timedelta
 import structlog
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.database.models import (
     AdvertisingCampaignRegistration,
@@ -114,24 +113,6 @@ async def get_commission_payment_count(db: AsyncSession, referrer_id: int, refer
         )
     )
     return result.scalar() or 0
-
-
-async def get_referral_earnings_by_user(
-    db: AsyncSession, user_id: int, limit: int = 50, offset: int = 0
-) -> list[ReferralEarning]:
-    result = await db.execute(
-        select(ReferralEarning)
-        .options(
-            selectinload(ReferralEarning.referral),
-            selectinload(ReferralEarning.referral_transaction),
-            selectinload(ReferralEarning.campaign),
-        )
-        .where(ReferralEarning.user_id == user_id)
-        .order_by(ReferralEarning.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
-    return result.scalars().all()
 
 
 async def get_referral_statistics(db: AsyncSession) -> dict:
@@ -301,142 +282,6 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
         'by_level': by_level,
         'top_referrers': top_referrers,
     }
-
-
-async def get_top_referrers_by_period(
-    db: AsyncSession,
-    period: str = 'week',  # "week" или "month"
-    sort_by: str = 'earnings',  # "earnings" или "invited"
-    limit: int = 20,
-) -> list:
-    """
-    Получает топ рефереров за период.
-
-    Args:
-        period: "week" (7 дней) или "month" (30 дней)
-        sort_by: "earnings" (по заработку) или "invited" (по приглашённым)
-        limit: количество записей
-
-    Returns:
-        Список словарей с данными рефереров
-    """
-    now = datetime.now(UTC)
-    if period == 'week':
-        start_date = now - timedelta(days=7)
-    else:  # month
-        start_date = now - timedelta(days=30)
-
-    if sort_by == 'invited':
-        # Топ по количеству приглашённых за период
-        referrals_result = await db.execute(
-            select(User.referred_by_id.label('referrer_id'), func.count(User.id).label('invited_count'))
-            .where(and_(User.referred_by_id.isnot(None), User.created_at >= start_date))
-            .group_by(User.referred_by_id)
-            .order_by(func.count(User.id).desc())
-            .limit(limit)
-        )
-
-        top_data = []
-        for row in referrals_result:
-            # Получаем заработок за период для этого реферера
-            earnings_result = await db.execute(
-                select(
-                    func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
-                    func.coalesce(func.sum(ReferralEarning.days_granted), 0),
-                ).where(
-                    and_(
-                        ReferralEarning.user_id == row.referrer_id,
-                        ReferralEarning.created_at >= start_date,
-                        not_referee_directed(),
-                    )
-                )
-            )
-            earnings, earned_days = earnings_result.one()
-
-            top_data.append(
-                {
-                    'referrer_id': row.referrer_id,
-                    'invited_count': row.invited_count,
-                    'earnings_kopeks': earnings or 0,
-                    'earnings_days': int(earned_days or 0),
-                }
-            )
-    else:
-        # Топ по заработку за период
-        # Собираем заработки из ReferralEarning
-        referral_earnings_result = await db.execute(
-            select(
-                ReferralEarning.user_id.label('referrer_id'),
-                func.sum(ReferralEarning.amount_kopeks).label('ref_earnings'),
-                func.sum(ReferralEarning.days_granted).label('ref_days'),
-            )
-            .where(ReferralEarning.created_at >= start_date, not_referee_directed())
-            .group_by(ReferralEarning.user_id)
-        )
-        referral_earnings = {
-            row.referrer_id: (row.ref_earnings or 0, int(row.ref_days or 0)) for row in referral_earnings_result
-        }
-
-        # Сортируем и берём топ. Дни участвуют в сортировке: иначе реферер
-        # «дневной» программы стоит с нулём и обрезается лимитом до того, как
-        # попадёт в список, каким бы он ни был.
-        sorted_referrers = sorted(referral_earnings.items(), key=lambda x: x[1], reverse=True)[:limit]
-
-        top_data = []
-        for referrer_id, (earnings, earned_days) in sorted_referrers:
-            # Получаем количество приглашённых за период
-            invited_result = await db.execute(
-                select(func.count(User.id)).where(
-                    and_(User.referred_by_id == referrer_id, User.created_at >= start_date)
-                )
-            )
-            invited_count = invited_result.scalar() or 0
-
-            top_data.append(
-                {
-                    'referrer_id': referrer_id,
-                    'invited_count': invited_count,
-                    'earnings_kopeks': earnings,
-                    'earnings_days': earned_days,
-                }
-            )
-
-    # Добавляем информацию о пользователях
-    result = []
-    for data in top_data:
-        user_result = await db.execute(
-            select(User.id, User.username, User.first_name, User.last_name, User.telegram_id).where(
-                User.id == data['referrer_id']
-            )
-        )
-        user = user_result.first()
-
-        if user:
-            display_name = ''
-            if user.first_name:
-                display_name = user.first_name
-                if user.last_name:
-                    display_name += f' {user.last_name}'
-            elif user.username:
-                display_name = f'@{user.username}'
-            elif user.telegram_id:
-                display_name = f'ID{user.telegram_id}'
-            else:
-                display_name = user.email or f'#{user.id}'
-
-            result.append(
-                {
-                    'user_id': user.id,
-                    'telegram_id': user.telegram_id,  # Can be None for email users
-                    'username': user.username,
-                    'display_name': display_name,
-                    'invited_count': data['invited_count'],
-                    'earnings_kopeks': data['earnings_kopeks'],
-                    'earnings_days': data.get('earnings_days', 0),
-                }
-            )
-
-    return result
 
 
 async def get_user_referral_stats(db: AsyncSession, user_id: int) -> dict:

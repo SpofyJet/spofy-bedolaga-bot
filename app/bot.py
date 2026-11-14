@@ -12,7 +12,6 @@ from app.handlers import (
     referral,
     referral_settings,
     server_status,
-    simple_subscription,
     start,
     subscription,
     support,
@@ -175,7 +174,6 @@ async def setup_bot(memory: MemoryStorage | None = None) -> tuple[Bot, Dispatche
     register_gift_activation_handlers(dp)
     common.register_handlers(dp)
     register_stars_handlers(dp)
-    simple_subscription.register_simple_subscription_handlers(dp)
     logger.info('⭐ Зарегистрированы обработчики Telegram Stars платежей')
     logger.info('⚡ Зарегистрированы обработчики простой покупки')
     logger.info('⚡ Зарегистрированы обработчики простой подписки')

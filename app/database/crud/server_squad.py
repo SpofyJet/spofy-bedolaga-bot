@@ -177,58 +177,6 @@ async def get_effective_tariff_squad_uuids(
     return [squad.squad_uuid for squad in available if squad.squad_uuid]
 
 
-async def get_active_server_squads(db: AsyncSession) -> list[ServerSquad]:
-    """Возвращает список активных серверов, доступных для подключения."""
-
-    squads = await get_available_server_squads(db)
-
-    if not squads:
-        return []
-
-    eligible: list[ServerSquad] = []
-
-    for squad in squads:
-        max_users = squad.max_users
-        current_users = squad.current_users or 0
-
-        if max_users is not None and current_users >= max_users:
-            continue
-
-        eligible.append(squad)
-
-    if eligible:
-        return eligible
-
-    return squads
-
-
-async def choose_random_active_server_squad(
-    db: AsyncSession,
-) -> ServerSquad | None:
-    """Возвращает случайный активный сервер."""
-
-    squads = await get_active_server_squads(db)
-
-    if not squads:
-        return None
-
-    return random.choice(squads)
-
-
-async def get_random_active_squad_uuid(
-    db: AsyncSession,
-    fallback_uuid: str | None = None,
-) -> str | None:
-    """Возвращает UUID случайного активного сервера или запасной UUID."""
-
-    squad = await choose_random_active_server_squad(db)
-
-    if squad:
-        return squad.squad_uuid
-
-    return fallback_uuid
-
-
 async def update_server_squad_promo_groups(
     db: AsyncSession, server_id: int, promo_group_ids: Iterable[int]
 ) -> ServerSquad | None:

@@ -17,7 +17,6 @@ class SubscriptionStates(StatesGroup):
     cart_saved_for_topup = State()
 
     # Состояния для простой подписки
-    waiting_for_simple_subscription_payment_method = State()
 
     # Состояния для кастомных дней/трафика при покупке тарифа
     selecting_custom_days = State()

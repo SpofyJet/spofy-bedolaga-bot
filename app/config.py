@@ -534,13 +534,6 @@ class Settings(BaseSettings):
     SUBSCRIPTION_REVOKE_ENABLED: bool = True
     SUBSCRIPTION_REVOKE_COOLDOWN_SECONDS: int = 900  # 15 minutes
 
-    # Настройки простой покупки
-    SIMPLE_SUBSCRIPTION_ENABLED: bool = False
-    SIMPLE_SUBSCRIPTION_PERIOD_DAYS: int = 30
-    SIMPLE_SUBSCRIPTION_DEVICE_LIMIT: int = 1
-    SIMPLE_SUBSCRIPTION_TRAFFIC_GB: int = 0  # 0 означает безлимит
-    SIMPLE_SUBSCRIPTION_SQUAD_UUID: str | None = None
-
     # Настройки конструктора меню (API)
     MENU_LAYOUT_ENABLED: bool = False  # Включить управление меню через API
 
@@ -1815,9 +1808,6 @@ class Settings(BaseSettings):
             logger.warning('Некорректное значение ADMIN_REPORTS_SEND_TIME', send_time_value=value)
             return None
 
-    def kopeks_to_rubles(self, kopeks: int) -> float:
-        return kopeks / 100
-
     def rubles_to_kopeks(self, rubles: float | str | Decimal) -> int:
         """Переводит рубли в копейки без двоичной ошибки: ``int(19.99 * 100)`` дал бы 1998."""
         amount = Decimal(str(rubles))
@@ -2473,14 +2463,6 @@ class Settings(BaseSettings):
 
         # Формируем финальную строку по шаблону
         return self.PAYMENT_BALANCE_TEMPLATE.format(service_name=self.PAYMENT_SERVICE_NAME, description=description)
-
-    def get_subscription_payment_description(self, period_days: int, amount_kopeks: int) -> str:
-        from app.utils.lifetime import for_period_ru
-
-        return self.PAYMENT_SUBSCRIPTION_TEMPLATE.format(
-            service_name=self.PAYMENT_SERVICE_NAME,
-            description=f'{self.PAYMENT_SUBSCRIPTION_DESCRIPTION} {for_period_ru(period_days)}',
-        )
 
     def get_stars_rate(self) -> float:
         return self.TELEGRAM_STARS_RATE_RUB

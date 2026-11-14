@@ -889,13 +889,6 @@ def get_main_menu_keyboard(
         and not getattr(current_subscription, 'is_trial', False)
         and getattr(current_subscription, 'is_active', False)
     )
-    simple_purchase_button = None
-    if settings.SIMPLE_SUBSCRIPTION_ENABLED:
-        simple_purchase_button = InlineKeyboardButton(
-            text=texts.MENU_SIMPLE_SUBSCRIPTION,
-            callback_data='simple_subscription_purchase',
-        )
-
     subscription_buttons: list[InlineKeyboardButton] = []
 
     if show_trial:
@@ -917,12 +910,6 @@ def get_main_menu_keyboard(
     defer_balance = bool(subscription_buttons)
     if not defer_balance and show_balance_button:
         keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data='menu_balance')])
-
-    if simple_purchase_button:
-        if defer_balance:
-            keyboard.append([simple_purchase_button])
-        else:
-            paired_buttons.append(simple_purchase_button)
 
     if custom_buttons:
         for button in custom_buttons:
