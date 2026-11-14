@@ -299,5 +299,6 @@ def test_every_addon_cart_in_code_carries_topup_intent():
             if _literal(keys.get('return_to_cart')) is not True:
                 missing.append(f'{path.relative_to(APP_ROOT.parent)}:{node.lineno}')
 
-    assert total >= 8, f'сторож видит слишком мало корзин докупки: {total}'
+    # 7 с 12.11.2026: ушла корзина POST /cabinet/subscription/devices (legacy), его никто не зовёт.
+    assert total >= 7, f'сторож видит слишком мало корзин докупки: {total}'
     assert not missing, f"корзины докупки без 'return_to_cart': True — автопокупка их пропустит: {missing}"
