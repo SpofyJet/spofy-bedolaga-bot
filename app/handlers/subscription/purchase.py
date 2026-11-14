@@ -65,12 +65,6 @@ from .autopay import (
     toggle_autopay,
 )
 from .common import update_traffic_prices
-from .countries import (
-    _should_show_countries_management,
-    apply_countries_changes,
-    handle_add_countries,
-    handle_manage_country,
-)
 from .devices import (
     confirm_add_devices,
     confirm_change_devices,
@@ -1281,13 +1275,10 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
         devices_limit=devices_limit_display,
     )
 
-    show_countries = await _should_show_countries_management(db_user)
-
     await callback.message.edit_text(
         settings_text,
         reply_markup=get_updated_subscription_settings_keyboard(
             db_user.language,
-            show_countries,
             tariff=tariff,
             subscription=subscription,
             is_legacy_subscription=_legacy_subscription(subscription),
@@ -1601,8 +1592,6 @@ def register_handlers(dp: Dispatcher):
 
     # Хендлеры платного триала
 
-    dp.callback_query.register(handle_add_countries, F.data == 'subscription_add_countries')
-
     dp.callback_query.register(handle_switch_traffic, F.data == 'subscription_switch_traffic')
 
     dp.callback_query.register(confirm_switch_traffic, F.data.startswith('switch_traffic_'))
@@ -1659,8 +1648,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_subscription_cancel, F.data == 'subscription_cancel')
     dp.callback_query.register(set_autopay_days, F.data.startswith('autopay_days_'))
     dp.callback_query.register(set_autopay_period, F.data.startswith('autopay_period_'))
-    dp.callback_query.register(handle_manage_country, F.data.startswith('country_manage_'))
-    dp.callback_query.register(apply_countries_changes, F.data == 'countries_apply')
     dp.callback_query.register(claim_discount_offer, F.data.startswith('claim_discount_'))
     dp.callback_query.register(
         handle_promo_offer_close,

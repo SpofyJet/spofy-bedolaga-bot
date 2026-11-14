@@ -2294,83 +2294,6 @@ def get_reset_traffic_confirm_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_manage_countries_keyboard(
-    countries: list[dict],
-    selected: list[str],
-    current_subscription_countries: list[str],
-    language: str = DEFAULT_LANGUAGE,
-    subscription_end_date: datetime = None,
-    discount_percent: int = 0,
-    sub_id: int | None = None,
-) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    back_cb = f'sm:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'menu_subscription'
-
-    # Считаем по дням (как в кабинете и подтверждении)
-    if subscription_end_date:
-        now = datetime.now(UTC)
-        days_left = max(1, math.ceil((subscription_end_date - now).total_seconds() / 86400))
-        price_multiplier = days_left / 30
-        logger.info(
-            '🔍 Расчет для управления странами: осталось дней до',
-            days_left=days_left,
-            subscription_end_date=subscription_end_date,
-        )
-    else:
-        price_multiplier = 1
-        days_left = 30
-
-    buttons = []
-    total_cost = 0
-
-    for country in countries:
-        if not country.get('is_available', True):
-            continue
-
-        uuid = country['uuid']
-        name = country['name']
-        price_per_month = country['price_kopeks']
-
-        discounted_per_month, discount_per_month = apply_percentage_discount(
-            price_per_month,
-            discount_percent,
-        )
-
-        if uuid in current_subscription_countries:
-            if uuid in selected:
-                icon = '✅'
-            else:
-                icon = '➖'
-        elif uuid in selected:
-            icon = '➕'
-            total_cost += int(discounted_per_month * price_multiplier)
-        else:
-            icon = '⚪'
-
-        if uuid not in current_subscription_countries and uuid in selected:
-            total_price = int(discounted_per_month * price_multiplier)
-            total_price = max(100, total_price) if total_price > 0 else 0
-            # n6-П9: детальный расчёт не помещается на кнопке (обрезается на
-            # мобильном) — показываем только итоговую доплату
-            price_text = f' (+{texts.format_price(total_price)})' if total_price > 0 else ''
-            display_name = f'{icon} {name}{price_text}'
-        else:
-            display_name = f'{icon} {name}'
-
-        buttons.append([InlineKeyboardButton(text=display_name, callback_data=f'country_manage_{uuid}')])
-
-    if total_cost > 0:
-        apply_text = f'✅ Применить (+{texts.format_price(total_cost)})'
-    else:
-        apply_text = '✅ Применить изменения'
-
-    buttons.append([InlineKeyboardButton(text=apply_text, callback_data='countries_apply')])
-
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)])
-
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-
 def get_device_selection_keyboard(
     language: str = DEFAULT_LANGUAGE,
     platforms: list[dict] | None = None,
@@ -2707,7 +2630,6 @@ def get_devices_management_keyboard(
 
 def get_updated_subscription_settings_keyboard(
     language: str = DEFAULT_LANGUAGE,
-    show_countries_management: bool = True,
     tariff=None,  # Тариф подписки (если есть - ограничиваем настройки)
     subscription=None,  # Подписка (для проверки суточной паузы)
     is_legacy_subscription: bool = False,  # Старая подписка: без тарифа при включённых тарифах
@@ -2719,23 +2641,13 @@ def get_updated_subscription_settings_keyboard(
 
     # Если подписка на тарифе - отключаем страны, модем, трафик
     has_tariff = tariff is not None
-    # Классические докупки (страны, пакеты трафика, устройства по PRICE_PER_DEVICE)
+    # Классические докупки (пакеты трафика, устройства по PRICE_PER_DEVICE)
     # доступны только настоящей классической подписке. У старой подписки при
     # включённых тарифах тарифа нет, но и классических цен для неё нет —
     # единственный путь: перейти на тариф.
     classic_addons_allowed = not has_tariff and not is_legacy_subscription
 
     # Для суточных тарифов кнопка паузы теперь в главном меню подписки
-
-    if show_countries_management and classic_addons_allowed:
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('ADD_COUNTRIES_BUTTON', '🌐 Добавить страны'),
-                    callback_data='subscription_add_countries',
-                )
-            ]
-        )
 
     if settings.is_traffic_selectable() and classic_addons_allowed:
         keyboard.append(

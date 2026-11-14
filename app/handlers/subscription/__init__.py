@@ -28,12 +28,6 @@ from .common import (
     resolve_button_url,
     update_traffic_prices,
 )
-from .countries import (
-    apply_countries_changes,
-    handle_add_countries,
-    handle_add_country_to_subscription,
-    handle_manage_country,
-)
 from .devices import (
     confirm_add_devices,
     confirm_change_devices,
@@ -116,7 +110,6 @@ from .traffic import (
 __all__ = [
     'activate_trial',
     'add_traffic',
-    'apply_countries_changes',
     'build_redirect_link',
     'claim_discount_offer',
     'clear_saved_cart',
@@ -137,8 +130,6 @@ __all__ = [
     'get_platforms_list',
     'get_servers_display_names',
     'get_traffic_switch_keyboard',
-    'handle_add_countries',
-    'handle_add_country_to_subscription',
     'handle_add_traffic',
     'handle_all_devices_reset_from_management',
     'handle_app_selection',
@@ -163,7 +154,6 @@ __all__ = [
     'handle_happ_download_close',
     'handle_happ_download_platform_choice',
     'handle_happ_download_request',
-    'handle_manage_country',
     'handle_no_traffic_packages',
     'handle_open_subscription_link',
     'handle_promo_offer_close',

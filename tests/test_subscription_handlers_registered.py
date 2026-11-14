@@ -10,8 +10,6 @@ REQUIRED = {
     'handle_subscription_cancel',
     'set_autopay_days',
     'set_autopay_period',
-    'handle_manage_country',
-    'apply_countries_changes',
     'claim_discount_offer',
     'handle_promo_offer_close',
     'handle_happ_download_request',
