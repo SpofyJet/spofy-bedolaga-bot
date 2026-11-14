@@ -980,7 +980,6 @@ def get_info_menu_keyboard(
     show_faq: bool = False,
     show_promo_groups: bool = False,
     show_rules: bool = True,
-    custom_pages: list[tuple[int, str]] | None = None,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
@@ -1014,16 +1013,6 @@ def get_info_menu_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('MENU_LEGAL', '📄 Правила и документы'),
                     callback_data='menu_legal',
-                )
-            ]
-        )
-
-    for page_id, page_title in custom_pages or []:
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=page_title,
-                    callback_data=f'info_page:{page_id}:1',
                 )
             ]
         )

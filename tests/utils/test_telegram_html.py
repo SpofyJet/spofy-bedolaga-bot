@@ -2,7 +2,6 @@ import re
 
 from app.utils.telegram_html import (
     html_to_telegram,
-    info_page_faq_to_telegram,
     split_telegram_text,
 )
 
@@ -129,17 +128,6 @@ def test_hard_split_backs_off_incomplete_entity():
     chunks = split_telegram_text(text, max_length=100)
     assert chunks[0] == 'x' * 97
     assert chunks[1].startswith('&amp;')
-
-
-def test_faq_content_rendered_as_question_blocks():
-    raw = '[{"q": "Вопрос?", "a": "<p>Ответ <b>жирный</b></p>"}]'
-    rendered = info_page_faq_to_telegram(raw)
-    assert rendered == '<b>Вопрос?</b>\nОтвет <b>жирный</b>'
-
-
-def test_faq_content_invalid_json_returns_empty():
-    assert info_page_faq_to_telegram('not json') == ''
-    assert info_page_faq_to_telegram('') == ''
 
 
 def test_empty_heading_and_paragraphs_leave_no_empty_tags():

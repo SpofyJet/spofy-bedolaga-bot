@@ -14,7 +14,6 @@ from .admin_channels import router as admin_channels_router
 from .admin_email_queue import router as admin_email_queue_router
 from .admin_email_templates import router as admin_email_templates_router
 from .admin_grace_access import router as admin_grace_access_router
-from .admin_info_pages import router as admin_info_pages_router
 from .admin_legal_pages import router as admin_legal_pages_router
 from .admin_menu_layout import router as admin_menu_layout_router
 from .admin_partners import router as admin_partners_router
@@ -45,7 +44,6 @@ from .balance import router as balance_router
 from .branding import router as branding_router
 from .gift import router as gift_router
 from .info import router as info_router
-from .info_pages import router as info_pages_router
 from .landing import router as landing_router
 from .media import router as media_router
 from .notifications import router as notifications_router
@@ -105,7 +103,6 @@ router.include_router(branding_router)
 router.include_router(landing_router)
 router.include_router(media_router)
 router.include_router(reminders_router)
-router.include_router(info_pages_router)
 
 # Wheel routes
 router.include_router(wheel_router)
@@ -150,7 +147,6 @@ router.include_router(admin_roles_router)
 router.include_router(admin_policies_router)
 router.include_router(admin_audit_log_router)
 router.include_router(admin_system_errors_router)
-router.include_router(admin_info_pages_router)
 router.include_router(admin_legal_pages_router)
 
 # WebSocket route

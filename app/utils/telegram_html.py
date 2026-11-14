@@ -1,5 +1,4 @@
 import html as html_module
-import json
 import re
 from html.parser import HTMLParser
 
@@ -144,27 +143,6 @@ def html_to_telegram(raw_html: str | None) -> str:
     renderer.feed(raw_html)
     renderer.close()
     return renderer.result()
-
-
-def info_page_faq_to_telegram(raw_content: str | None) -> str:
-    if not raw_content:
-        return ''
-    try:
-        items = json.loads(raw_content)
-    except (TypeError, ValueError):
-        return ''
-    if not isinstance(items, list):
-        return ''
-    blocks: list[str] = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        question = html_module.escape(str(item.get('q') or '').strip())
-        answer = html_to_telegram(str(item.get('a') or ''))
-        block = f'<b>{question}</b>\n{answer}'.strip() if question else answer
-        if block:
-            blocks.append(block)
-    return '\n\n'.join(blocks)
 
 
 def stored_html_to_telegram_pages(raw_content: str | None, *, max_length: int = 3500) -> list[str]:

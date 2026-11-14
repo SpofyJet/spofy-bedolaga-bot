@@ -3,12 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.faq import (
-    create_faq_page,
     get_faq_page_by_id,
     get_faq_pages,
     get_faq_setting,
     set_faq_enabled,
-    update_faq_page,
 )
 from app.database.models import FaqPage, FaqSetting
 
@@ -27,26 +25,6 @@ class FaqService:
     @staticmethod
     def normalize_language(language: str) -> str:
         return FaqService._normalize_language(language)
-
-    @classmethod
-    async def get_setting(
-        cls,
-        db: AsyncSession,
-        language: str,
-        *,
-        fallback: bool = True,
-    ) -> FaqSetting | None:
-        lang = cls._normalize_language(language)
-        setting = await get_faq_setting(db, lang)
-
-        if setting or not fallback:
-            return setting
-
-        default_lang = cls._normalize_language(settings.DEFAULT_LANGUAGE)
-        if lang != default_lang:
-            return await get_faq_setting(db, default_lang)
-
-        return setting
 
     @classmethod
     async def is_enabled(cls, db: AsyncSession, language: str) -> bool:
@@ -143,54 +121,6 @@ class FaqService:
             return page
 
         return None
-
-    @classmethod
-    async def create_page(
-        cls,
-        db: AsyncSession,
-        *,
-        language: str,
-        title: str,
-        content: str,
-        display_order: int | None = None,
-        is_active: bool | None = None,
-    ) -> FaqPage:
-        lang = cls._normalize_language(language)
-        is_active_value = True if is_active is None else bool(is_active)
-        page = await create_faq_page(
-            db,
-            language=lang,
-            title=title,
-            content=content,
-            display_order=display_order,
-            is_active=is_active_value,
-        )
-
-        setting = await get_faq_setting(db, lang)
-        if not setting:
-            await set_faq_enabled(db, lang, True)
-
-        return page
-
-    @classmethod
-    async def update_page(
-        cls,
-        db: AsyncSession,
-        page: FaqPage,
-        *,
-        title: str | None = None,
-        content: str | None = None,
-        display_order: int | None = None,
-        is_active: bool | None = None,
-    ) -> FaqPage:
-        return await update_faq_page(
-            db,
-            page,
-            title=title,
-            content=content,
-            display_order=display_order,
-            is_active=is_active,
-        )
 
     @staticmethod
     def split_content_into_pages(
