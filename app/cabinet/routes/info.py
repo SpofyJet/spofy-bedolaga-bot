@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.rules import get_current_rules_content, get_rules_by_language
-from app.database.models import User
 from app.services import legal_consent_service
 from app.services.faq_service import FaqService
 from app.services.privacy_policy_service import PrivacyPolicyService
@@ -15,7 +14,7 @@ from app.services.public_offer_service import PublicOfferService
 from app.services.recurrent_payments_service import RecurrentPaymentsService
 from app.utils.display_mode import is_visible_in_web
 
-from ..dependencies import get_cabinet_db, get_current_cabinet_user
+from ..dependencies import get_cabinet_db
 
 
 logger = structlog.get_logger(__name__)
@@ -98,16 +97,6 @@ class RecurrentPaymentsResponse(BaseModel):
     updated_at: str | None = None
 
 
-class ServiceInfoResponse(BaseModel):
-    """General service info."""
-
-    name: str
-    description: str | None = None
-    support_email: str | None = None
-    support_telegram: str | None = None
-    website: str | None = None
-
-
 class SupportConfigResponse(BaseModel):
     """Support/tickets configuration for miniapp."""
 
@@ -162,41 +151,6 @@ async def get_faq_pages(
         )
         for page in pages
     ]
-
-
-@router.get('/faq/{page_id}', response_model=FaqPageResponse)
-async def get_faq_page(
-    page_id: int,
-    language: str = Query('ru', min_length=2, max_length=10),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Get a specific FAQ page by ID."""
-    if not is_visible_in_web(settings.FAQ_DISPLAY_MODE):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='FAQ is not available',
-        )
-    requested_lang = FaqService.normalize_language(language)
-    page = await FaqService.get_page(
-        db,
-        page_id,
-        requested_lang,
-        include_inactive=False,
-        fallback=True,
-    )
-
-    if not page:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='FAQ page not found',
-        )
-
-    return FaqPageResponse(
-        id=page.id,
-        title=page.title,
-        content=page.content or '',
-        order=page.display_order or 0,
-    )
 
 
 @router.get('/rules', response_model=RulesResponse)
@@ -318,35 +272,6 @@ async def get_recurrent_payments(
     )
 
 
-@router.get('/service', response_model=ServiceInfoResponse)
-async def get_service_info(
-    language: str = Query('ru', min_length=2, max_length=10),
-):
-    """Get general service information.
-
-    Название и описание берём из брендинга (MINIAPP_SERVICE_NAME_*/
-    MINIAPP_SERVICE_DESCRIPTION_*) — того же источника, что и мини-апп, чтобы
-    сервис не назывался в двух местах по-разному. Раньше здесь читались
-    SERVICE_NAME / SERVICE_DESCRIPTION / WEBSITE_URL, которых в Settings нет,
-    поэтому любой инстанс отдавал «VPN Service» с пустыми контактами.
-    """
-    requested_lang = _normalize_language_code(language)
-    branding = settings.get_miniapp_branding()
-    name = branding['service_name'].get(requested_lang) or branding['service_name']['default']
-    description = branding['service_description'].get(requested_lang) or branding['service_description']['default']
-
-    # Незаполненный контакт — это null, а не пустая строка: так отвечала прежняя
-    # версия ручки (`getattr(...) or getattr(...)`), так же поступает соседний
-    # /support-config, и только так работает клиентская проверка «контакт задан».
-    return ServiceInfoResponse(
-        name=name,
-        description=description,
-        support_email=(settings.SUPPORT_EMAIL or '').strip() or None,
-        support_telegram=(settings.SUPPORT_USERNAME or '').strip() or None,
-        website=(settings.SERVICE_WEBSITE_URL or '').strip() or None,
-    )
-
-
 @router.get('/languages')
 async def get_available_languages():
     """Get list of available languages."""
@@ -364,36 +289,6 @@ async def get_available_languages():
         ],
         'default': default_language,
     }
-
-
-@router.get('/user/language')
-async def get_user_language(
-    user: User = Depends(get_current_cabinet_user),
-):
-    """Get current user's language."""
-    return {'language': user.language or 'ru'}
-
-
-@router.patch('/user/language')
-async def update_user_language(
-    request: dict[str, str],
-    user: User = Depends(get_current_cabinet_user),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Update user's language preference."""
-    requested_language = _normalize_language_code(request.get('language', 'ru'))
-    available_languages = _get_available_language_codes()
-    if requested_language not in available_languages:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid language. Supported: {", ".join(available_languages)}',
-        )
-
-    user.language = requested_language
-    await db.commit()
-    await db.refresh(user)
-
-    return {'language': user.language}
 
 
 @router.get('/support-config', response_model=SupportConfigResponse)

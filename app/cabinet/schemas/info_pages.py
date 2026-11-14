@@ -69,19 +69,6 @@ class InfoPageUpdateRequest(BaseModel):
     display_mode: str | None = Field(None, pattern=r'^(bot|web|both)$')
 
 
-class ReorderItem(BaseModel):
-    """Single item in a reorder request."""
-
-    id: int
-    sort_order: int = Field(ge=0)
-
-
-class ReorderRequest(BaseModel):
-    """Request to bulk-reorder info pages."""
-
-    items: list[ReorderItem] = Field(..., min_length=1)
-
-
 class LegacyFaqResponse(BaseModel):
     """A bot FAQ page, kept in its original language and ID namespace."""
 

@@ -64,7 +64,6 @@ from app.utils.timezone import format_local_datetime
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import (
-    PurchasePreviewRequest,
     SubscriptionResponse,
     TariffPurchaseRequest,
     TrialActivateRequest,
@@ -502,40 +501,6 @@ async def get_purchase_options(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to load purchase options',
         )
-
-
-@router.post('/purchase-preview')
-async def preview_purchase(
-    request: PurchasePreviewRequest,
-    user: User = Depends(get_current_cabinet_user),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> dict[str, Any]:
-    """Calculate and preview the total price for selected options (classic mode only)."""
-    # This endpoint is for classic mode only, tariffs mode uses /purchase-tariff
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail='This endpoint is not available in tariffs mode. Use /purchase-tariff instead.',
-    )
-
-
-@router.post('/purchase')
-async def submit_purchase(
-    request: PurchasePreviewRequest,
-    user: User = Depends(get_current_cabinet_user),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> dict[str, Any]:
-    """Submit subscription purchase (deduct from balance, classic mode only)."""
-    if getattr(user, 'restriction_subscription', False):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='Subscription purchases are restricted for this account',
-        )
-
-    # This endpoint is for classic mode only, tariffs mode uses /purchase-tariff
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail='This endpoint is not available in tariffs mode. Use /purchase-tariff instead.',
-    )
 
 
 # ============ Tariff Purchase (for tariffs mode) ============

@@ -10,11 +10,6 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.cabinet.schemas.remnawave import (
-    SquadActionRequest,
-    SquadCreateRequest,
-    SquadUpdateRequest,
-)
 from app.external.remnawave_api import (
     INTERNAL_SQUAD_NAME_MAX_LENGTH,
     INTERNAL_SQUAD_NAME_MIN_LENGTH,
@@ -48,8 +43,8 @@ def test_helper_accepts_panel_valid_names(name: str) -> None:
 @pytest.mark.parametrize('name', BAD_NAMES)
 @pytest.mark.parametrize(
     'model',
-    [SquadCreateRequest, RemnaWaveSquadCreateRequest],
-    ids=['cabinet', 'webapi'],
+    [RemnaWaveSquadCreateRequest],
+    ids=['webapi'],
 )
 def test_create_schemas_reject_invalid_names(model: type, name: str) -> None:
     with pytest.raises(ValidationError):
@@ -59,8 +54,8 @@ def test_create_schemas_reject_invalid_names(model: type, name: str) -> None:
 @pytest.mark.parametrize('name', BAD_NAMES)
 @pytest.mark.parametrize(
     'model',
-    [SquadUpdateRequest, RemnaWaveSquadUpdateRequest],
-    ids=['cabinet', 'webapi'],
+    [RemnaWaveSquadUpdateRequest],
+    ids=['webapi'],
 )
 def test_update_schemas_reject_invalid_names(model: type, name: str) -> None:
     with pytest.raises(ValidationError):
@@ -70,8 +65,8 @@ def test_update_schemas_reject_invalid_names(model: type, name: str) -> None:
 @pytest.mark.parametrize('name', BAD_NAMES)
 @pytest.mark.parametrize(
     'model',
-    [SquadActionRequest, RemnaWaveSquadActionRequest],
-    ids=['cabinet', 'webapi'],
+    [RemnaWaveSquadActionRequest],
+    ids=['webapi'],
 )
 def test_rename_action_rejects_invalid_names(model: type, name: str) -> None:
     with pytest.raises(ValidationError):
@@ -80,13 +75,9 @@ def test_rename_action_rejects_invalid_names(model: type, name: str) -> None:
 
 @pytest.mark.parametrize('name', GOOD_NAMES)
 def test_schemas_accept_panel_valid_names(name: str) -> None:
-    assert SquadCreateRequest(name=name).name == name
     assert RemnaWaveSquadCreateRequest(name=name).name == name
-    assert SquadUpdateRequest(name=name).name == name
     assert RemnaWaveSquadActionRequest(action='rename', name=name).name == name
 
 
 def test_update_and_action_still_allow_omitting_name() -> None:
-    assert SquadUpdateRequest().name is None
     assert RemnaWaveSquadUpdateRequest().name is None
-    assert SquadActionRequest(action='delete').name is None

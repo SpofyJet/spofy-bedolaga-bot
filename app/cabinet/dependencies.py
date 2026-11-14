@@ -379,50 +379,6 @@ async def get_optional_cabinet_user(
     return user
 
 
-async def get_current_admin_user(
-    request: Request,
-    user: User = Depends(get_current_cabinet_user),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> User:
-    """
-    Get current authenticated admin user.
-
-    Checks if the user is admin by legacy config (ADMIN_IDS / ADMIN_EMAILS)
-    **or** by RBAC role assignment (any role with level > 0).
-
-    Args:
-        request: FastAPI request object
-        user: Authenticated User object
-        db: Database session
-
-    Returns:
-        Authenticated admin User object
-
-    Raises:
-        HTTPException: If user is not an admin by either mechanism
-    """
-    # Legacy check: config-based admin list. Routed through is_user_admin_by_env so the
-    # ADMIN_EMAILS match honours the trusted email_verification_source guard — an email
-    # verified by an untrusted source (VK/Yandex OAuth, or a no-proof flow) must not grant
-    # admin even though email_verified is True.
-    from app.services.rbac_bootstrap_service import is_user_admin_by_env
-
-    if is_user_admin_by_env(user).is_admin:
-        return user
-
-    # RBAC check: user has any active role with level > 0
-    from app.database.crud.rbac import UserRoleCRUD
-
-    _permissions, _role_names, max_level = await UserRoleCRUD.get_user_permissions(db, user.id)
-    if max_level > 0:
-        return user
-
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail='Admin access required',
-    )
-
-
 def require_permission(*permissions: str):
     """
     FastAPI dependency factory for RBAC permission checks.

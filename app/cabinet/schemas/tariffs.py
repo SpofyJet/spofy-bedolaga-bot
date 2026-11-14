@@ -278,27 +278,3 @@ class TariffTrialResponse(BaseModel):
     id: int
     is_trial_available: bool
     message: str
-
-
-class TariffStatsResponse(BaseModel):
-    """Tariff statistics."""
-
-    id: int
-    name: str
-    subscriptions_count: int
-    active_subscriptions: int
-    trial_subscriptions: int
-    revenue_kopeks: int
-    revenue_rubles: float
-
-
-class SyncSquadsResponse(BaseModel):
-    """Response after syncing squads for tariff subscriptions."""
-
-    tariff_id: int
-    tariff_name: str
-    total_subscriptions: int
-    updated_count: int
-    failed_count: int
-    skipped_count: int
-    errors: list[str] = Field(default_factory=list)

@@ -42,13 +42,12 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
-@router.get('/info', response_model=SubscriptionStatusResponse)
 async def get_subscription(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
     subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ):
-    """Get current user's subscription details."""
+    """Get current user's subscription details (served by GET /subscription in ../subscription.py)."""
     # Reload user from current session to get fresh data
     # (user object is from different session in get_current_cabinet_user)
     from app.database.crud.user import get_user_by_id
@@ -184,43 +183,6 @@ async def get_connection_link(
 
 
 # ============ hApp Downloads ============
-
-
-@router.get('/happ-downloads')
-async def get_happ_downloads(
-    user: User = Depends(get_current_cabinet_user),
-) -> dict[str, Any]:
-    """Get hApp download links for different platforms."""
-    platforms = {
-        'ios': {
-            'name': 'iOS (iPhone/iPad)',
-            'icon': '🍎',
-            'link': settings.get_happ_download_link('ios'),
-        },
-        'android': {
-            'name': 'Android',
-            'icon': '🤖',
-            'link': settings.get_happ_download_link('android'),
-        },
-        'macos': {
-            'name': 'macOS',
-            'icon': '🖥️',
-            'link': settings.get_happ_download_link('macos'),
-        },
-        'windows': {
-            'name': 'Windows',
-            'icon': '💻',
-            'link': settings.get_happ_download_link('windows'),
-        },
-    }
-
-    # Filter out platforms without links
-    available_platforms = {k: v for k, v in platforms.items() if v['link']}
-
-    return {
-        'platforms': available_platforms,
-        'happ_enabled': bool(available_platforms),
-    }
 
 
 # ============ App Config for Connection ============

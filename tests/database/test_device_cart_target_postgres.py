@@ -24,7 +24,7 @@ from tests.services.test_cart_cleanup_redis import (
 pytestmark = [pytest.mark.postgres, pytest.mark.asyncio]
 
 
-@pytest.mark.parametrize('entry', ['cart', 'purchase', 'legacy', 'telegram_add', 'telegram_change'])
+@pytest.mark.parametrize('entry', ['cart', 'purchase', 'telegram_add', 'telegram_change'])
 @pytest.mark.parametrize('target_state', ['present', 'deleted', 'foreign', 'legacy_unpinned'])
 async def test_device_topup_keeps_selected_subscription(postgres_database, monkeypatch, carts, entry, target_state):
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
@@ -83,7 +83,6 @@ async def test_device_topup_keeps_selected_subscription(postgres_database, monke
             handler = {
                 'cart': devices.save_devices_cart,
                 'purchase': devices.purchase_devices,
-                'legacy': devices.purchase_devices_legacy,
             }[entry]
             if entry == 'cart':
                 await handler(DevicePurchaseRequest(devices=1), subscription_id=10, user=user, db=db)

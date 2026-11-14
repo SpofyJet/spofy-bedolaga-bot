@@ -1,7 +1,6 @@
 """Admin routes for managing news article media (images/videos)."""
 
 import asyncio
-import re
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
@@ -11,7 +10,6 @@ from app.config import settings
 from app.database.models import User
 from app.services.news_media_service import (
     SavedMedia,
-    delete_media_file,
     detect_file_type,
     ensure_upload_dirs,
     save_image,
@@ -26,10 +24,6 @@ from ..schemas.news_media import NewsMediaUploadResponse
 logger = structlog.get_logger(__name__)
 
 _BYTES_PER_MB = 1024 * 1024
-
-# Only allow UUID-hex filenames with expected extensions (path traversal defense-in-depth).
-# thumb_ prefix is NOT allowed — thumbnails are cleaned up automatically when the main file is deleted.
-_SAFE_FILENAME_RE = re.compile(r'^[0-9a-f]{32}\.(jpg|mp4|webm)$')
 
 router = APIRouter(prefix='/admin/news/media', tags=['Cabinet Admin News Media'])
 
@@ -124,27 +118,3 @@ async def upload_media(
     )
 
     return _build_response(request, saved)
-
-
-@router.delete('/{filename}', status_code=status.HTTP_204_NO_CONTENT)
-async def delete_media(
-    filename: str,
-    admin: User = Depends(require_permission('news:delete')),
-) -> None:
-    """Delete a previously uploaded media file."""
-    if not _SAFE_FILENAME_RE.match(filename):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid filename',
-        )
-
-    upload_path = settings.get_media_upload_path()
-
-    deleted = await asyncio.to_thread(delete_media_file, filename, upload_path)
-    if not deleted:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='File not found',
-        )
-
-    logger.info('Media deleted', filename=filename, admin_id=admin.id)

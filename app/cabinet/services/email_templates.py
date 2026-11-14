@@ -1950,7 +1950,3 @@ class EmailNotificationTemplates:
             'subject': subjects.get(language, subjects['ru']),
             'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
-
-
-# Singleton instance
-email_notification_templates = EmailNotificationTemplates()

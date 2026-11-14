@@ -163,38 +163,6 @@ async def get_active_discount(
     )
 
 
-@router.get('/group-discounts', response_model=PromoGroupDiscounts)
-async def get_promo_group_discounts(
-    user: User = Depends(get_current_cabinet_user),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Get user's promo group discounts."""
-    await db.refresh(user, ['promo_group', 'user_promo_groups'])
-
-    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
-
-    if not promo_group:
-        return PromoGroupDiscounts()
-
-    # Get period discounts
-    period_discounts = {}
-    raw_period_discounts = getattr(promo_group, 'period_discounts', None)
-    if isinstance(raw_period_discounts, dict):
-        for key, value in raw_period_discounts.items():
-            try:
-                period_discounts[str(key)] = int(value)
-            except (TypeError, ValueError):
-                continue
-
-    return PromoGroupDiscounts(
-        group_name=promo_group.name,
-        server_discount_percent=promo_group.server_discount_percent or 0,
-        traffic_discount_percent=promo_group.traffic_discount_percent or 0,
-        device_discount_percent=promo_group.device_discount_percent or 0,
-        period_discounts=period_discounts,
-    )
-
-
 @router.get('/loyalty-tiers', response_model=LoyaltyTiersResponse)
 async def get_loyalty_tiers(
     user: User = Depends(get_current_cabinet_user),

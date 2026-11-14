@@ -100,44 +100,6 @@ async def set_remnawave_config_uuid(
     )
 
 
-@router.get('/remnawave/config')
-async def get_remnawave_subscription_config(
-    admin: User = Depends(require_permission('apps:read')),
-):
-    """Fetch subscription page config from RemnaWave panel."""
-    config_uuid = _get_remnawave_config_uuid()
-    if not config_uuid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='RemnaWave subscription config is not configured',
-        )
-
-    try:
-        service = RemnaWaveService()
-        async with service.get_api_client() as api:
-            config = await api.get_subscription_page_config(config_uuid)
-            if not config:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail='Subscription config not found',
-                )
-
-            return {
-                'uuid': config.uuid,
-                'name': config.name,
-                'view_position': config.view_position,
-                'config': config.config,
-            }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error('Error fetching RemnaWave config', error=e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to fetch config from RemnaWave',
-        )
-
-
 @router.get('/remnawave/configs')
 async def list_remnawave_subscription_configs(
     admin: User = Depends(require_permission('apps:read')),

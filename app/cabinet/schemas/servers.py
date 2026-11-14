@@ -101,19 +101,6 @@ class ServerTrialToggleResponse(BaseModel):
     message: str
 
 
-class ServerStatsResponse(BaseModel):
-    """Server statistics."""
-
-    id: int
-    display_name: str
-    squad_uuid: str
-    current_users: int
-    max_users: int | None
-    active_subscriptions: int
-    trial_subscriptions: int
-    usage_percent: float | None = None
-
-
 class ServerSyncResponse(BaseModel):
     """Response after syncing with RemnaWave."""
 

@@ -26,7 +26,6 @@ from ..schemas.pinned_messages import (
     PinnedMessageCreateRequest,
     PinnedMessageListResponse,
     PinnedMessageResponse,
-    PinnedMessageSettingsRequest,
     PinnedMessageUnpinResponse,
     PinnedMessageUpdateRequest,
 )
@@ -227,32 +226,6 @@ async def update_pinned_message(
     await db.refresh(msg)
 
     logger.info('Admin updated pinned message #', admin_id=admin.id, message_id=message_id)
-
-    return _serialize_pinned_message(msg)
-
-
-@router.patch('/{message_id}/settings', response_model=PinnedMessageResponse)
-async def update_pinned_message_settings(
-    message_id: int,
-    payload: PinnedMessageSettingsRequest,
-    admin: User = Depends(require_permission('pinned_messages:edit')),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> PinnedMessageResponse:
-    """Update only pinned message display settings."""
-    result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
-    msg = result.scalar_one_or_none()
-    if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
-
-    if payload.send_before_menu is not None:
-        msg.send_before_menu = payload.send_before_menu
-
-    if payload.send_on_every_start is not None:
-        msg.send_on_every_start = payload.send_on_every_start
-
-    msg.updated_at = datetime.now(UTC)
-    await db.commit()
-    await db.refresh(msg)
 
     return _serialize_pinned_message(msg)
 

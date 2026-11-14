@@ -1,6 +1,6 @@
 """Admin routes for RemnaWave management in cabinet."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -9,14 +9,11 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.server_squad import (
-    count_active_users_for_squad,
     get_all_server_squads,
-    get_server_squad_by_uuid,
     sync_with_remnawave,
 )
 from app.database.models import User
 from app.utils.cache import cache
-from app.utils.panel_node_usage import normalize_node_usage
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.remnawave import (
@@ -35,32 +32,16 @@ from ..schemas.remnawave import (
     GeocheckStartResponse,
     HealthResponse,
     # Inbounds
-    InboundsListResponse,
-    # Migration
-    MigrationPreviewResponse,
-    MigrationRequest,
-    MigrationResponse,
-    MigrationStats,
     NodeActionRequest,
     NodeActionResponse,
     # Nodes
     NodeInfo,
     NodesListResponse,
-    NodesOverview,
-    NodeStatisticsResponse,
-    NodeUsageResponse,
-    # Recap / devices / top consumers / health / sub-requests
     RecapResponse,
     # Status & Connection
     RemnaWaveStatusResponse,
     ServerInfo,
-    SquadActionRequest,
-    SquadCreateRequest,
-    SquadDetailResponse,
-    SquadOperationResponse,
     SquadsListResponse,
-    SquadUpdateRequest,
-    # Squads
     SquadWithLocalInfo,
     SubscriptionRequestStatsResponse,
     # Manual Sync
@@ -358,32 +339,6 @@ async def list_nodes(
     return NodesListResponse(items=serialized, total=len(serialized))
 
 
-@router.get('/nodes/overview', response_model=NodesOverview)
-async def get_nodes_overview(
-    admin: User = Depends(require_permission('remnawave:read')),
-) -> NodesOverview:
-    """Get nodes overview with statistics."""
-    service = _get_service()
-    _ensure_configured(service)
-
-    nodes = await service.get_all_nodes()
-
-    total = len(nodes)
-    online = sum(1 for n in nodes if n.get('is_connected') and not n.get('is_disabled'))
-    disabled = sum(1 for n in nodes if n.get('is_disabled'))
-    offline = total - online - disabled
-    total_users_online = sum(n.get('users_online', 0) or 0 for n in nodes)
-
-    return NodesOverview(
-        total=total,
-        online=online,
-        offline=offline,
-        disabled=disabled,
-        total_users_online=total_users_online,
-        nodes=[_serialize_node(n) for n in nodes],
-    )
-
-
 @router.get('/nodes/realtime')
 async def get_nodes_realtime(
     admin: User = Depends(require_permission('remnawave:read')),
@@ -412,57 +367,6 @@ async def get_node_details(
         )
 
     return _serialize_node(node)
-
-
-@router.get('/nodes/{node_uuid}/statistics', response_model=NodeStatisticsResponse)
-async def get_node_statistics(
-    node_uuid: str,
-    admin: User = Depends(require_permission('remnawave:read')),
-) -> NodeStatisticsResponse:
-    """Get node statistics with usage history."""
-    service = _get_service()
-    _ensure_configured(service)
-
-    stats = await service.get_node_statistics(node_uuid)
-    if not stats or not stats.get('node'):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Node not found or no statistics available',
-        )
-
-    return NodeStatisticsResponse(
-        node=_serialize_node(stats['node']),
-        realtime=stats.get('realtime'),
-        # Нормализуем той же функцией, что и Web API-близнец: схема здесь
-        # `list[dict[str, Any]]`, поэтому расхождение ключей pydantic не поймает,
-        # и фронт молча отрисовал бы пустые ячейки.
-        usage_history=normalize_node_usage(stats.get('usage_history'), node_uuid),
-        last_updated=_parse_datetime(stats.get('last_updated')),
-    )
-
-
-@router.get('/nodes/{node_uuid}/usage', response_model=NodeUsageResponse)
-async def get_node_usage(
-    node_uuid: str,
-    start: datetime | None = Query(default=None),
-    end: datetime | None = Query(default=None),
-    admin: User = Depends(require_permission('remnawave:read')),
-) -> NodeUsageResponse:
-    """Get node usage history for a date range."""
-    service = _get_service()
-    _ensure_configured(service)
-
-    end_dt = end or datetime.now(UTC)
-    start_dt = start or (end_dt - timedelta(days=7))
-
-    if start_dt >= end_dt:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid date range',
-        )
-
-    usage = await service.get_node_user_usage_by_range(node_uuid, start_dt, end_dt)
-    return NodeUsageResponse(items=normalize_node_usage(usage, node_uuid))
 
 
 @router.post('/nodes/{node_uuid}/action', response_model=NodeActionResponse)
@@ -659,285 +563,10 @@ async def list_squads(
     return SquadsListResponse(items=items, total=len(items))
 
 
-@router.get('/squads/{squad_uuid}', response_model=SquadDetailResponse)
-async def get_squad_details(
-    squad_uuid: str,
-    admin: User = Depends(require_permission('remnawave:read')),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> SquadDetailResponse:
-    """Get detailed information about a squad."""
-    service = _get_service()
-    _ensure_configured(service)
-
-    # Get squad from RemnaWave
-    squad = await service.get_squad_details(squad_uuid)
-    if not squad:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Squad not found',
-        )
-
-    # Get local info from DB
-    local = await get_server_squad_by_uuid(db, squad_uuid)
-    active_subs = await count_active_users_for_squad(db, squad_uuid) if local else 0
-
-    return SquadDetailResponse(
-        uuid=squad.get('uuid', ''),
-        name=squad.get('name', ''),
-        members_count=squad.get('members_count', 0),
-        inbounds_count=squad.get('inbounds_count', 0),
-        inbounds=squad.get('inbounds', []),
-        local_id=local.id if local else None,
-        display_name=local.display_name if local else None,
-        country_code=local.country_code if local else None,
-        description=local.description if local else None,
-        is_available=local.is_available if local else None,
-        is_trial_eligible=local.is_trial_eligible if local else None,
-        price_kopeks=local.price_kopeks if local else None,
-        max_users=local.max_users if local else None,
-        current_users=local.current_users if local else None,
-        sort_order=local.sort_order if local else None,
-        is_synced=local is not None,
-        active_subscriptions=active_subs,
-    )
-
-
-@router.post('/squads', response_model=SquadOperationResponse, status_code=status.HTTP_201_CREATED)
-async def create_squad(
-    payload: SquadCreateRequest,
-    admin: User = Depends(require_permission('remnawave:manage')),
-) -> SquadOperationResponse:
-    """Create a new squad in RemnaWave."""
-    service = _get_service()
-    _ensure_configured(service)
-
-    squad_uuid = await service.create_squad(payload.name, payload.inbound_uuids)
-
-    if squad_uuid:
-        logger.info(
-            'Admin created squad', telegram_id=admin.telegram_id, payload_name=payload.name, squad_uuid=squad_uuid
-        )
-        return SquadOperationResponse(
-            success=True,
-            message='Squad created successfully',
-            data={'uuid': squad_uuid},
-        )
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail='Failed to create squad',
-    )
-
-
-@router.patch('/squads/{squad_uuid}', response_model=SquadOperationResponse)
-async def update_squad(
-    squad_uuid: str,
-    payload: SquadUpdateRequest,
-    admin: User = Depends(require_permission('remnawave:manage')),
-) -> SquadOperationResponse:
-    """Update a squad in RemnaWave."""
-    service = _get_service()
-    _ensure_configured(service)
-
-    if payload.name is None and payload.inbound_uuids is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='No update data provided',
-        )
-
-    success = await service.update_squad(
-        squad_uuid,
-        name=payload.name,
-        inbounds=payload.inbound_uuids,
-    )
-
-    if success:
-        logger.info('Admin updated squad', telegram_id=admin.telegram_id, squad_uuid=squad_uuid)
-        return SquadOperationResponse(success=True, message='Squad updated')
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail='Failed to update squad',
-    )
-
-
-@router.post('/squads/{squad_uuid}/action', response_model=SquadOperationResponse)
-async def perform_squad_action(
-    squad_uuid: str,
-    payload: SquadActionRequest,
-    admin: User = Depends(require_permission('remnawave:manage')),
-) -> SquadOperationResponse:
-    """Perform an action on a squad."""
-    service = _get_service()
-    _ensure_configured(service)
-
-    action = payload.action
-    success = False
-    message = 'Unknown action'
-
-    if action == 'add_all_users':
-        success = await service.add_all_users_to_squad(squad_uuid)
-        message = 'Users added' if success else 'Failed to add users'
-    elif action == 'remove_all_users':
-        success = await service.remove_all_users_from_squad(squad_uuid)
-        message = 'Users removed' if success else 'Failed to remove users'
-    elif action == 'delete':
-        success = await service.delete_squad(squad_uuid)
-        message = 'Squad deleted' if success else 'Failed to delete squad'
-    elif action == 'rename':
-        if not payload.name:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Name is required for rename action',
-            )
-        success = await service.rename_squad(squad_uuid, payload.name)
-        message = 'Squad renamed' if success else 'Failed to rename squad'
-    elif action == 'update_inbounds':
-        if not payload.inbound_uuids:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Inbound UUIDs are required',
-            )
-        success = await service.update_squad_inbounds(squad_uuid, payload.inbound_uuids)
-        message = 'Inbounds updated' if success else 'Failed to update inbounds'
-
-    if success:
-        logger.info('Admin performed on squad', telegram_id=admin.telegram_id, action=action, squad_uuid=squad_uuid)
-
-    return SquadOperationResponse(success=success, message=message)
-
-
-@router.delete('/squads/{squad_uuid}', response_model=SquadOperationResponse)
-async def delete_squad(
-    squad_uuid: str,
-    admin: User = Depends(require_permission('remnawave:manage')),
-) -> SquadOperationResponse:
-    """Delete a squad."""
-    service = _get_service()
-    _ensure_configured(service)
-
-    success = await service.delete_squad(squad_uuid)
-
-    if success:
-        logger.info('Admin deleted squad', telegram_id=admin.telegram_id, squad_uuid=squad_uuid)
-        return SquadOperationResponse(success=True, message='Squad deleted')
-    raise HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail='Failed to delete squad',
-    )
-
-
 # ============ Migration ============
 
 
-@router.get('/squads/{squad_uuid}/migration-preview', response_model=MigrationPreviewResponse)
-async def preview_migration(
-    squad_uuid: str,
-    admin: User = Depends(require_permission('remnawave:read')),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> MigrationPreviewResponse:
-    """Get migration preview for a squad."""
-    squad = await get_server_squad_by_uuid(db, squad_uuid)
-    if not squad:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Squad not found in local database',
-        )
-
-    users_to_migrate = await count_active_users_for_squad(db, squad_uuid)
-
-    return MigrationPreviewResponse(
-        squad_uuid=squad.squad_uuid,
-        squad_name=squad.display_name,
-        current_users=squad.current_users or 0,
-        max_users=squad.max_users,
-        users_to_migrate=users_to_migrate,
-    )
-
-
-@router.post('/squads/migrate', response_model=MigrationResponse)
-async def migrate_squad_users(
-    payload: MigrationRequest,
-    admin: User = Depends(require_permission('remnawave:manage')),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> MigrationResponse:
-    """Migrate users from one squad to another."""
-    service = _get_service()
-    _ensure_configured(service)
-
-    source_uuid = payload.source_uuid.strip()
-    target_uuid = payload.target_uuid.strip()
-
-    if source_uuid == target_uuid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Source and target squads must be different',
-        )
-
-    source = await get_server_squad_by_uuid(db, source_uuid)
-    if not source:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Source squad not found',
-        )
-
-    target = await get_server_squad_by_uuid(db, target_uuid)
-    if not target:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Target squad not found',
-        )
-
-    try:
-        result = await service.migrate_squad_users(
-            db,
-            source_uuid=source.squad_uuid,
-            target_uuid=target.squad_uuid,
-        )
-    except RemnaWaveConfigurationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        )
-
-    if not result.get('success'):
-        return MigrationResponse(
-            success=False,
-            message=result.get('message') or 'Migration failed',
-            error=result.get('error'),
-        )
-
-    logger.info(
-        'Admin migrated users from to', telegram_id=admin.telegram_id, source_uuid=source_uuid, target_uuid=target_uuid
-    )
-
-    return MigrationResponse(
-        success=True,
-        message=result.get('message') or 'Migration completed',
-        data=MigrationStats(
-            source_uuid=source.squad_uuid,
-            target_uuid=target.squad_uuid,
-            total=result.get('total', 0),
-            updated=result.get('updated', 0),
-            panel_updated=result.get('panel_updated', 0),
-            panel_failed=result.get('panel_failed', 0),
-            source_removed=result.get('source_removed', 0),
-            target_added=result.get('target_added', 0),
-        ),
-    )
-
-
 # ============ Inbounds ============
-
-
-@router.get('/inbounds', response_model=InboundsListResponse)
-async def list_inbounds(
-    admin: User = Depends(require_permission('remnawave:read')),
-) -> InboundsListResponse:
-    """Get list of all available inbounds."""
-    service = _get_service()
-    _ensure_configured(service)
-
-    inbounds = await service.get_all_inbounds()
-    return InboundsListResponse(items=inbounds or [], total=len(inbounds or []))
 
 
 # ============ Auto Sync ============

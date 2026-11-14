@@ -93,22 +93,6 @@ async def test_device_purchase_is_refused_for_legacy_subscription(postgres_datab
 
 
 @pytest.mark.asyncio
-async def test_legacy_device_endpoint_is_refused_for_legacy_subscription(postgres_database):
-    from app.cabinet.routes.subscription_modules.devices import purchase_devices_legacy
-
-    async with postgres_session(postgres_database, TABLES) as db:
-        user = await _seed(db)
-
-        with pytest.raises(HTTPException) as exc:
-            await purchase_devices_legacy(
-                request=DevicePurchaseRequest(devices=1), subscription_id=None, user=user, db=db
-            )
-
-        _tariff_required(exc)
-        await _assert_untouched(db, user)
-
-
-@pytest.mark.asyncio
 async def test_device_price_is_refused_for_legacy_subscription(postgres_database):
     from app.cabinet.routes.subscription_modules.devices import get_device_price
 

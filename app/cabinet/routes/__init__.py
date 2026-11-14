@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter
 
-from .abuse import router as abuse_router
 from .account_linking import merge_router as merge_router, router as account_linking_router
 from .activity import router as activity_router
 from .admin_apps import router as admin_apps_router
@@ -95,7 +94,6 @@ router.include_router(auth_router)
 router.include_router(oauth_router)
 router.include_router(account_linking_router)
 router.include_router(merge_router)
-router.include_router(abuse_router)
 router.include_router(subscription_router)
 router.include_router(multi_tariff_subscription_router)
 router.include_router(balance_router)

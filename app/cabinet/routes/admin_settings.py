@@ -213,23 +213,6 @@ def _serialize_definition(definition, include_choices: bool = True) -> SettingDe
 # ============ Routes ============
 
 
-@router.get('/categories', response_model=list[SettingCategorySummary])
-async def list_categories(
-    admin: User = Depends(require_permission('settings:read')),
-):
-    """Get list of setting categories."""
-    categories = bot_configuration_service.get_categories()
-    return [
-        SettingCategorySummary(
-            key=key,
-            label=label,
-            description=bot_configuration_service.get_category_description(key),
-            items=count,
-        )
-        for key, label, count in categories
-    ]
-
-
 @router.get('', response_model=list[SettingDefinition])
 async def list_settings(
     admin: User = Depends(require_permission('settings:read')),
@@ -248,20 +231,6 @@ async def list_settings(
         items.extend(_serialize_definition(defn) for defn in definitions)
 
     return items
-
-
-@router.get('/{key}', response_model=SettingDefinition)
-async def get_setting(
-    key: str,
-    admin: User = Depends(require_permission('settings:read')),
-):
-    """Get a specific setting by key."""
-    try:
-        definition = bot_configuration_service.get_definition(key)
-    except KeyError as error:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Setting not found') from error
-
-    return _serialize_definition(definition)
 
 
 @router.put('/{key}', response_model=SettingDefinition)

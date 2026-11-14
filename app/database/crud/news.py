@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import delete, func, nullslast, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -136,42 +136,6 @@ async def get_news_article_by_slug(db: AsyncSession, slug: str) -> NewsArticle |
         .where(NewsArticle.slug == slug)
     )
     return result.scalar_one_or_none()
-
-
-async def get_published_news(
-    db: AsyncSession,
-    *,
-    category: str | None = None,
-    limit: int = 20,
-    offset: int = 0,
-) -> list[NewsArticle]:
-    """Get published news articles, ordered by published_at descending.
-
-    Does NOT load the author relationship -- list views do not need it.
-    """
-    stmt = select(NewsArticle).where(NewsArticle.is_published.is_(True))
-    if category:
-        stmt = stmt.where(NewsArticle.category == category)
-
-    # NULLs last so articles without published_at don't float to the top in DESC
-    stmt = stmt.order_by(nullslast(NewsArticle.published_at.desc())).offset(offset).limit(limit)
-
-    result = await db.execute(stmt)
-    return list(result.scalars().all())
-
-
-async def get_published_news_count(
-    db: AsyncSession,
-    *,
-    category: str | None = None,
-) -> int:
-    """Get count of published news articles, optionally filtered by category."""
-    stmt = select(func.count(NewsArticle.id)).where(NewsArticle.is_published.is_(True))
-    if category:
-        stmt = stmt.where(NewsArticle.category == category)
-
-    result = await db.execute(stmt)
-    return result.scalar_one() or 0
 
 
 async def get_all_news(

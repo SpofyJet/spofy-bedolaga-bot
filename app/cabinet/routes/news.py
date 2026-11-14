@@ -4,23 +4,19 @@ import time
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.news import (
     get_news_article_by_slug,
     get_news_categories,
-    get_published_news,
-    get_published_news_count,
     increment_views,
 )
 from app.database.models import NewsArticle, User
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.news import (
-    NewsArticleListItem,
     NewsArticleResponse,
-    NewsListResponse,
 )
 
 
@@ -112,37 +108,6 @@ async def list_categories(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to load categories',
-        )
-
-
-@router.get('', response_model=NewsListResponse)
-async def list_published_news(
-    user: User = Depends(get_current_cabinet_user),
-    db: AsyncSession = Depends(get_cabinet_db),
-    category: str | None = Query(None, max_length=100),
-    limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-) -> NewsListResponse:
-    """Get paginated list of published news articles.
-
-    SQLAlchemy AsyncSession does not support concurrent operations, so
-    queries run sequentially.
-    """
-    try:
-        articles = await get_published_news(db, category=category, limit=limit, offset=offset)
-        total = await get_published_news_count(db, category=category)
-        categories = await get_news_categories(db)
-
-        items = [NewsArticleListItem(**_article_to_response(a, include_content=False)) for a in articles]
-
-        return NewsListResponse(items=items, total=total, categories=categories)
-    except HTTPException:
-        raise
-    except Exception:
-        logger.exception('Failed to list published news')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load news',
         )
 
 

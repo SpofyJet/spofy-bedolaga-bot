@@ -15,8 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.discount_offer import (
-    count_discount_offers,
-    list_discount_offers,
     upsert_discount_offer,
 )
 from app.database.crud.promo_offer_log import list_promo_offer_logs
@@ -378,19 +376,6 @@ async def list_templates(
     return PromoOfferTemplateListResponse(items=[_serialize_template(template) for template in templates])
 
 
-@router.get('/templates/{template_id}', response_model=PromoOfferTemplateResponse)
-async def get_template(
-    template_id: int,
-    admin: User = Depends(require_permission('promo_offers:read')),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> PromoOfferTemplateResponse:
-    """Get a promo offer template."""
-    template = await get_promo_offer_template_by_id(db, template_id)
-    if not template:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Template not found')
-    return _serialize_template(template)
-
-
 @router.patch('/templates/{template_id}', response_model=PromoOfferTemplateResponse)
 async def update_template(
     template_id: int,
@@ -427,37 +412,6 @@ async def update_template(
 
 
 # ============== Offer Endpoints ==============
-
-
-@router.get('', response_model=PromoOfferListResponse)
-async def list_offers(
-    admin: User = Depends(require_permission('promo_offers:read')),
-    db: AsyncSession = Depends(get_cabinet_db),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-    user_id: int | None = Query(None, ge=1),
-    is_active: bool | None = Query(None),
-) -> PromoOfferListResponse:
-    """Get list of promo offers."""
-    offers = await list_discount_offers(
-        db,
-        offset=offset,
-        limit=limit,
-        user_id=user_id,
-        is_active=is_active,
-    )
-    total = await count_discount_offers(
-        db,
-        user_id=user_id,
-        is_active=is_active,
-    )
-
-    return PromoOfferListResponse(
-        items=[_serialize_offer(offer) for offer in offers],
-        total=total,
-        limit=limit,
-        offset=offset,
-    )
 
 
 def _build_promo_keyboard(offer_id: int, button_text: str) -> InlineKeyboardMarkup:

@@ -202,21 +202,3 @@ async def clear_replaces_tab(db: AsyncSession, tab: str, *, exclude_page_id: int
         stmt = stmt.where(InfoPage.id != exclude_page_id)
 
     await db.execute(stmt)
-
-
-async def reorder_info_pages(db: AsyncSession, items: list[dict]) -> None:
-    """Bulk update sort_order for info pages.
-
-    Each item must have ``id`` and ``sort_order`` attributes.
-    """
-    for item in items:
-        page_id = item.id if hasattr(item, 'id') else item.get('id')
-        sort_order = item.sort_order if hasattr(item, 'sort_order') else item.get('sort_order')
-        if page_id is None or sort_order is None:
-            continue
-        await db.execute(
-            update(InfoPage).where(InfoPage.id == page_id).values(sort_order=sort_order, updated_at=datetime.now(UTC))
-        )
-
-    await db.commit()
-    logger.info('Reordered info pages', count=len(items))

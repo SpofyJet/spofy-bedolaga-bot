@@ -33,19 +33,14 @@ from ..schemas.broadcasts import (
     BroadcastAudienceUserSearchResponse,
     BroadcastButton,
     BroadcastButtonsResponse,
-    BroadcastCreateRequest,
     BroadcastFilter,
     BroadcastFiltersResponse,
     BroadcastListResponse,
-    BroadcastPreviewRequest,
-    BroadcastPreviewResponse,
     BroadcastResponse,
     BroadcastTariffsResponse,
     CombinedBroadcastCreateRequest,
     EmailFilterItem,
     EmailFiltersResponse,
-    EmailPreviewRequest,
-    EmailPreviewResponse,
     EmailRenderRequest,
     EmailRenderResponse,
     TariffFilter,
@@ -429,35 +424,6 @@ async def get_buttons(
     return BroadcastButtonsResponse(buttons=buttons)
 
 
-@router.post('/preview', response_model=BroadcastPreviewResponse)
-async def preview_broadcast(
-    request: BroadcastPreviewRequest,
-    admin: User = Depends(require_permission('broadcasts:read')),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> BroadcastPreviewResponse:
-    """Preview broadcast recipients count."""
-    # Get tariff IDs for validation
-    result = await db.execute(select(Tariff.id))
-    tariff_ids = {row[0] for row in result.all()}
-
-    if not _validate_target(request.target, tariff_ids):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid target: {request.target}',
-        )
-
-    try:
-        count = await get_target_users_count(db, request.target)
-    except Exception as e:
-        logger.error('Failed to get count for target', target=request.target, error=e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to count recipients',
-        )
-
-    return BroadcastPreviewResponse(target=request.target, count=count)
-
-
 @router.post('/audience/preview', response_model=BroadcastAudiencePreviewResponse)
 async def preview_audience(
     request: BroadcastAudiencePreviewRequest,
@@ -550,93 +516,6 @@ async def search_audience_users(
     )
 
 
-@router.post('', response_model=BroadcastResponse, status_code=status.HTTP_201_CREATED)
-async def create_broadcast(
-    request: BroadcastCreateRequest,
-    admin: User = Depends(require_permission('broadcasts:create')),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> BroadcastResponse:
-    """Create and start a broadcast."""
-    # Validate target
-    result = await db.execute(select(Tariff.id))
-    tariff_ids = {row[0] for row in result.all()}
-
-    if not _validate_target(request.target, tariff_ids):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid target: {request.target}',
-        )
-
-    # Validate buttons
-    if not _validate_buttons(request.selected_buttons):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid button key',
-        )
-
-    message_text = request.message_text.strip()
-    if not message_text:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Message text must not be empty',
-        )
-
-    media_payload = request.media
-
-    if media_payload:
-        _ensure_media_caption_fits(media_payload.caption or message_text)
-
-    # Create broadcast record
-    broadcast = BroadcastHistory(
-        target_type=request.target,
-        message_text=message_text,
-        has_media=media_payload is not None,
-        media_type=media_payload.type if media_payload else None,
-        media_file_id=media_payload.file_id if media_payload else None,
-        media_caption=media_payload.caption if media_payload else None,
-        total_count=0,
-        sent_count=0,
-        failed_count=0,
-        status='queued',
-        admin_id=admin.id,
-        admin_name=admin.username or f'Admin #{admin.id}',
-        category=request.category,
-    )
-    db.add(broadcast)
-    await db.commit()
-    await db.refresh(broadcast)
-
-    # Prepare media config
-    media_config = None
-    if media_payload:
-        media_config = BroadcastMediaConfig(
-            type=media_payload.type,
-            file_id=media_payload.file_id,
-            caption=media_payload.caption or message_text,
-        )
-
-    # Create broadcast config
-    config = BroadcastConfig(
-        target=request.target,
-        message_text=message_text,
-        selected_buttons=request.selected_buttons,
-        media=media_config,
-        initiator_name=admin.username or f'Admin #{admin.id}',
-        custom_buttons=[btn.model_dump() for btn in request.custom_buttons] if request.custom_buttons else None,
-        category=request.category,
-    )
-
-    # Start broadcast
-    await broadcast_service.start_broadcast(broadcast.id, config)
-    await db.refresh(broadcast)
-
-    logger.info(
-        'Admin created broadcast for target', admin_id=admin.id, broadcast_id=broadcast.id, target=request.target
-    )
-
-    return _serialize_broadcast(broadcast)
-
-
 @router.get('', response_model=BroadcastListResponse)
 async def list_broadcasts(
     admin: User = Depends(require_permission('broadcasts:read')),
@@ -715,31 +594,6 @@ async def get_email_filters(
         total_with_email=total_with_email,
         promo_group_filters=promo_group_filters,
     )
-
-
-@router.post('/email-preview', response_model=EmailPreviewResponse)
-async def preview_email_broadcast(
-    request: EmailPreviewRequest,
-    admin: User = Depends(require_permission('broadcasts:read')),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> EmailPreviewResponse:
-    """Preview email broadcast recipients count."""
-    if not _validate_email_target(request.target):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid email target: {request.target}',
-        )
-
-    try:
-        count = await _get_email_filter_count(db, request.target)
-    except Exception as e:
-        logger.error('Failed to get email count for target', target=request.target, error=e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to count email recipients',
-        )
-
-    return EmailPreviewResponse(target=request.target, count=count)
 
 
 @router.post('/email-render', response_model=EmailRenderResponse)

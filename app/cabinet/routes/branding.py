@@ -146,31 +146,6 @@ class AnimationEnabledUpdate(BaseModel):
     enabled: bool
 
 
-ALLOWED_BG_TYPES = (
-    'aurora',
-    'sparkles',
-    'vortex',
-    'shooting-stars',
-    'background-beams',
-    'background-beams-collision',
-    'gradient-animation',
-    'wavy',
-    'background-lines',
-    'boxes',
-    'meteors',
-    'grid',
-    'dots',
-    'spotlight',
-    'ripple',
-    'fireflies',
-    'snowfall',
-    'starfield',
-    'matrix-rain',
-    'liquid-gradient',
-    'constellation',
-    'none',
-)
-
 MAX_SETTINGS_KEYS = 20
 MAX_SETTINGS_VALUE_LEN = 200
 

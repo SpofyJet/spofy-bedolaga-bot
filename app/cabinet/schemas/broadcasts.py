@@ -198,19 +198,6 @@ class BroadcastListResponse(BaseModel):
 # ============ Preview ============
 
 
-class BroadcastPreviewRequest(BaseModel):
-    """Request to preview broadcast recipients count."""
-
-    target: str
-
-
-class BroadcastPreviewResponse(BaseModel):
-    """Preview response with recipients count."""
-
-    target: str
-    count: int
-
-
 class BroadcastAudiencePreviewRequest(BaseModel):
     channel: Literal['telegram', 'email']
     category: Literal['system', 'news', 'promo'] = 'system'
@@ -288,19 +275,6 @@ class CombinedBroadcastCreateRequest(BaseModel):
 
 
 # ============ Email Preview ============
-
-
-class EmailPreviewRequest(BaseModel):
-    """Request to preview email broadcast recipients."""
-
-    target: str
-
-
-class EmailPreviewResponse(BaseModel):
-    """Preview response for email broadcast."""
-
-    target: str
-    count: int
 
 
 class EmailRenderRequest(BaseModel):

@@ -10,12 +10,11 @@ from app.database.crud.news_categories import (
     delete_category,
     get_all_categories,
     get_category_by_id,
-    update_category,
 )
 from app.database.models import User
 
 from ..dependencies import get_cabinet_db, require_permission
-from ..schemas.news_categories import NewsCategoryCreate, NewsCategoryResponse, NewsCategoryUpdate
+from ..schemas.news_categories import NewsCategoryCreate, NewsCategoryResponse
 
 
 logger = structlog.get_logger(__name__)
@@ -46,30 +45,6 @@ async def create_new_category(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail='Category already exists',
-        )
-    return NewsCategoryResponse.model_validate(category)
-
-
-@router.put('/{category_id}', response_model=NewsCategoryResponse)
-async def update_existing_category(
-    category_id: int,
-    request: NewsCategoryUpdate,
-    admin: User = Depends(require_permission('news:edit')),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> NewsCategoryResponse:
-    """Update an existing news category."""
-    category = await get_category_by_id(db, category_id)
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Category not found',
-        )
-    try:
-        category = await update_category(db, category, **request.model_dump(exclude_unset=True))
-    except IntegrityError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='Category name already exists',
         )
     return NewsCategoryResponse.model_validate(category)
 

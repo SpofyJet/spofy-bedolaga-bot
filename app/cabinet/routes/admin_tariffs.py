@@ -1,14 +1,10 @@
 """Admin routes for managing tariffs in cabinet."""
 
-import asyncio
-
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
-from app.config import settings
 from app.database.crud.server_squad import get_all_server_squads
 from app.database.crud.tariff import (
     create_tariff,
@@ -21,8 +17,7 @@ from app.database.crud.tariff import (
     set_tariff_promo_groups,
     update_tariff,
 )
-from app.database.models import PromoGroup, Subscription, SubscriptionStatus, Tariff, Transaction, TransactionType, User
-from app.services.panel_sync import patch_panel_squads
+from app.database.models import PromoGroup, Tariff, User
 from app.services.tariff_squad_sync import sync_tariff_squads_in_background
 from app.utils.background import spawn_background_task
 
@@ -33,13 +28,11 @@ from ..schemas.tariffs import (
     PromoGroupInfo,
     ServerInfo,
     ServerTrafficLimit,
-    SyncSquadsResponse,
     TariffCreateRequest,
     TariffDetailResponse,
     TariffListItem,
     TariffListResponse,
     TariffSortOrderRequest,
-    TariffStatsResponse,
     TariffToggleResponse,
     TariffTrialResponse,
     TariffUpdateRequest,
@@ -581,213 +574,6 @@ async def toggle_trial_tariff(
     )
 
 
-@router.get('/{tariff_id}/stats', response_model=TariffStatsResponse)
-async def get_tariff_stats(
-    tariff_id: int,
-    admin: User = Depends(require_permission('tariffs:read')),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Get tariff statistics."""
-    tariff = await get_tariff_by_id(db, tariff_id)
-    if not tariff:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
-        )
-
-    # Count subscriptions
-    total_result = await db.execute(select(func.count(Subscription.id)).where(Subscription.tariff_id == tariff_id))
-    total_count = total_result.scalar() or 0
-
-    # Count active subscriptions
-    active_result = await db.execute(
-        select(func.count(Subscription.id)).where(
-            Subscription.tariff_id == tariff_id,
-            Subscription.status == 'active',
-        )
-    )
-    active_count = active_result.scalar() or 0
-
-    # Count trial subscriptions
-    trial_result = await db.execute(
-        select(func.count(Subscription.id)).where(
-            Subscription.tariff_id == tariff_id,
-            Subscription.is_trial == True,
-        )
-    )
-    trial_count = trial_result.scalar() or 0
-
-    # Calculate revenue from subscription payments for users on this tariff
-    revenue_result = await db.execute(
-        select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
-        .join(Subscription, Transaction.user_id == Subscription.user_id)
-        .where(
-            Subscription.tariff_id == tariff_id,
-            Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-            Transaction.is_completed == True,
-        )
-    )
-    revenue_kopeks = revenue_result.scalar() or 0
-
-    return TariffStatsResponse(
-        id=tariff_id,
-        name=tariff.name,
-        subscriptions_count=total_count,
-        active_subscriptions=active_count,
-        trial_subscriptions=trial_count,
-        revenue_kopeks=revenue_kopeks,
-        revenue_rubles=revenue_kopeks / 100,
-    )
-
-
 async def _background_sync_squads(tariff_id: int, admin_id: int) -> None:
     """Общая с телеграм-редактором фоновая синхронизация (app.services.tariff_squad_sync)."""
     await sync_tariff_squads_in_background(tariff_id, admin_id)
-
-
-_SYNC_SQUADS_CONCURRENCY = 5
-_SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES = 10
-
-
-@router.post('/{tariff_id}/sync-squads', response_model=SyncSquadsResponse)
-async def sync_tariff_squads(
-    tariff_id: int,
-    admin: User = Depends(require_permission('tariffs:edit')),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Sync squads from tariff to all active/trial subscriptions in Remnawave panel.
-
-    Updates connected_squads and external_squad_uuid for every active or trial
-    subscription linked to this tariff.  Only users that have a remnawave_id
-    (i.e. already exist in the panel) are touched.
-    """
-    tariff = await get_tariff_by_id(db, tariff_id)
-    if not tariff:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
-        )
-
-    # Fetch active + trial subscriptions for this tariff whose users exist in Remnawave
-    result = await db.execute(
-        select(Subscription)
-        .join(User, Subscription.user_id == User.id)
-        .options(joinedload(Subscription.user))
-        .where(
-            and_(
-                Subscription.tariff_id == tariff_id,
-                Subscription.status.in_([SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]),
-                # См. комментарий в фоновом синке: в multi-tariff идентичность
-                # на подписке, фильтр только по User не выбрал бы никого.
-                or_(Subscription.remnawave_id.isnot(None), User.remnawave_id.isnot(None)),
-            )
-        )
-    )
-    subscriptions = list(result.unique().scalars().all())
-
-    if not subscriptions:
-        return SyncSquadsResponse(
-            tariff_id=tariff_id,
-            tariff_name=tariff.name,
-            total_subscriptions=0,
-            updated_count=0,
-            failed_count=0,
-            skipped_count=0,
-        )
-
-    new_squads = tariff.allowed_squads or []
-    # None means "clear external squad" — intentional when tariff has none
-    ext_squad_uuid = tariff.external_squad_uuid
-
-    # Sync to Remnawave panel with concurrency limit and circuit breaker
-    from app.services.grace_access_runtime import update_panel_user_grace_safe
-    from app.services.remnawave_service import RemnaWaveService
-
-    service = RemnaWaveService()
-    updated_count = 0
-    failed_count = 0
-    skipped_count = 0
-    consecutive_failures = 0
-    errors: list[str] = []
-    aborted = False
-
-    async with service.get_api_client() as api:
-        semaphore = asyncio.Semaphore(_SYNC_SQUADS_CONCURRENCY)
-
-        async def _sync_one(sub: Subscription) -> str:
-            # Counter mutations are safe: no `await` between read-modify-write
-            # and the check within each branch (single-threaded asyncio event loop).
-            nonlocal updated_count, failed_count, skipped_count, consecutive_failures, aborted
-
-            if aborted:
-                skipped_count += 1
-                return 'skipped'
-
-            remnawave_id = (
-                sub.remnawave_id
-                if settings.is_multi_tariff_enabled()
-                else (sub.user.remnawave_id if sub.user else None)
-            )
-            if not remnawave_id:
-                skipped_count += 1
-                return 'skipped'
-
-            async with semaphore:
-                if aborted:
-                    skipped_count += 1
-                    return 'skipped'
-
-                try:
-                    await patch_panel_squads(
-                        api,
-                        user_id=remnawave_id,
-                        squads=new_squads,
-                        external_squad_uuid=ext_squad_uuid,
-                        update_call=lambda **kwargs: update_panel_user_grace_safe(api, sub.id, **kwargs),
-                        subscription=sub,
-                    )
-                    # Update local DB only on successful API call
-                    sub.connected_squads = new_squads
-                    updated_count += 1
-                    consecutive_failures = 0
-                    return 'ok'
-                except Exception as e:
-                    failed_count += 1
-                    consecutive_failures += 1
-                    errors.append(f'user_id={sub.user_id}: sync failed')
-                    logger.warning(
-                        'Failed to sync squads for user in Remnawave',
-                        user_id=sub.user_id,
-                        remnawave_id=remnawave_id,
-                        error=str(e),
-                    )
-                    if consecutive_failures >= _SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES:
-                        aborted = True
-                        errors.append(f'Aborted after {_SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES} consecutive failures')
-                    return 'error'
-
-        await asyncio.gather(*[_sync_one(sub) for sub in subscriptions])
-
-    # Commit local DB changes only for successfully synced subscriptions
-    await db.commit()
-
-    logger.info(
-        'Admin synced squads for tariff',
-        admin_id=admin.id,
-        tariff_id=tariff_id,
-        tariff_name=tariff.name,
-        total=len(subscriptions),
-        updated=updated_count,
-        failed=failed_count,
-        skipped=skipped_count,
-    )
-
-    return SyncSquadsResponse(
-        tariff_id=tariff_id,
-        tariff_name=tariff.name,
-        total_subscriptions=len(subscriptions),
-        updated_count=updated_count,
-        failed_count=failed_count,
-        skipped_count=skipped_count,
-        errors=errors[:20],
-    )

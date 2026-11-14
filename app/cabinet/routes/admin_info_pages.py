@@ -13,7 +13,6 @@ from app.database.crud.info_pages import (
     delete_info_page,
     get_all_info_pages,
     get_info_page_by_id,
-    reorder_info_pages,
     update_info_page,
 )
 from app.database.models import FaqPage, FaqSetting, User
@@ -27,7 +26,6 @@ from ..schemas.info_pages import (
     InfoPageUpdateRequest,
     LegacyFaqResponse,
     LegacyFaqUpdateRequest,
-    ReorderRequest,
 )
 
 
@@ -211,23 +209,6 @@ async def remove_page(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to delete info page',
-        )
-
-
-@router.post('/reorder', status_code=status.HTTP_204_NO_CONTENT)
-async def reorder_pages(
-    request: ReorderRequest,
-    admin: User = Depends(require_permission('info_pages:edit')),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> None:
-    """Bulk update sort_order for info pages."""
-    try:
-        await reorder_info_pages(db, request.items)
-    except Exception:
-        logger.exception('Failed to reorder info pages')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to reorder info pages',
         )
 
 

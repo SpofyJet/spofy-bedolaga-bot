@@ -2,7 +2,7 @@
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import String, func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.server_squad import (
@@ -13,7 +13,7 @@ from app.database.crud.server_squad import (
     update_server_squad,
     update_server_squad_promo_groups,
 )
-from app.database.models import PromoGroup, ServerSquad, Subscription, Tariff, User
+from app.database.models import PromoGroup, ServerSquad, Tariff, User
 from app.services.subscription_service import SubscriptionService
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -22,7 +22,6 @@ from ..schemas.servers import (
     ServerDetailResponse,
     ServerListItem,
     ServerListResponse,
-    ServerStatsResponse,
     ServerSyncResponse,
     ServerToggleResponse,
     ServerTrialToggleResponse,
@@ -239,49 +238,6 @@ async def toggle_server_trial(
         id=server_id,
         is_trial_eligible=new_status,
         message=f'Server {status_text}',
-    )
-
-
-@router.get('/{server_id}/stats', response_model=ServerStatsResponse)
-async def get_server_stats(
-    server_id: int,
-    admin: User = Depends(require_permission('servers:read')),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Get server statistics."""
-    server = await get_server_squad_by_id(db, server_id)
-    if not server:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Server not found',
-        )
-
-    active_subs = await count_active_users_for_squad(db, server.squad_uuid)
-
-    # Count trial subscriptions on this server
-    # Use LIKE query for JSON array since .contains() is DB-specific
-    trial_result = await db.execute(
-        select(func.count(Subscription.id)).where(
-            Subscription.is_trial == True,
-            Subscription.status == 'active',
-            func.cast(Subscription.connected_squads, String).like(f'%"{server.squad_uuid}"%'),
-        )
-    )
-    trial_count = trial_result.scalar() or 0
-
-    usage_percent = None
-    if server.max_users and server.max_users > 0:
-        usage_percent = round((server.current_users or 0) / server.max_users * 100, 1)
-
-    return ServerStatsResponse(
-        id=server_id,
-        display_name=server.display_name,
-        squad_uuid=server.squad_uuid,
-        current_users=server.current_users or 0,
-        max_users=server.max_users,
-        active_subscriptions=active_subs,
-        trial_subscriptions=trial_count,
-        usage_percent=usage_percent,
     )
 
 

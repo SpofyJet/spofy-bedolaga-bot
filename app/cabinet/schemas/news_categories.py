@@ -23,21 +23,6 @@ class NewsCategoryCreate(BaseModel):
         return v
 
 
-class NewsCategoryUpdate(BaseModel):
-    """Request to update a news category."""
-
-    name: str | None = Field(None, min_length=1, max_length=100)
-    color: str | None = Field(None, max_length=20)
-
-    @field_validator('color')
-    @classmethod
-    def validate_color(cls, v: str | None) -> str | None:
-        if v is not None and not _HEX_COLOR_RE.match(v):
-            msg = 'Invalid hex color'
-            raise ValueError(msg)
-        return v
-
-
 class NewsCategoryResponse(BaseModel):
     """News category response."""
 

@@ -20,7 +20,6 @@ from app.database.crud.subscription_segments import segment_condition, subscript
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.user import (
     add_user_balance,
-    delete_user as soft_delete_user,
     get_referrals,
     get_user_by_id,
     get_user_by_telegram_id,
@@ -43,7 +42,6 @@ from app.database.models import (
     PromoGroup,
     ReferralEarning,
     Subscription,
-    SubscriptionServer,
     SubscriptionStatus,
     TrafficPurchase,
     Transaction,
@@ -77,8 +75,6 @@ from ..schemas.users import (
     AssignReferrerRequest,
     AssignReferrerResponse,
     DeleteDeviceResponse,
-    DeleteUserRequest,
-    DeleteUserResponse,
     DeviceInfo,
     DisableUserRequest,
     DisableUserResponse,
@@ -92,8 +88,6 @@ from ..schemas.users import (
     RenameDeviceRequest,
     RenameDeviceResponse,
     ResetDevicesResponse,
-    ResetSubscriptionRequest,
-    ResetSubscriptionResponse,
     ResetTrialRequest,
     ResetTrialResponse,
     SendUserMessageRequest,
@@ -116,7 +110,6 @@ from ..schemas.users import (
     UpdateRestrictionsResponse,
     UpdateSubscriptionRequest,
     UpdateSubscriptionResponse,
-    UpdateUserStatusRequest,
     UpdateUserStatusResponse,
     UserAvailableTariffItem,
     UserAvailableTariffsResponse,
@@ -2056,51 +2049,6 @@ async def get_user_available_tariffs(
 # === Status Management ===
 
 
-@router.post('/{user_id}/status', response_model=UpdateUserStatusResponse)
-async def update_user_status(
-    user_id: int,
-    request: UpdateUserStatusRequest,
-    admin: User = Depends(require_permission('users:edit')),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Update user status (active, blocked, deleted)."""
-    user = await get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
-        )
-
-    old_status = user.status
-    new_status = request.status.value
-
-    if old_status == new_status:
-        return UpdateUserStatusResponse(
-            success=True,
-            old_status=old_status,
-            new_status=new_status,
-            message='Status unchanged',
-        )
-
-    user.status = new_status
-    user.updated_at = datetime.now(UTC)
-    await db.commit()
-    await db.refresh(user)
-
-    action = f'{old_status} -> {new_status}'
-    if request.reason:
-        action += f' (reason: {request.reason})'
-
-    logger.info('Admin changed status for user', admin_id=admin.id, user_id=user_id, action=action)
-
-    return UpdateUserStatusResponse(
-        success=True,
-        old_status=old_status,
-        new_status=new_status,
-        message=f'Status changed from {old_status} to {new_status}',
-    )
-
-
 @router.post('/{user_id}/block', response_model=UpdateUserStatusResponse)
 async def block_user(
     user_id: int,
@@ -2855,56 +2803,6 @@ async def reset_user_devices(
 # === Delete User ===
 
 
-@router.delete('/{user_id}', response_model=DeleteUserResponse)
-async def delete_user(
-    user_id: int,
-    request: DeleteUserRequest = DeleteUserRequest(),
-    admin: User = Depends(require_permission('users:delete')),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """
-    Delete a user.
-
-    - **soft_delete=True**: Mark user as deleted (default)
-    - **soft_delete=False**: Permanently delete from database
-    """
-    user = await get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
-        )
-
-    if request.soft_delete:
-        await soft_delete_user(db, user)
-        action = 'soft deleted'
-    else:
-        from app.services.grace_access_runtime import (
-            GraceAccessDeletionBlocked,
-            ensure_no_open_grace_for_user,
-        )
-
-        try:
-            await ensure_no_open_grace_for_user(db, user.id)
-        except GraceAccessDeletionBlocked as error:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail='Open grace access must be drained or restored before permanent deletion.',
-            ) from error
-        # Hard delete
-        await db.delete(user)
-        await db.commit()
-        action = 'permanently deleted'
-
-    reason_text = f' (reason: {request.reason})' if request.reason else ''
-    logger.info('Admin user', admin_id=admin.id, action=action, user_id=user_id, reason_text=reason_text)
-
-    return DeleteUserResponse(
-        success=True,
-        message=f'User {action} successfully',
-    )
-
-
 @router.delete('/{user_id}/full', response_model=FullDeleteUserResponse)
 async def full_delete_user(
     user_id: int,
@@ -3045,132 +2943,6 @@ async def reset_user_trial(
         subscription_deleted=subscription_deleted,
         has_used_trial_reset=True,
         trial_available=trial_available,
-    )
-
-
-@router.post('/{user_id}/reset-subscription', response_model=ResetSubscriptionResponse)
-async def reset_user_subscription(
-    user_id: int,
-    request: ResetSubscriptionRequest = ResetSubscriptionRequest(),
-    admin: User = Depends(require_permission('users:subscription')),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """
-    Reset user subscription - removes/deactivates subscription.
-
-    Actions:
-    - Delete subscription from bot database
-    - Optionally deactivate in Remnawave panel
-    - User will have no active subscription
-    """
-    user = await get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
-        )
-
-    subscription_deleted = False
-    panel_deactivated = False
-    panel_error: str | None = None
-
-    subs = user.subscriptions or []
-    if not subs:
-        return ResetSubscriptionResponse(
-            success=True,
-            message='User has no subscription to reset',
-            subscription_deleted=False,
-            panel_deactivated=False,
-        )
-
-    from app.services.grace_access_runtime import (
-        GraceAccessDeletionBlocked,
-        ensure_no_open_grace_for_subscriptions,
-    )
-
-    try:
-        await ensure_no_open_grace_for_subscriptions(db, tuple(sub.id for sub in subs))
-    except GraceAccessDeletionBlocked as error:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='Open grace access must be drained or restored before resetting subscriptions.',
-        ) from error
-
-    # Best-effort: stop Platega SBP autopay before any irreversible panel/DB
-    # step. Each cancellation commits its own transaction internally, which
-    # releases the grace-guard's Postgres advisory lock acquired just above.
-    # It therefore runs BEFORE panel deactivation and the DB deletes, and the
-    # guard is re-acquired immediately below — closing that window before
-    # anything that can't be undone happens.
-    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
-
-    for sub in subs:
-        await cancel_platega_recurring_for_subscription_safe(db, sub.id)
-
-    try:
-        await ensure_no_open_grace_for_subscriptions(db, tuple(sub.id for sub in subs))
-    except GraceAccessDeletionBlocked as error:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='Open grace access must be drained or restored before resetting subscriptions.',
-        ) from error
-
-    # Deactivate in Remnawave panel if requested
-    if request.deactivate_in_panel:
-        try:
-            from app.services.subscription_service import SubscriptionService
-
-            subscription_service = SubscriptionService()
-            if settings.is_multi_tariff_enabled():
-                panel_targets = [sub.remnawave_id for sub in subs if sub.remnawave_id]
-            else:
-                panel_targets = [user.remnawave_id] if user.remnawave_id else []
-
-            panel_results = [
-                await subscription_service.disable_remnawave_user(panel_user_id, db=db)
-                for panel_user_id in panel_targets
-            ]
-            panel_deactivated = bool(panel_targets) and all(panel_results)
-            if panel_targets and not panel_deactivated:
-                return ResetSubscriptionResponse(
-                    success=False,
-                    message='Subscription reset failed: panel deactivation was not completed',
-                    subscription_deleted=False,
-                    panel_deactivated=False,
-                    panel_error='Не удалось отключить всех пользователей в Remnawave',
-                )
-            if panel_deactivated:
-                logger.info('Disabled Remnawave users for subscription reset', user_id=user_id)
-        except Exception as e:
-            logger.warning('Failed to disable Remnawave user during subscription reset', error=e)
-            return ResetSubscriptionResponse(
-                success=False,
-                message='Subscription reset failed: panel deactivation was not completed',
-                subscription_deleted=False,
-                panel_deactivated=False,
-                panel_error='Ошибка обработки пользователя в Remnawave',
-            )
-
-    # Delete all subscriptions from database
-    from sqlalchemy import delete
-
-    for sub in subs:
-        await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id))
-    await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
-    subscription_deleted = True
-
-    user.updated_at = datetime.now(UTC)
-    await db.commit()
-
-    reason_text = f' (reason: {request.reason})' if request.reason else ''
-    logger.info('Admin reset subscription for user', admin_id=admin.id, user_id=user_id, reason_text=reason_text)
-
-    return ResetSubscriptionResponse(
-        success=True,
-        message='Subscription reset successfully',
-        subscription_deleted=subscription_deleted,
-        panel_deactivated=panel_deactivated,
-        panel_error=panel_error,
     )
 
 

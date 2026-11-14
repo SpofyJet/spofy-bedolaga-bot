@@ -41,38 +41,6 @@ async def create_tag(db: AsyncSession, *, name: str, color: str = '#94a3b8') -> 
     return tag
 
 
-async def update_tag(
-    db: AsyncSession,
-    tag: NewsTag,
-    **kwargs: str | None,
-) -> NewsTag:
-    """Update an existing news tag.
-
-    Supported kwargs: name, color.
-
-    Raises:
-        IntegrityError: if the new name conflicts with an existing tag.
-    """
-    update_data: dict[str, str] = {}
-    if 'name' in kwargs and kwargs['name'] is not None:
-        update_data['name'] = kwargs['name'].strip()
-    if 'color' in kwargs and kwargs['color'] is not None:
-        update_data['color'] = kwargs['color']
-
-    if not update_data:
-        return tag
-
-    await db.execute(update(NewsTag).where(NewsTag.id == tag.id).values(**update_data))
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise
-    await db.refresh(tag)
-    logger.info('Updated news tag', tag_id=tag.id, updated_fields=list(update_data.keys()))
-    return tag
-
-
 async def delete_tag(db: AsyncSession, tag: NewsTag) -> None:
     """Delete a news tag and clear tag fields from all linked articles."""
     tag_id, tag_name = tag.id, tag.name

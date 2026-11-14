@@ -113,12 +113,6 @@ class AdminStatusUpdateRequest(BaseModel):
     status: str = Field(..., description='New status: open, answered, pending, closed')
 
 
-class AdminPriorityUpdateRequest(BaseModel):
-    """Update ticket priority."""
-
-    priority: str = Field(..., description='New priority: low, normal, high, urgent')
-
-
 class AdminStatsResponse(BaseModel):
     """Ticket statistics for admin."""
 
@@ -558,61 +552,6 @@ async def update_ticket_status(
         ticket.closed_at = datetime.now(UTC)
     else:
         ticket.closed_at = None
-
-    await db.commit()
-    await db.refresh(ticket)
-
-    messages = sorted(ticket.messages or [], key=lambda m: m.created_at)
-    messages_response = [_message_to_response(m) for m in messages]
-
-    user_info = None
-    if ticket.user:
-        user_info = _user_to_info(ticket.user)
-
-    return AdminTicketDetailResponse(
-        id=ticket.id,
-        title=ticket.title or f'Ticket #{ticket.id}',
-        status=ticket.status,
-        priority=ticket.priority or 'normal',
-        created_at=ticket.created_at,
-        updated_at=ticket.updated_at or ticket.created_at,
-        closed_at=ticket.closed_at,
-        is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
-        user=user_info,
-        messages=messages_response,
-    )
-
-
-@router.post('/{ticket_id}/priority', response_model=AdminTicketDetailResponse)
-async def update_ticket_priority(
-    ticket_id: int,
-    request: AdminPriorityUpdateRequest,
-    admin: User = Depends(require_permission('tickets:close')),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Update ticket priority."""
-    allowed_priorities = {'low', 'normal', 'high', 'urgent'}
-    if request.priority not in allowed_priorities:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid priority. Allowed: {", ".join(allowed_priorities)}',
-        )
-
-    query = (
-        select(Ticket).where(Ticket.id == ticket_id).options(selectinload(Ticket.messages), selectinload(Ticket.user))
-    )
-
-    result = await db.execute(query)
-    ticket = result.scalar_one_or_none()
-
-    if not ticket:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Ticket not found',
-        )
-
-    ticket.priority = request.priority
-    ticket.updated_at = datetime.now(UTC)
 
     await db.commit()
     await db.refresh(ticket)

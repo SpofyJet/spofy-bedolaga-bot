@@ -92,22 +92,6 @@ async def list_subscriptions(
     )
 
 
-@router.get('/{subscription_id}', response_model=SubscriptionListItem)
-async def get_subscription_detail(
-    subscription_id: int,
-    user: User = Depends(get_current_cabinet_user),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> SubscriptionListItem:
-    """Get specific subscription details with ownership check."""
-    subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
-    if not subscription or subscription.is_pending_trial:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Subscription not found',
-        )
-    return _subscription_to_list_item(subscription)
-
-
 @router.delete('/{subscription_id}')
 async def delete_subscription(
     subscription_id: int,

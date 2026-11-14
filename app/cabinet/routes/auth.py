@@ -2464,46 +2464,6 @@ async def verify_email_change(
     }
 
 
-@router.post('/email/change/cancel')
-async def cancel_email_change(
-    user: User = Depends(get_current_cabinet_user),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """
-    Cancel pending email change.
-    """
-    if not user.email_change_new:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='No pending email change',
-        )
-
-    await clear_email_change_pending(db, user)
-
-    return {'message': 'Email change cancelled'}
-
-
-@router.get('/email/change/status')
-async def get_email_change_status(
-    user: User = Depends(get_current_cabinet_user),
-):
-    """
-    Get pending email change status.
-    """
-    if not user.email_change_new:
-        return {
-            'pending': False,
-            'new_email': None,
-            'expires_at': None,
-        }
-
-    return {
-        'pending': True,
-        'new_email': user.email_change_new,
-        'expires_at': user.email_change_expires.isoformat() if user.email_change_expires else None,
-    }
-
-
 # --- Deep link auth (fallback when oauth.telegram.org is blocked) ---
 
 

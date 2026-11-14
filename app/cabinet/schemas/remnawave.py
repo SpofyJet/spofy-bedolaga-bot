@@ -7,12 +7,6 @@ from typing import Any, Literal, Self
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.external.remnawave_api import (
-    INTERNAL_SQUAD_NAME_MAX_LENGTH,
-    INTERNAL_SQUAD_NAME_MIN_LENGTH,
-    INTERNAL_SQUAD_NAME_PATTERN,
-)
-
 
 # ============ Status & Connection ============
 
@@ -156,21 +150,6 @@ class NodesOverview(BaseModel):
     nodes: list[NodeInfo]
 
 
-class NodeStatisticsResponse(BaseModel):
-    """Node statistics with usage history."""
-
-    node: NodeInfo
-    realtime: dict[str, Any] | None = None
-    usage_history: list[dict[str, Any]] = Field(default_factory=list)
-    last_updated: datetime | None = None
-
-
-class NodeUsageResponse(BaseModel):
-    """Node usage history response."""
-
-    items: list[dict[str, Any]] = Field(default_factory=list)
-
-
 class NodeActionRequest(BaseModel):
     """Request to perform node action."""
 
@@ -302,124 +281,10 @@ class SquadsListResponse(BaseModel):
     total: int
 
 
-class SquadDetailResponse(BaseModel):
-    """Detailed squad response."""
-
-    uuid: str
-    name: str
-    members_count: int
-    inbounds_count: int
-    inbounds: list[dict[str, Any]] = Field(default_factory=list)
-    # Local DB info if synced
-    local_id: int | None = None
-    display_name: str | None = None
-    country_code: str | None = None
-    description: str | None = None
-    is_available: bool | None = None
-    is_trial_eligible: bool | None = None
-    price_kopeks: int | None = None
-    max_users: int | None = None
-    current_users: int | None = None
-    sort_order: int | None = None
-    is_synced: bool = False
-    active_subscriptions: int = 0
-
-
-class SquadCreateRequest(BaseModel):
-    """Request to create a new squad. Имя — по правилам панели (2–30, латиница/цифры/пробел/-/_)."""
-
-    name: str = Field(
-        ...,
-        min_length=INTERNAL_SQUAD_NAME_MIN_LENGTH,
-        max_length=INTERNAL_SQUAD_NAME_MAX_LENGTH,
-        pattern=INTERNAL_SQUAD_NAME_PATTERN,
-    )
-    inbound_uuids: list[str] = Field(default_factory=list)
-
-
-class SquadUpdateRequest(BaseModel):
-    """Request to update a squad."""
-
-    name: str | None = Field(
-        None,
-        min_length=INTERNAL_SQUAD_NAME_MIN_LENGTH,
-        max_length=INTERNAL_SQUAD_NAME_MAX_LENGTH,
-        pattern=INTERNAL_SQUAD_NAME_PATTERN,
-    )
-    inbound_uuids: list[str] | None = None
-
-
-class SquadActionRequest(BaseModel):
-    """Request to perform squad action."""
-
-    action: Literal['add_all_users', 'remove_all_users', 'delete', 'rename', 'update_inbounds']
-    name: str | None = Field(
-        None,
-        min_length=INTERNAL_SQUAD_NAME_MIN_LENGTH,
-        max_length=INTERNAL_SQUAD_NAME_MAX_LENGTH,
-        pattern=INTERNAL_SQUAD_NAME_PATTERN,
-    )
-    inbound_uuids: list[str] | None = None
-
-
-class SquadOperationResponse(BaseModel):
-    """Response after squad operation."""
-
-    success: bool
-    message: str | None = None
-    data: dict[str, Any] | None = None
-
-
 # ============ Migration ============
 
 
-class MigrationPreviewResponse(BaseModel):
-    """Preview of squad migration."""
-
-    squad_uuid: str
-    squad_name: str
-    current_users: int
-    max_users: int | None = None
-    users_to_migrate: int
-
-
-class MigrationRequest(BaseModel):
-    """Request to migrate users between squads."""
-
-    source_uuid: str
-    target_uuid: str
-
-
-class MigrationStats(BaseModel):
-    """Migration statistics."""
-
-    source_uuid: str
-    target_uuid: str
-    total: int = 0
-    updated: int = 0
-    panel_updated: int = 0
-    panel_failed: int = 0
-    source_removed: int = 0
-    target_added: int = 0
-
-
-class MigrationResponse(BaseModel):
-    """Response after migration."""
-
-    success: bool
-    message: str | None = None
-    error: str | None = None
-    data: MigrationStats | None = None
-
-
 # ============ Inbounds ============
-
-
-class InboundsListResponse(BaseModel):
-    """List of inbounds response."""
-
-    items: list[dict[str, Any]] = Field(default_factory=list)
-    total: int = 0
 
 
 # ============ Auto Sync ============

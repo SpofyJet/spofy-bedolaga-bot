@@ -41,38 +41,6 @@ async def create_category(db: AsyncSession, *, name: str, color: str = '#00e5a0'
     return category
 
 
-async def update_category(
-    db: AsyncSession,
-    category: NewsCategory,
-    **kwargs: str | None,
-) -> NewsCategory:
-    """Update an existing news category.
-
-    Supported kwargs: name, color.
-
-    Raises:
-        IntegrityError: if the new name conflicts with an existing category.
-    """
-    update_data: dict[str, str] = {}
-    if 'name' in kwargs and kwargs['name'] is not None:
-        update_data['name'] = kwargs['name'].strip()
-    if 'color' in kwargs and kwargs['color'] is not None:
-        update_data['color'] = kwargs['color']
-
-    if not update_data:
-        return category
-
-    await db.execute(update(NewsCategory).where(NewsCategory.id == category.id).values(**update_data))
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise
-    await db.refresh(category)
-    logger.info('Updated news category', category_id=category.id, updated_fields=list(update_data.keys()))
-    return category
-
-
 async def delete_category(db: AsyncSession, category: NewsCategory) -> None:
     """Delete a news category and clear category fields from all linked articles."""
     cat_id, cat_name = category.id, category.name

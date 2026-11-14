@@ -381,13 +381,6 @@ class UpdateSubscriptionResponse(BaseModel):
     subscription: UserSubscriptionInfo | None = None
 
 
-class UpdateUserStatusRequest(BaseModel):
-    """Request to update user status."""
-
-    status: UserStatusEnum
-    reason: str | None = Field(None, max_length=500, description='Reason for status change')
-
-
 class UpdateUserStatusResponse(BaseModel):
     """Response after status update."""
 
@@ -541,20 +534,6 @@ class ResetDevicesResponse(BaseModel):
     success: bool
     message: str
     deleted_count: int = 0
-
-
-class DeleteUserRequest(BaseModel):
-    """Request to delete user."""
-
-    soft_delete: bool = Field(default=True, description='Soft delete (mark as deleted) or hard delete')
-    reason: str | None = Field(None, max_length=500, description='Reason for deletion')
-
-
-class DeleteUserResponse(BaseModel):
-    """Response after user deletion."""
-
-    success: bool
-    message: str
 
 
 # === Statistics ===
@@ -789,23 +768,6 @@ class ResetTrialResponse(BaseModel):
     # Главный ответ на вопрос админа: сможет ли человек взять триал после нажатия.
     # Без него кнопка сообщала «успешно» даже когда ничего не менялось.
     trial_available: bool = False
-
-
-class ResetSubscriptionRequest(BaseModel):
-    """Request to reset user subscription."""
-
-    deactivate_in_panel: bool = Field(default=True, description='Also deactivate in Remnawave panel')
-    reason: str | None = Field(None, max_length=500, description='Reason for subscription reset')
-
-
-class ResetSubscriptionResponse(BaseModel):
-    """Response after subscription reset."""
-
-    success: bool
-    message: str
-    subscription_deleted: bool = False
-    panel_deactivated: bool = False
-    panel_error: str | None = None
 
 
 class DisableUserRequest(BaseModel):

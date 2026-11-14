@@ -9,11 +9,7 @@ import pytest
 
 sys.modules.setdefault('nh3', MagicMock())
 
-from fastapi import HTTPException
 
-from app.cabinet.routes.subscription_modules import traffic as traffic_routes
-from app.cabinet.schemas.subscription import TrafficPurchaseRequest
-from app.config import settings
 from app.database.crud.subscription import carried_seconds_by_value, extend_subscription
 from app.database.models import Base, Subscription, SubscriptionStatus, Tariff, User
 from app.handlers.subscription.traffic import _traffic_switch_blocked
@@ -148,32 +144,6 @@ async def test_renewing_same_tariff_keeps_days(monkeypatch):
         result = await extend_subscription(db, subscription, 30, tariff_id=2)
 
         assert _days_left(result, now) == pytest.approx(130, abs=0.1)
-
-
-@pytest.mark.asyncio
-async def test_cabinet_refuses_package_switch_on_tariff(monkeypatch):
-    now = datetime.now(UTC)
-    monkeypatch.setattr(type(settings), 'get_traffic_packages', lambda self: PACKAGES)
-    async with memory_session(monkeypatch, TABLES) as db:
-        user = User(id=1, telegram_id=1001, first_name='U', language='ru', status='active', balance_kopeks=10000)
-        db.add(user)
-        for tariff in _tariffs():
-            db.add(tariff)
-        await db.flush()
-        db.add(_subscription(now, tariff_id=3, days=30, limit=100))
-        await db.commit()
-
-        with pytest.raises(HTTPException) as refused:
-            await traffic_routes.switch_traffic_package(
-                TrafficPurchaseRequest(gb=0), user=user, db=db, subscription_id=None
-            )
-
-        assert refused.value.status_code == 400
-        assert refused.value.detail['code'] == 'tariff_traffic_fixed'
-        subscription = await db.get(Subscription, 10)
-        await db.refresh(user)
-        assert subscription.traffic_limit_gb == 100
-        assert user.balance_kopeks == 10000
 
 
 def test_bot_refuses_package_switch_on_tariff_and_trial():

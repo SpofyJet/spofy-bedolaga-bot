@@ -366,21 +366,6 @@ async def get_system_info(
         )
 
 
-@router.get('/nodes', response_model=NodesOverview)
-async def get_nodes_status(
-    admin: User = Depends(require_permission('stats:read')),
-):
-    """Get status of all nodes."""
-    try:
-        return await _get_nodes_overview()
-    except Exception as e:
-        logger.error('Failed to get nodes status', error=e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load nodes status',
-        )
-
-
 @router.post('/nodes/{node_uuid}/restart')
 async def restart_node(
     node_uuid: str,
