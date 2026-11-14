@@ -151,26 +151,6 @@ class RemnaWaveAccessibleNode:
 
 
 @dataclass
-class RemnaWaveHost:
-    """Хост панели — то, куда подключаются пользователи: адрес, порт, SNI, инбаунд."""
-
-    uuid: str
-    remark: str
-    address: str
-    port: int | None = None
-    sni: str | None = None
-    host: str | None = None
-    is_disabled: bool = False
-    is_hidden: bool = False
-    # 3.4.3: у хоста массив `tags`; поля `tag` в схеме панели нет.
-    tags: list[str] = field(default_factory=list)
-    security_layer: str | None = None
-    config_profile_uuid: str | None = None
-    config_profile_inbound_uuid: str | None = None
-    view_position: int = 0
-
-
-@dataclass
 class RemnaWaveNode:
     uuid: str
     name: str
@@ -1261,11 +1241,6 @@ class RemnaWaveAPI:
         response = await self._make_request('GET', '/api/nodes')
         return [self._parse_node(node) for node in response['response']]
 
-    async def get_all_hosts(self) -> list[RemnaWaveHost]:
-        """GET /api/hosts — все хосты панели (включая отключённые и скрытые)."""
-        response = await self._make_request('GET', '/api/hosts')
-        return [self._parse_host(host) for host in response.get('response') or []]
-
     async def get_node_by_uuid(self, uuid: str) -> RemnaWaveNode | None:
         try:
             response = await self._make_request('GET', f'/api/nodes/{uuid}')
@@ -1305,26 +1280,6 @@ class RemnaWaveAPI:
             if encrypted:
                 info.happ_crypto_link = encrypted
         return info
-
-    async def get_subscription_links_by_short_uuid(self, short_uuid: str) -> list[str]:
-        """Remnawave 2.x: защищённая ``GET /api/subscriptions/by-short-uuid/{shortUuid}`` → ``response.links``."""
-        response = await self._make_request('GET', f'/api/subscriptions/by-short-uuid/{short_uuid}')
-        data = response.get('response') if isinstance(response, dict) else None
-        return [str(link) for link in ((data or {}).get('links') or []) if link]
-
-    async def get_public_subscription(
-        self, short_uuid: str, *, user_agent: str | None = None, headers: dict[str, str] | None = None
-    ) -> tuple[str, dict[str, str]]:
-        """Публичная подписка как её видит клиент: тело и заголовки ответа (``x-hwid-active`` и т. п.)."""
-        request_headers = dict(headers or {})
-        if user_agent:
-            request_headers['User-Agent'] = user_agent
-        async with self.session.get(
-            f'{self.base_url}/api/sub/{short_uuid}', headers=request_headers or None
-        ) as response:
-            if response.status >= 400:
-                raise RemnaWaveAPIError(f'Failed to get subscription: {response.status}')
-            return await response.text(), {key.lower(): value for key, value in response.headers.items()}
 
     async def get_system_stats(self) -> dict[str, Any]:
         """``GET /api/system/stats`` — без query-параметров (``tz`` есть только у ``/stats/bandwidth``)."""
@@ -1976,26 +1931,6 @@ class RemnaWaveAPI:
             view_position=squad_data.get('viewPosition', 0),
             created_at=self._parse_optional_datetime(squad_data.get('createdAt')),
             updated_at=self._parse_optional_datetime(squad_data.get('updatedAt')),
-        )
-
-    @staticmethod
-    def _parse_host(data: dict) -> RemnaWaveHost:
-        inbound = data.get('inbound') or {}
-        port = data.get('port')
-        return RemnaWaveHost(
-            uuid=data['uuid'],
-            remark=data.get('remark') or '',
-            address=data.get('address') or '',
-            port=int(port) if port is not None else None,
-            sni=data.get('sni') or None,
-            host=data.get('host') or None,
-            is_disabled=bool(data.get('isDisabled', False)),
-            is_hidden=bool(data.get('isHidden', False)),
-            tags=[str(tag) for tag in (data.get('tags') or []) if tag],
-            security_layer=data.get('securityLayer') or None,
-            config_profile_uuid=inbound.get('configProfileUuid') or None,
-            config_profile_inbound_uuid=inbound.get('configProfileInboundUuid') or None,
-            view_position=int(data.get('viewPosition') or 0),
         )
 
     def _parse_node(self, node_data: dict) -> RemnaWaveNode:

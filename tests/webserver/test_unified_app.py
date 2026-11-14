@@ -26,7 +26,6 @@ async def test_unified_app_health_reports_features(monkeypatch: pytest.MonkeyPat
     miniapp_static_dir = tmp_path / 'miniapp'
     miniapp_static_dir.mkdir()
 
-    monkeypatch.setattr(settings, 'WEB_API_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'PLATEGA_ENABLED', True, raising=False)
     # Маршрут монтируется по учётным данным, а не по флагу: без ключа
     # проверять подпись коллбека нечем, и эндпоинт не поднимается.
@@ -88,7 +87,6 @@ def _build_unified_app(monkeypatch: pytest.MonkeyPatch, docs_enabled: bool) -> F
     dispatcher = SimpleNamespace(feed_update=AsyncMock())
     payment_service = AsyncMock(spec=PaymentService)
 
-    monkeypatch.setattr(settings, 'WEB_API_ENABLED', False, raising=False)
     monkeypatch.setattr(settings, 'WEB_API_DOCS_ENABLED', docs_enabled, raising=False)
     monkeypatch.setattr(settings, 'MINIAPP_STATIC_PATH', 'miniapp', raising=False)
 
@@ -106,7 +104,6 @@ async def test_unified_app_health_path_without_admin(monkeypatch: pytest.MonkeyP
     dispatcher = SimpleNamespace(feed_update=AsyncMock())
     payment_service = AsyncMock(spec=PaymentService)
 
-    monkeypatch.setattr(settings, 'WEB_API_ENABLED', False, raising=False)
     monkeypatch.setattr(settings, 'MINIAPP_STATIC_PATH', 'miniapp', raising=False)
 
     app = create_unified_app(

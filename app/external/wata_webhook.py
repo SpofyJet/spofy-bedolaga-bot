@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import json
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 import structlog
 from aiohttp import ClientSession, ClientTimeout, ContentTypeError, web
@@ -13,7 +11,6 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
 from app.config import settings
-from app.database.database import AsyncSessionLocal
 from app.services.payment_service import PaymentService
 
 
@@ -137,51 +134,6 @@ class WataWebhookHandler:
         except Exception as error:
             logger.error('Ошибка проверки подписи WATA', error=error)
             return False
-
-    async def handle_webhook(self, request: web.Request) -> web.Response:
-        if not settings.is_wata_enabled():
-            logger.warning('Получен WATA webhook, но сервис отключен')
-            return web.json_response({'status': 'error', 'reason': 'wata_disabled'}, status=503)
-
-        raw_body = await request.text()
-        if not raw_body:
-            logger.warning('Получен пустой WATA webhook')
-            return web.json_response({'status': 'error', 'reason': 'empty_body'}, status=400)
-
-        signature = request.headers.get('X-Signature')
-        if not await self._verify_signature(raw_body, signature or ''):
-            return web.json_response({'status': 'error', 'reason': 'invalid_signature'}, status=401)
-
-        try:
-            payload: dict[str, Any] = json.loads(raw_body)
-        except json.JSONDecodeError:
-            logger.error('Некорректный JSON WATA webhook')
-            return web.json_response({'status': 'error', 'reason': 'invalid_json'}, status=400)
-
-        logger.info(
-            'Получен WATA webhook',
-            payload=payload.get('orderId'),
-            payload_2=payload.get('transactionStatus'),
-        )
-
-        processed: bool | None = None
-        async with AsyncSessionLocal() as db:
-            try:
-                processed = await self.payment_service.process_wata_webhook(db, payload)
-                await db.commit()
-            except Exception as e:
-                logger.error('Ошибка обработки WATA webhook', error=e)
-                await db.rollback()
-                return web.json_response({'status': 'error', 'reason': 'internal_error'}, status=500)
-
-        if processed is None:
-            logger.error('Не удалось обработать WATA webhook: нет сессии БД')
-            return web.json_response({'status': 'error', 'reason': 'db_session_unavailable'}, status=500)
-
-        if processed:
-            return web.json_response({'status': 'ok'}, status=200)
-
-        return web.json_response({'status': 'error', 'reason': 'not_processed'}, status=400)
 
     async def health_check(self, request: web.Request) -> web.Response:
         return web.json_response(

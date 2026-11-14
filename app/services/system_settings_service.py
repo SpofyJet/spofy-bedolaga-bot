@@ -188,7 +188,7 @@ class BotConfigurationService:
         'MAINTENANCE': '🔧 Обслуживание',
         'BACKUP': '💾 Резервные копии',
         'VERSION': '🔄 Проверка версий',
-        'WEB_API': '⚡ Web API',
+        'WEB_API': '🌐 Веб-сервер',
         'WEBHOOK': '🌐 Webhook',
         'WEBHOOK_NOTIFICATIONS': '📢 Уведомления от вебхуков',
         'LOG': '📝 Логирование',
@@ -197,8 +197,6 @@ class BotConfigurationService:
         'INFO_PAGES': '📄 Инфо-страницы',
         'GRACE_ACCESS': '🛟 Grace-доступ',
         'BYPASS_DOWNGRADE': '🏴‍☠️ Обходы при исчерпании трафика',
-        'BSCHEK': '📶 BSCHEKER (bschekbot)',
-        'DPICHECKER': '🧱 DPI//CHECKER',
     }
 
     CATEGORY_DESCRIPTIONS: dict[str, str] = {
@@ -247,7 +245,7 @@ class BotConfigurationService:
         'MAINTENANCE': 'Режим обслуживания, сообщения и интервалы.',
         'BACKUP': 'Резервное копирование и расписание.',
         'VERSION': 'Отслеживание обновлений репозитория.',
-        'WEB_API': 'Web API, токены и права доступа.',
+        'WEB_API': 'Адрес, порт и документация общего веб-сервера бота (кабинет, вебхуки, /health).',
         'WEBHOOK': 'Пути и секреты вебхуков.',
         'WEBHOOK_NOTIFICATIONS': 'Управление уведомлениями, которые получают пользователи при событиях RemnaWave (отключение/активация подписки, устройства, трафик и т.д.).',
         'LOG': 'Уровни логирования и ротация.',
@@ -263,14 +261,6 @@ class BotConfigurationService:
             'Временный ограниченный доступ для истёкших и лимитных подписок. '
             'Здесь ключи лежат по отдельности; связанный экран с проверкой конфигурации и состоянием '
             'сессий — в админке кабинета, раздел «Grace-доступ».'
-        ),
-        'BSCHEK': (
-            'Проверка хостов и конфигов глазами мобильных операторов РФ через bschekbot API: '
-            'ключ, эталонная подписка панели, потолок цены одной задачи.'
-        ),
-        'DPICHECKER': (
-            'Проверки VPN-ключей, адресов и MTProto из сетей России, Китая, Ирана и Туркменистана '
-            'через API DPI//CHECKER: включение и ключ API. Раздел — в админке кабинета.'
         ),
     }
 
@@ -478,8 +468,6 @@ class BotConfigurationService:
         'DISPLAY_NAME_': 'MODERATION',
         'GRACE_ACCESS_': 'GRACE_ACCESS',
         'BYPASS_': 'BYPASS_DOWNGRADE',
-        'BSCHEK_': 'BSCHEK',
-        'DPICHECKER_': 'DPICHECKER',
     }
 
     CHOICES: dict[str, list[ChoiceOption]] = {

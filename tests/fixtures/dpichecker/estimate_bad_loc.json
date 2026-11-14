@@ -1,7 +1,0 @@
-{
- "status": 400,
- "body": {
-  "error": "location must be one of: russia, china, iran, turkmenistan.",
-  "code": "invalid_location"
- }
-}

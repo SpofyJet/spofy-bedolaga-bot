@@ -77,8 +77,6 @@ PERMISSION_REGISTRY: dict[str, list[str]] = {
     'audit_log': ['read', 'export'],
     'system_errors': ['read', 'manage'],
     'channels': ['read', 'edit'],
-    'reachability': ['read', 'run'],
-    'dpichecker': ['read', 'run'],
     'wheel': ['read', 'edit'],
     'apps': ['read', 'edit'],
     'email_templates': ['read', 'edit'],

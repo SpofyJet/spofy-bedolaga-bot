@@ -23,7 +23,6 @@ from app.services.backup_service import backup_service
 from app.services.broadcast_service import broadcast_service
 from app.services.bypass_downgrade_service import bypass_downgrade_service
 from app.services.daily_subscription_service import daily_subscription_service
-from app.services.dpichecker.service import dpichecker_service
 from app.services.grace_access_runtime import grace_access_runtime
 from app.services.log_rotation_service import log_rotation_service
 from app.services.maintenance_service import maintenance_service
@@ -36,7 +35,6 @@ from app.services.payment_verification_service import (
     get_enabled_auto_methods,
     method_display_name,
 )
-from app.services.reachability.service import reachability_service
 from app.services.remnawave_sync_service import remnawave_sync_service
 from app.services.reporting_service import reporting_service
 from app.services.system_settings_service import bot_configuration_service
@@ -67,18 +65,6 @@ class GracefulExit:
         if self.signum is None:
             self.signum = signum
         self.exit = True
-
-
-def _dpichecker_notifier(bot):
-    """Итог прогона монитора DPI//CHECKER → админ-чат, категория «Инфраструктура»."""
-    from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
-
-    async def notify(text: str) -> bool:
-        return await AdminNotificationService(bot).send_admin_notification(
-            text, category=NotificationCategory.INFRASTRUCTURE
-        )
-
-    return notify
 
 
 async def main():
@@ -639,31 +625,6 @@ async def main():
             stage.log(f'Интервал опроса: {settings.MONITORING_INTERVAL}с')
 
         async with timeline.stage(
-            'Доступность из РФ (bschekbot)',
-            '📶',
-            success_message='Обходчик задач проверки запущен',
-        ) as stage:
-            reachability_enabled = settings.is_bschek_enabled() and settings.is_bschek_configured()
-            if reachability_enabled:
-                reachability_service.start_background()
-                stage.log('Незавершённые задачи будут подхвачены обходчиком')
-            else:
-                stage.skip('Интеграция bschekbot выключена или без ключа')
-
-        async with timeline.stage(
-            'DPI//CHECKER',
-            '🧱',
-            success_message='Обходчик мониторов запущен',
-        ) as stage:
-            dpichecker_notify = _dpichecker_notifier(bot)
-            # Модуль могут включить из кабинета на ходу — цикл здоровья ниже сверяется с настройками.
-            dpichecker_service.sync_background(dpichecker_notify)
-            if dpichecker_service.background_running:
-                stage.log('Итоги мониторов из кабинета будут приходить в админ-чат')
-            else:
-                stage.skip('DPI//CHECKER выключен или без ключа')
-
-        async with timeline.stage(
             'Служба техработ',
             '🛡️',
             success_message='Служба техработ запущена',
@@ -828,13 +789,6 @@ async def main():
                         logger.error('Служба техработ завершилась с ошибкой', error=exception)
                         maintenance_task = asyncio.create_task(maintenance_service.start_monitoring())
 
-                if reachability_enabled:
-                    # Идемпотентно: перезапускает только упавший обходчик, живой не трогает.
-                    reachability_service.start_background()
-
-                # Идемпотентно и по живым настройкам: включили — запустит, выключили — остановит.
-                dpichecker_service.sync_background(dpichecker_notify)
-
                 if version_check_task and version_check_task.done():
                     exception = version_check_task.exception()
                     if exception:
@@ -927,18 +881,6 @@ async def main():
             monitoring_service.stop_monitoring()
             monitoring_task.cancel()
             await asyncio.wait([monitoring_task])
-
-        logger.info('ℹ️ Остановка обходчика мониторов DPI//CHECKER...')
-        try:
-            await dpichecker_service.stop_background()
-        except Exception as error:
-            logger.warning('Не удалось остановить обходчик мониторов DPI//CHECKER', error=error)
-
-        logger.info('ℹ️ Остановка обходчика задач проверки доступности...')
-        try:
-            await reachability_service.stop_background()
-        except Exception as error:
-            logger.warning('Не удалось остановить обходчик задач проверки', error=error)
 
         if maintenance_task and not maintenance_task.done():
             logger.info('ℹ️ Остановка службы техработ...')

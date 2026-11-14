@@ -911,24 +911,12 @@ class Settings(BaseSettings):
     WEBHOOK_WORKER_SHUTDOWN_TIMEOUT: float = 30.0
     BOT_RUN_MODE: str = 'polling'
 
-    WEB_API_ENABLED: bool = False
+    # Общий веб-сервер бота (кабинет, вебхуки, /health); имена ключей остались от Web API.
     WEB_API_HOST: str = '0.0.0.0'
     WEB_API_PORT: int = 8080
     WEB_API_WORKERS: int = 1
-    WEB_API_ALLOWED_ORIGINS: str = '*'
     WEB_API_DOCS_ENABLED: bool = False
-    WEB_API_TITLE: str = 'Spofy Bedolaga Bot Admin API'
     WEB_API_VERSION: str = '1.0.0'
-    WEB_API_DEFAULT_TOKEN: str | None = None
-    WEB_API_DEFAULT_TOKEN_NAME: str = 'Bootstrap Token'
-    WEB_API_TOKEN_HASH_ALGORITHM: str = 'sha256'
-    WEB_API_TOKEN_HMAC_SECRET: str | None = None
-    WEB_API_REQUEST_LOGGING: bool = True
-    # Потолок ОДНОЙ операции ручного пополнения через POST /users/{id}/deposit.
-    # Эндпоинт рассчитан на автоматизацию (AI-агент поддержки), поэтому у него есть
-    # предохранитель: агент, ошибшийся на два нуля, упрётся в лимит, а не подарит
-    # человеку годовую подписку. 0 — без ограничения.
-    WEB_API_MANUAL_DEPOSIT_MAX_KOPEKS: int = 1_000_000
 
     APP_CONFIG_CACHE_TTL: int = 3600
 
@@ -1047,23 +1035,6 @@ class Settings(BaseSettings):
     EMAIL_UNSUBSCRIBE_BASE_URL: str = ''
     # Необязательный mailto-вариант в List-Unsubscribe для клиентов без HTTP one-click.
     EMAIL_UNSUBSCRIBE_MAILTO: str = ''
-
-    # bschekbot — BSCHEKER: проверка хостов глазами мобильных операторов
-    BSCHEK_ENABLED: bool = False
-    BSCHEK_API_URL: str = 'https://bsbord.com/v1'
-    BSCHEK_API_KEY: str | None = None  # bsk_live_…, выпускается вручную в кабинете bschekbot
-    BSCHEK_REQUEST_TIMEOUT: int = 200  # синхронный probe идёт до нескольких минут
-    BSCHEK_REFERENCE_SUBSCRIPTION: str | None = None  # shortUuid эталонной подписки панели
-    BSCHEK_JOB_COST_LIMIT_KOPEKS: int = 0  # потолок цены одной задачи, 0 — без потолка
-
-    # DPI//CHECKER (dpichecker.st): проверки VPN/IP/MTProto из сетей РФ, Китая, Ирана, Туркменистана — только кабинет
-    DPICHECKER_ENABLED: bool = False
-    DPICHECKER_API_URL: str = 'https://dpichecker.st/api/v1'
-    DPICHECKER_API_KEY: str | None = (
-        None  # X-API-Key; выпускается в боте DPI//CHECKER (Главное меню → API) или на сайте
-    )
-    DPICHECKER_REQUEST_TIMEOUT: int = 30  # обычный запрос; long-poll ожидания результата — свой, длиннее
-    DPICHECKER_REFERENCE_SUBSCRIPTION: str | None = None  # VPN «из панели»: ссылка подписки или shortUuid панели
 
     # SOCKS5 proxy for routing bot traffic to Telegram API
     # Format: socks5://user:password@host:port or socks5://host:port
@@ -2944,28 +2915,6 @@ class Settings(BaseSettings):
     def get_enabled_oauth_provider_names(self) -> list[str]:
         """Return list of enabled OAuth provider names."""
         return [name for name, cfg in self.get_oauth_providers_config().items() if cfg['enabled']]
-
-    # bschekbot helpers
-    def is_bschek_enabled(self) -> bool:
-        return bool(self.BSCHEK_ENABLED)
-
-    def is_bschek_configured(self) -> bool:
-        return bool(self.BSCHEK_API_KEY)
-
-    def is_dpichecker_enabled(self) -> bool:
-        return bool(self.DPICHECKER_ENABLED)
-
-    def is_dpichecker_configured(self) -> bool:
-        return bool(self.DPICHECKER_API_KEY)
-
-    def get_dpichecker_webhook_url(self) -> str | None:
-        """Куда DPI//CHECKER шлёт события; без внешнего адреса бота — никуда."""
-        if not self.WEBHOOK_URL:
-            return None
-        return f'{self.WEBHOOK_URL.rstrip("/")}/dpichecker/webhook'
-
-    def get_bschek_api_url(self) -> str:
-        return (self.BSCHEK_API_URL or 'https://bsbord.com/v1').rstrip('/')
 
     model_config = {'env_file': '.env', 'env_file_encoding': 'utf-8', 'extra': 'ignore'}
 

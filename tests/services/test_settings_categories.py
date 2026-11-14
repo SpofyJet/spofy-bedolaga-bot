@@ -21,7 +21,7 @@ from app.services.system_settings_service import bot_configuration_service as se
         ('MAX_DEVICES_LIMIT', 'SUBSCRIPTIONS_CORE'),
         ('CABINET_REQUIRE_LEGAL_CONSENT', 'CABINET'),
         ('CABINET_LEGAL_CONSENT_PRECHECKED', 'CABINET'),
-        ('WEB_API_MANUAL_DEPOSIT_MAX_KOPEKS', 'WEB_API'),
+        ('WEB_API_PORT', 'WEB_API'),
         ('MAIN_MENU_LIVE_ENABLED', 'INTERFACE'),
     ],
 )
