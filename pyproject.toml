@@ -256,9 +256,6 @@ ignore = [
 '**/migrations/**/*.py' = [
     'ALL',
 ]
-'app/lib/**/*.py' = [
-    'ALL',
-]
 'main.py' = [
     'E402',
     'PLC0415',

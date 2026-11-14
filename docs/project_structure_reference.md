@@ -98,7 +98,6 @@
 - `app/external/`
 - `app/handlers/`
 - `app/keyboards/`
-- `app/lib/`
 - `app/localization/`
 - `app/logging_config.py` — Python-модуль
   Классы: нет
@@ -713,9 +712,6 @@
 - `app/database/crud/server_squad.py` — Python-модуль
   Классы: нет
   Функции: `create_server_squad`, `get_server_squad_by_uuid`, `get_server_squad_by_id`, `get_all_server_squads`, `get_available_server_squads`, `get_effective_tariff_squad_uuids` — Resolve tariff squads, treating an empty list as "all available squads"., `get_active_server_squads` — Возвращает список активных серверов, доступных для подключения., `choose_random_active_server_squad` — Возвращает случайный активный сервер., `get_random_active_squad_uuid` — Возвращает UUID случайного активного сервера или запасной UUID., `update_server_squad_promo_groups`, `update_server_squad`, `delete_server_squad`, `sync_with_remnawave`, `get_server_connected_users`, `get_trial_eligible_server_squads`, `choose_random_trial_server_squad`, `get_random_trial_squad_uuid`, `get_server_statistics`, `count_active_users_for_squad` — Возвращает количество активных подписок, подключенных к указанному скваду., `add_user_to_servers`, `remove_user_from_servers`, `update_server_user_counts` — Increment and decrement server user counters in a single sorted pass., `get_server_ids_by_uuids`, `get_server_squads_by_uuids` — Получает список ServerSquad объектов по их UUID с загрузкой allowed_promo_groups., `ensure_servers_synced` — Проверяет и синхронизирует серверы при запуске., `sync_server_user_counts`
-- `app/database/crud/squad.py` — Python-модуль
-  Классы: нет
-  Функции: `create_squad`, `update_squad`
 - `app/database/crud/subscription.py` — Python-модуль
   Классы: нет
   Функции: `generate_unique_short_id` — Generate a unique remnawave_short_id (6 hex chars) with collision check., `is_recently_updated_by_webhook` — Return True if subscription was updated by webhook within guard window., `device_addons_carry_over` — Переносятся ли докупленные места со старого тарифа на новый., `calc_device_limit_on_tariff_switch` — device_limit после смены тарифа самим пользователем., `calc_device_limit_on_admin_tariff_change` — device_limit после смены тарифа админом (одному или массово)., `is_active_paid_subscription` — Return True if subscription is active, paid (non-trial), and not expired., `get_subscription_by_user_id` — Get primary subscription for user., `apply_trial_conversion_defaults` — Настройки, которые подписка получает, перестав быть триалом., `create_trial_subscription` — Создает триальную подписку., `resolve_trial_conversion_candidate` — Кандидат конверсии триала, каким его увидит ``create_paid_subscription``., `create_paid_subscription`, `replace_subscription` — Перезаписывает параметры существующей подписки пользователя., `reconcile_tariff_traffic_limit` — Вернуть тарифную подписку к условиям тарифа: база тарифа + активные докупки., `reconcile_subscription_traffic_limit` — Приводит снапшот traffic_limit_gb к инварианту «база тарифа + активные докупки»., `resync_traffic_limit_for_tariff_subscriptions` — Ресинк снапшотов traffic_limit_gb всех подписок тарифа после его правки., `should_carry_trial_remaining_days` — Переносить ли остаток триальных дней на платную подписку при переходе., `carried_seconds_by_value` — Остаток срока при переходе на тариф дороже — по стоимости, а не день в день., `extend_subscription` — Продлевает подписку на указанное количество дней., `add_subscription_traffic`, `add_subscription_devices`, `add_subscription_squad`, `remove_subscription_squad`, `decrement_subscription_server_counts` — Decrease server counters linked to the provided subscription., `update_subscription_autopay`, `deactivate_subscription`, `reset_subscription` — Полностью обнулить подписку «как будто пользователь её не оформлял», НЕ удаляя, `reactivate_subscription` — Реактивация подписки (например, после повторной подписки на канал или докупки трафика)., `get_expiring_subscriptions`, `get_expired_subscriptions`, `get_subscriptions_for_autopay`, `get_subscriptions_statistics`, `get_trial_statistics`, `wipe_trial_subscriptions` — Снимает доступ и удаляет переданные триал-подписки — единый код для ботовой, `reset_trials_for_users_without_paid_subscription` — Bulk-сброс истёкших триалов у неплативших (кнопка «Сбросить триалы» в боте)., `update_subscription_usage`, `get_all_subscriptions`, `get_subscriptions_batch` — Получает подписки пачками для синхронизации. Загружает связанных пользователей и тарифы., `add_subscription_servers`, `get_subscription_server_ids`, `remove_subscription_servers`, `expire_subscription`, `expire_subscription_if_still_due` — Погасить подписку, только если в базе она всё ещё ACTIVE с прошедшей датой., `check_and_update_subscription_status`, `create_subscription_no_commit` — Создает подписку без немедленного коммита для пакетной обработки, `create_subscription`, `create_pending_subscription` — Creates a pending subscription that will be activated after payment., `create_sbp_pending_subscription` — Заготовка подписки под СБП-оформление (покупка через Platega-рекуррент)., `activate_pending_subscription` — Активирует pending подписку пользователя, меняя её статус на ACTIVE., `activate_pending_trial_subscription` — Активирует pending триальную подписку по её ID после оплаты., `get_daily_subscriptions_for_charge` — Получает все суточные подписки, которые нужно обработать для списания., `get_disabled_daily_subscriptions_for_resume` — Получает список DISABLED суточных подписок, которые можно возобновить., `get_expired_daily_subscriptions_for_recovery` — Получает EXPIRED суточные подписки, которые были ошибочно экспайрены, `get_limited_daily_subscriptions_for_recovery` — Суточные подписки, застрявшие в LIMITED (панель зарезала их по лимиту трафика)., `pause_daily_subscription` — Приостанавливает суточную подписку (списание не будет происходить)., `resume_daily_subscription` — Возобновляет суточную подписку (списание продолжится)., `update_daily_charge_time` — Обновляет время последнего суточного списания и продлевает подписку на 1 день., `suspend_daily_subscription_insufficient_balance` — Приостанавливает подписку из-за недостатка баланса., `toggle_daily_subscription_pause` — Переключает состояние паузы суточной подписки., `get_active_subscriptions_by_user_id` — Get all active/trial/limited subscriptions for a user., `get_subscription_by_id_for_user` — Get subscription by ID with ownership check (IDOR protection)., `get_subscription_by_id` — Get subscription by ID (admin use only, no ownership check)., `get_subscription_by_user_and_tariff` — Get a subscription for a specific user+tariff combination., `get_alive_trial_subscription` — Alive (active/trial/limited) trial subscription of the user, if any., `deactivate_user_trial_subscriptions` — Deactivate all trial subscriptions for a user., `get_all_subscriptions_by_user_id` — Get all subscriptions for a user (any status).
@@ -869,9 +865,6 @@
 - `app/handlers/ultima_deeplink.py` — Python-модуль
   Классы: нет
   Функции: `is_ultima_deeplink`, `link_source` — ``ultima_ch1`` → ``ch1``; просто ``ultima`` → пустая строка., `open_ultima_offer` — Выдать (или показать действующее) предложение ULTIMA. False — предложения нет, пусть идёт обычный /start.
-- `app/handlers/webhooks.py` — Python-модуль
-  Классы: нет
-  Функции: `handle_successful_payment`, `handle_pre_checkout_query`
 
 #### app/handlers/admin
 
@@ -1073,12 +1066,6 @@
 - `app/handlers/subscription/my_subscriptions.py` — Python-модуль
   Классы: нет
   Функции: `show_my_subscriptions` — Show list of all user subscriptions., `show_subscription_detail` — Show detail view for a single subscription (IDOR protected)., `handle_subscription_link` — Delegation: sl:{sub_id} → connect subscription link handler., `handle_subscription_extend` — Delegation: se:{sub_id} → extend/renew subscription handler., `handle_subscription_traffic` — Delegation: st:{sub_id} → traffic management handler., `handle_subscription_devices` — Delegation: sd:{sub_id} → devices menu with buy + manage options., `handle_change_devices_menu` — Delegation: change_devices_menu:{sub_id} → buy/change device limit., `handle_device_management_menu` — Delegation: device_management:{sub_id} → manage connected devices.
-- `app/handlers/subscription/notifications.py` — Python-модуль
-  Классы: нет
-  Функции: `send_trial_notification`, `send_purchase_notification`, `send_extension_notification`
-- `app/handlers/subscription/pricing.py` — Python-модуль
-  Классы: нет
-  Функции: `get_subscription_cost`, `get_subscription_info_text`
 - `app/handlers/subscription/promo.py` — Python-модуль
   Классы: нет
   Функции: `claim_discount_offer`, `handle_promo_offer_close`
@@ -1109,21 +1096,12 @@
 - `app/keyboards/inline.py` — Python-модуль
   Классы: нет
   Функции: `get_main_menu_keyboard_async` — Асинхронная версия get_main_menu_keyboard с поддержкой конструктора меню., `get_rules_keyboard`, `get_privacy_policy_keyboard`, `get_channel_sub_keyboard` — Subscription keyboard for required channels., `get_post_registration_keyboard`, `get_language_selection_keyboard`, `build_connect_button` — «🔗 Подключиться» для только что оплаченной (активной) подписки — по CONNECT_BUTTON_MODE., `get_main_menu_keyboard`, `get_info_menu_keyboard`, `get_happ_download_button_row`, `get_happ_cryptolink_keyboard`, `get_happ_download_platform_keyboard`, `get_happ_download_link_keyboard`, `get_back_keyboard`, `get_support_menu_button` — Кнопка «Поддержка» (та же, что в «Инфо»); None, если раздел поддержки выключен., `payment_error_navigation_rows` — «Назад» и «Поддержка» под сообщением о сбое оплаты — чтобы экран не был тупиком., `get_payment_error_keyboard`, `get_server_status_keyboard`, `get_insufficient_balance_keyboard`, `get_subscription_keyboard`, `get_payment_methods_keyboard_with_cart`, `get_insufficient_balance_keyboard_with_cart`, `get_balance_keyboard`, `get_payment_methods_keyboard`, `get_referral_keyboard`, `get_support_keyboard`, `get_stars_credited_to_balance_keyboard` — «Мой баланс» + «Поддержка» — после того как оплату Stars не удалось применить, `get_pagination_keyboard`, `get_confirmation_keyboard`, `get_autopay_keyboard`, `get_autopay_days_keyboard`, `get_autopay_period_keyboard` — Period picker for autopay. `current_period=None` means "use default"., `get_add_traffic_keyboard`, `get_add_traffic_keyboard_from_tariff` — Клавиатура для докупки трафика из настроек тарифа., `get_change_devices_keyboard`, `get_confirm_change_devices_keyboard`, `get_reset_traffic_confirm_keyboard`, `get_manage_countries_keyboard`, `get_device_selection_keyboard`, `get_connection_guide_keyboard`, `get_app_selection_keyboard`, `get_specific_app_keyboard`, `get_extend_subscription_keyboard_with_prices`, `get_cryptobot_payment_keyboard`, `get_devices_management_keyboard`, `get_updated_subscription_settings_keyboard`, `get_device_management_help_keyboard`, `get_ticket_cancel_keyboard`, `get_my_tickets_keyboard`, `get_ticket_view_keyboard`, `get_ticket_reply_cancel_keyboard`, `get_admin_tickets_keyboard`, `get_admin_ticket_view_keyboard`, `get_ticket_notification_keyboard` — Клавиатура для уведомления о тикете (личный или групповой админ-чат)., `get_admin_ticket_reply_cancel_keyboard`
-- `app/keyboards/reply.py` — Python-модуль
-  Классы: нет
-  Функции: нет
 - `app/keyboards/topup_amounts.py` — Python-модуль
   Классы: нет
   Функции: `resolve_config_method_id`, `format_quick_amount`, `get_topup_amount_keyboard`
 - `app/keyboards/withdrawal.py` — Python-модуль
   Классы: нет
   Функции: `get_withdrawal_request_keyboard` — Клавиатура заявки по её статусу и роли получателя; ``None`` — кнопок нет.
-
-### app/lib
-
-- `app/lib/__init__.py` — Python-модуль
-  Классы: нет
-  Функции: нет
 
 ### app/localization
 
@@ -2156,9 +2134,6 @@
 - `app/webapi/routes/servers.py` — Python-модуль
   Классы: нет
   Функции: `list_servers`, `get_servers_statistics`, `create_server_endpoint`, `get_server_endpoint`, `update_server_endpoint`, `delete_server_endpoint`, `get_server_connected_users_endpoint`, `sync_servers_with_remnawave`, `sync_server_counts`
-- `app/webapi/routes/settings.py` — Python-модуль
-  Классы: нет
-  Функции: нет
 - `app/webapi/routes/stats.py` — Python-модуль
   Классы: нет
   Функции: `stats_overview`, `stats_full`
