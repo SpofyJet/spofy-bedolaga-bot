@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.subscription import (
-    create_paid_subscription,
     create_trial_subscription,
 )
 from app.database.models import PaymentMethod, Subscription, SubscriptionStatus, User
@@ -19,7 +18,6 @@ from app.keyboards.inline import (
     get_back_keyboard,
     get_happ_download_button_row,
     get_insufficient_balance_keyboard,
-    get_payment_methods_keyboard_with_cart,
     get_subscription_keyboard,
     get_updated_subscription_settings_keyboard,
 )
@@ -44,24 +42,6 @@ async def _resolve_subscription(callback, db_user, db, state=None):
     from .common import resolve_subscription_from_context
 
     return await resolve_subscription_from_context(callback, db_user, db, state)
-
-
-def _serialize_markup(markup: InlineKeyboardMarkup | None) -> Any | None:
-    if markup is None:
-        return None
-
-    model_dump = getattr(markup, 'model_dump', None)
-    if callable(model_dump):
-        try:
-            return model_dump(exclude_none=True)
-        except TypeError:
-            return model_dump()
-
-    to_python = getattr(markup, 'to_python', None)
-    if callable(to_python):
-        return to_python()
-
-    return markup
 
 
 from app.states import SubscriptionStates
@@ -1060,38 +1040,6 @@ async def start_subscription_purchase(
     await show_tariffs_list(callback, db_user, db, state)
 
 
-async def save_cart_and_redirect_to_topup(
-    callback: types.CallbackQuery, state: FSMContext, db_user: User, missing_amount: int
-):
-    texts = get_texts(db_user.language)
-    data = await state.get_data()
-
-    # Сохраняем данные корзины в Redis
-    cart_data = {
-        **data,
-        'saved_cart': True,
-        'missing_amount': missing_amount,
-        'return_to_cart': True,
-        'user_id': db_user.id,
-    }
-
-    await user_cart_service.save_user_cart(db_user.id, cart_data)
-
-    await callback.message.edit_text(
-        f'💰 Недостаточно средств для оформления подписки\n\n'
-        f'Требуется: {texts.format_price(missing_amount, round_kopeks=False)}\n'
-        f'У вас: {texts.format_price(db_user.balance_kopeks, round_kopeks=False)}\n\n'
-        f'🛒 Ваша корзина сохранена!\n'
-        f'После пополнения баланса вы сможете вернуться к оформлению подписки.\n\n'
-        f'Выберите способ пополнения:',
-        reply_markup=get_payment_methods_keyboard_with_cart(
-            db_user.language,
-            missing_amount,
-        ),
-        parse_mode='HTML',
-    )
-
-
 async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     # Получаем данные корзины из Redis
     cart_data = await user_cart_service.get_user_cart(db_user.id)
@@ -1262,51 +1210,6 @@ async def confirm_extend_subscription(
     return
 
     # Валидация что период доступен для продления
-
-
-async def create_paid_subscription_with_traffic_mode(
-    db: AsyncSession,
-    user_id: int,
-    duration_days: int,
-    device_limit: int | None,
-    connected_squads: list[str],
-    traffic_gb: int | None = None,
-    autopay_enabled: bool | None = None,
-):
-    from app.config import settings
-
-    if traffic_gb is None:
-        if settings.is_traffic_fixed():
-            traffic_limit_gb = settings.get_fixed_traffic_limit()
-        else:
-            traffic_limit_gb = 0
-    else:
-        traffic_limit_gb = traffic_gb
-
-    create_kwargs = dict(
-        db=db,
-        user_id=user_id,
-        duration_days=duration_days,
-        traffic_limit_gb=traffic_limit_gb,
-        connected_squads=connected_squads,
-        update_server_counters=False,
-    )
-
-    if device_limit is not None:
-        create_kwargs['device_limit'] = device_limit
-
-    if autopay_enabled is not None:
-        create_kwargs['autopay_enabled'] = autopay_enabled
-
-    subscription = await create_paid_subscription(**create_kwargs)
-
-    logger.info(
-        '📋 Создана подписка с трафиком: ГБ (режим: )',
-        traffic_limit_gb=traffic_limit_gb,
-        TRAFFIC_SELECTION_MODE=settings.TRAFFIC_SELECTION_MODE,
-    )
-
-    return subscription
 
 
 async def handle_subscription_settings(callback: types.CallbackQuery, db_user: User, db: AsyncSession):

@@ -79,31 +79,6 @@ def _get_panel_user_id(subscription, db_user):
     return getattr(subscription, 'remnawave_id', None) or db_user.remnawave_id
 
 
-async def get_current_devices_detailed(db_user: User, subscription=None) -> dict:
-    try:
-        panel_user_id = _get_panel_user_id(subscription, db_user) if subscription else db_user.remnawave_id
-        if not panel_user_id:
-            return {'count': 0, 'devices': []}
-
-        from app.services.remnawave_service import RemnaWaveService
-
-        service = RemnaWaveService()
-
-        async with service.get_api_client() as api:
-            devices_info = await api.get_user_devices(panel_user_id)
-
-            if isinstance(devices_info, dict):
-                total_devices = devices_info.get('total', 0)
-                devices_list = devices_info.get('devices', [])
-
-                return {'count': total_devices, 'devices': devices_list[:5]}
-            return {'count': 0, 'devices': []}
-
-    except Exception as e:
-        logger.error('Ошибка получения детальной информации об устройствах', error=e)
-        return {'count': 0, 'devices': []}
-
-
 async def get_servers_display_names(squad_uuids: list[str]) -> str:
     if not squad_uuids:
         return 'Нет серверов'

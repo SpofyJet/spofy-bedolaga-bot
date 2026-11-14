@@ -6,8 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.config import settings
-from app.handlers.subscription import devices, my_subscriptions, pricing
-from app.localization.texts import get_texts
+from app.handlers.subscription import devices, my_subscriptions
 
 
 @pytest.fixture
@@ -34,8 +33,6 @@ def link_env(monkeypatch):
     monkeypatch.setattr(my_subscriptions, '_build_subscription_detail_keyboard', lambda *a, **k: None)
     monkeypatch.setattr(devices, '_resolve_subscription', AsyncMock(return_value=(sub, 7)))
     monkeypatch.setattr(devices, 'get_device_management_help_keyboard', lambda *a: None)
-    monkeypatch.setattr(pricing, '_get_countries_info', AsyncMock(return_value=[]))
-    monkeypatch.setattr(pricing, 'get_subscription_cost', AsyncMock(return_value=0))
     monkeypatch.setattr(type(settings), 'is_devices_selection_enabled', lambda self: False)
     return sub
 
@@ -43,7 +40,7 @@ def link_env(monkeypatch):
 @pytest.mark.asyncio
 @pytest.mark.parametrize('mode', ['guide', 'happ_cryptolink'])
 @pytest.mark.parametrize('hidden', [False, True])
-@pytest.mark.parametrize('surface', ['multi-card', 'classic-info', 'device-help'])
+@pytest.mark.parametrize('surface', ['multi-card', 'device-help'])
 async def test_text_surfaces_use_display_link_and_existing_hide_policy(monkeypatch, link_env, mode, hidden, surface):
     monkeypatch.setattr(settings, 'CONNECT_BUTTON_MODE', mode)
     monkeypatch.setattr(settings, 'HIDE_SUBSCRIPTION_LINK', hidden)
@@ -52,8 +49,6 @@ async def test_text_surfaces_use_display_link_and_existing_hide_policy(monkeypat
     if surface == 'multi-card':
         await my_subscriptions.show_subscription_detail(callback, user, AsyncMock(), AsyncMock())
         text = callback.message.edit_text.await_args.args[0]
-    elif surface == 'classic-info':
-        text = await pricing.get_subscription_info_text(link_env, get_texts('ru'), user, AsyncMock())
     else:
         await devices.show_device_connection_help(callback, user, AsyncMock(), AsyncMock())
         text = callback.message.edit_text.await_args.args[0]

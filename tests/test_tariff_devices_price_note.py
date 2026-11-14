@@ -14,20 +14,6 @@ def _tariff(**kw):
     return SimpleNamespace(**base)
 
 
-async def _extra(existing, tariff):
-    with patch.object(tp, 'get_subscription_by_user_id', AsyncMock(return_value=existing)):
-        return await tp._extra_device_count(None, SimpleNamespace(id=1), tariff)
-
-
-async def test_extra_devices_are_counted_beyond_the_tariff():
-    assert await _extra(SimpleNamespace(tariff_id=3, device_limit=5), _tariff()) == 2
-
-
-async def test_no_extra_devices_means_no_note():
-    assert await _extra(SimpleNamespace(tariff_id=3, device_limit=3), _tariff()) == 0
-    assert await _extra(None, _tariff()) == 0
-
-
 def test_period_keyboard_keeps_the_base_prices():
     kb = tp.get_tariff_periods_keyboard(
         _tariff(id=3, name='T', period_prices={'365': 180000}, highlight_period_days=None), 'ru'

@@ -13,7 +13,6 @@ from app.localization.texts import get_texts
 from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 from app.utils.lifetime import is_lifetime_end
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
-from app.utils.price_display import PriceInfo, format_price_button
 from app.utils.pricing_utils import (
     apply_percentage_discount,
 )
@@ -1607,37 +1606,6 @@ def get_subscription_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=_one_accent(keyboard, accent_prefer))
 
 
-def get_payment_methods_keyboard_with_cart(
-    language: str = 'ru',
-    amount_kopeks: int = 0,
-) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    keyboard = get_payment_methods_keyboard(amount_kopeks, language)
-
-    # n6-П28: «Назад» остаётся последним рядом; разрушительная
-    # «Очистить корзину» — перед ним, возврат к оформлению — выше
-    back_row = keyboard.inline_keyboard.pop() if keyboard.inline_keyboard else []
-
-    # Кнопка возврата к оформлению подписки
-    keyboard.inline_keyboard.append(
-        [
-            InlineKeyboardButton(
-                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT, callback_data='return_to_saved_cart', style='success'
-            )
-        ]
-    )
-
-    # Кнопка "Очистить корзину"
-    keyboard.inline_keyboard.append(
-        [InlineKeyboardButton(text='🗑️ Очистить корзину и вернуться', callback_data='clear_saved_cart', style='danger')]
-    )
-
-    if back_row:
-        keyboard.inline_keyboard.append(back_row)
-
-    return keyboard
-
-
 def get_insufficient_balance_keyboard_with_cart(
     language: str = 'ru',
     amount_kopeks: int = 0,
@@ -1666,27 +1634,6 @@ def get_insufficient_balance_keyboard_with_cart(
     )
 
     return keyboard
-
-
-def _spofy_days_word(n: int) -> str:
-    n = abs(int(n))
-    if 11 <= (n % 100) <= 14:
-        return 'дней'
-    last = n % 10
-    if last == 1:
-        return 'день'
-    if 2 <= last <= 4:
-        return 'дня'
-    return 'дней'
-
-
-def _spofy_days_label(days: int, language: str = 'ru') -> str:
-    """n6-П5: «N дней» с учётом языка — единый формат кнопок периодов."""
-    lang = (language or 'ru').split('-')[0].lower()
-    n = abs(int(days))
-    if lang == 'en':
-        return f'{n} day' if n == 1 else f'{n} days'
-    return f'{n} {_spofy_days_word(n)}'
 
 
 def _get_device_declension(count: int) -> str:
@@ -2077,40 +2024,6 @@ def get_autopay_keyboard(language: str = DEFAULT_LANGUAGE, sub_id: int | None = 
             [InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)],
         ]
     )
-
-
-_PAYMENT_METHOD_LOCALE_KEYS: dict[str, tuple[str, str]] = {
-    'bank_card': ('PAYMENT_METHOD_BANK_CARD', '💳 Банковская карта'),
-    'yoo_money': ('PAYMENT_METHOD_YOO_MONEY', '🟣 ЮMoney'),
-    'sberbank': ('PAYMENT_METHOD_SBERBANK', '🟢 СберPay'),
-    'tinkoff_bank': ('PAYMENT_METHOD_TINKOFF_BANK', '🟡 Т-Банк'),
-    'sbp': ('PAYMENT_METHOD_SBP', '🏦 СБП'),
-    'mir_pay': ('PAYMENT_METHOD_MIR_PAY', '🟦 Mir Pay'),
-}
-
-
-def _get_payment_method_display_name(card, language: str = DEFAULT_LANGUAGE) -> str:
-    """Локализованное название метода оплаты + реквизиты."""
-    texts = get_texts(language)
-
-    # Для банковских карт title уже содержит тип + маску (например "Visa *4444")
-    if card.method_type == 'bank_card' or (not card.method_type and card.card_last4):
-        if card.title:
-            return card.title
-        if card.card_last4:
-            return f'{card.card_type or "Card"} *{card.card_last4}'
-
-    # Для остальных методов: локализованное название + реквизиты из title
-    locale_entry = _PAYMENT_METHOD_LOCALE_KEYS.get(card.method_type)
-    if locale_entry:
-        key, default = locale_entry
-        method_name = texts.t(key, default)
-    else:
-        method_name = card.method_type or 'Card'
-
-    if card.title:
-        return f'{method_name} {card.title}'
-    return method_name
 
 
 def get_autopay_days_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
@@ -2787,56 +2700,6 @@ def get_specific_app_keyboard(
         has_other_apps=True,
         sub_id=sub_id,
     )
-
-
-def get_extend_subscription_keyboard_with_prices(language: str, prices: dict) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    keyboard = []
-
-    available_periods = settings.get_available_renewal_periods()
-
-    for days in available_periods:
-        if days not in prices:
-            continue
-
-        price_info = prices[days]
-
-        if isinstance(price_info, dict):
-            final_price = price_info.get('final')
-            original_price = price_info.get('original', 0)
-            if final_price is None:
-                final_price = price_info.get('original', 0)
-        else:
-            final_price = price_info
-            original_price = price_info
-
-        # n6-П5: единый формат «N дней» (вместо «1 месяц»)
-        period_display = _spofy_days_label(days, language)
-
-        # Create PriceInfo from already calculated prices
-        # Note: original_price and final_price are calculated in the handler
-        discount_percent = 0
-        if original_price > final_price and original_price > 0:
-            discount_percent = ((original_price - final_price) * 100) // original_price
-
-        price_info_obj = PriceInfo(
-            base_price=original_price, final_price=final_price, discount_percent=discount_percent
-        )
-
-        # Format button using unified system
-        button_text = format_price_button(
-            period_label=period_display,
-            price_info=price_info_obj,
-            format_price_func=texts.format_price,
-            emphasize=False,
-            add_exclamation=False,
-        )
-
-        keyboard.append([InlineKeyboardButton(text=button_text, callback_data=f'extend_period_{days}')])
-
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')])
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_cryptobot_payment_keyboard(

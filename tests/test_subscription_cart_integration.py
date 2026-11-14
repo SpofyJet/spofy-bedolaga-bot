@@ -4,8 +4,6 @@ import pytest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
     Message,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +12,6 @@ from app.database.models import User
 from app.handlers.subscription.autopay import handle_subscription_cancel
 from app.handlers.subscription.purchase import (
     clear_saved_cart,
-    save_cart_and_redirect_to_topup,
 )
 
 
@@ -63,55 +60,6 @@ def mock_state():
     state.set_state = AsyncMock()
     state.clear = AsyncMock()
     return state
-
-
-async def test_save_cart_and_redirect_to_topup(mock_callback_query, mock_state, mock_user, mock_db):
-    """Тест сохранения корзины и перенаправления к пополнению"""
-    # Мокаем все зависимости
-    with (
-        patch('app.handlers.subscription.purchase.user_cart_service') as mock_cart_service,
-        patch('app.handlers.subscription.purchase.get_payment_methods_keyboard_with_cart') as mock_keyboard_func,
-        patch('app.localization.texts.get_texts') as mock_get_texts,
-    ):
-        # Подготовим моки
-        mock_cart_service.save_user_cart = AsyncMock(return_value=True)
-        mock_keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text='✅', callback_data='confirm')]]
-        )
-        mock_keyboard_func.return_value = mock_keyboard
-
-        # Подготовим тексты
-        mock_texts = AsyncMock()
-        mock_texts.format_price = lambda x: f'{x / 100:.0f} ₽'
-        mock_get_texts.return_value = mock_texts
-
-        missing_amount = 40000  # 50000 - 10000 = 40000
-
-        # Вызываем функцию
-        await save_cart_and_redirect_to_topup(mock_callback_query, mock_state, mock_user, missing_amount)
-
-        # Проверяем, что данные были сохранены в корзину
-        mock_cart_service.save_user_cart.assert_called_once()
-        args, kwargs = mock_cart_service.save_user_cart.call_args
-        saved_user_id, saved_cart_data = args
-
-        assert saved_user_id == mock_user.id
-        assert saved_cart_data['period_days'] == 30
-        assert saved_cart_data['countries'] == ['ru']
-        assert saved_cart_data['devices'] == 2
-        assert saved_cart_data['traffic_gb'] == 10
-        assert saved_cart_data['total_price'] == 50000
-        assert saved_cart_data['saved_cart'] is True
-        assert saved_cart_data['missing_amount'] == missing_amount
-        assert saved_cart_data['return_to_cart'] is True
-        assert saved_cart_data['user_id'] == mock_user.id
-
-        # Проверяем, что сообщение было отредактировано
-        mock_callback_query.message.edit_text.assert_called_once()
-
-        # В этой функции нет вызова callback.answer()
-        # mock_callback_query.answer не должен быть вызван
-        mock_callback_query.answer.assert_not_called()
 
 
 async def test_clear_saved_cart(mock_callback_query, mock_state, mock_user, mock_db):

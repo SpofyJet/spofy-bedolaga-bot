@@ -360,23 +360,6 @@ def get_tariffs_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-async def _extra_device_count(db, db_user: User, tariff: Tariff) -> int:
-    """Сколько устройств у человека сверх включённых в тариф (0 — доплаты нет)."""
-    try:
-        if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-            existing = await get_subscription_by_user_and_tariff(db, db_user.id, tariff.id)
-        else:
-            existing = await get_subscription_by_user_id(db, db_user.id)
-        if existing is None or existing.tariff_id != tariff.id or not (tariff.device_price_kopeks or 0):
-            return 0
-        return max(0, (existing.device_limit or 0) - (tariff.device_limit or 0))
-    except Exception as error:
-        logger.warning('Не удалось посчитать дополнительные устройства', tariff_id=tariff.id, error=str(error))
-        return 0
-
-
 def _price_breakdown_note(texts, tariff: Tariff, device_limit: int | None, result) -> str:
     """Одна строка: из чего сложилась стоимость, когда в неё входят дополнительные устройства."""
     included = tariff.device_limit or 0

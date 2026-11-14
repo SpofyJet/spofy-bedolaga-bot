@@ -436,59 +436,6 @@ async def confirm_reset_traffic(
     await callback.answer()
 
 
-async def refresh_traffic_config():
-    try:
-        from app.config import refresh_traffic_prices
-
-        refresh_traffic_prices()
-
-        packages = settings.get_traffic_packages()
-        enabled_count = sum(1 for pkg in packages if pkg['enabled'])
-
-        logger.info('🔄 Конфигурация трафика обновлена: активных пакетов', enabled_count=enabled_count)
-        for pkg in packages:
-            if pkg['enabled']:
-                gb_text = '♾️ Безлимит' if pkg['gb'] == 0 else f'{pkg["gb"]} ГБ'
-                logger.info('📦 ₽', gb_text=gb_text, pkg=pkg['price'] / 100)
-
-        return True
-
-    except Exception as e:
-        logger.error('⚠️ Ошибка обновления конфигурации трафика', error=e)
-        return False
-
-
-async def get_traffic_packages_info() -> str:
-    try:
-        packages = settings.get_traffic_packages()
-
-        info_lines = ['📦 Настроенные пакеты трафика:']
-
-        enabled_packages = [pkg for pkg in packages if pkg['enabled']]
-        disabled_packages = [pkg for pkg in packages if not pkg['enabled']]
-
-        if enabled_packages:
-            info_lines.append('\n✅ Активные:')
-            for pkg in enabled_packages:
-                gb_text = '♾️ Безлимит' if pkg['gb'] == 0 else f'{pkg["gb"]} ГБ'
-                info_lines.append(f'   • {gb_text}: {pkg["price"] // 100}₽')
-
-        if disabled_packages:
-            info_lines.append('\n❌ Отключенные:')
-            for pkg in disabled_packages:
-                gb_text = '♾️ Безлимит' if pkg['gb'] == 0 else f'{pkg["gb"]} ГБ'
-                info_lines.append(f'   • {gb_text}: {pkg["price"] // 100}₽')
-
-        info_lines.append(f'\n📊 Всего пакетов: {len(packages)}')
-        info_lines.append(f'🟢 Активных: {len(enabled_packages)}')
-        info_lines.append(f'🔴 Отключенных: {len(disabled_packages)}')
-
-        return '\n'.join(info_lines)
-
-    except Exception as e:
-        return f'⚠️ Ошибка получения информации: {e}'
-
-
 async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     from app.database.crud.tariff import get_tariff_by_id
 

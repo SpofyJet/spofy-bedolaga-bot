@@ -13,13 +13,9 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.config import get_traffic_prices, settings
 from app.database.models import Subscription, User
-from app.localization.texts import get_texts
 from app.utils.incy_crypt1 import wrap_incy_deep_link
 from app.utils.pricing_utils import (
     apply_percentage_discount,
-)
-from app.utils.promo_offer import (
-    get_user_active_promo_discount_percent,
 )
 
 
@@ -128,10 +124,6 @@ def _format_text_with_placeholders(template: str, values: dict[str, Any]) -> str
         return template
 
 
-def _get_promo_offer_discount_percent(user: User | None) -> int:
-    return get_user_active_promo_discount_percent(user)
-
-
 def _get_period_hint_from_subscription(subscription: Subscription | None) -> int | None:
     if not subscription or not subscription.end_date:
         return None
@@ -166,29 +158,6 @@ def update_traffic_prices():
 
     refresh_traffic_prices()
     logger.info('🔄 TRAFFIC_PRICES обновлены из конфигурации')
-
-
-def format_traffic_display(traffic_gb: int, is_fixed_mode: bool = None) -> str:
-    if is_fixed_mode is None:
-        is_fixed_mode = settings.is_traffic_fixed()
-
-    if traffic_gb == 0:
-        if is_fixed_mode:
-            return 'Безлимитный'
-        return 'Безлимитный'
-    if is_fixed_mode:
-        return f'{traffic_gb} ГБ'
-    return f'{traffic_gb} ГБ'
-
-
-def validate_traffic_price(gb: int) -> bool:
-    from app.config import settings
-
-    price = settings.get_traffic_price(gb)
-    if gb == 0:
-        return True
-
-    return price > 0
 
 
 def get_localized_value(values: Any, language: str, default_language: str = 'en') -> str:
@@ -557,18 +526,6 @@ def create_deep_link(app: dict[str, Any], subscription_url: str) -> str | None:
     redirect_link = build_redirect_link(scheme_link, template) if scheme_link and template else None
 
     return redirect_link or scheme_link or subscription_url
-
-
-def get_reset_devices_confirm_keyboard(
-    language: str = 'ru', back_callback: str = 'menu_subscription'
-) -> InlineKeyboardMarkup:
-    get_texts(language)
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text='✅ Да, сбросить все устройства', callback_data='confirm_reset_devices')],
-            [InlineKeyboardButton(text='❌ Отмена', callback_data=back_callback)],
-        ]
-    )
 
 
 def get_traffic_switch_keyboard(

@@ -16,93 +16,12 @@ from app.database.models import User
 from app.localization.texts import get_texts
 from app.services.promo_offer_service import promo_offer_service
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
-from app.utils.pricing_utils import (
-    format_period_description,
-)
 from app.utils.promo_offer import (
-    build_promo_offer_hint,
     offer_discount_source,
 )
 from app.utils.timezone import format_local_datetime
 
 from .common import _format_text_with_placeholders
-
-
-async def _get_promo_offer_hint(
-    db: AsyncSession,
-    db_user: User,
-    texts,
-    percent: int | None = None,
-) -> str | None:
-    return await build_promo_offer_hint(db, db_user, texts, percent)
-
-
-async def _build_promo_group_discount_text(
-    db_user: User,
-    periods: list[int] | None = None,
-    texts=None,
-) -> str:
-    promo_group = db_user.get_primary_promo_group()
-
-    if not promo_group:
-        return ''
-
-    if texts is None:
-        texts = get_texts(db_user.language)
-
-    service_lines: list[str] = []
-
-    if promo_group.server_discount_percent > 0:
-        service_lines.append(texts.PROMO_GROUP_DISCOUNT_SERVERS.format(percent=promo_group.server_discount_percent))
-
-    if promo_group.traffic_discount_percent > 0:
-        service_lines.append(texts.PROMO_GROUP_DISCOUNT_TRAFFIC.format(percent=promo_group.traffic_discount_percent))
-
-    if promo_group.device_discount_percent > 0:
-        service_lines.append(texts.PROMO_GROUP_DISCOUNT_DEVICES.format(percent=promo_group.device_discount_percent))
-
-    period_lines: list[str] = []
-
-    period_candidates: set[int] = set(periods or [])
-
-    raw_period_discounts = getattr(promo_group, 'period_discounts', None)
-    if isinstance(raw_period_discounts, dict):
-        for key in raw_period_discounts.keys():
-            try:
-                period_candidates.add(int(key))
-            except (TypeError, ValueError):
-                continue
-
-    for period_days in sorted(period_candidates):
-        percent = promo_group.get_discount_percent('period', period_days)
-
-        if percent <= 0:
-            continue
-
-        period_display = format_period_description(period_days, db_user.language)
-        period_lines.append(
-            texts.PROMO_GROUP_PERIOD_DISCOUNT_ITEM.format(
-                period=period_display,
-                percent=percent,
-            )
-        )
-
-    if not service_lines and not period_lines:
-        return ''
-
-    lines: list[str] = [texts.PROMO_GROUP_DISCOUNTS_HEADER]
-
-    if service_lines:
-        lines.extend(service_lines)
-
-    if period_lines:
-        if service_lines:
-            lines.append('')
-
-        lines.append(texts.PROMO_GROUP_PERIOD_DISCOUNTS_HEADER)
-        lines.extend(period_lines)
-
-    return '\n'.join(lines)
 
 
 async def claim_discount_offer(
