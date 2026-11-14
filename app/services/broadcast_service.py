@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import InterfaceError, SQLAlchemyError
 
 from app.database.database import AsyncSessionLocal
-from app.database.models import BroadcastHistory, Subscription, SubscriptionStatus, User, UserStatus
+from app.database.models import BroadcastHistory, Subscription, SubscriptionStatus, User
 from app.handlers.admin.messages import (
     create_broadcast_keyboard,
     get_custom_users,
@@ -367,7 +367,6 @@ class BroadcastService:
 
     async def resume_interrupted(self, max_age_hours: int = 72) -> int:
         """При старте бота: продолжить рассылки, которые оборвал перезапуск. Возвращает их число."""
-        from sqlalchemy import select
 
         from app.services.decision_log import KIND_BROADCAST_RESUMED, record_decision
 
@@ -759,95 +758,6 @@ class BroadcastService:
                 return
 
 
-async def cleanup_blocked_broadcast_users(blocked_telegram_ids: list[int]) -> None:
-    """
-    Фоновая очистка пользователей, заблокировавших бота (обнаруженных при рассылке).
-
-    Для каждого telegram_id:
-    - Помечает пользователя как BLOCKED
-    - Отключает активные подписки (ACTIVE/TRIAL → DISABLED)
-    - Отключает пользователя в Remnawave панели
-    """
-    from app.services.subscription_service import SubscriptionService
-
-    subscription_service = SubscriptionService()
-
-    for telegram_id in blocked_telegram_ids:
-        try:
-            async with AsyncSessionLocal() as session:
-                result = await session.execute(select(User).where(User.telegram_id == telegram_id))
-                user = result.scalar_one_or_none()
-                if not user or user.status == UserStatus.BLOCKED.value:
-                    continue
-
-                from app.services.rbac_bootstrap_service import is_protected_from_blocking
-
-                if is_protected_from_blocking(user):
-                    # An admin who muted the bot must not lose access to it.
-                    logger.info('Пропуск авто-блокировки: аккаунт админа из env', telegram_id=telegram_id)
-                    continue
-
-                user.status = UserStatus.BLOCKED.value
-
-                # Проверяем, есть ли активная оплаченная подписка
-                from app.database.crud.subscription import is_active_paid_subscription
-
-                sub_result = await session.execute(select(Subscription).where(Subscription.user_id == user.id))
-                all_subs = sub_result.scalars().all()
-
-                if any(is_active_paid_subscription(s) for s in all_subs):
-                    logger.info(
-                        '⏭️ Пропуск отключения подписки: у пользователя активная оплаченная подписка',
-                        telegram_id=telegram_id,
-                        user_id=user.id,
-                    )
-                    await session.commit()
-                    continue
-
-                # Отключаем активные подписки (только триальные или истёкшие)
-                active_sub_result = await session.execute(
-                    select(Subscription).where(
-                        Subscription.user_id == user.id,
-                        Subscription.status.in_(
-                            [
-                                SubscriptionStatus.ACTIVE.value,
-                                SubscriptionStatus.TRIAL.value,
-                            ]
-                        ),
-                    )
-                )
-                subscriptions = active_sub_result.scalars().all()
-                for sub in subscriptions:
-                    sub.status = SubscriptionStatus.DISABLED.value
-
-                await session.commit()
-
-                # Отключаем в Remnawave панели (вне транзакции)
-                from app.config import settings
-
-                if settings.is_multi_tariff_enabled():
-                    await session.refresh(user, ['subscriptions'])
-                    for sub in user.subscriptions or []:
-                        if sub.remnawave_id:
-                            await subscription_service.disable_remnawave_user(sub.remnawave_id)
-                elif user.remnawave_id:
-                    await subscription_service.disable_remnawave_user(user.remnawave_id)
-
-                logger.info(
-                    'Заблокированный пользователь очищен при рассылке',
-                    telegram_id=telegram_id,
-                    user_id=user.id,
-                    disabled_subs=len(subscriptions),
-                )
-
-        except Exception as exc:
-            logger.error(
-                'Ошибка очистки заблокированного пользователя',
-                telegram_id=telegram_id,
-                exc=exc,
-            )
-
-
 broadcast_service = BroadcastService()
 
 
@@ -987,9 +897,7 @@ class EmailBroadcastService:
         выключенные новости резали только Telegram, а на почту всё равно
         приходили.
         """
-        from sqlalchemy import select
 
-        from app.database.models import Subscription, SubscriptionStatus, User
         from app.utils.notification_prefs import filter_users_by_broadcast_category
 
         async with AsyncSessionLocal() as session:

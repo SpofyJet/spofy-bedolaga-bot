@@ -34,7 +34,6 @@ KNOWN_WITHOUT_RULE: dict[str, str] = {
     'app/database/crud/subscription.py::activate_pending_subscription': (
         'активация оплаченной по счёту подписки: лимит тарифа задан при её оформлении'
     ),
-    'app/database/crud/subscription.py::activate_pending_trial_subscription': 'активация триала: лимит триала',
     'app/database/crud/subscription.py::resume_daily_subscription': 'суточное возобновление: лимит ведёт суточный сервис',
     'app/cabinet/routes/subscription_modules/daily.py::toggle_subscription_pause': (
         'суточная пауза/возобновление из кабинета: лимит ведёт суточный сервис'

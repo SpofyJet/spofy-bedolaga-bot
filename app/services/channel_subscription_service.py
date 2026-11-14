@@ -233,17 +233,6 @@ class ChannelSubscriptionService:
             )
         return result
 
-    async def get_first_channel_id(self) -> str | None:
-        """Get the first active channel ID (for announcements, etc.).
-
-        Channel IDs are always stored as strings in the DB.
-        Telegram API accepts string channel_id in chat_id parameters.
-        """
-        channels = await self.get_required_channels()
-        if not channels:
-            return None
-        return channels[0]['channel_id']
-
     # -- Event handlers (called from ChatMemberUpdated router) --------------------
 
     async def on_user_joined(self, telegram_id: int, channel_id: str) -> None:

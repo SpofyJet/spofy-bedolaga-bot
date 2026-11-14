@@ -80,27 +80,6 @@ async def test_cabinet_disable_user_refuses_env_admin(env_admin):
 
 
 @pytest.mark.asyncio
-async def test_broadcast_auto_block_skips_env_admin(env_admin):
-    """A muted bot reports the owner as "blocked" — that must not flip their status."""
-    from app.services import broadcast_service
-
-    class _Result:
-        def scalar_one_or_none(self):
-            return env_admin
-
-    session = AsyncMock()
-    session.execute = AsyncMock(return_value=_Result())
-    session.__aenter__ = AsyncMock(return_value=session)
-    session.__aexit__ = AsyncMock(return_value=False)
-
-    with patch.object(broadcast_service, 'AsyncSessionLocal', lambda: session):
-        await broadcast_service.cleanup_blocked_broadcast_users([env_admin.telegram_id])
-
-    assert env_admin.status == UserStatus.ACTIVE.value
-    session.commit.assert_not_awaited()
-
-
-@pytest.mark.asyncio
 async def test_blocked_users_scan_skips_env_admin(env_admin):
     from app.services.blocked_users_service import BlockedUsersService
 

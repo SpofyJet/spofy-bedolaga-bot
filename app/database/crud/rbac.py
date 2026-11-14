@@ -5,7 +5,7 @@ from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import AccessPolicy, AdminAuditLog, AdminRole, User, UserRole
+from app.database.models import AccessPolicy, AdminAuditLog, AdminRole, UserRole
 
 
 logger = structlog.get_logger(__name__)
@@ -250,45 +250,6 @@ class UserRoleCRUD:
         await db.refresh(user_role)
         logger.info('Assigned role to user', user_role_id=user_role.id, user_id=user_id, role_id=role_id)
         return user_role
-
-    @staticmethod
-    async def get_all_admins(
-        db: AsyncSession,
-        *,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> list[dict]:
-        """Get users that have at least one active role.
-
-        Returns list of dicts: [{'user': User, 'role_names': [str, ...]}]
-        """
-        # Subquery: aggregate role names per user
-        role_agg = (
-            select(
-                UserRole.user_id,
-                func.array_agg(AdminRole.name).label('role_names'),
-            )
-            .join(AdminRole, UserRole.role_id == AdminRole.id)
-            .where(
-                UserRole.is_active.is_(True),
-                AdminRole.is_active.is_(True),
-            )
-            .group_by(UserRole.user_id)
-            .subquery()
-        )
-
-        stmt = (
-            select(User, role_agg.c.role_names)
-            .join(role_agg, User.id == role_agg.c.user_id)
-            .order_by(User.id)
-            .offset(offset)
-            .limit(limit)
-        )
-
-        result = await db.execute(stmt)
-        rows = result.all()
-
-        return [{'user': row[0], 'role_names': list(row[1] or [])} for row in rows]
 
     @staticmethod
     async def get_superadmin_count(db: AsyncSession) -> int:

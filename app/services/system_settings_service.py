@@ -330,8 +330,6 @@ class BotConfigurationService:
         'PROMO_GROUP_AUTO_ASSIGN_NOTIFY_USER': 'SUBSCRIPTIONS_CORE',
         'DEFAULT_AUTOPAY_ENABLED': 'AUTOPAY',
         'DEFAULT_AUTOPAY_DAYS_BEFORE': 'AUTOPAY',
-        'MIN_BALANCE_FOR_AUTOPAY_KOPEKS': 'AUTOPAY',
-        'TRIAL_WARNING_HOURS': 'TRIAL',
         'TRIAL_USER_TAG': 'TRIAL',
         'SUPPORT_USERNAME': 'SUPPORT',
         'SUPPORT_MENU_ENABLED': 'SUPPORT',
@@ -382,9 +380,6 @@ class BotConfigurationService:
         'RESET_DEVICES_ON_RENEWAL': 'SUBSCRIPTIONS_CORE',
         'LOW_BALANCE_ALERT_EXPIRY_DAYS': 'NOTIFICATIONS',
         'ENABLE_NOTIFICATIONS': 'NOTIFICATIONS',
-        'NOTIFICATION_RETRY_ATTEMPTS': 'NOTIFICATIONS',
-        'NOTIFICATION_CACHE_HOURS': 'NOTIFICATIONS',
-        'MONITORING_LOGS_RETENTION_DAYS': 'MONITORING',
         'MONITORING_INTERVAL': 'MONITORING',
         'TRAFFIC_MONITORING_ENABLED': 'MONITORING',
         'TRAFFIC_MONITORING_INTERVAL_HOURS': 'MONITORING',
@@ -418,7 +413,6 @@ class BotConfigurationService:
         'CABINET_BUTTON_STYLE': 'INTERFACE',
         'CONNECT_BUTTON_MODE': 'CONNECT_BUTTON',
         'MINIAPP_CUSTOM_URL': 'CONNECT_BUTTON',
-        'ENABLE_DEEP_LINKS': 'ADDITIONAL',
         'APP_CONFIG_CACHE_TTL': 'ADDITIONAL',
         'INACTIVE_USER_DELETE_MONTHS': 'MAINTENANCE',
         'MAINTENANCE_MESSAGE': 'MAINTENANCE',
@@ -1492,11 +1486,6 @@ class BotConfigurationService:
     def get_category_description(cls, category_key: str) -> str:
         description = cls.CATEGORY_DESCRIPTIONS.get(category_key, '')
         return cls._format_dynamic_copy(category_key, description)
-
-    @classmethod
-    def is_toggle(cls, key: str) -> bool:
-        definition = cls.get_definition(key)
-        return definition.python_type is bool
 
     @classmethod
     def is_read_only(cls, key: str) -> bool:

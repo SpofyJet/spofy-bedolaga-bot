@@ -382,35 +382,6 @@ class SubscriptionService:
             logger.error('Ошибка создания RemnaWave пользователя', error=e)
             return None
 
-    async def _adopt_panel_user_by_short_uuid(self, api: RemnaWaveAPI, subscription) -> RemnaWaveUser | None:
-        """Опознать уже существующего панельного пользователя подписки по shortUuid.
-
-        Нужно ровно для строк, привязанных до апгрейда на 3.0.0: `uuid` из API
-        исчез, числовой id ещё не проставлен бэкфилом, но `shortUuid` панель
-        по-прежнему знает (`GET /api/users/by-short-uuid/{shortUuid}` сохранился).
-
-        Возвращает None, если опознать нечем или не удалось — вызывающий тогда
-        честно создаёт нового пользователя. Транзиентную ошибку пробрасываем:
-        «панель моргнула» не должно превращаться в дубль аккаунта.
-        """
-        short_uuid = (getattr(subscription, 'remnawave_short_uuid', None) or '').strip()
-        if not short_uuid:
-            return None
-        # Отсутствие аккаунта доказывает ТОЛЬКО 404 (его `get_user_by_short_uuid`
-        # отдаёт как None). Любой другой ответ — 5xx на рестарте панели, 429,
-        # таймаут — означает «не знаем», и проглотить его здесь нельзя: вызывающий
-        # воспримет None как «создавать нового» и заведёт дубль рядом с живым
-        # оплаченным аккаунтом. Пробрасываем — пусть операция честно упадёт.
-        panel_user = await api.get_user_by_short_uuid(short_uuid)
-        if panel_user is None:
-            return None
-        logger.info(
-            '🔗 Панельный пользователь опознан по short_uuid — дубль не создаём',
-            subscription_id=getattr(subscription, 'id', None),
-            remnawave_id=panel_user.id,
-        )
-        return panel_user
-
     async def _panel_id_is_free_for(self, db: AsyncSession, subscription, panel_id: int | None) -> bool:
         return await panel_id_is_free_for(db, subscription, panel_id)
 

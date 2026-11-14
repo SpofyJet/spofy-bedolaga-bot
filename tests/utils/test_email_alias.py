@@ -9,9 +9,6 @@ import pytest
 
 from app.utils.email_alias import (
     canonical_email,
-    email_domain,
-    has_alias_forms,
-    is_email_alias_of,
 )
 
 
@@ -52,34 +49,3 @@ class TestCanonicalEmail:
     def test_local_part_cannot_become_empty(self) -> None:
         """«+tag@gmail.com» свернулось бы в «@gmail.com» — общий ящик для всех."""
         assert canonical_email('+tag@gmail.com') == '+tag@gmail.com'
-
-
-class TestIsEmailAliasOf:
-    def test_detects_alias(self) -> None:
-        assert is_email_alias_of('user+1@gmail.com', 'user@gmail.com') is True
-        assert is_email_alias_of('u.ser@gmail.com', 'user@gmail.com') is True
-
-    def test_same_address_is_not_an_alias(self) -> None:
-        """Точное совпадение — задача обычной проверки, здесь оно не «алиас»."""
-        assert is_email_alias_of('user@gmail.com', 'User@GMAIL.com') is False
-
-    def test_different_mailboxes(self) -> None:
-        assert is_email_alias_of('other@gmail.com', 'user@gmail.com') is False
-        assert is_email_alias_of('user@gmail.com', 'user@yandex.ru') is False
-
-    @pytest.mark.parametrize(('a', 'b'), [(None, 'user@gmail.com'), ('user@gmail.com', None), (None, None)])
-    def test_missing_values(self, a: str | None, b: str | None) -> None:
-        assert is_email_alias_of(a, b) is False
-
-
-class TestHelpers:
-    def test_has_alias_forms(self) -> None:
-        assert has_alias_forms('user@gmail.com') is True
-        assert has_alias_forms('user@yandex.ru') is True
-        assert has_alias_forms('user@corp.example') is False
-        assert has_alias_forms('') is False
-
-    def test_email_domain_merges_twins(self) -> None:
-        assert email_domain('user@ya.ru') == 'yandex.ru'
-        assert email_domain('user@googlemail.com') == 'gmail.com'
-        assert email_domain('broken') == ''

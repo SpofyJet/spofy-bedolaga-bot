@@ -770,17 +770,6 @@ class Tariff(Base):
         prices = self.period_prices or {}
         return sorted([int(p) for p in prices.keys()])
 
-    def get_purchasable_periods(self) -> list[int]:
-        """Периоды, доступные для покупки, с учётом суточных тарифов.
-
-        У суточных тарифов ``period_prices`` пуст — оплата идёт за день,
-        поэтому единственный «период» покупки равен 1 дню. Для обычных
-        тарифов поведение совпадает с :meth:`get_available_periods`.
-        """
-        if self.is_daily and self.daily_price_kopeks:
-            return [1]
-        return self.get_available_periods()
-
     def get_purchasable_price_for_period(self, period_days: int) -> int | None:
         """Цена за период с учётом суточных тарифов.
 
@@ -795,28 +784,6 @@ class Tariff(Base):
         """Возвращает минимальный доступный период в днях (для автопродления)."""
         periods = self.get_available_periods()
         return periods[0] if periods else None
-
-    def get_price_rubles(self, period_days: int) -> float | None:
-        """Возвращает цену в рублях для указанного периода."""
-        price_kopeks = self.get_price_for_period(period_days)
-        if price_kopeks is not None:
-            return price_kopeks / 100
-        return None
-
-    def get_traffic_limit_for_server(self, squad_uuid: str) -> int:
-        """Возвращает лимит трафика для конкретного сервера.
-
-        Если для сервера настроен отдельный лимит - возвращает его,
-        иначе возвращает общий traffic_limit_gb тарифа.
-        """
-        limits = self.server_traffic_limits or {}
-        if squad_uuid in limits:
-            server_limit = limits[squad_uuid]
-            if isinstance(server_limit, dict) and 'traffic_limit_gb' in server_limit:
-                return server_limit['traffic_limit_gb']
-            if isinstance(server_limit, int):
-                return server_limit
-        return self.traffic_limit_gb
 
     def is_available_for_promo_group(self, promo_group_id: int | None) -> bool:
         """Проверяет, доступен ли тариф для указанной промогруппы."""
@@ -836,18 +803,9 @@ class Tariff(Base):
         packages = self.get_traffic_topup_packages()
         return packages.get(gb)
 
-    def get_available_traffic_packages(self) -> list[int]:
-        """Возвращает список доступных пакетов трафика в ГБ."""
-        packages = self.get_traffic_topup_packages()
-        return sorted(packages.keys())
-
     def can_topup_traffic(self) -> bool:
         """Проверяет, можно ли докупить трафик на этом тарифе."""
         return self.traffic_topup_enabled and bool(self.traffic_topup_packages) and not self.is_unlimited_traffic
-
-    def get_daily_price_rubles(self) -> float:
-        """Возвращает суточную цену в рублях."""
-        return self.daily_price_kopeks / 100 if self.daily_price_kopeks else 0
 
     def get_price_for_custom_days(self, days: int) -> int | None:
         """Возвращает цену для произвольного количества дней."""
@@ -1061,16 +1019,6 @@ class User(Base):
             return self.email.split('@')[0]
         return f'User{self.id}'
 
-    @property
-    def is_email_user(self) -> bool:
-        """Пользователь зарегистрирован через email (без Telegram)."""
-        return self.auth_type == 'email' and self.telegram_id is None
-
-    @property
-    def is_web_user(self) -> bool:
-        """Пользователь без Telegram (email, OAuth и т.д.)."""
-        return self.telegram_id is None
-
     def get_primary_promo_group(self):
         """Возвращает промогруппу с максимальным приоритетом."""
         try:
@@ -1102,12 +1050,6 @@ class User(Base):
 
     def add_balance(self, kopeks: int) -> None:
         self.balance_kopeks += kopeks
-
-    def subtract_balance(self, kopeks: int) -> bool:
-        if self.balance_kopeks >= kopeks:
-            self.balance_kopeks -= kopeks
-            return True
-        return False
 
 
 class Subscription(Base):
@@ -1280,12 +1222,6 @@ class Subscription(Base):
         return end is not None and end <= datetime.now(UTC)
 
     @property
-    def should_be_expired(self) -> bool:
-        current_time = datetime.now(UTC)
-        end = _aware(self.end_date)
-        return self.status == SubscriptionStatus.ACTIVE.value and end is not None and end <= current_time
-
-    @property
     def actual_status(self) -> str:
         current_time = datetime.now(UTC)
         end = _aware(self.end_date)
@@ -1432,15 +1368,6 @@ class Subscription(Base):
         if self.tariff:
             return getattr(self.tariff, 'daily_price_kopeks', 0)
         return 0
-
-    @property
-    def can_charge_daily(self) -> bool:
-        """Проверяет, можно ли списать суточную оплату."""
-        if not self.is_daily_tariff:
-            return False
-        if self.is_daily_paused:
-            return False
-        return self.status == SubscriptionStatus.ACTIVE.value
 
 
 class GraceAccessSessionModel(Base):
@@ -1662,10 +1589,6 @@ class SubscriptionConversion(Base):
     created_at = Column(AwareDateTime(), default=func.now())
 
     user = relationship('User', backref='subscription_conversions')
-
-    @property
-    def first_payment_amount_rubles(self) -> float:
-        return (self.first_payment_amount_kopeks or 0) / 100
 
     def __repr__(self):
         return f'<SubscriptionConversion(user_id={self.user_id}, converted_at={self.converted_at})>'
@@ -2562,14 +2485,6 @@ class Ticket(Base):
     messages = relationship('TicketMessage', back_populates='ticket', cascade='all, delete-orphan')
 
     @property
-    def is_open(self) -> bool:
-        return self.status == TicketStatus.OPEN.value
-
-    @property
-    def is_answered(self) -> bool:
-        return self.status == TicketStatus.ANSWERED.value
-
-    @property
     def is_closed(self) -> bool:
         return self.status == TicketStatus.CLOSED.value
 
@@ -2631,10 +2546,6 @@ class TicketMessage(Base):
     @property
     def is_user_message(self) -> bool:
         return not self.is_from_admin
-
-    @property
-    def is_admin_message(self) -> bool:
-        return self.is_from_admin
 
     def __repr__(self):
         return f"<TicketMessage(id={self.id}, ticket_id={self.ticket_id}, is_admin={self.is_from_admin}, text='{self.message_text[:30]}...')>"

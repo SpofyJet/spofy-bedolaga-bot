@@ -163,11 +163,6 @@ class RenewalPaymentDescriptor:
     payload_id: str
     pricing_snapshot: dict[str, Any] | None = None
 
-    @property
-    def balance_component_kopeks(self) -> int:
-        remaining = self.total_amount_kopeks - self.missing_amount_kopeks
-        return max(0, remaining)
-
 
 _PAYLOAD_PREFIX = 'subscription_renewal'
 

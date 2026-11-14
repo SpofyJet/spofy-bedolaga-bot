@@ -272,12 +272,6 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
             raise
 
 
-async def get_db_read_only() -> AsyncGenerator[AsyncSession]:
-    """Read-only dependency для тяжелых SELECT запросов"""
-    async with db_manager.session(read_only=True) as session:
-        yield session
-
-
 # ============================================================================
 # BATCH OPERATIONS FOR PERFORMANCE
 # ============================================================================
@@ -338,18 +332,6 @@ batch_ops = BatchOperations()
 # ============================================================================
 # INITIALIZATION AND CLEANUP
 # ============================================================================
-
-
-async def close_db() -> None:
-    """Корректное закрытие всех соединений"""
-    logger.info('Закрытие соединений с БД...')
-
-    await engine.dispose()
-
-    if db_manager.read_replica_engine:
-        await db_manager.read_replica_engine.dispose()
-
-    logger.info('Все подключения к базе данных закрыты')
 
 
 # ============================================================================

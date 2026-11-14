@@ -93,10 +93,7 @@ class Settings(BaseSettings):
     INVITE_ONLY_ALLOW_GIFT_LINKS: bool = True
 
     SUPPORT_USERNAME: str = '@support'
-    # Публичные контакты сервиса, которые кабинет отдаёт в GET /info/service.
-    # До этого хендлер читал SUPPORT_EMAIL и WEBSITE_URL через getattr, но таких
-    # полей в Settings никогда не было — эндпоинт всегда возвращал None.
-    SUPPORT_EMAIL: str | None = None
+    # Сайт сервиса для кнопки в меню бота (см. handlers/menu.py).
     SERVICE_WEBSITE_URL: str | None = None
     SUPPORT_MENU_ENABLED: bool = True
     SUPPORT_SYSTEM_MODE: str = 'both'  # one of: tickets, contact, both
@@ -120,11 +117,6 @@ class Settings(BaseSettings):
     SUPPORT_INFO_TEXT_UA: str = ''
     SUPPORT_INFO_TEXT_ZH: str = ''
     SUPPORT_INFO_TEXT_FA: str = ''
-
-    # MiniApp tickets settings
-    MINIAPP_TICKETS_ENABLED: bool = True  # Enable/disable tickets section in miniapp
-    MINIAPP_SUPPORT_TYPE: str = 'tickets'  # one of: tickets, profile, url
-    MINIAPP_SUPPORT_URL: str = ''  # Custom URL to redirect when tickets disabled (only for url type)
 
     ADMIN_NOTIFICATIONS_ENABLED: bool = False
     # Rich-вид сообщений админ-чата (Bot API 10.1): заголовки, таблицы,
@@ -218,13 +210,6 @@ class Settings(BaseSettings):
     # Держим >= CART_TTL_SECONDS: метка не должна умирать раньше корзины, иначе
     # оплата по «старой» ссылке зачислит деньги и молча не купит подписку.
     CART_AUTOPURCHASE_INTENT_TTL_SECONDS: int = 86400  # 24 часа, как жизнь платёжной ссылки
-
-    # Внешний антифрод: бот не видит подключений и сам ничего не считает,
-    # только спрашивает и показывает. Не настроен — вопросов к клиенту нет.
-    ABUSE_API_ENABLED: bool = False
-    ABUSE_API_URL: str | None = None
-    ABUSE_API_KEY: str | None = None
-    ABUSE_API_TIMEOUT: int = 5
 
     REMNAWAVE_API_URL: str | None = None
     REMNAWAVE_API_KEY: str | None = None
@@ -377,9 +362,7 @@ class Settings(BaseSettings):
     # меньше, чем положено по тарифу. True — прежнее поведение (минимум 1).
     ALLOW_DEVICES_BELOW_TARIFF_LIMIT: bool = False
 
-    TRIAL_WARNING_HOURS: int = 2
     ENABLE_NOTIFICATIONS: bool = True
-    NOTIFICATION_RETRY_ATTEMPTS: int = 3
     # Уведомления истёкшим и отписавшимся от канала — переключатели меню «Уведомления пользователям»
     # в админке бота и раздела настроек кабинета. Хранятся в базе (system_settings), а не в файле.
     NOTIFICATION_TRIAL_CHANNEL_UNSUBSCRIBED_ENABLED: bool = True
@@ -391,9 +374,6 @@ class Settings(BaseSettings):
     NOTIFICATION_EXPIRED_WAVE3_DISCOUNT_PERCENT: int = 20
     NOTIFICATION_EXPIRED_WAVE3_VALID_HOURS: int = 24
     NOTIFICATION_EXPIRED_WAVE3_TRIGGER_DAYS: int = 5
-
-    MONITORING_LOGS_RETENTION_DAYS: int = 30
-    NOTIFICATION_CACHE_HOURS: int = 24
 
     SERVER_STATUS_MODE: str = 'disabled'
     SERVER_STATUS_EXTERNAL_URL: str | None = None
@@ -605,7 +585,6 @@ class Settings(BaseSettings):
     # >0 → autopay charges this many days each cycle by default (must be present in tariff/renewal periods).
     # Per-subscription override lives in Subscription.autopay_period_days.
     DEFAULT_AUTOPAY_PERIOD_DAYS: int = 0
-    MIN_BALANCE_FOR_AUTOPAY_KOPEKS: int = 10000
 
     # ── Антиспам уведомлений об ошибке автоплатежа ──
     # Максимум уведомлений об ошибке списания за ОДИН цикл подписки (до следующего end_date).
@@ -960,7 +939,6 @@ class Settings(BaseSettings):
     # человеку годовую подписку. 0 — без ограничения.
     WEB_API_MANUAL_DEPOSIT_MAX_KOPEKS: int = 1_000_000
 
-    ENABLE_DEEP_LINKS: bool = True
     APP_CONFIG_CACHE_TTL: int = 3600
 
     VERSION_CHECK_ENABLED: bool = True
@@ -1870,9 +1848,6 @@ class Settings(BaseSettings):
 
         return cleaned
 
-    def get_trial_warning_hours(self) -> int:
-        return self.TRIAL_WARNING_HOURS
-
     def get_trial_user_tag(self) -> str | None:
         return self._normalize_user_tag(self.TRIAL_USER_TAG, 'TRIAL_USER_TAG')
 
@@ -1958,9 +1933,6 @@ class Settings(BaseSettings):
         sep = '&' if '?' in cabinet_url else '?'
         return f'{cabinet_url}{sep}ref={safe_code}'
 
-    def is_deep_links_enabled(self) -> bool:
-        return self.ENABLE_DEEP_LINKS
-
     def get_miniapp_branding(self) -> dict[str, dict[str, str | None]]:
         def _clean(value: str | None) -> str | None:
             if value is None:
@@ -1988,9 +1960,6 @@ class Settings(BaseSettings):
                 'ru': desc_ru,
             },
         }
-
-    def get_app_config_cache_ttl(self) -> int:
-        return self.APP_CONFIG_CACHE_TTL
 
     def is_traffic_selectable(self) -> bool:
         return self.TRAFFIC_SELECTION_MODE.lower() == 'selectable'
@@ -2394,13 +2363,6 @@ class Settings(BaseSettings):
         except Exception:
             return {}
 
-    def get_base_promo_group_period_discount(self, period_days: int | None) -> int:
-        if not period_days or not self.is_base_promo_group_period_discount_enabled():
-            return 0
-
-        discounts = self.get_base_promo_group_period_discounts()
-        return discounts.get(period_days, 0)
-
     def is_maintenance_auto_enable(self) -> bool:
         return self.MAINTENANCE_AUTO_ENABLE
 
@@ -2519,9 +2481,6 @@ class Settings(BaseSettings):
             service_name=self.PAYMENT_SERVICE_NAME,
             description=f'{self.PAYMENT_SUBSCRIPTION_DESCRIPTION} {for_period_ru(period_days)}',
         )
-
-    def get_custom_payment_description(self, description: str) -> str:
-        return self.PAYMENT_BALANCE_TEMPLATE.format(service_name=self.PAYMENT_SERVICE_NAME, description=description)
 
     def get_stars_rate(self) -> float:
         return self.TELEGRAM_STARS_RATE_RUB
@@ -2735,12 +2694,6 @@ class Settings(BaseSettings):
     def is_version_check_enabled(self) -> bool:
         return self.VERSION_CHECK_ENABLED
 
-    def get_version_check_repo(self) -> str:
-        return self.VERSION_CHECK_REPO
-
-    def get_version_check_interval(self) -> int:
-        return self.VERSION_CHECK_INTERVAL_HOURS
-
     def _get_fallback_traffic_packages(self) -> list[dict]:
         try:
             if self.TRAFFIC_PACKAGES_CONFIG.strip():
@@ -2897,9 +2850,6 @@ class Settings(BaseSettings):
     def get_server_status_mode(self) -> str:
         return self.SERVER_STATUS_MODE
 
-    def is_server_status_enabled(self) -> bool:
-        return self.get_server_status_mode() != 'disabled'
-
     def get_server_status_external_url(self) -> str | None:
         url = (self.SERVER_STATUS_EXTERNAL_URL or '').strip()
         return url or None
@@ -2948,23 +2898,6 @@ class Settings(BaseSettings):
 
     def is_support_tickets_enabled(self) -> bool:
         return self.get_support_system_mode() in {'tickets', 'both'}
-
-    def is_support_contact_enabled(self) -> bool:
-        return self.get_support_system_mode() in {'contact', 'both'}
-
-    # MiniApp tickets settings
-    def is_miniapp_tickets_enabled(self) -> bool:
-        """Check if tickets are enabled in miniapp."""
-        return bool(self.MINIAPP_TICKETS_ENABLED)
-
-    def get_miniapp_support_type(self) -> str:
-        """Get miniapp support type: tickets, profile, or url."""
-        support_type = (self.MINIAPP_SUPPORT_TYPE or 'tickets').strip().lower()
-        return support_type if support_type in {'tickets', 'profile', 'url'} else 'tickets'
-
-    def get_miniapp_support_url(self) -> str:
-        """Get custom support URL for miniapp (when type is 'url')."""
-        return (self.MINIAPP_SUPPORT_URL or '').strip()
 
     def get_bot_run_mode(self) -> str:
         mode = (self.BOT_RUN_MODE or 'polling').strip().lower()
@@ -3200,11 +3133,6 @@ def set_period_prices_from_db(period_prices: dict[int, int]) -> None:
     global _DB_PERIOD_PRICES
     _DB_PERIOD_PRICES = period_prices.copy() if period_prices else None
     refresh_period_prices()
-
-
-def get_db_period_prices() -> dict[int, int] | None:
-    """Возвращает периоды/цены из БД если они загружены."""
-    return _DB_PERIOD_PRICES
 
 
 def clear_db_period_prices() -> None:

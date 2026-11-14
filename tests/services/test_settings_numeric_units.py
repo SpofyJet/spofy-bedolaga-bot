@@ -30,7 +30,6 @@ def test_devices_selection_disabled_amount_zero_stays_plain() -> None:
         'REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS',
         'BASE_SUBSCRIPTION_PRICE',
         'PRICE_30_DAYS',
-        'MIN_BALANCE_FOR_AUTOPAY_KOPEKS',
     ],
 )
 def test_money_keys_keep_currency_formatting(key: str) -> None:

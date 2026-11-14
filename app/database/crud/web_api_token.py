@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import WebApiToken
@@ -63,33 +62,6 @@ async def create_token(
     return token
 
 
-async def update_token(
-    db: AsyncSession,
-    token: WebApiToken,
-    **kwargs,
-) -> WebApiToken:
-    for key, value in kwargs.items():
-        if hasattr(token, key):
-            setattr(token, key, value)
-    token.updated_at = datetime.now(UTC)
-    await db.flush()
-    await db.refresh(token)
-    return token
-
-
-async def set_tokens_active_status(
-    db: AsyncSession,
-    token_ids: Iterable[int],
-    *,
-    is_active: bool,
-) -> None:
-    await db.execute(
-        update(WebApiToken)
-        .where(WebApiToken.id.in_(list(token_ids)))
-        .values(is_active=is_active, updated_at=datetime.now(UTC))
-    )
-
-
 async def delete_token(db: AsyncSession, token: WebApiToken) -> None:
     await db.delete(token)
 
@@ -100,6 +72,4 @@ __all__ = [
     'get_token_by_hash',
     'get_token_by_id',
     'list_tokens',
-    'set_tokens_active_status',
-    'update_token',
 ]

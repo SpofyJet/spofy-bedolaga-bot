@@ -102,30 +102,6 @@ def canonical_email(email: str | None) -> str:
     return f'{local}@{domain}'
 
 
-def is_email_alias_of(candidate: str | None, existing: str | None) -> bool:
-    """Оба адреса ведут в один ящик, но записаны по-разному."""
-    if not candidate or not existing:
-        return False
-    if candidate.strip().lower() == existing.strip().lower():
-        return False
-    return canonical_email(candidate) == canonical_email(existing)
-
-
-def email_domain(email: str | None) -> str:
-    """Домен адреса с учётом слияния доменов-близнецов (ya.ru → yandex.ru)."""
-    normalized = (email or '').strip().lower()
-    if normalized.count('@') != 1:
-        return ''
-    domain = normalized.split('@', 1)[1]
-    return DOMAIN_ALIASES.get(domain, domain)
-
-
-def has_alias_forms(email: str | None) -> bool:
-    """У этого адреса вообще бывают алиасы — есть ли смысл искать двойников."""
-    domain = email_domain(email)
-    return domain in PLUS_ADDRESSING_DOMAINS or domain in DOT_INSENSITIVE_DOMAINS
-
-
 def sibling_domains(domain: str) -> set[str]:
     """Домены, письма с которых попадают в тот же ящик, включая сам домен."""
     if not domain:

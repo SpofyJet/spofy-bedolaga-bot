@@ -39,82 +39,6 @@ def validate_email(email: str) -> bool:
     return re.match(pattern, email) is not None
 
 
-def validate_phone(phone: str) -> bool:
-    pattern = r'^\+?[1-9]\d{1,14}$'
-    cleaned_phone = re.sub(r'[\s\-\(\)]', '', phone)
-    return re.match(pattern, cleaned_phone) is not None
-
-
-def validate_telegram_username(username: str) -> bool:
-    if not username:
-        return False
-    username = username.lstrip('@')
-    pattern = r'^[a-zA-Z0-9_]{5,32}$'
-    return re.match(pattern, username) is not None
-
-
-def validate_amount(amount_str: str, min_amount: float = 0, max_amount: float = float('inf')) -> float | None:
-    try:
-        amount = float(amount_str.replace(',', '.'))
-        if min_amount <= amount <= max_amount:
-            return amount
-        return None
-    except (ValueError, TypeError):
-        return None
-
-
-def validate_positive_integer(value: str | int, max_value: int = None) -> int | None:
-    try:
-        num = int(value)
-        if num > 0 and (max_value is None or num <= max_value):
-            return num
-        return None
-    except (ValueError, TypeError):
-        return None
-
-
-def validate_url(url: str) -> bool:
-    pattern = r'^https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$'
-    return re.match(pattern, url) is not None
-
-
-def validate_uuid(uuid_str: str) -> bool:
-    pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-    return re.match(pattern, uuid_str.lower()) is not None
-
-
-def validate_traffic_amount(traffic_str: str) -> int | None:
-    traffic_str = traffic_str.upper().strip()
-
-    if traffic_str in ['UNLIMITED', 'БЕЗЛИМИТ', '∞']:
-        return 0
-
-    units = {'MB': 1, 'GB': 1024, 'TB': 1024 * 1024, 'МБ': 1, 'ГБ': 1024, 'ТБ': 1024 * 1024}
-
-    for unit, multiplier in units.items():
-        if traffic_str.endswith(unit):
-            try:
-                value = float(traffic_str[: -len(unit)].strip())
-                return int(value * multiplier)
-            except ValueError:
-                break
-
-    try:
-        return int(float(traffic_str))
-    except ValueError:
-        return None
-
-
-def validate_subscription_period(days: str | int) -> int | None:
-    try:
-        days_int = int(days)
-        if 1 <= days_int <= 3650:
-            return days_int
-        return None
-    except (ValueError, TypeError):
-        return None
-
-
 def sanitize_html(text: str) -> str:
     """
     Безопасно санитизирует HTML-текст, заменяя HTML-сущности на соответствующие теги,
@@ -245,24 +169,6 @@ def validate_html_structure(text: str) -> tuple[bool, str]:
     return True, ''
 
 
-def fix_html_tags(text: str) -> str:
-    if not text:
-        return text
-
-    fixes = [
-        (r'<a href=([^"\s>]+)>', r'<a href="\1">'),
-        (r'<(br|hr|img[^>]*?)>', r'<\1 />'),
-        (r'<<([^>]+)>>', r'<\1>'),
-        (r'<\s+([^>]+)\s+>', r'<\1>'),
-    ]
-
-    result = text
-    for pattern, replacement in fixes:
-        result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
-
-    return result
-
-
 def get_html_help_text() -> str:
     return """<b>Поддерживаемые HTML теги:</b>
 
@@ -287,22 +193,3 @@ def get_html_help_text() -> str:
 
 <b>✅ Правильно:</b>
 <code>&lt;b&gt;жирный &lt;i&gt;курсив&lt;/i&gt;&lt;/b&gt;</code>"""
-
-
-def validate_rules_content(text: str) -> tuple[bool, str, str | None]:
-    if not text or not text.strip():
-        return False, 'Текст правил не может быть пустым', None
-
-    if len(text) > 4000:
-        return False, f'Текст слишком длинный: {len(text)} символов (максимум 4000)', None
-
-    is_valid_html, html_error = validate_html_tags(text)
-    if not is_valid_html:
-        fixed_text = fix_html_tags(text)
-        fixed_is_valid, _ = validate_html_tags(fixed_text)
-
-        if fixed_is_valid and fixed_text != text:
-            return False, html_error, fixed_text
-        return False, html_error, None
-
-    return True, '', None

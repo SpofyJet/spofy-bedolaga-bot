@@ -2,7 +2,6 @@ import html
 import re
 from datetime import UTC, datetime
 
-from app.utils.subscription_time import local_days_until
 from app.utils.timezone import format_local_datetime
 
 
@@ -27,10 +26,6 @@ def format_datetime(dt: datetime | str, format_str: str = '%d.%m.%Y %H:%M') -> s
     Раньше здесь был голый strftime по UTC: админка показывала окончание
     подписки 11:17, когда панель и «Моя подписка» — 14:17 по Москве.
     """
-    return format_local_datetime(_coerce_datetime(dt), format_str)
-
-
-def format_date(dt: datetime | str, format_str: str = '%d.%m.%Y') -> str:
     return format_local_datetime(_coerce_datetime(dt), format_str)
 
 
@@ -146,26 +141,6 @@ def format_percentage(value: float, decimals: int = 1) -> str:
     return f'{value:.{decimals}f}%'
 
 
-def format_number(number: float, separator: str = ' ') -> str:
-    if isinstance(number, float):
-        integer_part = int(number)
-        decimal_part = number - integer_part
-
-        formatted_integer = f'{integer_part:,}'.replace(',', separator)
-
-        if decimal_part > 0:
-            return f'{formatted_integer}.{decimal_part:.2f}'.split('.')[0] + f'.{str(decimal_part).split(".")[1][:2]}'
-        return formatted_integer
-    return f'{number:,}'.replace(',', separator)
-
-
-def truncate_text(text: str, max_length: int = 100, suffix: str = '...') -> str:
-    if len(text) <= max_length:
-        return text
-
-    return text[: max_length - len(suffix)] + suffix
-
-
 def format_username(username: str | None, user_id: int, full_name: str | None = None) -> str:
     if full_name:
         return full_name
@@ -194,61 +169,6 @@ def format_username_link(username: str | None, fallback: str = '') -> str:
     if not _TELEGRAM_USERNAME_RE.match(normalized_username):
         return f'@{safe_username}'
     return f'<a href="https://t.me/{safe_username}">@{safe_username}</a>'
-
-
-def format_subscription_status(is_active: bool, is_trial: bool, end_date: datetime | str, language: str = 'ru') -> str:
-    if isinstance(end_date, str):
-        try:
-            end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-        except (ValueError, AttributeError):
-            end_date = datetime.now(UTC)
-
-    language_code = (language or 'ru').split('-')[0].lower()
-    use_russian_fallback = language_code == 'ru'
-
-    if not is_active:
-        return '❌ Неактивна' if use_russian_fallback else '❌ Inactive'
-
-    if is_trial:
-        status = '🎁 Тестовая' if use_russian_fallback else '🎁 Trial'
-    else:
-        status = '✅ Активна' if use_russian_fallback else '✅ Active'
-
-    now = datetime.now(UTC)
-    if end_date > now:
-        days_left = local_days_until(end_date, now)
-        if days_left > 0:
-            status += f' ({days_left} дн.)' if use_russian_fallback else f' ({days_left} days)'
-        else:
-            hours_left = (end_date - now).seconds // 3600
-            status += f' ({hours_left} ч.)' if use_russian_fallback else f' ({hours_left} hrs)'
-    else:
-        status = '⏰ Истекла' if use_russian_fallback else '⏰ Expired'
-
-    return status
-
-
-def format_traffic_usage(used_gb: float, limit_gb: int, language: str = 'ru') -> str:
-    language_code = (language or 'ru').split('-')[0].lower()
-    use_russian_fallback = language_code == 'ru'
-
-    if limit_gb == 0:
-        if use_russian_fallback:
-            return f'{used_gb:.1f} ГБ / ∞'
-        return f'{used_gb:.1f} GB / ∞'
-
-    percentage = (used_gb / limit_gb) * 100 if limit_gb > 0 else 0
-
-    if use_russian_fallback:
-        return f'{used_gb:.1f} ГБ / {limit_gb} ГБ ({percentage:.1f}%)'
-    return f'{used_gb:.1f} GB / {limit_gb} GB ({percentage:.1f}%)'
-
-
-def format_boolean(value: bool, language: str = 'ru') -> str:
-    language_code = (language or 'ru').split('-')[0].lower()
-    if language_code == 'ru':
-        return '✅ Да' if value else '❌ Нет'
-    return '✅ Yes' if value else '❌ No'
 
 
 # ---------------------------------------------------------------------------

@@ -2,15 +2,6 @@ from app.config import settings
 from app.localization.texts import get_texts
 
 
-def verify_payment_amount(
-    received_kopeks: int,
-    expected_kopeks: int,
-    tolerance_kopeks: int = 1,
-) -> bool:
-    """Check that the received amount matches the expected amount within tolerance."""
-    return abs(received_kopeks - expected_kopeks) <= tolerance_kopeks
-
-
 def get_available_payment_methods() -> list[dict[str, str]]:
     """
     Возвращает список доступных способов оплаты с их настройками
@@ -156,32 +147,3 @@ def get_payment_methods_text(language: str) -> str:
     )
 
     return text
-
-
-def is_payment_method_available(method_id: str) -> bool:
-    """
-    Проверяет, доступен ли конкретный способ оплаты
-    """
-    if method_id == 'stars':
-        return settings.TELEGRAM_STARS_ENABLED
-    if method_id == 'wata':
-        return settings.is_wata_enabled()
-    if method_id == 'cryptobot':
-        return settings.is_cryptobot_enabled()
-    if method_id == 'xrocket':
-        return settings.is_xrocket_enabled()
-    if method_id == 'pay2328':
-        return settings.is_pay2328_enabled()
-    if method_id == 'platega':
-        return settings.is_platega_enabled() and bool(settings.get_platega_active_methods())
-    if method_id.startswith('platega_m'):
-        if not settings.is_platega_enabled():
-            return False
-        try:
-            code = int(method_id[len('platega_m') :])
-        except ValueError:
-            return False
-        return code in settings.get_platega_active_methods()
-    if method_id == 'support':
-        return settings.is_support_topup_enabled()
-    return False

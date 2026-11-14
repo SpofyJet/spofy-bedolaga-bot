@@ -201,14 +201,6 @@ class TicketCRUD:
         return result.scalars().all()
 
     @staticmethod
-    async def count_tickets(db: AsyncSession, status: str | None = None) -> int:
-        query = select(func.count()).select_from(Ticket)
-        if status:
-            query = query.where(Ticket.status == status)
-        result = await db.execute(query)
-        return int(result.scalar() or 0)
-
-    @staticmethod
     async def count_tickets_by_statuses(db: AsyncSession, statuses: list[str]) -> int:
         query = select(func.count()).select_from(Ticket)
         if statuses:
@@ -362,13 +354,6 @@ class TicketCRUD:
 
         return [row[0] for row in result.fetchall()]
 
-    @staticmethod
-    async def get_open_tickets_count(db: AsyncSession) -> int:
-        """Получить количество открытых тикетов"""
-        query = select(Ticket).where(Ticket.status.in_([TicketStatus.OPEN.value, TicketStatus.ANSWERED.value]))
-        result = await db.execute(query)
-        return len(result.scalars().all())
-
 
 class TicketMessageCRUD:
     """CRUD операции для работы с сообщениями тикетов"""
@@ -446,22 +431,6 @@ class TicketMessageCRUD:
             logger.warning('Failed to emit ticket.message_added event', error=error)
 
         return message
-
-    @staticmethod
-    async def get_ticket_messages(
-        db: AsyncSession, ticket_id: int, limit: int = 50, offset: int = 0
-    ) -> list[TicketMessage]:
-        """Получить сообщения тикета"""
-        query = (
-            select(TicketMessage)
-            .where(TicketMessage.ticket_id == ticket_id)
-            .order_by(TicketMessage.created_at)
-            .offset(offset)
-            .limit(limit)
-        )
-
-        result = await db.execute(query)
-        return result.scalars().all()
 
     @staticmethod
     async def get_first_message(db: AsyncSession, ticket_id: int) -> TicketMessage | None:

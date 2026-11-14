@@ -216,38 +216,6 @@ def cache_key(*parts) -> str:
     return ':'.join(str(part) for part in parts)
 
 
-class UserCache:
-    @staticmethod
-    async def get_user_data(user_id: int) -> dict | None:
-        key = cache_key('user', user_id)
-        return await cache.get(key)
-
-    @staticmethod
-    async def set_user_data(user_id: int, data: dict, expire: int = 3600) -> bool:
-        key = cache_key('user', user_id)
-        return await cache.set(key, data, expire)
-
-    @staticmethod
-    async def delete_user_data(user_id: int) -> bool:
-        key = cache_key('user', user_id)
-        return await cache.delete(key)
-
-    @staticmethod
-    async def get_user_session(user_id: int, session_key: str) -> Any | None:
-        key = cache_key('session', user_id, session_key)
-        return await cache.get(key)
-
-    @staticmethod
-    async def set_user_session(user_id: int, session_key: str, data: Any, expire: int = 1800) -> bool:
-        key = cache_key('session', user_id, session_key)
-        return await cache.set(key, data, expire)
-
-    @staticmethod
-    async def delete_user_session(user_id: int, session_key: str) -> bool:
-        key = cache_key('session', user_id, session_key)
-        return await cache.delete(key)
-
-
 class RateLimitCache:
     # Lua script: atomic INCR + conditional EXPIRE (only on key creation).
     # Prevents sliding window — TTL is set once, not refreshed on every request.
@@ -314,11 +282,6 @@ return c
     ) -> bool:
         key = cache_key('rate_limit', user_id, action)
         return await RateLimitCache._atomic_rate_check(key, limit, window, fail_closed=fail_closed)
-
-    @staticmethod
-    async def reset_rate_limit(user_id: int, action: str) -> bool:
-        key = cache_key('rate_limit', user_id, action)
-        return await cache.delete(key)
 
     @staticmethod
     async def is_ip_rate_limited(ip: str, action: str, limit: int, window: int, *, fail_closed: bool = False) -> bool:
@@ -421,11 +384,6 @@ class ChannelSubCache:
     async def set_sub_status(telegram_id: int, channel_id: str, is_member: bool) -> None:
         key = cache_key('channel_sub', telegram_id, channel_id)
         await cache.set(key, 1 if is_member else 0, expire=ChannelSubCache.SUB_TTL)
-
-    @staticmethod
-    async def invalidate_sub(telegram_id: int, channel_id: str) -> None:
-        key = cache_key('channel_sub', telegram_id, channel_id)
-        await cache.delete(key)
 
     @staticmethod
     async def invalidate_user_channels(telegram_id: int, channel_ids: list[str]) -> None:
