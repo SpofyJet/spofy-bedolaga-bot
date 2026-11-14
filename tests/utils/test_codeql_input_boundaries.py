@@ -5,7 +5,6 @@ from contextlib import contextmanager
 
 import pytest
 
-from app.services.server_status_service import ServerStatusService
 from app.utils import rich_admin, validators
 
 
@@ -23,11 +22,6 @@ def parsing_deadline():
         signal.signal(signal.SIGALRM, previous)
 
 
-def test_unterminated_escaped_metric_label_is_bounded():
-    with parsing_deadline():
-        assert ServerStatusService()._parse_labels('A="' + '\\!' * 100) == {}
-
-
 @pytest.mark.parametrize('validate', [validators.validate_html_tags, validators.validate_html_structure])
 def test_unterminated_long_tag_is_bounded(validate):
     with parsing_deadline():
@@ -38,11 +32,6 @@ def test_unterminated_long_tag_is_bounded(validate):
 def test_unterminated_rich_blocks_are_bounded(tag):
     with parsing_deadline():
         assert rich_admin._inline_newlines_to_rich(f'<{tag}>' * 20_000)
-
-
-def test_metric_label_escapes_and_adjacent_labels_still_parse():
-    labels = ServerStatusService()._parse_labels(r'name="edge\"one",address="example.com",protocol="vless"')
-    assert labels == {'name': 'edge"one', 'address': 'example.com', 'protocol': 'vless'}
 
 
 def test_rich_segmentation_preserves_existing_short_input_semantics():

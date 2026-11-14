@@ -390,13 +390,6 @@ AVAILABLE_CALLBACKS: list[dict[str, Any]] = [
         'icon': '📋',
         'text': {'ru': '📋 Правила', 'en': '📋 Rules'},
     },
-    {
-        'callback_data': 'menu_server_status',
-        'name': 'Статус серверов',
-        'category': 'menu',
-        'icon': '🖥️',
-        'text': {'ru': '🖥️ Статус серверов', 'en': '🖥️ Server Status'},
-    },
     # Баланс
     {
         'callback_data': 'balance_history',

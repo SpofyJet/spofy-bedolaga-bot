@@ -11,7 +11,6 @@ from app.handlers import (
     promocode,
     referral,
     referral_settings,
-    server_status,
     start,
     subscription,
     support,
@@ -157,7 +156,6 @@ async def setup_bot(memory: MemoryStorage | None = None) -> tuple[Bot, Dispatche
     referral.register_handlers(dp)
     referral_settings.register_handlers(dp)
     support.register_handlers(dp)
-    server_status.register_handlers(dp)
     tickets.register_handlers(dp)
     admin_main.register_handlers(dp)
     admin_users.register_handlers(dp)

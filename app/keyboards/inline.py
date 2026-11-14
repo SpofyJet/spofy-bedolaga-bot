@@ -1017,34 +1017,6 @@ def get_info_menu_keyboard(
             ]
         )
 
-    server_status_mode = settings.get_server_status_mode()
-    server_status_text = texts.t('MENU_SERVER_STATUS', '📊 Статус серверов')
-
-    if server_status_mode == 'external_link':
-        status_url = settings.get_server_status_external_url()
-        if status_url:
-            buttons.append([InlineKeyboardButton(text=server_status_text, url=status_url)])
-    elif server_status_mode == 'external_link_miniapp':
-        status_url = settings.get_server_status_external_url()
-        if status_url:
-            buttons.append(
-                [
-                    InlineKeyboardButton(
-                        text=server_status_text,
-                        web_app=types.WebAppInfo(url=status_url),
-                    )
-                ]
-            )
-    elif server_status_mode == 'xray':
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=server_status_text,
-                    callback_data='menu_server_status',
-                )
-            ]
-        )
-
     # «Поддержка» живёт здесь (в главном меню не показываем — по решению владельца).
     support_button = get_support_menu_button(language)
     if support_button is not None:
@@ -1191,48 +1163,6 @@ def get_payment_error_keyboard(
     language: str = DEFAULT_LANGUAGE, back_callback: str = 'balance_topup'
 ) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=payment_error_navigation_rows(language, back_callback))
-
-
-def get_server_status_keyboard(
-    language: str,
-    current_page: int,
-    total_pages: int,
-) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    keyboard: list[list[InlineKeyboardButton]] = [
-        [
-            InlineKeyboardButton(
-                text=texts.t('SERVER_STATUS_REFRESH', '🔄 Обновить'),
-                callback_data=f'server_status_page:{current_page}',
-            )
-        ]
-    ]
-
-    if total_pages > 1:
-        nav_row: list[InlineKeyboardButton] = []
-
-        if current_page > 1:
-            nav_row.append(
-                InlineKeyboardButton(
-                    text=texts.t('SERVER_STATUS_PREV_PAGE', '⬅️ Назад'),
-                    callback_data=f'server_status_page:{current_page - 1}',
-                )
-            )
-
-        if current_page < total_pages:
-            nav_row.append(
-                InlineKeyboardButton(
-                    text=texts.t('SERVER_STATUS_NEXT_PAGE', 'Вперед ➡️'),
-                    callback_data=f'server_status_page:{current_page + 1}',
-                )
-            )
-
-        if nav_row:
-            keyboard.append(nav_row)
-
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_insufficient_balance_keyboard(

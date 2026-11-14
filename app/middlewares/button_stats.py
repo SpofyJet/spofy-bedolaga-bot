@@ -40,7 +40,6 @@ BUILTIN_CALLBACKS: set[str] = {
     'menu_privacy_policy',
     'menu_public_offer',
     'menu_rules',
-    'menu_server_status',
     # Баланс
     'balance_history',
     'balance_topup',
