@@ -3,9 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.faq import (
-    bulk_update_order,
     create_faq_page,
-    delete_faq_page,
     get_faq_page_by_id,
     get_faq_pages,
     get_faq_setting,
@@ -193,22 +191,6 @@ class FaqService:
             display_order=display_order,
             is_active=is_active,
         )
-
-    @classmethod
-    async def delete_page(cls, db: AsyncSession, page_id: int) -> None:
-        await delete_faq_page(db, page_id)
-
-    @classmethod
-    async def reorder_pages(
-        cls,
-        db: AsyncSession,
-        language: str,
-        pages: list[FaqPage],
-    ) -> None:
-        lang = cls._normalize_language(language)
-        ordered = [page for page in pages if page.language == lang]
-        payload = [(page.id, index + 1) for index, page in enumerate(ordered)]
-        await bulk_update_order(db, payload)
 
     @staticmethod
     def split_content_into_pages(

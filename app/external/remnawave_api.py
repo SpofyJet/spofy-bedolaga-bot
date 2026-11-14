@@ -38,14 +38,6 @@ class TrafficLimitStrategy(Enum):
     MONTH_ROLLING = 'MONTH_ROLLING'
 
 
-# Имя внутреннего сквада по контракту панели (POST/PATCH /api/internal-squads, 3.4.3):
-# 2–30 символов, латиница, цифры, пробел, дефис, подчёркивание. Проверяем на своей
-# границе — иначе админ получает от панели безликий 400.
-INTERNAL_SQUAD_NAME_MIN_LENGTH = 2
-INTERNAL_SQUAD_NAME_MAX_LENGTH = 30
-INTERNAL_SQUAD_NAME_PATTERN = r'^[A-Za-z0-9_\s-]+$'
-
-
 @dataclass
 class UserTraffic:
     """Данные о трафике пользователя (новая структура API)"""
@@ -1198,42 +1190,6 @@ class RemnaWaveAPI:
             if e.status_code == 404:
                 return None
             raise
-
-    async def create_internal_squad(self, name: str, inbounds: list[str]) -> RemnaWaveInternalSquad:
-        data = {'name': name, 'inbounds': inbounds}
-        response = await self._make_request('POST', '/api/internal-squads', data)
-        return self._parse_internal_squad(response['response'])
-
-    async def update_internal_squad(
-        self, uuid: str, name: str | None = None, inbounds: list[str] | None = None
-    ) -> RemnaWaveInternalSquad:
-        data = {'uuid': uuid}
-        if name:
-            data['name'] = name
-        if inbounds is not None:
-            data['inbounds'] = inbounds
-
-        response = await self._make_request('PATCH', '/api/internal-squads', data)
-        return self._parse_internal_squad(response['response'])
-
-    async def delete_internal_squad(self, uuid: str) -> bool:
-        # 3.0.0: DELETE отдаёт 204/202 без тела — `isDeleted` больше нет.
-        await self._make_request('DELETE', f'/api/internal-squads/{uuid}')
-        return True
-
-    async def add_users_to_internal_squad(self, uuid: str) -> bool:
-        """Добавляет всех пользователей в Internal Squad (bulk action).
-
-        3.0.0: bulk-операции отвечают 202 (выполняются в фоне) либо 204 — тела
-        нет, поля `eventSent` в контракте не осталось. Успех = нет исключения.
-        """
-        await self._make_request('POST', f'/api/internal-squads/{uuid}/bulk-actions/add-users')
-        return True
-
-    async def remove_users_from_internal_squad(self, uuid: str) -> bool:
-        """Удаляет всех пользователей из Internal Squad (bulk action)"""
-        await self._make_request('DELETE', f'/api/internal-squads/{uuid}/bulk-actions/remove-users')
-        return True
 
     async def add_many_users_to_internal_squad(self, uuid: str, user_ids: list[int]) -> bool:
         """``POST /api/internal-squads/{uuid}/bulk-actions/add-many-users`` — новое в 3.0.0.

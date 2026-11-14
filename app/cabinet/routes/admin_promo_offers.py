@@ -73,30 +73,6 @@ class PromoOfferUserInfo(BaseModel):
     full_name: str | None = None
 
 
-class PromoOfferResponse(BaseModel):
-    id: int
-    user_id: int
-    subscription_id: int | None = None
-    notification_type: str | None = None
-    discount_percent: int | None = None
-    bonus_amount_kopeks: int | None = None
-    expires_at: datetime | None = None
-    claimed_at: datetime | None = None
-    is_active: bool
-    effect_type: str | None = None
-    extra_data: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-    user: PromoOfferUserInfo | None = None
-
-
-class PromoOfferListResponse(BaseModel):
-    items: list[PromoOfferResponse]
-    total: int
-    limit: int
-    offset: int
-
-
 class PromoOfferTemplateResponse(BaseModel):
     id: int
     name: str
@@ -233,25 +209,6 @@ def _serialize_user(user: User | None) -> PromoOfferUserInfo | None:
         first_name=user.first_name,
         last_name=user.last_name,
         full_name=user.full_name,
-    )
-
-
-def _serialize_offer(offer: DiscountOffer) -> PromoOfferResponse:
-    return PromoOfferResponse(
-        id=offer.id,
-        user_id=offer.user_id,
-        subscription_id=offer.subscription_id,
-        notification_type=offer.notification_type,
-        discount_percent=offer.discount_percent,
-        bonus_amount_kopeks=offer.bonus_amount_kopeks,
-        expires_at=offer.expires_at,
-        claimed_at=offer.claimed_at,
-        is_active=offer.is_active,
-        effect_type=offer.effect_type,
-        extra_data=offer.extra_data or {},
-        created_at=offer.created_at,
-        updated_at=offer.updated_at,
-        user=_serialize_user(offer.user),
     )
 
 

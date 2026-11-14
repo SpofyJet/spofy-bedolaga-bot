@@ -18,7 +18,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 MODULES = [
     ('app/cabinet/routes/admin_remnawave.py', 'app.cabinet.routes'),
-    ('app/webapi/routes/remnawave.py', 'app.webapi.routes'),
 ]
 
 

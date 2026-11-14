@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
 
 from app.database.models import PromoGroup, Tariff
 
@@ -76,30 +75,3 @@ async def test_stale_telegram_button_denied_before_checkout(monkeypatch, handler
     assert locked.balance_kopeks == 10000
     db.commit.assert_not_awaited()
     state.get_data.assert_not_awaited()
-
-
-@pytest.mark.parametrize('platform', ['cabinet', 'miniapp'])
-async def test_api_purchase_denied_without_group(monkeypatch, platform):
-    from app.database.crud import user as users
-
-    user = SimpleNamespace(id=42, language='ru', balance_kopeks=10000, get_primary_promo_group=lambda: None)
-    monkeypatch.setattr(users, 'lock_user_for_pricing', AsyncMock(return_value=user))
-    db = AsyncMock()
-    if platform == 'cabinet':
-        from app.cabinet.routes.subscription_modules import purchase as m
-        from app.cabinet.schemas.subscription import TariffPurchaseRequest
-
-        monkeypatch.setattr(m, 'get_tariff_by_id', AsyncMock(return_value=_tariff(10)))
-        call = m.purchase_tariff(TariffPurchaseRequest(tariff_id=9, period_days=30), user, db)
-    else:
-        from app.webapi.routes import miniapp as m
-        from app.webapi.schemas.miniapp import MiniAppTariffPurchaseRequest
-
-        monkeypatch.setattr(m, 'get_tariff_by_id', AsyncMock(return_value=_tariff(10)))
-        monkeypatch.setattr(m, '_authorize_miniapp_user', AsyncMock(return_value=user))
-        call = m.purchase_tariff_endpoint(MiniAppTariffPurchaseRequest(initData='test', tariffId=9, periodDays=30), db)
-    with pytest.raises(HTTPException) as exc:
-        await call
-    assert exc.value.status_code == 403
-    assert user.balance_kopeks == 10000
-    db.commit.assert_not_awaited()

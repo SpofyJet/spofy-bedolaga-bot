@@ -19,7 +19,7 @@ import importlib
 import pytest
 
 
-LAZY_PACKAGES = ['app.webserver', 'app.webapi']
+LAZY_PACKAGES = ['app.webserver']
 
 
 @pytest.mark.parametrize('package_name', LAZY_PACKAGES)

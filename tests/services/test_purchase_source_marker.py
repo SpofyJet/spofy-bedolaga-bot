@@ -12,7 +12,6 @@ from app.services.admin_notification_service import (
     AdminNotificationService,
     NotificationCategory,
 )
-from app.services.user_action_log_service import bind_request_path, reset_request_path
 
 
 def test_source_is_unknown_by_default():
@@ -28,20 +27,6 @@ def test_explicit_source_and_subpage_flag():
             assert ctx.current_purchase_source() == 'subpage'
         assert ctx.current_purchase_source() == 'bot'
     assert ctx.current_purchase_source() is None
-
-
-def test_cabinet_is_recognised_by_request_path():
-    for path, expected in (
-        ('/cabinet/subscription/purchase', 'cabinet'),
-        ('/cabinet/spofy-subpage/abc/checkout', None),
-        ('/cabinet/landing/x/purchase', None),
-        ('/platega-webhook', None),
-    ):
-        token = bind_request_path(path)
-        try:
-            assert ctx.current_purchase_source() == expected, path
-        finally:
-            reset_request_path(token)
 
 
 def test_cart_source():

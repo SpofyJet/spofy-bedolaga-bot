@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -77,82 +77,6 @@ async def get_offer_by_id(db: AsyncSession, offer_id: int) -> DiscountOffer | No
         .where(DiscountOffer.id == offer_id)
     )
     return result.scalar_one_or_none()
-
-
-async def list_discount_offers(
-    db: AsyncSession,
-    *,
-    offset: int = 0,
-    limit: int = 50,
-    user_id: int | None = None,
-    notification_type: str | None = None,
-    is_active: bool | None = None,
-) -> list[DiscountOffer]:
-    stmt = (
-        select(DiscountOffer)
-        .options(
-            selectinload(DiscountOffer.user),
-            selectinload(DiscountOffer.subscription),
-        )
-        .order_by(DiscountOffer.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
-
-    if user_id is not None:
-        stmt = stmt.where(DiscountOffer.user_id == user_id)
-    if notification_type:
-        stmt = stmt.where(DiscountOffer.notification_type == notification_type)
-    if is_active is not None:
-        stmt = stmt.where(DiscountOffer.is_active == is_active)
-
-    result = await db.execute(stmt)
-    return result.scalars().all()
-
-
-async def list_active_discount_offers_for_user(
-    db: AsyncSession,
-    user_id: int,
-) -> list[DiscountOffer]:
-    """Return active (not yet claimed) offers for a user."""
-
-    now = datetime.now(UTC)
-    stmt = (
-        select(DiscountOffer)
-        .options(
-            selectinload(DiscountOffer.user),
-            selectinload(DiscountOffer.subscription),
-        )
-        .where(
-            DiscountOffer.user_id == user_id,
-            DiscountOffer.is_active == True,
-            DiscountOffer.expires_at > now,
-        )
-        .order_by(DiscountOffer.expires_at.asc())
-    )
-
-    result = await db.execute(stmt)
-    return result.scalars().all()
-
-
-async def count_discount_offers(
-    db: AsyncSession,
-    *,
-    user_id: int | None = None,
-    notification_type: str | None = None,
-    is_active: bool | None = None,
-) -> int:
-    stmt = select(func.count(DiscountOffer.id))
-
-    if user_id is not None:
-        stmt = stmt.where(DiscountOffer.user_id == user_id)
-    if notification_type:
-        stmt = stmt.where(DiscountOffer.notification_type == notification_type)
-    if is_active is not None:
-        stmt = stmt.where(DiscountOffer.is_active == is_active)
-
-    result = await db.execute(stmt)
-    return int(result.scalar() or 0)
 
 
 async def mark_offer_claimed(

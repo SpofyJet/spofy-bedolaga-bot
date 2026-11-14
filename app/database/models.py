@@ -2587,20 +2587,6 @@ class MainMenuButton(Base):
 
     __table_args__ = (Index('ix_main_menu_buttons_order', 'display_order', 'id'),)
 
-    @property
-    def action_type_enum(self) -> MainMenuButtonActionType:
-        try:
-            return MainMenuButtonActionType(self.action_type)
-        except ValueError:
-            return MainMenuButtonActionType.URL
-
-    @property
-    def visibility_enum(self) -> MainMenuButtonVisibility:
-        try:
-            return MainMenuButtonVisibility(self.visibility)
-        except ValueError:
-            return MainMenuButtonVisibility.ALL
-
     def __repr__(self) -> str:
         return (
             f"<MainMenuButton id={self.id} text='{self.text}' "

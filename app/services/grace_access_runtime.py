@@ -1501,38 +1501,6 @@ async def create_panel_user_grace_safe(
         return await _adopt_or_create(api, adopt_short_uuid, create_kwargs)
 
 
-@asynccontextmanager
-async def grace_sensitive_global_panel_update():
-    """Block all grace creation while one all-users panel mutation runs."""
-    async with AsyncSessionLocal() as guard_db:
-        async with guard_db.begin():
-            if guard_db.get_bind().dialect.name == 'postgresql':
-                await guard_db.execute(
-                    text('SELECT pg_advisory_xact_lock(:namespace, :lock_id)'),
-                    {
-                        'namespace': _POSTGRES_LOCK_NAMESPACE,
-                        'lock_id': _POSTGRES_GLOBAL_PANEL_LOCK_ID,
-                    },
-                )
-            else:
-                first_subscription_id = (await guard_db.execute(select(func.min(Subscription.id)))).scalar_one_or_none()
-                if first_subscription_id is not None:
-                    await guard_db.execute(
-                        update(Subscription)
-                        .where(Subscription.id == first_subscription_id)
-                        .values(updated_at=Subscription.updated_at)
-                    )
-
-            open_count = (
-                await guard_db.execute(
-                    select(func.count())
-                    .select_from(GraceAccessSessionModel)
-                    .where(GraceAccessSessionModel.state.in_(_OPEN_STATES))
-                )
-            ).scalar_one()
-            yield int(open_count) == 0
-
-
 async def set_panel_user_enabled_state_grace_safe(
     api: Any,
     remnawave_id: int,

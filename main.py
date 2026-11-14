@@ -44,12 +44,11 @@ from app.services.traffic_cycle_service import traffic_cycle_service
 from app.services.traffic_monitoring_service import traffic_monitoring_scheduler
 from app.services.trial_abuse_service import trial_abuse_service
 from app.services.version_service import version_service
-from app.services.web_api_token_service import ensure_default_web_api_token
 from app.utils.background import spawn_background_task
 from app.utils.log_handlers import ExcludePaymentFilter, LevelFilterHandler
 from app.utils.payment_logger import configure_payment_logger
 from app.utils.startup_timeline import StartupTimeline
-from app.webapi.server import WebAPIServer
+from app.webserver.server import WebAPIServer
 from app.webserver.unified_app import create_unified_app
 
 
@@ -243,11 +242,8 @@ async def main():
             success_message='База данных готова',
         ) as stage:
             seq_ok = await sync_postgres_sequences()
-            token_ok = await ensure_default_web_api_token()
             if not seq_ok:
                 stage.warning('Не удалось синхронизировать последовательности PostgreSQL')
-            if not token_ok:
-                stage.warning('Не удалось создать/проверить дефолтный веб-API токен')
 
         async with timeline.stage(
             'RBAC bootstrap',
@@ -579,10 +575,7 @@ async def main():
             success_message='Веб-сервер запущен',
         ) as stage:
             should_start_web_app = (
-                settings.is_web_api_enabled()
-                or telegram_webhook_enabled
-                or payment_webhooks_enabled
-                or settings.get_miniapp_static_path().exists()
+                telegram_webhook_enabled or payment_webhooks_enabled or settings.get_miniapp_static_path().exists()
             )
 
             if should_start_web_app:
@@ -600,8 +593,6 @@ async def main():
                 stage.log(f'Базовый URL: {base_url}')
 
                 features: list[str] = []
-                if settings.is_web_api_enabled():
-                    features.append('админка')
                 if payment_webhooks_enabled:
                     features.append('платежные webhook-и')
                 if telegram_webhook_enabled:

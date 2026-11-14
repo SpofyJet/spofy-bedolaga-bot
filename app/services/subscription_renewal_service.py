@@ -7,7 +7,6 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-from uuid import uuid4
 
 import structlog
 from aiogram import Bot
@@ -169,51 +168,6 @@ _PAYLOAD_PREFIX = 'subscription_renewal'
 
 def build_renewal_period_id(period_days: int) -> str:
     return f'days:{period_days}'
-
-
-def build_payment_descriptor(
-    user_id: int,
-    subscription_id: int,
-    period_days: int,
-    total_amount_kopeks: int,
-    missing_amount_kopeks: int,
-    *,
-    pricing_snapshot: dict[str, Any] | None = None,
-) -> RenewalPaymentDescriptor:
-    return RenewalPaymentDescriptor(
-        user_id=user_id,
-        subscription_id=subscription_id,
-        period_days=period_days,
-        total_amount_kopeks=max(0, int(total_amount_kopeks)),
-        missing_amount_kopeks=max(0, int(missing_amount_kopeks)),
-        payload_id=uuid4().hex[:8],
-        pricing_snapshot=pricing_snapshot or None,
-    )
-
-
-def encode_payment_payload(descriptor: RenewalPaymentDescriptor) -> str:
-    snapshot_segment = ''
-    if descriptor.pricing_snapshot:
-        try:
-            raw_snapshot = json.dumps(
-                descriptor.pricing_snapshot,
-                separators=(',', ':'),
-                ensure_ascii=False,
-            ).encode('utf-8')
-            snapshot_segment = base64.urlsafe_b64encode(raw_snapshot).decode('ascii').rstrip('=')
-        except (TypeError, ValueError):
-            snapshot_segment = ''
-
-    payload = (
-        f'{_PAYLOAD_PREFIX}|{descriptor.user_id}|{descriptor.subscription_id}|'
-        f'{descriptor.period_days}|{descriptor.total_amount_kopeks}|'
-        f'{descriptor.missing_amount_kopeks}|{descriptor.payload_id}'
-    )
-
-    if snapshot_segment:
-        payload = f'{payload}|{snapshot_segment}'
-
-    return payload
 
 
 def decode_payment_payload(payload: str, expected_user_id: int | None = None) -> RenewalPaymentDescriptor | None:
@@ -565,11 +519,3 @@ class SubscriptionRenewalService:
             charged_from_balance_kopeks=charge_from_balance,
             old_end_date=old_end_date,
         )
-
-
-def calculate_missing_amount(balance_kopeks: int, total_kopeks: int) -> int:
-    if total_kopeks <= 0:
-        return 0
-    if balance_kopeks <= 0:
-        return total_kopeks
-    return max(0, total_kopeks - min(balance_kopeks, total_kopeks))

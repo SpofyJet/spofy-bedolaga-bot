@@ -87,21 +87,6 @@ class TicketCRUD:
         return result.scalar_one_or_none()
 
     @staticmethod
-    async def get_user_tickets(
-        db: AsyncSession, user_id: int, status: str | None = None, limit: int = 20, offset: int = 0
-    ) -> list[Ticket]:
-        """Получить тикеты пользователя"""
-        query = select(Ticket).where(Ticket.user_id == user_id)
-
-        if status:
-            query = query.where(Ticket.status == status)
-
-        query = query.order_by(desc(Ticket.updated_at)).offset(offset).limit(limit)
-
-        result = await db.execute(query)
-        return result.scalars().all()
-
-    @staticmethod
     async def count_user_tickets_by_statuses(db: AsyncSession, user_id: int, statuses: list[str]) -> int:
         """Подсчитать количество тикетов пользователя по списку статусов"""
         query = select(func.count()).select_from(Ticket).where(Ticket.user_id == user_id)
@@ -310,49 +295,6 @@ class TicketCRUD:
         except Exception:
             await db.rollback()
             # не мешаем основной логике
-
-    @staticmethod
-    async def list_support_audit(
-        db: AsyncSession,
-        *,
-        limit: int = 50,
-        offset: int = 0,
-        action: str | None = None,
-    ) -> list[SupportAuditLog]:
-        from sqlalchemy import desc, select
-
-        query = select(SupportAuditLog).order_by(desc(SupportAuditLog.created_at))
-
-        if action:
-            query = query.where(SupportAuditLog.action == action)
-
-        result = await db.execute(query.offset(offset).limit(limit))
-        return result.scalars().all()
-
-    @staticmethod
-    async def count_support_audit(db: AsyncSession, action: str | None = None) -> int:
-        from sqlalchemy import func, select
-
-        query = select(func.count()).select_from(SupportAuditLog)
-
-        if action:
-            query = query.where(SupportAuditLog.action == action)
-
-        result = await db.execute(query)
-        return int(result.scalar() or 0)
-
-    @staticmethod
-    async def list_support_audit_actions(db: AsyncSession) -> list[str]:
-        from sqlalchemy import select
-
-        result = await db.execute(
-            select(SupportAuditLog.action)
-            .where(SupportAuditLog.action.isnot(None))
-            .distinct()
-            .order_by(SupportAuditLog.action)
-        )
-
-        return [row[0] for row in result.fetchall()]
 
 
 class TicketMessageCRUD:

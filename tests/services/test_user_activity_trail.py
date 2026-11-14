@@ -39,7 +39,6 @@ from app.services import user_action_log_service as log_module
 from app.services.user_action_log_service import (
     ACTIVITY_TOUCH_INTERVAL,
     CABINET_BUTTON_TYPE,
-    MINIAPP_BUTTON_TYPE,
     SCREEN_PREFIX,
     mark_user_seen,
     normalize_screen_path,
@@ -165,38 +164,6 @@ def test_activity_route_itself_is_not_logged_as_an_action():
 # ---------------------------------------------------------------------------
 
 
-def test_miniapp_read_is_logged_as_screen(spawned):
-    log_module.schedule_miniapp_action_log(7, '/miniapp/subscription')
-
-    assert spawned == [
-        {
-            'user_id': 7,
-            'button_id': f'{SCREEN_PREFIX}/miniapp/subscription',
-            'callback_data': '/miniapp/subscription',
-            'button_type': MINIAPP_BUTTON_TYPE,
-        }
-    ]
-
-
-def test_miniapp_action_is_still_an_action(spawned):
-    log_module.schedule_miniapp_action_log(7, '/miniapp/subscription/purchase')
-
-    assert spawned[0]['button_id'] == 'POST /miniapp/subscription/purchase'
-
-
-def test_miniapp_status_polling_is_one_screen(spawned):
-    for _ in range(5):
-        log_module.schedule_miniapp_action_log(7, '/miniapp/payments/status')
-
-    assert len(spawned) == 1
-
-
-def test_miniapp_unknown_path_is_ignored(spawned):
-    log_module.schedule_miniapp_action_log(7, '/miniapp/whatever')
-
-    assert spawned == []
-
-
 # ---------------------------------------------------------------------------
 # last_activity: кабинет и Mini App тоже «активность»
 # ---------------------------------------------------------------------------
@@ -292,50 +259,6 @@ def _shared_session(session):
             return False
 
     return _Proxy
-
-
-@pytest.mark.asyncio
-async def test_miniapp_auth_touches_last_activity_and_logs_the_screen(monkeypatch):
-    from app.database.models import Base, ButtonClickLog, User
-    from app.webapi.routes import miniapp
-    from tests.fixtures.sqlite_memory import memory_session
-
-    monkeypatch.setattr(miniapp, 'parse_webapp_init_data', lambda init_data, token: {'user': {'id': 555000111}})
-
-    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
-        stale = datetime.now(UTC) - timedelta(days=3)
-        db.add(
-            User(
-                id=7,
-                telegram_id=555000111,
-                first_name='U',
-                status='active',
-                language='ru',
-                balance_kopeks=0,
-                created_at=stale,
-                last_activity=stale,
-            )
-        )
-        await db.commit()
-        # Фоновая запись открывает СВОЮ сессию к боевой базе — подменяем на эту.
-        monkeypatch.setattr(log_module, 'AsyncSessionLocal', _shared_session(db))
-
-        token = log_module.bind_request_path('/miniapp/subscription')
-        try:
-            user = await miniapp._authorize_miniapp_user('stub', db)
-        finally:
-            log_module.reset_request_path(token)
-        await log_module.drain_pending_actions()
-
-        db.expire_all()
-        stored = await db.get(User, 7)
-        rows = (await db.execute(select(ButtonClickLog))).scalars().all()
-
-    assert user.id == 7
-    assert stored.last_activity > stale + timedelta(days=2)
-    assert [(row.button_id, row.button_type, row.user_id) for row in rows] == [
-        (f'{SCREEN_PREFIX}/miniapp/subscription', MINIAPP_BUTTON_TYPE, 7)
-    ]
 
 
 # ---------------------------------------------------------------------------
@@ -461,7 +384,7 @@ async def test_timeline_marks_screens_and_payments(monkeypatch):
                 ButtonClickLog(
                     button_id=f'{SCREEN_PREFIX}/miniapp/subscription',
                     user_id=7,
-                    button_type=MINIAPP_BUTTON_TYPE,
+                    button_type='miniapp',
                     clicked_at=now,
                 ),
                 ButtonClickLog(

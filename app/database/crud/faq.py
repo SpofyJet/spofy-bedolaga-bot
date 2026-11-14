@@ -1,8 +1,7 @@
-from collections.abc import Iterable
 from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import FaqPage, FaqSetting
@@ -127,14 +126,3 @@ async def delete_faq_page(db: AsyncSession, page_id: int) -> None:
     await db.execute(delete(FaqPage).where(FaqPage.id == page_id))
     await db.commit()
     logger.info('🗑️ Страница FAQ удалена', page_id=page_id)
-
-
-async def bulk_update_order(
-    db: AsyncSession,
-    pages: Iterable[tuple[int, int]],
-) -> None:
-    for page_id, order in pages:
-        await db.execute(
-            update(FaqPage).where(FaqPage.id == page_id).values(display_order=order, updated_at=datetime.now(UTC))
-        )
-    await db.commit()

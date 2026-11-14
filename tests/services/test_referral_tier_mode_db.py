@@ -403,50 +403,6 @@ async def test_average_income_counts_every_rank(monkeypatch, tier_mode):
 
 
 @pytest.mark.asyncio
-async def test_overview_average_counts_every_rank_too(monkeypatch, tier_mode):
-    """Вторая точка того же среза по level==1 — в сводке по всем партнёрам.
-
-    Первую закрыл test_average_income_counts_every_rank, а эта осталась: мутация
-    «вернуть срез по level==1» здесь выживала.
-    """
-    ensure_real_aiosqlite(monkeypatch)
-    from app.services.partner_stats_service import PartnerStatsService
-
-    async with memory_session(monkeypatch, TABLES) as db:
-        db.add(_user(1))
-        for uid in range(2, 12):
-            db.add(_user(uid, referred_by=1, topped_up=True))
-        for uid in range(2, 4):
-            db.add(
-                ReferralEarning(
-                    user_id=1,
-                    referral_id=uid,
-                    amount_kopeks=100_00,
-                    reason='referral_level_topup',
-                    level=1,
-                    reward_type=ReferralRewardType.MONEY.value,
-                )
-            )
-        for uid in range(4, 12):
-            db.add(
-                ReferralEarning(
-                    user_id=1,
-                    referral_id=uid,
-                    amount_kopeks=900_00,
-                    reason='referral_level_topup',
-                    level=2,
-                    reward_type=ReferralRewardType.MONEY.value,
-                )
-            )
-        await db.commit()
-
-        stats = await PartnerStatsService.get_global_partner_stats(db)
-        average = stats['summary']['avg_earnings_per_referral_kopeks']
-
-    assert average > 100_00, f'среднее {average} посчитано только по стартовому рангу'
-
-
-@pytest.mark.asyncio
 async def test_cap_applies_to_an_earning_made_in_the_same_second(monkeypatch, tier_mode):
     """Лимит обязан считать начисление, сделанное сразу после создания правила.
 

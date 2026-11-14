@@ -166,45 +166,6 @@ async def test_cabinet_resume_lifts_panel_limit_after_paid_reset(monkeypatch):
     assert subscription.status == SubscriptionStatus.ACTIVE.value
 
 
-async def _resume_from_miniapp(
-    db,
-    monkeypatch,
-    *,
-    traffic_reset_mode: str | None,
-    reset_on_payment: bool,
-    status: str = SubscriptionStatus.DISABLED.value,
-):
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
-
-    import app.services.subscription_service as subscription_service_module
-    from app.webapi.routes import miniapp
-    from app.webapi.schemas.miniapp import MiniAppDailySubscriptionToggleRequest
-
-    monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', reset_on_payment)
-    monkeypatch.setattr(settings, 'DEFAULT_TRAFFIC_RESET_STRATEGY', 'MONTH')
-
-    panel = _FakePanelSync()
-    monkeypatch.setattr(subscription_service_module, 'SubscriptionService', lambda: panel)
-
-    db.add_all(_rows(traffic_reset_mode, status=status))
-    await db.commit()
-
-    loaded = await db.execute(
-        select(User).options(selectinload(User.subscriptions)).where(User.id == 1),
-    )
-    user = loaded.scalar_one()
-
-    async def _fake_authorize(init_data, session):
-        return user
-
-    monkeypatch.setattr(miniapp, '_authorize_miniapp_user', _fake_authorize)
-
-    payload = MiniAppDailySubscriptionToggleRequest(init_data='stub', subscriptionId=10)
-    await miniapp.toggle_daily_subscription_pause_endpoint(payload=payload, db=db)
-    return panel, await db.get(Subscription, 10)
-
-
 @pytest.mark.asyncio
 async def test_miniapp_resume_resets_traffic(monkeypatch):
     """Кнопка «возобновить» в Mini App живёт по той же политике, что и планировщик."""

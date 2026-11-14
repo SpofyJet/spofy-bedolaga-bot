@@ -503,21 +503,10 @@ async def test_delete_user_returns_true_on_empty_body(status: int):
 
 @pytest.mark.parametrize('status', [202, 204])
 async def test_empty_body_actions_return_true_without_reading_response(status: int):
-    """Bulk-операции сквадов, удаление сквада и рестарт ноды выполняются в фоне:
+    """Bulk-операции сквадов и рестарт ноды выполняются в фоне:
     ``eventSent`` / ``isDeleted`` вычищены из контракта, успех = нет исключения."""
     squad = 'squad-uuid'
     cases = [
-        (lambda api: api.delete_internal_squad(squad), 'DELETE', f'http://panel.local/api/internal-squads/{squad}'),
-        (
-            lambda api: api.add_users_to_internal_squad(squad),
-            'POST',
-            f'http://panel.local/api/internal-squads/{squad}/bulk-actions/add-users',
-        ),
-        (
-            lambda api: api.remove_users_from_internal_squad(squad),
-            'DELETE',
-            f'http://panel.local/api/internal-squads/{squad}/bulk-actions/remove-users',
-        ),
         (
             lambda api: api.add_many_users_to_internal_squad(squad, [1, 2]),
             'POST',

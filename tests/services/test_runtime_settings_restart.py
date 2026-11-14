@@ -77,7 +77,7 @@ async def test_cabinet_switches_remain_effective_after_loading_committed_db(monk
         for key, value in DEFAULTS.items():
             setattr(settings, key, value)
         bot_configuration_service._overrides_raw.clear()
-        await bot_configuration_service.initialize(sync_web_api_token=False)
+        await bot_configuration_service.initialize()
 
         assert settings.REFERRAL_WITHDRAWAL_ENABLED is False
         assert settings.REFERRAL_PARTNER_SECTION_VISIBLE is False

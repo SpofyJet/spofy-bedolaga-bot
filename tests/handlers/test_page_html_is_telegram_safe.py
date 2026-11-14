@@ -154,43 +154,6 @@ async def test_long_page_is_split_without_breaking_a_tag(monkeypatch, visible):
     assert len(sent) <= 4096
 
 
-@pytest.mark.asyncio
-async def test_admin_privacy_preview_drops_unsupported_markup(monkeypatch):
-    """Экран «Текущий текст политики» показывает то же, что увидит пользователь."""
-    import inspect
-
-    from app.handlers.admin import privacy_policy as admin_privacy
-
-    policy = SimpleNamespace(content=RICH_HTML)
-    monkeypatch.setattr(admin_privacy.PrivacyPolicyService, 'get_policy', AsyncMock(return_value=policy))
-
-    callback = _Callback('admin_privacy_policy_view')
-    # Мимо @admin_required: он проверяет тип реального CallbackQuery, а проверяется
-    # не право доступа, а разметка отправленного текста.
-    handler = inspect.unwrap(admin_privacy.view_privacy_policy)
-    await handler(callback, db_user=_user(), db=AsyncMock())
-
-    assert callback.sent
-    assert _disallowed_tags(callback.sent[0]) == set()
-
-
-@pytest.mark.asyncio
-async def test_admin_offer_preview_drops_unsupported_markup(monkeypatch):
-    import inspect
-
-    from app.handlers.admin import public_offer as admin_offer
-
-    offer = SimpleNamespace(content=RICH_HTML)
-    monkeypatch.setattr(admin_offer.PublicOfferService, 'get_offer', AsyncMock(return_value=offer))
-
-    callback = _Callback('admin_public_offer_view')
-    handler = inspect.unwrap(admin_offer.view_public_offer)
-    await handler(callback, db_user=_user(), db=AsyncMock())
-
-    assert callback.sent
-    assert _disallowed_tags(callback.sent[0]) == set()
-
-
 # ------------------------------------------------------------------ регистрация
 # При регистрации правила и политика показываются из start.py, мимо меню. Тот же
 # <h1> из редактора ронял шаг «политика после правил»: «Unsupported start tag "h1"».

@@ -1,19 +1,18 @@
 import asyncio
 import re
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import asynccontextmanager
 from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 import structlog
-from sqlalchemy import String, and_, cast, delete, func, select, update
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
-from app.database.crud.server_squad import get_server_squad_by_uuid
 from app.database.crud.subscription import (
     decrement_subscription_server_counts,
 )
@@ -22,9 +21,7 @@ from app.database.crud.user import (
     get_user_by_telegram_id,
 )
 from app.database.models import (
-    ServerSquad,
     Subscription,
-    SubscriptionServer,
     SubscriptionStatus,
     User,
 )
@@ -34,7 +31,6 @@ from app.external.remnawave_api import (
     RemnaWaveInvalidUserIdError,
     coerce_panel_user_id,
 )
-from app.services.bypass_downgrade import panel_squads_for
 from app.services.panel_sync import (
     BULK_SNAPSHOT,
     link_subscription_panel_identity,
@@ -1114,16 +1110,6 @@ class RemnaWaveService:
         async with self.get_api_client() as api:
             return await api.get_node_geocheck_result(job_id)
 
-    async def update_squad_inbounds(self, squad_uuid: str, inbound_uuids: list[str]) -> bool:
-        try:
-            async with self.get_api_client() as api:
-                data = {'uuid': squad_uuid, 'inbounds': inbound_uuids}
-                await api._make_request('PATCH', '/api/internal-squads', data)
-                return True
-        except Exception as e:
-            logger.error('Error updating squad inbounds', error=e)
-            return False
-
     async def get_all_squads(self) -> list[dict[str, Any]]:
         try:
             async with self.get_api_client() as api:
@@ -1150,257 +1136,6 @@ class RemnaWaveService:
         except Exception as e:
             logger.error('Ошибка получения сквадов из Remnawave', error=e)
             return []
-
-    async def create_squad(self, name: str, inbounds: list[str]) -> str | None:
-        try:
-            async with self.get_api_client() as api:
-                squad = await api.create_internal_squad(name, inbounds)
-
-                logger.info('✅ Создан новый сквад', name=name)
-                return squad.uuid
-
-        except Exception as e:
-            logger.error('Ошибка создания сквада', name=name, error=e)
-            return None
-
-    async def update_squad(self, uuid: str, name: str = None, inbounds: list[str] = None) -> bool:
-        try:
-            async with self.get_api_client() as api:
-                await api.update_internal_squad(uuid, name, inbounds)
-
-                logger.info('✅ Обновлен сквад', uuid=uuid)
-                return True
-
-        except Exception as e:
-            logger.error('Ошибка обновления сквада', uuid=uuid, error=e)
-            return False
-
-    async def delete_squad(self, uuid: str) -> bool:
-        try:
-            async with self.get_api_client() as api:
-                result = await api.delete_internal_squad(uuid)
-
-                if result:
-                    logger.info('✅ Удален сквад', uuid=uuid)
-
-                return result
-
-        except Exception as e:
-            logger.error('Ошибка удаления сквада', uuid=uuid, error=e)
-            return False
-
-    async def migrate_squad_users(
-        self,
-        db: AsyncSession,
-        source_uuid: str,
-        target_uuid: str,
-    ) -> dict[str, Any]:
-        """Переносит активных подписок с одного сквада на другой."""
-
-        from app.services.grace_access_runtime import update_panel_user_grace_safe
-
-        if source_uuid == target_uuid:
-            return {
-                'success': False,
-                'error': 'same_squad',
-                'message': 'Источник и назначение совпадают',
-            }
-
-        source_uuid = source_uuid.strip()
-        target_uuid = target_uuid.strip()
-
-        source_server = await get_server_squad_by_uuid(db, source_uuid)
-        target_server = await get_server_squad_by_uuid(db, target_uuid)
-
-        if not source_server or not target_server:
-            return {
-                'success': False,
-                'error': 'not_found',
-                'message': 'Сквады не найдены',
-            }
-
-        subscription_query = (
-            select(Subscription)
-            .options(selectinload(Subscription.user))
-            .where(
-                Subscription.status.in_(
-                    [
-                        SubscriptionStatus.ACTIVE.value,
-                        SubscriptionStatus.TRIAL.value,
-                    ]
-                ),
-                cast(Subscription.connected_squads, String).like(f'%"{source_uuid}"%'),
-            )
-        )
-
-        result = await db.execute(subscription_query)
-        subscriptions = result.scalars().unique().all()
-
-        total_candidates = len(subscriptions)
-        if not subscriptions:
-            logger.info(
-                '🚚 Переезд сквада → : подходящих подписок не найдено', source_uuid=source_uuid, target_uuid=target_uuid
-            )
-            return {
-                'success': True,
-                'total': 0,
-                'updated': 0,
-                'panel_updated': 0,
-                'panel_failed': 0,
-            }
-
-        exit_stack = AsyncExitStack()
-        panel_updated = 0
-        panel_failed = 0
-        updated_subscriptions = 0
-        source_decrement = 0
-        target_increment = 0
-
-        try:
-            needs_panel_update = any(
-                (
-                    subscription.remnawave_id
-                    if settings.is_multi_tariff_enabled()
-                    else (subscription.user and subscription.user.remnawave_id)
-                )
-                for subscription in subscriptions
-            )
-
-            api = None
-            if needs_panel_update:
-                api = await exit_stack.enter_async_context(self.get_api_client())
-
-            for subscription in subscriptions:
-                current_squads = list(subscription.connected_squads or [])
-                if source_uuid not in current_squads:
-                    continue
-
-                had_target_before = target_uuid in current_squads
-                new_squads = [squad_uuid for squad_uuid in current_squads if squad_uuid != source_uuid]
-                if not had_target_before:
-                    new_squads.append(target_uuid)
-
-                _panel_user_id = (
-                    getattr(subscription, 'remnawave_id', None)
-                    if settings.is_multi_tariff_enabled()
-                    else (subscription.user.remnawave_id if subscription.user else None)
-                )
-                if _panel_user_id:
-                    if api is None:
-                        panel_failed += 1
-                        logger.error(
-                            '❌ RemnaWave API недоступен для обновления пользователя',
-                            telegram_id=subscription.user.telegram_id if subscription.user else None,
-                        )
-                        continue
-
-                    try:
-                        await update_panel_user_grace_safe(
-                            api,
-                            subscription.id,
-                            user_id=_panel_user_id,
-                            # Обходы отключены за трафик — панель остаётся в Bypass-Off.
-                            active_internal_squads=panel_squads_for(subscription, new_squads),
-                        )
-                        panel_updated += 1
-                    except Exception as error:
-                        panel_failed += 1
-                        logger.error(
-                            '❌ Ошибка обновления сквадов пользователя',
-                            telegram_id=subscription.user.telegram_id,
-                            error=error,
-                        )
-                        continue
-
-                subscription.connected_squads = new_squads
-                subscription.updated_at = datetime.now(UTC)
-
-                source_decrement += 1
-                if not had_target_before:
-                    target_increment += 1
-
-                updated_subscriptions += 1
-
-                link_result = await db.execute(
-                    select(SubscriptionServer)
-                    .where(
-                        and_(
-                            SubscriptionServer.subscription_id == subscription.id,
-                            SubscriptionServer.server_squad_id == source_server.id,
-                        )
-                    )
-                    .limit(1)
-                )
-                link = link_result.scalars().first()
-
-                if link:
-                    if had_target_before:
-                        await db.execute(
-                            delete(SubscriptionServer).where(
-                                and_(
-                                    SubscriptionServer.subscription_id == subscription.id,
-                                    SubscriptionServer.server_squad_id == source_server.id,
-                                )
-                            )
-                        )
-                    else:
-                        link.server_squad_id = target_server.id
-                elif not had_target_before:
-                    db.add(
-                        SubscriptionServer(
-                            subscription_id=subscription.id,
-                            server_squad_id=target_server.id,
-                            paid_price_kopeks=0,
-                        )
-                    )
-
-            if updated_subscriptions:
-                # Update in consistent ID order to prevent deadlocks
-                counter_updates = {}
-                if source_decrement:
-                    counter_updates[source_server.id] = func.greatest(ServerSquad.current_users - source_decrement, 0)
-                if target_increment:
-                    counter_updates[target_server.id] = ServerSquad.current_users + target_increment
-                for sid in sorted(counter_updates):
-                    await db.execute(
-                        update(ServerSquad).where(ServerSquad.id == sid).values(current_users=counter_updates[sid])
-                    )
-
-                await db.commit()
-            else:
-                await db.rollback()
-
-            logger.info(
-                '🚚 Завершен переезд сквада → : обновлено подписок (не обновлены в панели)',
-                source_uuid=source_uuid,
-                target_uuid=target_uuid,
-                updated_subscriptions=updated_subscriptions,
-                panel_failed=panel_failed,
-            )
-
-            return {
-                'success': True,
-                'total': total_candidates,
-                'updated': updated_subscriptions,
-                'panel_updated': panel_updated,
-                'panel_failed': panel_failed,
-                'source_removed': source_decrement,
-                'target_added': target_increment,
-            }
-
-        except RemnaWaveConfigurationError:
-            await db.rollback()
-            raise
-        except Exception as error:
-            await db.rollback()
-            logger.error('❌ Ошибка переезда сквада', source_uuid=source_uuid, target_uuid=target_uuid, error=error)
-            return {
-                'success': False,
-                'error': 'unexpected',
-                'message': str(error),
-            }
-        finally:
-            await exit_stack.aclose()
 
     async def sync_users_from_panel(self, db: AsyncSession, sync_type: str = 'all') -> dict[str, int]:
         # Выгрузка панели идёт минутами; транзакцию, с которой пришла сессия
@@ -2009,10 +1744,6 @@ class RemnaWaveService:
 
     async def _sync_users_from_panel_multi(self, db: AsyncSession, sync_type: str) -> dict[str, int]:
         """Multi-tariff sync: match panel users to subscriptions by remnawave_id."""
-        from sqlalchemy import select
-        from sqlalchemy.orm import selectinload
-
-        from app.database.models import Subscription
 
         stats = {'created': 0, 'updated': 0, 'errors': 0, 'deleted': 0}
         # Момент снимка: см. sync_users_from_panel — список выгружается целиком и
@@ -2637,154 +2368,6 @@ class RemnaWaveService:
         except Exception as e:
             logger.error('Ошибка получения актуального использования нод', error=e)
             return []
-
-    async def get_squad_details(self, squad_uuid: str) -> dict | None:
-        try:
-            async with self.get_api_client() as api:
-                squad = await api.get_internal_squad_by_uuid(squad_uuid)
-                if squad:
-                    inbounds = [
-                        asdict(inbound) if is_dataclass(inbound) else inbound for inbound in squad.inbounds or []
-                    ]
-                    return {
-                        'uuid': squad.uuid,
-                        'name': squad.name,
-                        'members_count': squad.members_count,
-                        'inbounds_count': squad.inbounds_count,
-                        'inbounds': inbounds,
-                    }
-                return None
-        except Exception as e:
-            logger.error('Error getting squad details', error=e)
-            return None
-
-    async def add_all_users_to_squad(self, squad_uuid: str) -> bool:
-        try:
-            from app.services.grace_access_runtime import grace_sensitive_global_panel_update
-
-            async with grace_sensitive_global_panel_update() as allowed:
-                if not allowed:
-                    logger.warning('Bulk squad add blocked while grace sessions are open')
-                    return False
-                async with self.get_api_client() as api:
-                    # 3.0.0: bulk-действие отвечает 202/204 без тела, поля
-                    # `eventSent` в контракте больше нет — успех определяется
-                    # отсутствием исключения (чтение поля рапортовало провал
-                    # на успешной операции).
-                    return await api.add_users_to_internal_squad(squad_uuid)
-        except Exception as e:
-            logger.error('Error adding users to squad', error=e)
-            return False
-
-    async def remove_all_users_from_squad(self, squad_uuid: str) -> bool:
-        try:
-            from app.services.grace_access_runtime import grace_sensitive_global_panel_update
-
-            async with grace_sensitive_global_panel_update() as allowed:
-                if not allowed:
-                    logger.warning('Bulk squad removal blocked while grace sessions are open')
-                    return False
-                async with self.get_api_client() as api:
-                    # 3.0.0: см. add_all_users_to_squad — тела у ответа нет.
-                    return await api.remove_users_from_internal_squad(squad_uuid)
-        except Exception as e:
-            logger.error('Error removing users from squad', error=e)
-            return False
-
-    async def get_all_inbounds(self) -> list[dict]:
-        try:
-            async with self.get_api_client() as api:
-                response = await api._make_request('GET', '/api/config-profiles/inbounds')
-                inbounds_data = response.get('response', {}).get('inbounds', [])
-
-                return [
-                    {
-                        'uuid': inbound['uuid'],
-                        'tag': inbound['tag'],
-                        'type': inbound['type'],
-                        'network': inbound.get('network'),
-                        'security': inbound.get('security'),
-                        'port': inbound.get('port'),
-                    }
-                    for inbound in inbounds_data
-                ]
-        except Exception as e:
-            logger.error('Error getting all inbounds', error=e)
-            return []
-
-    async def rename_squad(self, squad_uuid: str, new_name: str) -> bool:
-        try:
-            async with self.get_api_client() as api:
-                data = {'uuid': squad_uuid, 'name': new_name}
-                await api._make_request('PATCH', '/api/internal-squads', data)
-                return True
-        except Exception as e:
-            logger.error('Error renaming squad', error=e)
-            return False
-
-    async def get_node_user_usage_by_range(self, node_uuid: str, start_date, end_date) -> list[dict[str, Any]]:
-        """Трафик пользователей на ноде за период.
-
-        3.0.0 удалил `/api/bandwidth-stats/nodes/{uuid}/users/legacy`, который
-        отдавал строки `{userUuid, username, nodeUuid, total, date}` — по одной
-        на пользователя и день. Замена `POST /api/bandwidth-stats/nodes/usage`
-        сохраняет привязку трафика к пользователю (числовой `id`), но разбивки
-        по дням у неё нет: `date` в элементах больше не будет.
-        """
-        try:
-            async with self.get_api_client() as api:
-                # Эндпоинт валидирует start/end как дату (YYYY-MM-DD); полный ISO
-                # с `Z` панель отвергает (400) — как и в get_top_consumers.
-                start_str = start_date.date().isoformat()
-                end_str = end_date.date().isoformat()
-
-                usage_data = await api.get_bandwidth_stats_nodes_usage([node_uuid], start_str, end_str)
-
-                items: list[dict[str, Any]] = []
-                for node in usage_data.get('nodes', []) or []:
-                    _node_uuid = node.get('uuid') or node_uuid
-                    for user in node.get('users', []) or []:
-                        items.append(
-                            {
-                                'userId': user.get('id'),
-                                'nodeUuid': _node_uuid,
-                                'total': user.get('totalBytes', 0) or 0,
-                            }
-                        )
-                return items
-
-        except Exception as e:
-            logger.error('Ошибка получения статистики использования ноды', node_uuid=node_uuid, error=e)
-            return []
-
-    async def get_node_statistics(self, node_uuid: str) -> dict[str, Any] | None:
-        try:
-            node = await self.get_node_details(node_uuid)
-            if not node:
-                return None
-
-            realtime_stats = await self.get_nodes_realtime_usage()
-
-            node_realtime = None
-            for stats in realtime_stats:
-                if stats.get('nodeUuid') == node_uuid:
-                    node_realtime = stats
-                    break
-
-            end_date = datetime.now(UTC)
-            start_date = end_date - timedelta(days=7)
-
-            usage_history = await self.get_node_user_usage_by_range(node_uuid, start_date, end_date)
-
-            return {
-                'node': node,
-                'realtime': node_realtime,
-                'usage_history': usage_history,
-                'last_updated': datetime.now(UTC).isoformat(),
-            }
-
-        except Exception as e:
-            logger.error('Ошибка получения статистики ноды', node_uuid=node_uuid, error=e)
 
     async def force_cleanup_user_data(self, db: AsyncSession, user: User) -> bool:
         """

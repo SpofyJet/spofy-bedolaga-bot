@@ -7,7 +7,6 @@ from app.config import settings
 from app.database.crud.public_offer import (
     get_public_offer,
     set_public_offer_enabled,
-    upsert_public_offer,
 )
 from app.database.models import PublicOffer
 
@@ -77,24 +76,6 @@ class PublicOfferService:
     async def is_offer_enabled(cls, db: AsyncSession, language: str) -> bool:
         offer = await cls.get_active_offer(db, language)
         return offer is not None
-
-    @classmethod
-    async def save_offer(
-        cls,
-        db: AsyncSession,
-        language: str,
-        content: str,
-    ) -> PublicOffer:
-        lang = cls._normalize_language(language)
-        enable_if_new = True
-        offer = await upsert_public_offer(
-            db,
-            lang,
-            content,
-            enable_if_new=enable_if_new,
-        )
-        logger.info('✅ Публичная оферта обновлена для языка', lang=lang)
-        return offer
 
     @classmethod
     async def set_enabled(

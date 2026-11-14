@@ -429,31 +429,3 @@ class MenuLayoutStatsService:
                 'trend': 'up' if change_percent > 0 else 'down' if change_percent < 0 else 'stable',
             },
         }
-
-    @classmethod
-    async def get_click_sequences(
-        cls,
-        db: AsyncSession,
-        user_id: int,
-        limit: int = 50,
-    ) -> list[dict[str, Any]]:
-        """Получить последовательности кликов пользователя."""
-        result = await db.execute(
-            select(
-                ButtonClickLog.button_id,
-                ButtonClickLog.button_text,
-                ButtonClickLog.clicked_at,
-            )
-            .where(ButtonClickLog.user_id == user_id)
-            .order_by(desc(ButtonClickLog.clicked_at))
-            .limit(limit)
-        )
-
-        return [
-            {
-                'button_id': row.button_id,
-                'button_text': row.button_text,
-                'clicked_at': row.clicked_at,
-            }
-            for row in result.all()
-        ]

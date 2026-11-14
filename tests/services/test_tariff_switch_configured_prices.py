@@ -42,16 +42,6 @@ def test_null_shorter_period_does_not_override_configured_price():
     assert result.new_period_days == 30
 
 
-def test_miniapp_wrapper_returns_client_error():
-    from fastapi import HTTPException
-
-    from app.webapi.routes.miniapp import _calculate_tariff_switch
-
-    with pytest.raises(HTTPException) as raised:
-        _calculate_tariff_switch(tariff({'30': 1000}), tariff({}), 10)
-    assert raised.value.status_code == 400
-
-
 def test_telegram_list_omits_unconfigured_tariff(monkeypatch):
     from app.config import settings
     from app.database.models import Tariff

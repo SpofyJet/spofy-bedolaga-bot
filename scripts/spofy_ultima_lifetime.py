@@ -91,7 +91,7 @@ def _backup(rows: list[Subscription]) -> Path:
 
 async def main(scope: str, apply: bool) -> int:
     # Настройки из кабинета (system_settings) — как в scripts/backfill_remnawave_ids.py.
-    await bot_configuration_service.initialize(sync_web_api_token=False)
+    await bot_configuration_service.initialize()
 
     async with AsyncSessionLocal() as db:
         rows = await _select(db, scope)

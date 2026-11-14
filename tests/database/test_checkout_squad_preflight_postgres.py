@@ -1,97 +1,18 @@
 """TG120: fresh proof of all deleted squads must refuse before wallet mutation."""
 
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
 from sqlalchemy import select
 
-from app.cabinet.routes.subscription_modules import purchase, tariff_switch
-from app.cabinet.schemas.subscription import TariffPurchaseRequest
 from app.database.models import Subscription, Tariff, Transaction, User
 from app.services import checkout_squad_validation as preflight
 from tests.database.test_multi_tariff_switch_postgres import switch_data
 
 
 pytestmark = pytest.mark.postgres
-
-
-@pytest.mark.parametrize('flow', ['purchase', 'daily', 'switch', 'miniapp_purchase', 'miniapp_switch'])
-@pytest.mark.parametrize('catalog_state', ['all_deleted', 'partial', 'unavailable'])
-async def test_tariff_checkout_checks_live_squads_before_debit(postgres_database, monkeypatch, flow, catalog_state):
-    async with switch_data(postgres_database, monkeypatch) as (db, user):
-        target = await db.get(Tariff, 3)
-        target.allowed_squads = ['masked-deleted', 'masked-surviving']
-        target.is_daily = flow == 'daily'
-        target.daily_price_kopeks = 100
-        user.promo_offer_discount_source = 'test'
-        user.promo_offer_discount_percent = 17
-        user.promo_offer_discount_expires_at = datetime.now(UTC) + timedelta(days=1)
-        await db.commit()
-        before_user = (await db.execute(select(User.__table__).where(User.id == user.id))).mappings().one()
-        before_subs = list((await db.execute(select(Subscription.__table__).order_by(Subscription.id))).mappings())
-        panel = SimpleNamespace(create_remnawave_user=AsyncMock(), update_remnawave_user=AsyncMock())
-        monkeypatch.setattr(purchase, 'SubscriptionService', lambda: panel)
-        monkeypatch.setattr(tariff_switch, 'SubscriptionService', lambda: panel)
-
-        async def get_catalog():
-            if catalog_state == 'unavailable':
-                raise TimeoutError('temporary panel outage')
-            return [] if catalog_state == 'all_deleted' else [SimpleNamespace(uuid='masked-surviving')]
-
-        @asynccontextmanager
-        async def api():
-            yield SimpleNamespace(get_internal_squads=get_catalog)
-
-        monkeypatch.setattr(preflight, 'RemnaWaveService', lambda: SimpleNamespace(get_api_client=api))
-        request = TariffPurchaseRequest(tariff_id=3, period_days=30)
-        from app.services.subscription_service import SubscriptionService
-        from app.webapi.routes import miniapp
-        from app.webapi.schemas.miniapp import (
-            MiniAppTariffPurchaseRequest,
-            MiniAppTariffSwitchRequest,
-        )
-
-        monkeypatch.setattr(SubscriptionService, 'create_remnawave_user', AsyncMock())
-        monkeypatch.setattr(SubscriptionService, 'update_remnawave_user', AsyncMock())
-        monkeypatch.setattr(miniapp, '_authorize_miniapp_user', AsyncMock(return_value=user))
-        await db.refresh(user, ['subscriptions'])
-
-        async def checkout():
-            if flow == 'miniapp_purchase':
-                return await miniapp.purchase_tariff_endpoint(
-                    MiniAppTariffPurchaseRequest(initData='masked', tariffId=3, periodDays=30), db
-                )
-            if flow == 'miniapp_switch':
-                return await miniapp.switch_tariff_endpoint(
-                    MiniAppTariffSwitchRequest(init_data='masked', tariff_id=3, subscriptionId=11), db
-                )
-            if flow == 'switch':
-                return await tariff_switch.switch_tariff(request, user, db, 11)
-            return await purchase.purchase_tariff(request, user, db)
-
-        if catalog_state == 'all_deleted':
-            with pytest.raises(HTTPException) as exc:
-                await checkout()
-            assert exc.value.status_code == 409
-            assert exc.value.detail['code'] == 'tariff_servers_unavailable'
-            assert (await db.execute(select(User.__table__).where(User.id == 1))).mappings().one() == before_user
-            assert (
-                list((await db.execute(select(Subscription.__table__).order_by(Subscription.id))).mappings())
-                == before_subs
-            )
-            assert list(await db.scalars(select(Transaction))) == []
-            panel.create_remnawave_user.assert_not_awaited()
-            panel.update_remnawave_user.assert_not_awaited()
-        else:
-            result = await checkout()
-            assert result['success'] if isinstance(result, dict) else result.success
-            await db.refresh(user)
-            assert user.balance_kopeks < 10000
-            assert len(list(await db.scalars(select(Transaction)))) == 1
 
 
 @pytest.mark.parametrize(

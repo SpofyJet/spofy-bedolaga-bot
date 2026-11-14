@@ -7,8 +7,6 @@ import uvicorn
 
 from app.config import settings
 
-from .app import create_web_api_app
-
 
 logger = structlog.get_logger(__name__)
 
@@ -16,8 +14,8 @@ logger = structlog.get_logger(__name__)
 class WebAPIServer:
     """Асинхронный uvicorn-сервер для административного API."""
 
-    def __init__(self, app: object | None = None) -> None:
-        self._app = app or create_web_api_app()
+    def __init__(self, app: object) -> None:
+        self._app = app
 
         workers = max(1, int(settings.WEB_API_WORKERS or 1))
         if workers > 1:

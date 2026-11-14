@@ -1,15 +1,12 @@
 """Вход в miniapp считается после проверки подписи, а занятый пул отвечает 503."""
 
-import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 
 from app.cabinet.routes import auth
-from app.webapi.middleware import pool_exhausted_handler
 
 
 def _patch(monkeypatch: pytest.MonkeyPatch, user_data: dict | None, limited: bool) -> AsyncMock:
@@ -52,13 +49,3 @@ async def test_invalid_signature_over_limit_gets_429(monkeypatch: pytest.MonkeyP
         await _login()
 
     assert error.value.status_code == 429
-
-
-async def test_pool_exhausted_answers_503_with_pause() -> None:
-    request = SimpleNamespace(method='GET', url=SimpleNamespace(path='/cabinet/auth/me'))
-
-    response = await pool_exhausted_handler(request, SQLAlchemyTimeoutError('QueuePool limit'))
-
-    assert response.status_code == 503
-    assert response.headers['retry-after'] == '5'
-    assert 'detail' in json.loads(response.body)

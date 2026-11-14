@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import fnmatch
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -33,7 +32,6 @@ from app.utils.pricing_utils import (
     calculate_device_addon_price,
     count_chargeable_devices,
 )
-from app.webapi.routes import miniapp as miniapp_routes
 from tests.fixtures.redis_pipeline import SequentialPipelineMixin
 from tests.fixtures.sqlite_memory import memory_session
 
@@ -267,23 +265,6 @@ async def test_menu_offers_only_carts_payable_from_the_bot(cart_service, stored,
         await cart_service.save_user_cart(USER_ID, stored)
 
     assert await subpage_service.has_resumable_cart(USER_ID) is expected
-
-
-@pytest.mark.asyncio
-async def test_old_miniapp_route_charges_one_time_price(monkeypatch):
-    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
-        user, subscription = await _seed(db, flat=True, end_date=LIFETIME_END, device_limit=9)
-        monkeypatch.setattr(miniapp_routes, '_authorize_miniapp_user', AsyncMock(return_value=user))
-        monkeypatch.setattr(miniapp_routes, '_ensure_paid_subscription', lambda *args, **kwargs: subscription)
-        monkeypatch.setattr(miniapp_routes, 'SubscriptionService', _PanelStub)
-
-        await miniapp_routes.update_subscription_devices_endpoint(
-            SimpleNamespace(init_data='x', devices=10, device_limit=10, subscription_id=SUB_ID), db
-        )
-        payments = await _payments(db)
-
-    assert [abs(payment.amount_kopeks) for payment in payments] == [ONE_TIME_PRICE]
-    assert 'дн.' not in payments[0].description
 
 
 def test_price_helpers():

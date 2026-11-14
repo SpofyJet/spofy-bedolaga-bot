@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.cabinet.routes import admin_legal_pages, info
 from app.config import settings
 from app.database import database
-from app.database.crud.rules import create_or_update_rules, restore_rules_version
+from app.database.crud.rules import create_or_update_rules
 from app.database.models import ServiceRule
 from app.localization import texts
 from tests.fixtures.sqlite_memory import memory_session
@@ -48,20 +48,6 @@ async def test_cabinet_save_updates_warm_bot_rules(monkeypatch, language, new_co
             assert '<b>Old rules</b>' not in public_rules.content
             assert '<b>Old rules</b>' not in await texts.get_rules(language)
         assert await texts.get_rules(other_language) == '<b>Other language</b>'
-
-
-@pytest.mark.asyncio
-async def test_restore_rules_updates_warm_cache(monkeypatch):
-    async with memory_session(monkeypatch, [ServiceRule.__table__]) as db:
-        monkeypatch.setattr(database, 'AsyncSessionLocal', async_sessionmaker(db.bind, expire_on_commit=False))
-        original = await create_or_update_rules(db, 'Original rules', 'ru')
-        await create_or_update_rules(db, 'Replacement rules', 'ru')
-        await texts.refresh_rules_cache('ru')
-        assert await texts.get_rules('ru') == 'Replacement rules'
-
-        await restore_rules_version(db, original.id, 'ru')
-
-        assert await texts.get_rules('ru') == 'Original rules'
 
 
 @pytest.mark.asyncio

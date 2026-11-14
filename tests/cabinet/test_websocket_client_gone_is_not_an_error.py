@@ -115,20 +115,3 @@ async def test_cabinet_socket_survives_a_disconnect_while_refusing(token) -> Non
 
     assert not errored.called
     assert not excepted.called
-
-
-async def test_webapi_socket_stays_quiet_when_client_is_gone() -> None:
-    from app.webapi.routes import websocket as ws_route
-
-    socket = _Socket(_client_disconnected())
-    socket.query_params = {'token': 'good'}
-
-    with (
-        patch.object(ws_route, 'verify_websocket_token', AsyncMock(return_value=True)),
-        patch.object(ws_route.logger, 'error') as errored,
-        patch.object(ws_route.logger, 'exception') as excepted,
-    ):
-        await ws_route.websocket_endpoint(socket)
-
-    assert not errored.called
-    assert not excepted.called

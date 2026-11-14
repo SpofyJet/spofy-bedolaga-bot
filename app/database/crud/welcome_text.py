@@ -1,11 +1,10 @@
 import html
-from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import func, select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import User, WelcomeText
+from app.database.models import WelcomeText
 
 
 logger = structlog.get_logger(__name__)
@@ -24,112 +23,6 @@ async def get_active_welcome_text(db: AsyncSession) -> str | None:
         return welcome_text.text_content
 
     return None
-
-
-async def get_welcome_text_by_id(db: AsyncSession, welcome_text_id: int) -> WelcomeText | None:
-    result = await db.execute(select(WelcomeText).where(WelcomeText.id == welcome_text_id))
-    return result.scalar_one_or_none()
-
-
-async def list_welcome_texts(
-    db: AsyncSession,
-    *,
-    include_inactive: bool = True,
-    limit: int = 50,
-    offset: int = 0,
-):
-    query = select(WelcomeText).order_by(WelcomeText.updated_at.desc())
-    if not include_inactive:
-        query = query.where(WelcomeText.is_active == True)
-
-    result = await db.execute(query.limit(limit).offset(offset))
-    return result.scalars().all()
-
-
-async def count_welcome_texts(db: AsyncSession, *, include_inactive: bool = True) -> int:
-    query = select(func.count(WelcomeText.id))
-    if not include_inactive:
-        query = query.where(WelcomeText.is_active == True)
-
-    result = await db.execute(query)
-    return result.scalar()
-
-
-async def create_welcome_text(
-    db: AsyncSession,
-    *,
-    text_content: str,
-    created_by: int | None = None,
-    is_enabled: bool = True,
-    is_active: bool = True,
-) -> WelcomeText:
-    resolved_creator = created_by
-
-    if created_by is not None:
-        result = await db.execute(select(User.id).where(User.id == created_by))
-        resolved_creator = result.scalar_one_or_none()
-
-    if is_active:
-        await db.execute(update(WelcomeText).values(is_active=False))
-
-    welcome_text = WelcomeText(
-        text_content=text_content,
-        is_active=is_active,
-        is_enabled=is_enabled,
-        created_by=resolved_creator,
-    )
-
-    db.add(welcome_text)
-    await db.commit()
-    await db.refresh(welcome_text)
-
-    logger.info(
-        '✅ Создан приветственный текст',
-        welcome_text_id=welcome_text.id,
-        is_active=welcome_text.is_active,
-        is_enabled=welcome_text.is_enabled,
-    )
-    return welcome_text
-
-
-async def update_welcome_text(
-    db: AsyncSession,
-    welcome_text: WelcomeText,
-    *,
-    text_content: str | None = None,
-    is_enabled: bool | None = None,
-    is_active: bool | None = None,
-) -> WelcomeText:
-    if is_active:
-        await db.execute(update(WelcomeText).where(WelcomeText.id != welcome_text.id).values(is_active=False))
-
-    if text_content is not None:
-        welcome_text.text_content = text_content
-
-    if is_enabled is not None:
-        welcome_text.is_enabled = is_enabled
-
-    if is_active is not None:
-        welcome_text.is_active = is_active
-
-    welcome_text.updated_at = datetime.now(UTC)
-
-    await db.commit()
-    await db.refresh(welcome_text)
-
-    logger.info(
-        '📝 Обновлен приветственный текст',
-        welcome_text_id=welcome_text.id,
-        is_active=welcome_text.is_active,
-        is_enabled=welcome_text.is_enabled,
-    )
-    return welcome_text
-
-
-async def delete_welcome_text(db: AsyncSession, welcome_text: WelcomeText) -> None:
-    await db.delete(welcome_text)
-    await db.commit()
-    logger.info('🗑️ Удален приветственный текст ID', welcome_text_id=welcome_text.id)
 
 
 def replace_placeholders(text: str, user) -> str:

@@ -1,15 +1,14 @@
 """Лог действий пользователя для таймлайна активности в карточке юзера.
 
-Поверхностей у пользователя три, и все три пишут в одну таблицу
+Поверхностей у пользователя две, и обе пишут в одну таблицу
 ``button_click_logs`` (без новых миграций), различаясь ``button_type``:
 
 * кнопки, команды и оплаты бота — ``ButtonStatsMiddleware``
   (тип ``None``/``builtin``/``callback``/``command``/``payment``);
 * кабинет — зависимость авторизации пишет изменения (POST/PUT/PATCH/DELETE),
   а сам кабинет присылает пачкой каждый открытый экран и каждое нажатие
-  (``POST /cabinet/activity/events``) — тип ``cabinet``;
-* Mini App — авторизация запроса в ``app/webapi/routes/miniapp.py``:
-  действия и просмотры экранов — тип ``miniapp``.
+  (``POST /cabinet/activity/events``) — тип ``cabinet``.
+Старые записи с типом ``miniapp`` (Mini App удалён 14.11.2026) остаются в истории.
 
 Решение владельца: «Активность» существует, чтобы видеть каждый чих — всё,
 что человек делает и в боте, и в кабинете. Поэтому пишутся и просмотры, и
@@ -17,11 +16,6 @@
 статуса платежа или перерисовка экрана не давали десяток строк, один и тот же
 экран одного человека в пределах минуты считается одной записью; нажатия не
 схлопываются, но ограничены лимитом в минуту на человека.
-
-Отличать действие от чтения по HTTP-методу в Mini App нельзя: ``init_data``
-приходит телом, поэтому и чтения идут POST-ом. Список действий задан явно,
-чтения — тоже, а тест-сторож требует, чтобы каждый маршрут был отнесён к одному
-из двух — новый маршрут не проскочит молча.
 
 Записи всех источников отдаёт GET /cabinet/admin/users/{id}/activity.
 """
@@ -31,7 +25,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-from contextvars import ContextVar, Token
+from contextvars import ContextVar
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -43,7 +37,6 @@ from app.database.database import AsyncSessionLocal
 logger = structlog.get_logger(__name__)
 
 CABINET_BUTTON_TYPE = 'cabinet'
-MINIAPP_BUTTON_TYPE = 'miniapp'
 
 # Открытие экрана: button_id = 'SCREEN <нормализованный путь>'.
 SCREEN_PREFIX = 'SCREEN '
@@ -81,44 +74,6 @@ _SECRET_SCREEN_PREFIXES = (
 # Длинный «непроизносимый» сегмент — тоже токен, даже на незнакомом экране.
 _OPAQUE_SEGMENT_RE = re.compile(r'^[A-Za-z0-9_-]{16,}$')
 
-# Действия человека в Mini App — то, что имеет смысл видеть в таймлайне.
-MINIAPP_ACTION_PATHS = frozenset(
-    {
-        '/miniapp/devices/remove',
-        '/miniapp/payments/create',
-        '/miniapp/promo-codes/activate',
-        '/miniapp/promo-offers/{id}/claim',
-        '/miniapp/subscription/autopay',
-        '/miniapp/subscription/daily/toggle-pause',
-        '/miniapp/subscription/devices',
-        '/miniapp/subscription/purchase',
-        '/miniapp/subscription/renewal',
-        '/miniapp/subscription/servers',
-        '/miniapp/subscription/tariff/purchase',
-        '/miniapp/subscription/tariff/switch',
-        '/miniapp/subscription/traffic',
-        '/miniapp/subscription/traffic-topup',
-        '/miniapp/subscription/trial',
-    }
-)
-
-# Чтения и предпросчёты: дёргаются при каждом открытии экрана. Пишутся как
-# просмотр экрана — одна запись на экран в минуту. Перечислены явно, чтобы
-# сторож видел полный список маршрутов.
-MINIAPP_READ_PATHS = frozenset(
-    {
-        '/miniapp/maintenance/status',
-        '/miniapp/payments/methods',
-        '/miniapp/payments/status',
-        '/miniapp/subscription',
-        '/miniapp/subscription/purchase/options',
-        '/miniapp/subscription/purchase/preview',
-        '/miniapp/subscription/renewal/options',
-        '/miniapp/subscription/settings',
-        '/miniapp/subscription/tariff/switch/preview',
-        '/miniapp/subscription/tariffs',
-    }
-)
 
 # Путь текущего запроса. Авторизация Mini App знает пользователя, но не путь:
 # init_data приходит телом, поэтому единой зависимости с ``Request`` там нет.
@@ -134,15 +89,6 @@ _recent_screens: dict[tuple[int, str], float] = {}
 # user_id -> (начало минуты, сколько нажатий в ней записано).
 _click_budget: dict[int, tuple[float, int]] = {}
 _monotonic = time.monotonic
-
-
-def bind_request_path(path: str) -> Token:
-    """Запомнить путь текущего запроса на время его обработки."""
-    return _request_path.set(path)
-
-
-def reset_request_path(token: Token) -> None:
-    _request_path.reset(token)
 
 
 def current_request_path() -> str | None:
@@ -227,23 +173,6 @@ def schedule_click_log(user_id: int, path: str, label: str, *, surface: str = CA
         callback_data=normalize_screen_path(path)[:255],
         button_type=surface,
     )
-
-
-def schedule_miniapp_action_log(user_id: int, path: str | None = None) -> None:
-    """Fire-and-forget запись шага юзера в Mini App: действие — как действие, чтение — как экран."""
-    resolved = path if path is not None else current_request_path()
-    if not resolved or not settings.USER_ACTION_LOG_ENABLED:
-        return
-    normalized = normalize_cabinet_path(resolved)
-    if normalized in MINIAPP_ACTION_PATHS:
-        _spawn(
-            user_id=user_id,
-            button_id=f'POST {normalized}'[:100],
-            callback_data=resolved[:255],
-            button_type=MINIAPP_BUTTON_TYPE,
-        )
-    elif normalized in MINIAPP_READ_PATHS:
-        schedule_screen_view_log(user_id, resolved, surface=MINIAPP_BUTTON_TYPE)
 
 
 def _seen_recently(user_id: int, button_id: str) -> bool:

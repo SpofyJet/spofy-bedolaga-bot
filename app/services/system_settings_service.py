@@ -22,7 +22,6 @@ from app.database.crud.system_setting import (
 )
 from app.database.database import AsyncSessionLocal
 from app.database.models import SystemSetting
-from app.services.web_api_token_service import ensure_default_web_api_token
 from app.utils.background import spawn_background_task
 
 
@@ -1805,13 +1804,8 @@ class BotConfigurationService:
         return ''.join(reversed(result))
 
     @classmethod
-    async def initialize(cls, *, sync_web_api_token: bool = True) -> None:
-        """Загрузить настройки из БД в память.
-
-        `sync_web_api_token=False` — для одноразовых CLI: им нужны только
-        значения, а бутстрап токена веб-API пишет в БД, и холостой прогон
-        (который обещает «ничего не записано») перестал бы быть холостым.
-        """
+    async def initialize(cls) -> None:
+        """Загрузить настройки из БД в память (только чтение)."""
         cls.initialize_definitions()
 
         async with AsyncSessionLocal() as session:
@@ -1859,9 +1853,6 @@ class BotConfigurationService:
 
             cls._overrides_raw[key] = raw_value
             cls._apply_to_settings(key, parsed_value)
-
-        if sync_web_api_token:
-            await cls._sync_default_web_api_token()
 
         refresh_period_prices()
         refresh_classic_period_prices()
@@ -1945,9 +1936,6 @@ class BotConfigurationService:
             cls._overrides_raw[key] = raw_value
             cls._apply_to_settings(key, value)
 
-        if key in {'WEB_API_DEFAULT_TOKEN', 'WEB_API_DEFAULT_TOKEN_NAME'}:
-            await cls._sync_default_web_api_token()
-
     @classmethod
     async def reset_value(
         cls,
@@ -1974,9 +1962,6 @@ class BotConfigurationService:
         else:
             original = cls.get_original_value(key)
             cls._apply_to_settings(key, original)
-
-        if key in {'WEB_API_DEFAULT_TOKEN', 'WEB_API_DEFAULT_TOKEN_NAME'}:
-            await cls._sync_default_web_api_token()
 
     @classmethod
     def _apply_to_settings(cls, key: str, value: Any) -> None:
@@ -2045,18 +2030,6 @@ class BotConfigurationService:
                     logger.error('Не удалось обновить конфигурацию сервиса автосинхронизации RemnaWave', error=error)
         except Exception as error:
             logger.error('Не удалось применить значение', key=key, setting_value=value, error=error)
-
-    @staticmethod
-    async def _sync_default_web_api_token() -> None:
-        default_token = (settings.WEB_API_DEFAULT_TOKEN or '').strip()
-        if not default_token:
-            return
-
-        success = await ensure_default_web_api_token()
-        if not success:
-            logger.warning(
-                'Не удалось синхронизировать бутстрап токен веб-API после обновления настроек',
-            )
 
 
 bot_configuration_service = BotConfigurationService

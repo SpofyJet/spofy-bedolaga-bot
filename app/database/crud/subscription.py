@@ -1847,87 +1847,6 @@ async def add_subscription_traffic(db: AsyncSession, subscription: Subscription,
     return subscription
 
 
-async def add_subscription_devices(db: AsyncSession, subscription: Subscription, devices: int) -> Subscription:
-    # Lock subscription to prevent concurrent modifications
-    locked_result = await db.execute(
-        select(Subscription)
-        .where(Subscription.id == subscription.id)
-        .options(selectinload(Subscription.tariff))
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    subscription = locked_result.scalar_one()
-
-    # Check max device limit
-    max_devices = settings.MAX_DEVICES_LIMIT
-    new_limit = (subscription.device_limit or 1) + devices
-    if max_devices > 0 and new_limit > max_devices:
-        logger.warning(
-            '📱 Попытка превысить лимит устройств',
-            user_id=subscription.user_id,
-            current=subscription.device_limit,
-            requested=devices,
-            max_devices=max_devices,
-        )
-        new_limit = max_devices
-
-    # Check tariff max device limit
-    tariff_max = subscription.tariff.max_device_limit if subscription.tariff else None
-    if tariff_max is not None and tariff_max > 0 and new_limit > tariff_max:
-        logger.warning(
-            '📱 Попытка превысить лимит устройств тарифа',
-            user_id=subscription.user_id,
-            current=subscription.device_limit,
-            requested=devices,
-            tariff_max_devices=tariff_max,
-        )
-        new_limit = tariff_max
-
-    subscription.device_limit = new_limit
-    subscription.updated_at = datetime.now(UTC)
-
-    await db.commit()
-    await db.refresh(subscription)
-
-    logger.info('📱 К подписке пользователя добавлено устройств', user_id=subscription.user_id, devices=devices)
-
-    # Доп. устройства меняют цену продления — привязка провайдерского
-    # автопродления с прежней суммой перестала её покрывать.
-    from app.services.recurrent_amount import sync_recurrent_bindings_after_price_change
-
-    await sync_recurrent_bindings_after_price_change(db, subscription.id)
-
-    return subscription
-
-
-async def add_subscription_squad(db: AsyncSession, subscription: Subscription, squad_uuid: str) -> Subscription:
-    if squad_uuid not in subscription.connected_squads:
-        subscription.connected_squads = subscription.connected_squads + [squad_uuid]
-        subscription.updated_at = datetime.now(UTC)
-
-        await db.commit()
-        await db.refresh(subscription)
-
-        logger.info('🌍 К подписке пользователя добавлен сквад', user_id=subscription.user_id, squad_uuid=squad_uuid)
-
-    return subscription
-
-
-async def remove_subscription_squad(db: AsyncSession, subscription: Subscription, squad_uuid: str) -> Subscription:
-    if squad_uuid in subscription.connected_squads:
-        squads = subscription.connected_squads.copy()
-        squads.remove(squad_uuid)
-        subscription.connected_squads = squads
-        subscription.updated_at = datetime.now(UTC)
-
-        await db.commit()
-        await db.refresh(subscription)
-
-        logger.info('🚫 Из подписки пользователя удален сквад', user_id=subscription.user_id, squad_uuid=squad_uuid)
-
-    return subscription
-
-
 async def decrement_subscription_server_counts(
     db: AsyncSession,
     subscription: Subscription | None,
@@ -2262,39 +2181,6 @@ async def get_subscriptions_statistics(db: AsyncSession) -> dict:
     }
 
 
-async def get_trial_statistics(db: AsyncSession) -> dict:
-    now = datetime.now(UTC)
-
-    total_trials_result = await db.execute(select(func.count(Subscription.id)).where(Subscription.is_trial.is_(True)))
-    total_trials = total_trials_result.scalar() or 0
-
-    active_trials_result = await db.execute(
-        select(func.count(Subscription.id)).where(
-            Subscription.is_trial.is_(True),
-            Subscription.end_date > now,
-            Subscription.status.in_([SubscriptionStatus.TRIAL.value, SubscriptionStatus.ACTIVE.value]),
-        )
-    )
-    active_trials = active_trials_result.scalar() or 0
-
-    resettable_trials_result = await db.execute(
-        select(func.count(Subscription.id))
-        .join(User, Subscription.user_id == User.id)
-        .where(
-            Subscription.is_trial.is_(True),
-            Subscription.end_date <= now,
-            User.has_had_paid_subscription.is_(False),
-        )
-    )
-    resettable_trials = resettable_trials_result.scalar() or 0
-
-    return {
-        'used_trials': total_trials,
-        'active_trials': active_trials,
-        'resettable_trials': resettable_trials,
-    }
-
-
 async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
     """Снимает доступ и удаляет переданные триал-подписки — единый код для ботовой
     кнопки «Сбросить триалы» и кабинетного per-user сброса.
@@ -2559,29 +2445,6 @@ async def get_subscription_server_ids(db: AsyncSession, subscription_id: int) ->
         select(SubscriptionServer.server_squad_id).where(SubscriptionServer.subscription_id == subscription_id)
     )
     return [row[0] for row in result.fetchall()]
-
-
-async def remove_subscription_servers(db: AsyncSession, subscription_id: int, server_squad_ids: list[int]) -> bool:
-    try:
-        from sqlalchemy import delete
-
-        from app.database.models import SubscriptionServer
-
-        await db.execute(
-            delete(SubscriptionServer).where(
-                SubscriptionServer.subscription_id == subscription_id,
-                SubscriptionServer.server_squad_id.in_(server_squad_ids),
-            )
-        )
-
-        await db.commit()
-        logger.info('🗑️ Удалены серверы из подписки', server_squad_ids=server_squad_ids, subscription_id=subscription_id)
-        return True
-
-    except Exception as e:
-        logger.error('Ошибка удаления серверов из подписки', error=e)
-        await db.rollback()
-        return False
 
 
 async def expire_subscription(db: AsyncSession, subscription: Subscription) -> Subscription:

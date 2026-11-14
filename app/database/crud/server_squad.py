@@ -5,11 +5,9 @@ from datetime import UTC, datetime
 import structlog
 from sqlalchemy import (
     String,
-    and_,
     cast,
     delete,
     func,
-    or_,
     select,
     text,
     update,
@@ -24,7 +22,6 @@ from app.database.models import (
     SubscriptionServer,
     SubscriptionStatus,
     Tariff,
-    User,
 )
 
 
@@ -234,27 +231,6 @@ async def update_server_squad(db: AsyncSession, server_id: int, **updates) -> Se
     return await get_server_squad_by_id(db, server_id)
 
 
-async def delete_server_squad(db: AsyncSession, server_id: int) -> bool:
-    connections_result = await db.execute(
-        select(func.count(SubscriptionServer.id)).where(SubscriptionServer.server_squad_id == server_id)
-    )
-    connections_count = connections_result.scalar()
-
-    if connections_count > 0:
-        logger.warning(
-            '⚠ Нельзя удалить сервер есть активные подключения',
-            server_id=server_id,
-            connections_count=connections_count,
-        )
-        return False
-
-    await db.execute(delete(ServerSquad).where(ServerSquad.id == server_id))
-    await db.commit()
-
-    logger.info('🗑️ Удален сервер', server_id=server_id)
-    return True
-
-
 async def sync_with_remnawave(db: AsyncSession, remnawave_squads: list[dict]) -> tuple[int, int, int]:
     created = 0
     updated = 0
@@ -385,33 +361,6 @@ async def sync_with_remnawave(db: AsyncSession, remnawave_squads: list[dict]) ->
 
     logger.info('🔄 Синхронизация завершена: + ~', created=created, updated=updated, removed=removed)
     return created, updated, removed
-
-
-async def get_server_connected_users(db: AsyncSession, server_id: int) -> list[User]:
-    server_uuid_result = await db.execute(select(ServerSquad.squad_uuid).where(ServerSquad.id == server_id))
-    server_uuid = server_uuid_result.scalar_one_or_none()
-
-    connection_filters = [SubscriptionServer.id.isnot(None)]
-
-    if server_uuid:
-        connection_filters.append(cast(Subscription.connected_squads, String).like(f'%"{server_uuid}"%'))
-
-    result = await db.execute(
-        select(User)
-        .join(Subscription, Subscription.user_id == User.id)
-        .outerjoin(
-            SubscriptionServer,
-            and_(
-                SubscriptionServer.subscription_id == Subscription.id,
-                SubscriptionServer.server_squad_id == server_id,
-            ),
-        )
-        .where(or_(*connection_filters))
-        .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
-        .order_by(User.id)
-    )
-
-    return result.scalars().unique().all()
 
 
 async def get_trial_eligible_server_squads(
@@ -675,40 +624,3 @@ async def ensure_servers_synced(db: AsyncSession) -> None:
 
     except Exception as e:
         logger.error('❌ Ошибка синхронизации серверов', error=e)
-
-
-async def sync_server_user_counts(db: AsyncSession) -> int:
-    try:
-        all_servers_result = await db.execute(select(ServerSquad.id, ServerSquad.squad_uuid))
-        all_servers = all_servers_result.fetchall()
-
-        logger.info('🔍 Найдено серверов для синхронизации', all_servers_count=len(all_servers))
-
-        updated_count = 0
-        for server_id, squad_uuid in all_servers:
-            count_result = await db.execute(
-                text("""
-                    SELECT COUNT(s.id)
-                    FROM subscriptions s
-                    WHERE s.status IN ('active', 'trial')
-                    AND s.connected_squads::text LIKE :uuid_pattern
-                """),
-                {'uuid_pattern': f'%"{squad_uuid}"%'},
-            )
-            actual_users = count_result.scalar() or 0
-
-            logger.info(
-                '📊 Сервер пользователей', server_id=server_id, squad_uuid=squad_uuid[:8], actual_users=actual_users
-            )
-
-            await db.execute(update(ServerSquad).where(ServerSquad.id == server_id).values(current_users=actual_users))
-            updated_count += 1
-
-        await db.commit()
-        logger.info('✅ Синхронизированы счетчики для серверов', updated_count=updated_count)
-        return updated_count
-
-    except Exception as e:
-        logger.error('Ошибка синхронизации счетчиков пользователей', error=e)
-        await db.rollback()
-        return 0

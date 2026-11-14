@@ -156,31 +156,6 @@ def test_cabinet_bonus_set_requires_at_least_one_component():
         _validate_create_payload(payload(traffic_gb=-5))
 
 
-def test_webapi_bonus_set_requires_at_least_one_component():
-    from app.webapi.routes.promocodes import _validate_create_payload
-
-    def payload(**kw):
-        base = dict(
-            code='COMBO',
-            type=PromoCodeType.BALANCE_AND_DAYS,
-            balance_bonus_kopeks=10000,
-            subscription_days=7,
-            traffic_gb=0,
-            valid_from=None,
-            valid_until=None,
-        )
-        base.update(kw)
-        return SimpleNamespace(**base)
-
-    _validate_create_payload(payload())
-
-    _validate_create_payload(payload(balance_bonus_kopeks=0))
-    _validate_create_payload(payload(subscription_days=0))
-
-    with pytest.raises(HTTPException):
-        _validate_create_payload(payload(balance_bonus_kopeks=0, subscription_days=0))
-
-
 async def test_combo_grants_traffic(monkeypatch):
     """Трафик из набора начисляется той же подписке, что и дни."""
     monkeypatch.setattr(

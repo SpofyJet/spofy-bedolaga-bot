@@ -29,11 +29,6 @@ class PinnedMessageUpdateRequest(BaseModel):
     media: PinnedMessageMedia | None = None
 
 
-class PinnedMessageSettingsRequest(BaseModel):
-    send_before_menu: bool | None = None
-    send_on_every_start: bool | None = None
-
-
 class PinnedMessageResponse(BaseModel):
     id: int
     content: str | None

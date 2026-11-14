@@ -36,13 +36,6 @@ class EventEmitter:
             except ValueError:
                 pass
 
-    def register_websocket(self, websocket: Any) -> None:
-        """Зарегистрировать WebSocket подключение."""
-        self._websocket_connections.add(websocket)
-        logger.debug(
-            'WebSocket connection registered. Total', websocket_connections_count=len(self._websocket_connections)
-        )
-
     def unregister_websocket(self, websocket: Any) -> None:
         """Отменить регистрацию WebSocket подключения."""
         self._websocket_connections.discard(websocket)

@@ -48,15 +48,6 @@ class SettingCategoryRef(BaseModel):
     label: str
 
 
-class SettingCategorySummary(BaseModel):
-    """Category summary."""
-
-    key: str
-    label: str
-    description: str = ''
-    items: int
-
-
 class SettingChoice(BaseModel):
     """Choice option for setting."""
 

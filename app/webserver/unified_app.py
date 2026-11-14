@@ -14,9 +14,9 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.services.disposable_email_service import disposable_email_service
 from app.services.payment_service import PaymentService
-from app.webapi.docs import add_redoc_endpoint
 
 from . import payments, telegram
+from .docs import add_redoc_endpoint
 
 
 logger = structlog.get_logger(__name__)
@@ -44,53 +44,48 @@ def _attach_docs_alias(app: FastAPI, docs_url: str | None) -> None:
 def _create_base_app(lifespan: Any = None) -> FastAPI:
     docs_config = settings.get_web_api_docs_config()
 
-    if settings.is_web_api_enabled():
-        from app.webapi.app import create_web_api_app
+    app = FastAPI(
+        title='Spofy Bedolaga Server',
+        version=settings.WEB_API_VERSION,
+        docs_url=docs_config.get('docs_url'),
+        redoc_url=None,
+        openapi_url=docs_config.get('openapi_url'),
+        lifespan=lifespan,
+    )
 
-        app = create_web_api_app(lifespan=lifespan)
-    else:
-        app = FastAPI(
-            title='Spofy Bedolaga Server',
-            version=settings.WEB_API_VERSION,
-            docs_url=docs_config.get('docs_url'),
-            redoc_url=None,
-            openapi_url=docs_config.get('openapi_url'),
-            lifespan=lifespan,
-        )
+    add_redoc_endpoint(
+        app,
+        redoc_url=docs_config.get('redoc_url'),
+        openapi_url=docs_config.get('openapi_url'),
+        title='Spofy Bedolaga Server',
+    )
 
-        add_redoc_endpoint(
-            app,
-            redoc_url=docs_config.get('redoc_url'),
-            openapi_url=docs_config.get('openapi_url'),
-            title='Spofy Bedolaga Server',
-        )
+    # Add cabinet routes even when web API is disabled
+    if settings.is_cabinet_enabled():
+        from fastapi.middleware.cors import CORSMiddleware
 
-        # Add cabinet routes even when web API is disabled
+        cabinet_origins = settings.get_cabinet_allowed_origins()
+        if '*' in cabinet_origins:
+            logger.warning('CORS wildcard with credentials is insecure, disabling credentials for wildcard')
+            app.add_middleware(
+                CORSMiddleware,
+                allow_origins=['*'],
+                allow_credentials=False,
+                allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+                allow_headers=['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Telegram-Init-Data'],
+            )
+        else:
+            app.add_middleware(
+                CORSMiddleware,
+                allow_origins=cabinet_origins,
+                allow_credentials=True,
+                allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+                allow_headers=['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Telegram-Init-Data'],
+            )
         if settings.is_cabinet_enabled():
-            from fastapi.middleware.cors import CORSMiddleware
+            from app.cabinet.routes import router as cabinet_router
 
-            cabinet_origins = settings.get_cabinet_allowed_origins()
-            if '*' in cabinet_origins:
-                logger.warning('CORS wildcard with credentials is insecure, disabling credentials for wildcard')
-                app.add_middleware(
-                    CORSMiddleware,
-                    allow_origins=['*'],
-                    allow_credentials=False,
-                    allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-                    allow_headers=['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Telegram-Init-Data'],
-                )
-            else:
-                app.add_middleware(
-                    CORSMiddleware,
-                    allow_origins=cabinet_origins,
-                    allow_credentials=True,
-                    allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-                    allow_headers=['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Telegram-Init-Data'],
-                )
-            if settings.is_cabinet_enabled():
-                from app.cabinet.routes import router as cabinet_router
-
-                app.include_router(cabinet_router)
+            app.include_router(cabinet_router)
 
     _attach_docs_alias(app, app.docs_url)
     return app
@@ -255,9 +250,7 @@ def create_unified_app(
     miniapp_mounted, miniapp_path = _mount_miniapp_static(app)
     _mount_uploads_static(app)
 
-    unified_health_path = '/health/unified' if settings.is_web_api_enabled() else '/health'
-
-    @app.get(unified_health_path)
+    @app.get('/health')
     async def unified_health() -> JSONResponse:
         webhook_path = settings.get_telegram_webhook_path() if enable_telegram_webhook else None
 
@@ -291,7 +284,6 @@ def create_unified_app(
             {
                 'status': 'ok',
                 'bot_run_mode': settings.get_bot_run_mode(),
-                'web_api_enabled': settings.is_web_api_enabled(),
                 'payment_webhooks': payment_state,
                 'telegram_webhook': telegram_state,
                 'remnawave_webhook': remnawave_webhook_state,

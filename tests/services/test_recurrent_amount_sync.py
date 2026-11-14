@@ -25,7 +25,6 @@ from app.database.models import (
     UserStatus,
     tariff_promo_groups,
 )
-from app.services import recurrent_amount as ra
 from app.services.recurrent_amount import (
     resolve_true_renewal_amount,
     sync_recurrent_bindings_after_price_change,
@@ -115,25 +114,6 @@ async def test_sync_never_raises_on_missing_subscription(monkeypatch):
     async with memory_session(monkeypatch, TABLES) as db:
         await _seed(db)
         await sync_recurrent_bindings_after_price_change(db, 999999)  # не бросает
-
-
-async def test_device_purchase_triggers_sync(monkeypatch):
-    """Докупка устройств вызывает согласование сумм из CRUD."""
-    async with memory_session(monkeypatch, TABLES) as db:
-        _, _, subscription = await _seed(db, device_limit=1)
-
-        called: list[int] = []
-
-        async def fake_sync(db_, subscription_id):
-            called.append(subscription_id)
-
-        monkeypatch.setattr(ra, 'sync_recurrent_bindings_after_price_change', fake_sync)
-
-        from app.database.crud.subscription import add_subscription_devices
-
-        await add_subscription_devices(db, subscription, 2)
-
-        assert called == [subscription.id]
 
 
 async def test_matching_amount_keeps_bindings(monkeypatch):

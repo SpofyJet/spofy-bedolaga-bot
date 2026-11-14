@@ -138,17 +138,6 @@ class BroadcastMediaRequest(BaseModel):
 # ============ Create ============
 
 
-class BroadcastCreateRequest(BaseModel):
-    """Request to create a broadcast."""
-
-    target: str
-    message_text: str = Field(..., min_length=1, max_length=4000)
-    selected_buttons: list[str] = Field(default_factory=lambda: ['home'])
-    custom_buttons: list[CustomBroadcastButton] = Field(default_factory=list, max_length=10)
-    media: BroadcastMediaRequest | None = None
-    category: str = Field(default='system', pattern='^(system|news|promo)$')
-
-
 # ============ Response ============
 
 

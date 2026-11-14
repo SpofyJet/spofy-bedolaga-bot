@@ -8,8 +8,6 @@ from app.database.models import (
     AdvertisingCampaignRegistration,
     ReferralEarning,
     ReferralRewardType,
-    Subscription,
-    SubscriptionStatus,
     User,
 )
 from app.utils.timezone import local_day_start
@@ -281,46 +279,6 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
         'month_earnings_days': int(month_days or 0),
         'by_level': by_level,
         'top_referrers': top_referrers,
-    }
-
-
-async def get_user_referral_stats(db: AsyncSession, user_id: int) -> dict:
-    invited_count_result = await db.execute(select(func.count(User.id)).where(User.referred_by_id == user_id))
-    invited_count = invited_count_result.scalar()
-
-    # Все четыре итога — одним запросом: общие суммы плюс месячный срез через
-    # FILTER, вместо двух отдельных round-trip к Postgres.
-    month_ago = datetime.now(UTC) - timedelta(days=30)
-    totals_result = await db.execute(
-        select(
-            func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
-            func.coalesce(func.sum(ReferralEarning.days_granted), 0),
-            func.coalesce(func.sum(ReferralEarning.amount_kopeks).filter(ReferralEarning.created_at >= month_ago), 0),
-            func.coalesce(func.sum(ReferralEarning.days_granted).filter(ReferralEarning.created_at >= month_ago), 0),
-        ).where(ReferralEarning.user_id == user_id, not_referee_directed())
-    )
-    total_earned, total_earned_days, month_earned, month_earned_days = totals_result.one()
-
-    active_referrals_result = await db.execute(
-        select(func.count(func.distinct(User.id)))
-        .join(Subscription, User.id == Subscription.user_id)
-        .where(
-            and_(
-                User.referred_by_id == user_id,
-                Subscription.status == SubscriptionStatus.ACTIVE.value,
-                Subscription.end_date > func.now(),
-            )
-        )
-    )
-    active_referrals = active_referrals_result.scalar() or 0
-
-    return {
-        'invited_count': invited_count,
-        'active_referrals': active_referrals,
-        'total_earned_kopeks': int(total_earned or 0),
-        'total_earned_days': int(total_earned_days or 0),
-        'month_earned_kopeks': int(month_earned or 0),
-        'month_earned_days': int(month_earned_days or 0),
     }
 
 

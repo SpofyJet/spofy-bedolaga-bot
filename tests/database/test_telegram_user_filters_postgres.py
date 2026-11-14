@@ -2,46 +2,17 @@
 
 from __future__ import annotations
 
-import inspect
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock
 
-import httpx
 import pytest
-from fastapi import FastAPI
 
 from app.cabinet.routes import admin_users
 from app.database.models import Subscription, SubscriptionEvent, Transaction, User
-from app.services import panel_online
-from app.webapi.dependencies import get_db_session, require_api_token
-from app.webapi.routes import subscription_events, transactions, users
 from tests.fixtures.postgres_db import postgres_session
 
 
 pytestmark = pytest.mark.postgres
 TABLES = [User.__table__]
-
-
-@asynccontextmanager
-async def _client(db, monkeypatch):
-    app = FastAPI()
-    app.include_router(admin_users.router, prefix='/cabinet')
-    app.include_router(users.router, prefix='/users')
-    app.include_router(transactions.router, prefix='/transactions')
-    app.include_router(subscription_events.router, prefix='/events')
-
-    async def session():
-        yield db
-
-    app.dependency_overrides[get_db_session] = session
-    app.dependency_overrides[admin_users.get_cabinet_db] = session
-    app.dependency_overrides[require_api_token] = lambda: None
-    permission = inspect.signature(admin_users.list_users).parameters['admin'].default.dependency
-    app.dependency_overrides[permission] = lambda: None
-    monkeypatch.setattr(panel_online, 'get_online_snapshot', AsyncMock(return_value=None))
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
-        yield client
 
 
 async def _seed_traffic(db):

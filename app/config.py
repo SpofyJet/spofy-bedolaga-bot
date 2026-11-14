@@ -1911,34 +1911,6 @@ class Settings(BaseSettings):
         sep = '&' if '?' in cabinet_url else '?'
         return f'{cabinet_url}{sep}ref={safe_code}'
 
-    def get_miniapp_branding(self) -> dict[str, dict[str, str | None]]:
-        def _clean(value: str | None) -> str | None:
-            if value is None:
-                return None
-            value_str = str(value).strip()
-            return value_str or None
-
-        name_en = _clean(self.MINIAPP_SERVICE_NAME_EN)
-        name_ru = _clean(self.MINIAPP_SERVICE_NAME_RU)
-        desc_en = _clean(self.MINIAPP_SERVICE_DESCRIPTION_EN)
-        desc_ru = _clean(self.MINIAPP_SERVICE_DESCRIPTION_RU)
-
-        default_name = name_en or name_ru or 'RemnaWave VPN'
-        default_description = desc_en or desc_ru or 'Secure & Fast Connection'
-
-        return {
-            'service_name': {
-                'default': default_name,
-                'en': name_en,
-                'ru': name_ru,
-            },
-            'service_description': {
-                'default': default_description,
-                'en': desc_en,
-                'ru': desc_ru,
-            },
-        }
-
     def is_traffic_selectable(self) -> bool:
         return self.TRAFFIC_SELECTION_MODE.lower() == 'selectable'
 
@@ -2485,29 +2457,6 @@ class Settings(BaseSettings):
             return topic_id
         return self.BACKUP_SEND_TOPIC_ID
 
-    def get_referral_settings(self) -> dict:
-        return {
-            'program_enabled': self.is_referral_program_enabled(),
-            'minimum_topup_kopeks': self.REFERRAL_MINIMUM_TOPUP_KOPEKS,
-            'first_topup_bonus_kopeks': self.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
-            'inviter_bonus_kopeks': self.REFERRAL_INVITER_BONUS_KOPEKS,
-            'commission_percent': self.REFERRAL_COMMISSION_PERCENT,
-            'first_payment_commission_percent': self.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT,
-            'recurring_commission_tiers': self.REFERRAL_RECURRING_COMMISSION_TIERS,
-            'notifications_enabled': self.REFERRAL_NOTIFICATIONS_ENABLED,
-            'reward_scheme': self.REFERRAL_REWARD_SCHEME,
-            'levels_mode': self.get_referral_levels_mode(),
-            'allow_days_target_choice': self.is_referral_days_target_choice_enabled(),
-            'allow_reward_kind_choice': self.is_referral_reward_kind_choice_enabled(),
-            # Через геттер, а не сырым полем: сырое отдавало бы 999 или 0 —
-            # значения, которые расчёт всё равно приводит к границам, так что
-            # потребители видели бы не ту глубину, по которой бот платит.
-            'max_level_depth': self.get_referral_max_level_depth(),
-            'withdrawal_enabled': self.REFERRAL_WITHDRAWAL_ENABLED,
-            'withdrawal_min_amount_kopeks': self.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS,
-            'withdrawal_cooldown_days': self.REFERRAL_WITHDRAWAL_COOLDOWN_DAYS,
-        }
-
     def is_referral_withdrawal_enabled(self) -> bool:
         """Проверяет, включена ли функция вывода реферального баланса."""
         return self.is_referral_program_enabled() and self.REFERRAL_WITHDRAWAL_ENABLED
@@ -2802,14 +2751,6 @@ class Settings(BaseSettings):
 
     def get_server_status_request_timeout(self) -> int:
         return max(1, self.SERVER_STATUS_REQUEST_TIMEOUT)
-
-    def is_web_api_enabled(self) -> bool:
-        return bool(self.WEB_API_ENABLED)
-
-    def get_web_api_allowed_origins(self) -> list[str]:
-        raw = (self.WEB_API_ALLOWED_ORIGINS or '').split(',')
-        origins = [origin.strip() for origin in raw if origin.strip()]
-        return origins or ['*']
 
     def get_web_api_docs_config(self) -> dict[str, str | None]:
         if self.WEB_API_DOCS_ENABLED:

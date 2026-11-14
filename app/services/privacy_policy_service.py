@@ -5,7 +5,6 @@ from app.config import settings
 from app.database.crud.privacy_policy import (
     get_privacy_policy,
     set_privacy_policy_enabled,
-    upsert_privacy_policy,
 )
 from app.database.models import PrivacyPolicy
 
@@ -71,24 +70,6 @@ class PrivacyPolicyService:
     async def is_policy_enabled(cls, db: AsyncSession, language: str) -> bool:
         policy = await cls.get_active_policy(db, language)
         return policy is not None
-
-    @classmethod
-    async def save_policy(
-        cls,
-        db: AsyncSession,
-        language: str,
-        content: str,
-    ) -> PrivacyPolicy:
-        lang = cls._normalize_language(language)
-        enable_if_new = True
-        policy = await upsert_privacy_policy(
-            db,
-            lang,
-            content,
-            enable_if_new=enable_if_new,
-        )
-        logger.info('✅ Политика конфиденциальности обновлена для языка', lang=lang)
-        return policy
 
     @classmethod
     async def set_enabled(
