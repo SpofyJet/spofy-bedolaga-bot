@@ -157,7 +157,7 @@ async def _get_admin_level(db: AsyncSession, admin: User) -> int:
 # Разделы, удалённые из кода. Их права остались в сохранённых ролях (bootstrap только
 # добавляет права), и редактор ролей присылает их обратно: отбрасываем молча, иначе
 # сохранение такой роли (на 15.11 — Admin с reachability:* и dpichecker:*) падает с 400.
-_RETIRED_PERMISSION_SECTIONS = frozenset({'reachability', 'dpichecker', 'coupons'})
+_RETIRED_PERMISSION_SECTIONS = frozenset({'reachability', 'dpichecker', 'coupons', 'news'})
 
 
 def _drop_retired_permissions(permissions: list[str]) -> list[str]:

@@ -23,12 +23,11 @@ import pytest
 from annotated_types import Ge, Gt, Le, Lt, MaxLen, MinLen
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 import app.cabinet.schemas as schemas_pkg
 from app.cabinet.dependencies import get_cabinet_db
 from app.cabinet.routes import admin_tariffs as route
-from app.cabinet.schemas.news import NewsUpdateRequest
 from app.cabinet.schemas.pinned_messages import PinnedMessageCreateRequest
 from app.database.models import (
     PromoGroup,
@@ -192,17 +191,6 @@ def test_pinned_message_can_be_media_only():
     )
     assert request.content == ''
     assert request.media is not None
-
-
-# ---------------------------------------------------------------------------
-# Новость: правка не пускает тег длиннее колонки
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(('field', 'value'), [('tag', 'x' * 51), ('excerpt', 'x' * 1001)])
-def test_news_update_enforces_same_lengths_as_create(field, value):
-    with pytest.raises(ValidationError):
-        NewsUpdateRequest(**{field: value})
 
 
 # ---------------------------------------------------------------------------
