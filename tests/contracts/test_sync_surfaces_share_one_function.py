@@ -16,7 +16,6 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BOT_ADMIN = ROOT / 'app' / 'handlers' / 'admin' / 'remnawave.py'
 BOT_USERS = ROOT / 'app' / 'handlers' / 'admin' / 'users.py'
 CABINET_RW = ROOT / 'app' / 'cabinet' / 'routes' / 'admin_remnawave.py'
 CABINET_USERS = ROOT / 'app' / 'cabinet' / 'routes' / 'admin_users.py'
@@ -34,14 +33,8 @@ def _function_source(path: Path, name: str) -> str:
 
 
 def test_full_sync_is_one_function_everywhere() -> None:
-    assert 'perform_full_sync(' in _function_source(BOT_ADMIN, 'sync_all_users')
     assert 'perform_full_sync(' in _function_source(AUTO_SYNC, '_perform_sync')
     assert 'perform_full_sync(' in _function_source(CABINET_RW, 'sync_full')
-
-
-def test_bot_full_sync_no_longer_imports_only() -> None:
-    body = _function_source(BOT_ADMIN, 'sync_all_users')
-    assert 'sync_users_from_panel(' not in body
 
 
 def test_full_sync_only_reads_the_panel() -> None:
@@ -50,12 +43,9 @@ def test_full_sync_only_reads_the_panel() -> None:
     assert 'sync_users_from_panel(' in body
     assert 'sync_users_to_panel(' not in body
     assert 'push_all_subscriptions(' not in body
-    summary = _function_source(BOT_ADMIN, 'sync_all_users')
-    assert 'to_panel' not in summary and 'в обе стороны' not in summary
 
 
 def test_from_panel_and_to_panel_share_service_methods() -> None:
-    assert 'sync_users_to_panel(' in _function_source(BOT_ADMIN, 'sync_users_to_panel')
     assert 'sync_users_to_panel(' in _function_source(CABINET_RW, 'sync_to_panel')
     assert 'sync_users_from_panel(' in _function_source(CABINET_RW, 'sync_from_panel')
 

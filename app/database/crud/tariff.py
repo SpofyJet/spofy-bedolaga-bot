@@ -3,7 +3,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import PromoGroup, Subscription, SubscriptionStatus, Tariff
+from app.database.models import PromoGroup, Subscription, Tariff
 from app.utils.panel_tag import normalize_panel_tag
 
 
@@ -105,27 +105,6 @@ async def get_trial_tariff(db: AsyncSession) -> Tariff | None:
     )
     result = await db.execute(query)
     return result.scalars().first()
-
-
-async def set_trial_tariff(db: AsyncSession, tariff_id: int) -> Tariff | None:
-    """Устанавливает тариф как триальный (снимает флаг с других тарифов)."""
-    # Снимаем флаг с всех тарифов
-    await db.execute(Tariff.__table__.update().values(is_trial_available=False))
-
-    # Устанавливаем флаг на выбранный тариф
-    tariff = await get_tariff_by_id(db, tariff_id)
-    if tariff:
-        tariff.is_trial_available = True
-        await db.commit()
-        await db.refresh(tariff)
-
-    return tariff
-
-
-async def clear_trial_tariff(db: AsyncSession) -> None:
-    """Снимает флаг триала со всех тарифов."""
-    await db.execute(Tariff.__table__.update().values(is_trial_available=False))
-    await db.commit()
 
 
 async def get_all_active_tariffs(db: AsyncSession) -> list[Tariff]:
@@ -466,18 +445,6 @@ async def get_tariff_subscriptions_count(db: AsyncSession, tariff_id: int) -> in
     return int(result.scalar_one())
 
 
-async def get_active_subscriptions_count_by_tariff_id(db: AsyncSession, tariff_id: int) -> int:
-    """Подсчитывает количество активных (active/trial) подписок на тарифе."""
-    active_statuses = [SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]
-    result = await db.execute(
-        select(func.count(Subscription.id)).where(
-            Subscription.tariff_id == tariff_id,
-            Subscription.status.in_(active_statuses),
-        )
-    )
-    return int(result.scalar_one())
-
-
 async def set_tariff_promo_groups(
     db: AsyncSession,
     tariff: Tariff,
@@ -495,57 +462,6 @@ async def set_tariff_promo_groups(
     await db.refresh(tariff)
 
     return tariff
-
-
-async def add_promo_group_to_tariff(
-    db: AsyncSession,
-    tariff: Tariff,
-    promo_group_id: int,
-) -> bool:
-    """Добавляет промогруппу к тарифу."""
-    promo_group = await db.get(PromoGroup, promo_group_id)
-    if not promo_group:
-        return False
-
-    if promo_group not in tariff.allowed_promo_groups:
-        tariff.allowed_promo_groups.append(promo_group)
-        await db.commit()
-
-    return True
-
-
-async def remove_promo_group_from_tariff(
-    db: AsyncSession,
-    tariff: Tariff,
-    promo_group_id: int,
-) -> bool:
-    """Удаляет промогруппу из тарифа."""
-    for pg in tariff.allowed_promo_groups:
-        if pg.id == promo_group_id:
-            tariff.allowed_promo_groups.remove(pg)
-            await db.commit()
-            return True
-    return False
-
-
-async def get_tariffs_with_subscriptions_count(
-    db: AsyncSession,
-    *,
-    include_inactive: bool = False,
-) -> list[tuple]:
-    """Получает тарифы с количеством подписок."""
-    query = (
-        select(Tariff, func.count(Subscription.id))
-        .outerjoin(Subscription, Subscription.tariff_id == Tariff.id)
-        .group_by(Tariff.id)
-        .order_by(Tariff.display_order, Tariff.id)
-    )
-
-    if not include_inactive:
-        query = query.where(Tariff.is_active.is_(True))
-
-    result = await db.execute(query)
-    return result.all()
 
 
 async def reorder_tariffs(

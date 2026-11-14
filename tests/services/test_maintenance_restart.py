@@ -124,15 +124,3 @@ class TestReferralKeysAreEditable:
         pinned = [line for line in lines if line.strip().startswith('REFERRAL_')]
 
         assert pinned == [], f'Эти ключи перестанут редактироваться из админки: {pinned}'
-
-    def test_settings_screen_names_locked_keys_instead_of_blaming_env(self, monkeypatch):
-        """Экран обязан отличать «залочено окружением» от «правьте .env всегда»."""
-        from app.handlers.admin import referrals
-
-        monkeypatch.setattr(referrals, 'ENV_OVERRIDE_KEYS', set())
-        assert 'кабинете' in referrals._settings_hint()
-
-        monkeypatch.setattr(referrals, 'ENV_OVERRIDE_KEYS', {'REFERRAL_COMMISSION_PERCENT'})
-        hint = referrals._settings_hint()
-        assert 'REFERRAL_COMMISSION_PERCENT' in hint
-        assert '.env' in hint

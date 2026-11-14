@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.subscription import get_expiring_subscriptions
-from app.database.crud.tariff import get_all_tariffs
 from app.database.crud.user import get_users_list
 from app.database.database import AsyncSessionLocal
 from app.database.models import (
@@ -28,26 +27,17 @@ from app.keyboards.admin import (
     get_admin_messages_keyboard,
     get_broadcast_button_config,
     get_broadcast_button_labels,
-    get_broadcast_history_keyboard,
     get_broadcast_media_keyboard,
     get_broadcast_target_keyboard,
     get_custom_criteria_keyboard,
     get_media_confirm_keyboard,
-    get_pinned_message_keyboard,
     get_updated_message_buttons_selector_keyboard_with_media,
 )
-from app.localization.texts import get_texts
 from app.services.broadcast_audience import BROADCAST_USER_STATUSES
-from app.services.pinned_message_service import (
-    broadcast_pinned_message,
-    get_active_pinned_message,
-    set_active_pinned_message,
-    unpin_active_pinned_message,
-)
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 from app.utils.miniapp_buttons import BUTTON_KEY_TO_CABINET_PATH, build_miniapp_or_callback_button
-from app.utils.timezone import format_local_datetime, local_day_start
+from app.utils.timezone import local_day_start
 
 
 logger = structlog.get_logger(__name__)
@@ -260,410 +250,11 @@ async def show_messages_menu(callback: types.CallbackQuery, db_user: User, db: A
 
 @admin_required
 @error_handler
-async def show_pinned_message_menu(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext,
-):
-    await state.clear()
-    pinned_message = await get_active_pinned_message(db)
-
-    if pinned_message:
-        content_preview = html.escape(pinned_message.content or '')
-        last_updated = pinned_message.updated_at or pinned_message.created_at
-        timestamp_text = format_local_datetime(last_updated, '%d.%m.%Y %H:%M') if last_updated else '—'
-        media_line = ''
-        if pinned_message.media_type:
-            media_label = 'Фото' if pinned_message.media_type == 'photo' else 'Видео'
-            media_line = f'📎 Медиа: {media_label}\n'
-        position_line = '⬆️ Отправлять перед меню' if pinned_message.send_before_menu else '⬇️ Отправлять после меню'
-        start_mode_line = (
-            '🔁 При каждом /start' if pinned_message.send_on_every_start else '🚫 Только один раз и при обновлении'
-        )
-        body = (
-            '📌 <b>Закрепленное сообщение</b>\n\n'
-            '📝 Текущий текст:\n'
-            f'<code>{content_preview}</code>\n\n'
-            f'{media_line}'
-            f'{position_line}\n'
-            f'{start_mode_line}\n'
-            f'🕒 Обновлено: {timestamp_text}'
-        )
-    else:
-        body = (
-            '📌 <b>Закрепленное сообщение</b>\n\n'
-            'Сообщение не задано. Отправьте новый текст, чтобы разослать и закрепить его у пользователей.'
-        )
-
-    await callback.message.edit_text(
-        body,
-        reply_markup=get_pinned_message_keyboard(
-            db_user.language,
-            send_before_menu=getattr(pinned_message, 'send_before_menu', True),
-            send_on_every_start=getattr(pinned_message, 'send_on_every_start', True),
-        ),
-        parse_mode='HTML',
-    )
-    await callback.answer()
-
-
-@admin_required
-@error_handler
-async def prompt_pinned_message_update(
-    callback: types.CallbackQuery,
-    db_user: User,
-    state: FSMContext,
-):
-    await state.set_state(AdminStates.editing_pinned_message)
-    await callback.message.edit_text(
-        '✏️ <b>Новое закрепленное сообщение</b>\n\n'
-        'Пришлите текст, фото или видео, которое нужно закрепить.\n'
-        'Бот отправит его всем активным пользователям, открепит старое и закрепит новое без уведомлений.',
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_pinned_message')]]
-        ),
-        parse_mode='HTML',
-    )
-    await callback.answer()
-
-
-@admin_required
-@error_handler
-async def toggle_pinned_message_position(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext,
-):
-    pinned_message = await get_active_pinned_message(db)
-    if not pinned_message:
-        await callback.answer('Сначала задайте закрепленное сообщение', show_alert=True)
-        return
-
-    pinned_message.send_before_menu = not pinned_message.send_before_menu
-    pinned_message.updated_at = datetime.now(UTC)
-    await db.commit()
-
-    await show_pinned_message_menu(callback, db_user, db, state)
-
-
-@admin_required
-@error_handler
-async def toggle_pinned_message_start_mode(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext,
-):
-    pinned_message = await get_active_pinned_message(db)
-    if not pinned_message:
-        await callback.answer('Сначала задайте закрепленное сообщение', show_alert=True)
-        return
-
-    pinned_message.send_on_every_start = not pinned_message.send_on_every_start
-    pinned_message.updated_at = datetime.now(UTC)
-    await db.commit()
-
-    await show_pinned_message_menu(callback, db_user, db, state)
-
-
-@admin_required
-@error_handler
-async def delete_pinned_message(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext,
-):
-    pinned_message = await get_active_pinned_message(db)
-    if not pinned_message:
-        await callback.answer('Закрепленное сообщение уже отсутствует', show_alert=True)
-        return
-
-    await callback.message.edit_text(
-        '🗑️ <b>Удаление закрепленного сообщения</b>\n\nПодождите, пока бот открепит сообщение у пользователей...',
-        parse_mode='HTML',
-    )
-
-    unpinned_count, failed_count, deleted = await unpin_active_pinned_message(
-        callback.bot,
-        db,
-    )
-
-    if not deleted:
-        await callback.message.edit_text(
-            '❌ Не удалось найти активное закрепленное сообщение для удаления',
-            reply_markup=get_admin_messages_keyboard(db_user.language),
-            parse_mode='HTML',
-        )
-        await state.clear()
-        return
-
-    total = unpinned_count + failed_count
-    await callback.message.edit_text(
-        '✅ <b>Закрепленное сообщение удалено</b>\n\n'
-        f'👥 Чатов обработано: {total}\n'
-        f'✅ Откреплено: {unpinned_count}\n'
-        f'⚠️ Ошибок: {failed_count}\n\n'
-        'Новое сообщение можно задать кнопкой "Обновить".',
-        reply_markup=get_admin_messages_keyboard(db_user.language),
-        parse_mode='HTML',
-    )
-    await state.clear()
-
-
-@admin_required
-@error_handler
-async def process_pinned_message_update(
-    message: types.Message,
-    db_user: User,
-    state: FSMContext,
-    db: AsyncSession,
-):
-    texts = get_texts(db_user.language)
-    media_type: str | None = None
-    media_file_id: str | None = None
-
-    if message.photo:
-        media_type = 'photo'
-        media_file_id = message.photo[-1].file_id
-    elif message.video:
-        media_type = 'video'
-        media_file_id = message.video.file_id
-
-    pinned_text = message.html_text or message.caption_html or message.text or message.caption or ''
-
-    if not pinned_text and not media_file_id:
-        await message.answer(
-            texts.t('ADMIN_PINNED_NO_CONTENT', '❌ Не удалось прочитать текст или медиа в сообщении, попробуйте снова.')
-        )
-        return
-
-    try:
-        pinned_message = await set_active_pinned_message(
-            db,
-            pinned_text,
-            db_user.id,
-            media_type=media_type,
-            media_file_id=media_file_id,
-        )
-    except ValueError as validation_error:
-        await message.answer(f'❌ {validation_error}')
-        return
-
-    # Сообщение сохранено, спрашиваем о рассылке
-    from app.keyboards.admin import get_pinned_broadcast_confirm_keyboard
-    from app.states import AdminStates
-
-    await message.answer(
-        texts.t(
-            'ADMIN_PINNED_SAVED_ASK_BROADCAST',
-            '📌 <b>Сообщение сохранено!</b>\n\n'
-            'Выберите, как доставить сообщение пользователям:\n\n'
-            '• <b>Разослать сейчас</b> — отправит и закрепит у всех активных пользователей\n'
-            '• <b>Только при /start</b> — пользователи увидят при следующем запуске бота',
-        ),
-        reply_markup=get_pinned_broadcast_confirm_keyboard(db_user.language, pinned_message.id),
-        parse_mode='HTML',
-    )
-    await state.set_state(AdminStates.confirming_pinned_broadcast)
-
-
-@admin_required
-@error_handler
-async def handle_pinned_broadcast_now(
-    callback: types.CallbackQuery,
-    db_user: User,
-    state: FSMContext,
-    db: AsyncSession,
-):
-    """Разослать закреплённое сообщение сейчас всем пользователям."""
-    texts = get_texts(db_user.language)
-
-    # Получаем ID сообщения из callback_data
-    pinned_message_id = int(callback.data.split(':')[1])
-
-    # Получаем сообщение из БД
-    from sqlalchemy import select
-
-    from app.database.models import PinnedMessage
-
-    result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == pinned_message_id))
-    pinned_message = result.scalar_one_or_none()
-
-    if not pinned_message:
-        await callback.answer('❌ Сообщение не найдено', show_alert=True)
-        await state.clear()
-        return
-
-    await callback.message.edit_text(
-        texts.t('ADMIN_PINNED_SAVING', '📌 Сообщение сохранено. Начинаю отправку и закрепление у пользователей...'),
-        parse_mode='HTML',
-    )
-
-    sent_count, failed_count = await broadcast_pinned_message(
-        callback.bot,
-        db,
-        pinned_message,
-    )
-
-    total = sent_count + failed_count
-    await callback.message.edit_text(
-        texts.t(
-            'ADMIN_PINNED_UPDATED',
-            '✅ <b>Закрепленное сообщение обновлено</b>\n\n'
-            '👥 Получателей: {total}\n'
-            '✅ Отправлено: {sent}\n'
-            '⚠️ Ошибок: {failed}',
-        ).format(total=total, sent=sent_count, failed=failed_count),
-        reply_markup=get_admin_messages_keyboard(db_user.language),
-        parse_mode='HTML',
-    )
-    await state.clear()
-
-
-@admin_required
-@error_handler
-async def handle_pinned_broadcast_skip(
-    callback: types.CallbackQuery,
-    db_user: User,
-    state: FSMContext,
-    db: AsyncSession,
-):
-    """Пропустить рассылку — пользователи увидят при /start."""
-    texts = get_texts(db_user.language)
-
-    await callback.message.edit_text(
-        texts.t(
-            'ADMIN_PINNED_SAVED_NO_BROADCAST',
-            '✅ <b>Закрепленное сообщение сохранено</b>\n\n'
-            'Рассылка не выполнена. Пользователи увидят сообщение при следующем вводе /start.',
-        ),
-        reply_markup=get_admin_messages_keyboard(db_user.language),
-        parse_mode='HTML',
-    )
-    await state.clear()
-
-
-@admin_required
-@error_handler
 async def show_broadcast_targets(callback: types.CallbackQuery, db_user: User, state: FSMContext):
     await callback.message.edit_text(
         '🎯 <b>Выбор целевой аудитории</b>\n\nВыберите категорию пользователей для рассылки:',
         reply_markup=get_broadcast_target_keyboard(db_user.language),
         parse_mode='HTML',
-    )
-    await callback.answer()
-
-
-@admin_required
-@error_handler
-async def show_tariff_filter(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    """Показывает список тарифов для фильтрации рассылки."""
-    tariffs = await get_all_tariffs(db, include_inactive=False)
-
-    if not tariffs:
-        await callback.message.edit_text(
-            '❌ <b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_msg_by_sub')]]
-            ),
-            parse_mode='HTML',
-        )
-        await callback.answer()
-        return
-
-    # Получаем количество подписчиков на каждом тарифе
-    tariff_counts = {}
-    for tariff in tariffs:
-        count_query = select(func.count(Subscription.id)).where(
-            Subscription.tariff_id == tariff.id,
-            Subscription.status == SubscriptionStatus.ACTIVE.value,
-        )
-        result = await db.execute(count_query)
-        tariff_counts[tariff.id] = result.scalar() or 0
-
-    buttons = []
-    for tariff in tariffs:
-        count = tariff_counts.get(tariff.id, 0)
-        buttons.append(
-            [
-                types.InlineKeyboardButton(
-                    text=f'{tariff.name} ({count} чел.)', callback_data=f'broadcast_tariff_{tariff.id}'
-                )
-            ]
-        )
-
-    buttons.append([types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_msg_by_sub')])
-
-    await callback.message.edit_text(
-        '📦 <b>Рассылка по тарифу</b>\n\nВыберите тариф для рассылки пользователям с активной подпиской на этот тариф:',
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
-        parse_mode='HTML',
-    )
-    await callback.answer()
-
-
-@admin_required
-@error_handler
-async def show_messages_history(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    page = 1
-    if '_page_' in callback.data:
-        page = int(callback.data.split('_page_')[1])
-
-    limit = 10
-    offset = (page - 1) * limit
-
-    stmt = select(BroadcastHistory).order_by(BroadcastHistory.created_at.desc()).offset(offset).limit(limit)
-    result = await db.execute(stmt)
-    broadcasts = result.scalars().all()
-
-    count_stmt = select(func.count(BroadcastHistory.id))
-    count_result = await db.execute(count_stmt)
-    total_count = count_result.scalar() or 0
-    total_pages = (total_count + limit - 1) // limit
-
-    if not broadcasts:
-        text = """
-📋 <b>История рассылок</b>
-
-❌ История рассылок пуста.
-Отправьте первую рассылку, чтобы увидеть её здесь.
-"""
-        keyboard = [[types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_messages')]]
-    else:
-        text = f'📋 <b>История рассылок</b> (страница {page}/{total_pages})\n\n'
-
-        for broadcast in broadcasts:
-            status_emoji = '✅' if broadcast.status == 'completed' else '❌' if broadcast.status == 'failed' else '⏳'
-            success_rate = (
-                round((broadcast.sent_count / broadcast.total_count * 100), 1) if broadcast.total_count > 0 else 0
-            )
-
-            message_preview = (
-                broadcast.message_text[:100] + '...'
-                if broadcast.message_text and len(broadcast.message_text) > 100
-                else (broadcast.message_text or '📊 Опрос')
-            )
-
-            import html
-
-            message_preview = html.escape(message_preview)
-
-            text += f"""
-{status_emoji} <b>{format_local_datetime(broadcast.created_at, '%d.%m.%Y %H:%M')}</b>
-📊 Отправлено: {broadcast.sent_count}/{broadcast.total_count} ({success_rate}%)
-🎯 Аудитория: {get_target_name(broadcast.target_type)}
-👤 Админ: {html.escape(broadcast.admin_name or '')}
-📝 Сообщение: {message_preview}
-━━━━━━━━━━━━━━━━━━━━━━━
-"""
-
-        keyboard = get_broadcast_history_keyboard(page, total_pages, db_user.language).inline_keyboard
-
-    await callback.message.edit_text(
-        text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode='HTML'
     )
     await callback.answer()
 
@@ -2112,19 +1703,10 @@ def get_target_display_name(target: str) -> str:
 
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_messages_menu, F.data == 'admin_messages')
-    dp.callback_query.register(show_pinned_message_menu, F.data == 'admin_pinned_message')
-    dp.callback_query.register(toggle_pinned_message_position, F.data == 'admin_pinned_message_position')
-    dp.callback_query.register(toggle_pinned_message_start_mode, F.data == 'admin_pinned_message_start_mode')
-    dp.callback_query.register(delete_pinned_message, F.data == 'admin_pinned_message_delete')
-    dp.callback_query.register(prompt_pinned_message_update, F.data == 'admin_pinned_message_edit')
-    dp.callback_query.register(handle_pinned_broadcast_now, F.data.startswith('admin_pinned_broadcast_now:'))
-    dp.callback_query.register(handle_pinned_broadcast_skip, F.data.startswith('admin_pinned_broadcast_skip:'))
     dp.callback_query.register(show_broadcast_targets, F.data.in_(['admin_msg_all', 'admin_msg_by_sub']))
-    dp.callback_query.register(show_tariff_filter, F.data == 'broadcast_by_tariff')
     dp.callback_query.register(select_broadcast_target, F.data.startswith('broadcast_'))
     dp.callback_query.register(confirm_broadcast, F.data == 'admin_confirm_broadcast')
 
-    dp.callback_query.register(show_messages_history, F.data.startswith('admin_msg_history'))
     dp.callback_query.register(show_custom_broadcast, F.data == 'admin_msg_custom')
     dp.callback_query.register(select_custom_criteria, F.data.startswith('criteria_'))
 
@@ -2137,4 +1719,3 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_change_media, F.data == 'change_media')
     dp.message.register(process_broadcast_message, AdminStates.waiting_for_broadcast_message)
     dp.message.register(process_broadcast_media, AdminStates.waiting_for_broadcast_media)
-    dp.message.register(process_pinned_message_update, AdminStates.editing_pinned_message)

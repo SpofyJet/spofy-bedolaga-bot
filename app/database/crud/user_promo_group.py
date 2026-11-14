@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import and_, desc, func, select
+from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -202,25 +202,3 @@ async def has_user_promo_group(db: AsyncSession, user_id: int, promo_group_id: i
         )
     )
     return result.scalar_one_or_none() is not None
-
-
-async def count_user_promo_groups(db: AsyncSession, user_id: int) -> int:
-    """
-    Подсчитывает количество промогрупп у пользователя.
-
-    Args:
-        db: Сессия БД
-        user_id: ID пользователя
-
-    Returns:
-        Количество промогрупп
-    """
-    try:
-        result = await db.execute(
-            select(func.count()).select_from(UserPromoGroup).where(UserPromoGroup.user_id == user_id)
-        )
-        return result.scalar_one()
-
-    except Exception as error:
-        logger.error('Ошибка подсчета промогрупп пользователя', error=error)
-        return 0

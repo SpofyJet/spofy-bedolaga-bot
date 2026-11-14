@@ -20,9 +20,7 @@ a few ordering invariants that are easy to break silently during refactors:
 import inspect
 
 import app.handlers.start as start_module
-from app.handlers.admin import coupons as admin_coupons
 from app.services import coupon_service
-from app.states import AdminStates
 
 
 START_SOURCE = inspect.getsource(start_module)
@@ -88,42 +86,3 @@ def test_redeem_aborts_when_remnawave_sync_returns_none() -> None:
         'create_remnawave_user swallows errors and returns None without '
         'committing — ignoring that burns the coupon during any panel outage'
     )
-
-
-def test_revoke_confirm_registered_before_revoke_prefix() -> None:
-    source = inspect.getsource(admin_coupons.register_handlers)
-    confirm = source.index("'admin_coupon_revoke_confirm_'")
-    revoke = source.index("'admin_coupon_revoke_'")
-    assert confirm < revoke, "startswith('admin_coupon_revoke_') also matches confirmation callbacks"
-
-
-def test_create_confirm_is_guarded_against_stale_buttons_and_double_taps() -> None:
-    source = inspect.getsource(admin_coupons.confirm_coupon_batch_creation)
-    # Stale confirm buttons from old messages must be rejected by FSM state
-    assert 'creating_coupon_batch_expiry.state' in source
-    # The wizard state must be consumed BEFORE the slow batch insert
-    clear = source.index('await state.clear()')
-    create = source.index('await create_coupon_batch(')
-    assert clear < create, 'a double-tap on the confirm button must not create the batch twice'
-    # FSM check→clear is not atomic across awaits (aiogram dispatches updates
-    # concurrently), so a synchronous set guard must close the double-tap window:
-    # the membership check and .add() run with no await between them.
-    assert isinstance(admin_coupons._batch_creation_in_progress, set)
-    add = source.index('_batch_creation_in_progress.add(')
-    check = source.index('in _batch_creation_in_progress')
-    guarded_create = source.index('await create_coupon_batch(')
-    assert check < add < guarded_create, 'the in-flight guard must be claimed before the batch insert'
-    # And released in a finally so a failure can't wedge the admin out forever.
-    assert '_batch_creation_in_progress.discard(' in source
-    assert 'finally:' in source
-
-
-def test_admin_states_for_coupon_creation_exist() -> None:
-    for name in (
-        'creating_coupon_batch_days',
-        'creating_coupon_batch_count',
-        'creating_coupon_batch_name',
-        'creating_coupon_batch_price',
-        'creating_coupon_batch_expiry',
-    ):
-        assert hasattr(AdminStates, name)

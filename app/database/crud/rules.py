@@ -134,35 +134,3 @@ async def restore_rules_version(db: AsyncSession, rule_id: int, language: str = 
         logger.error('❌ Ошибка при восстановлении правил ID', rule_id=rule_id, error=e)
         await db.rollback()
         raise
-
-
-async def get_rules_statistics(db: AsyncSession) -> dict:
-    try:
-        active_result = await db.execute(select(ServiceRule).where(ServiceRule.is_active == True))
-        active_rules = active_result.scalars().all()
-
-        all_result = await db.execute(select(ServiceRule))
-        all_rules = all_result.scalars().all()
-
-        languages_stats = {}
-        for rule in active_rules:
-            lang = rule.language
-            if lang not in languages_stats:
-                languages_stats[lang] = {'active_count': 0, 'last_updated': None, 'content_length': 0}
-
-            languages_stats[lang]['active_count'] += 1
-            languages_stats[lang]['content_length'] = len(rule.content)
-
-            if not languages_stats[lang]['last_updated'] or rule.updated_at > languages_stats[lang]['last_updated']:
-                languages_stats[lang]['last_updated'] = rule.updated_at
-
-        return {
-            'total_active': len(active_rules),
-            'total_all_time': len(all_rules),
-            'languages': languages_stats,
-            'total_languages': len(languages_stats),
-        }
-
-    except Exception as e:
-        logger.error('❌ Ошибка при получении статистики правил', error=e)
-        return {'total_active': 0, 'total_all_time': 0, 'languages': {}, 'total_languages': 0, 'error': str(e)}

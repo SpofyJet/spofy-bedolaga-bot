@@ -260,9 +260,5 @@ async def refresh_rules_cache(language: str = DEFAULT_LANGUAGE) -> None:
     await get_rules_from_db(language)
 
 
-def clear_rules_cache() -> None:
-    _cached_rules.clear()
-
-
 def reload_locales() -> None:
     clear_locale_cache()

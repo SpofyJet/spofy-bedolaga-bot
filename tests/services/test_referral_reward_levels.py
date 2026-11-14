@@ -1001,9 +1001,8 @@ class TestLegacyImportPercent:
         import inspect
 
         from app.cabinet.routes import admin_partners
-        from app.handlers.admin import referral_levels
 
-        for handler in (admin_partners.import_legacy_referral_settings, referral_levels.import_legacy_settings):
+        for handler in (admin_partners.import_legacy_referral_settings,):
             source = inspect.getsource(handler)
             assert 'legacy_percent_for_import()' in source
             # Именно обращение к настройке, а не упоминание её имени в докстринге.

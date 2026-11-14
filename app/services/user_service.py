@@ -4,9 +4,8 @@ from typing import Any
 
 import structlog
 from aiogram import Bot, types
-from sqlalchemy import delete, exists, func, select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database.crud.promo_group import get_promo_group_by_id
@@ -14,8 +13,6 @@ from app.database.crud.subscription import get_subscription_by_user_id
 from app.database.crud.transaction import get_user_transactions_count
 from app.database.crud.user import (
     add_user_balance,
-    get_inactive_users,
-    get_referrals,
     get_user_by_id,
     get_users_count,
     get_users_list,
@@ -25,7 +22,6 @@ from app.database.crud.user import (
 )
 from app.database.models import (
     AdvertisingCampaign,
-    AdvertisingCampaignRegistration,
     BroadcastHistory,
     CryptoBotPayment,
     Pay2328Payment,
@@ -241,204 +237,6 @@ class UserService:
                 'has_prev': False,
             }
 
-    async def get_users_ready_to_renew(
-        self,
-        db: AsyncSession,
-        min_balance_kopeks: int,
-        page: int = 1,
-        limit: int = 10,
-    ) -> dict[str, Any]:
-        """Возвращает пользователей с истекшей подпиской и достаточным балансом."""
-        try:
-            offset = (page - 1) * limit
-            now = datetime.now(UTC)
-
-            base_filters = [
-                User.balance_kopeks >= min_balance_kopeks,
-                Subscription.end_date.isnot(None),
-                Subscription.end_date <= now,
-            ]
-
-            query = (
-                select(User)
-                .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
-                .join(Subscription, Subscription.user_id == User.id)
-                .where(*base_filters)
-                .order_by(User.balance_kopeks.desc(), Subscription.end_date.asc())
-                .offset(offset)
-                .limit(limit)
-            )
-            result = await db.execute(query)
-            users = result.scalars().unique().all()
-
-            count_query = (
-                select(func.count(User.id)).join(Subscription, Subscription.user_id == User.id).where(*base_filters)
-            )
-            total_count = (await db.execute(count_query)).scalar() or 0
-            total_pages = (total_count + limit - 1) // limit if total_count else 0
-
-            return {
-                'users': users,
-                'current_page': page,
-                'total_pages': total_pages,
-                'total_count': total_count,
-            }
-
-        except Exception as e:
-            logger.error('Ошибка получения пользователей для продления', error=e)
-            return {
-                'users': [],
-                'current_page': 1,
-                'total_pages': 1,
-                'total_count': 0,
-            }
-
-    async def get_potential_customers(
-        self,
-        db: AsyncSession,
-        min_balance_kopeks: int,
-        page: int = 1,
-        limit: int = 10,
-    ) -> dict[str, Any]:
-        """Возвращает пользователей без активной подписки с достаточным балансом."""
-        try:
-            offset = (page - 1) * limit
-
-            # Фильтры: нет активной подписки И баланс >= порога
-            base_filters = [
-                User.balance_kopeks >= min_balance_kopeks,
-            ]
-
-            # Subquery: user has at least one active/trial subscription
-            active_sub_exists = exists().where(
-                Subscription.user_id == User.id,
-                Subscription.status.in_(['active', 'trial']),
-            )
-
-            # Основной запрос: пользователи БЕЗ активных подписок
-            query = (
-                select(User)
-                .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
-                .where(
-                    *base_filters,
-                    ~active_sub_exists,
-                )
-                .order_by(User.balance_kopeks.desc(), User.created_at.desc())
-                .offset(offset)
-                .limit(limit)
-            )
-            result = await db.execute(query)
-            users = result.scalars().unique().all()
-
-            # Запрос для подсчета общего количества
-            count_query = select(func.count(User.id)).where(
-                *base_filters,
-                ~active_sub_exists,
-            )
-            total_count = (await db.execute(count_query)).scalar() or 0
-            total_pages = (total_count + limit - 1) // limit if total_count else 0
-
-            return {
-                'users': users,
-                'current_page': page,
-                'total_pages': total_pages,
-                'total_count': total_count,
-            }
-
-        except Exception as e:
-            logger.error('Ошибка получения потенциальных клиентов', error=e)
-            return {
-                'users': [],
-                'current_page': 1,
-                'total_pages': 1,
-                'total_count': 0,
-            }
-
-    async def get_users_by_campaign_page(self, db: AsyncSession, page: int = 1, limit: int = 20) -> dict[str, Any]:
-        try:
-            offset = (page - 1) * limit
-
-            campaign_ranked = select(
-                AdvertisingCampaignRegistration.user_id.label('user_id'),
-                AdvertisingCampaignRegistration.campaign_id.label('campaign_id'),
-                AdvertisingCampaignRegistration.created_at.label('created_at'),
-                func.row_number()
-                .over(
-                    partition_by=AdvertisingCampaignRegistration.user_id,
-                    order_by=AdvertisingCampaignRegistration.created_at.desc(),
-                )
-                .label('rn'),
-            ).cte('campaign_ranked')
-
-            latest_campaign = (
-                select(
-                    campaign_ranked.c.user_id,
-                    campaign_ranked.c.campaign_id,
-                    campaign_ranked.c.created_at,
-                )
-                .where(campaign_ranked.c.rn == 1)
-                .subquery()
-            )
-
-            query = (
-                select(
-                    User,
-                    AdvertisingCampaign.name.label('campaign_name'),
-                    latest_campaign.c.created_at,
-                )
-                .join(latest_campaign, latest_campaign.c.user_id == User.id)
-                .join(
-                    AdvertisingCampaign,
-                    AdvertisingCampaign.id == latest_campaign.c.campaign_id,
-                )
-                .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
-                .order_by(
-                    AdvertisingCampaign.name.asc(),
-                    latest_campaign.c.created_at.desc(),
-                )
-                .offset(offset)
-                .limit(limit)
-            )
-
-            result = await db.execute(query)
-            rows = result.all()
-
-            users = [row[0] for row in rows]
-            campaign_map = {
-                row[0].id: {
-                    'campaign_name': row[1],
-                    'registered_at': row[2],
-                }
-                for row in rows
-            }
-
-            total_stmt = select(func.count()).select_from(latest_campaign)
-            total_result = await db.execute(total_stmt)
-            total_count = total_result.scalar() or 0
-            total_pages = (total_count + limit - 1) // limit if total_count else 1
-
-            return {
-                'users': users,
-                'campaigns': campaign_map,
-                'current_page': page,
-                'total_pages': total_pages,
-                'total_count': total_count,
-                'has_next': page < total_pages,
-                'has_prev': page > 1,
-            }
-
-        except Exception as e:
-            logger.error('Ошибка получения пользователей по кампаниям', error=e)
-            return {
-                'users': [],
-                'campaigns': {},
-                'current_page': 1,
-                'total_pages': 1,
-                'total_count': 0,
-                'has_next': False,
-                'has_prev': False,
-            }
-
     async def update_user_balance(
         self,
         db: AsyncSession,
@@ -536,60 +334,6 @@ class UserService:
             await db.rollback()
             logger.error('Ошибка обновления промогруппы пользователя', user_id=user_id, error=e)
             return False, None, None, None
-
-    async def update_user_referrals(
-        self,
-        db: AsyncSession,
-        user_id: int,
-        referral_user_ids: list[int],
-        admin_id: int,
-    ) -> tuple[bool, dict[str, int]]:
-        try:
-            user = await get_user_by_id(db, user_id)
-            if not user:
-                return False, {'error': 'user_not_found'}
-
-            unique_ids: list[int] = []
-            for referral_id in referral_user_ids:
-                if referral_id == user_id:
-                    continue
-                if referral_id not in unique_ids:
-                    unique_ids.append(referral_id)
-
-            current_referrals = await get_referrals(db, user_id)
-            current_ids = {ref.id for ref in current_referrals}
-
-            to_assign = unique_ids
-            to_remove = [rid for rid in current_ids if rid not in unique_ids]
-            to_add = [rid for rid in unique_ids if rid not in current_ids]
-
-            if to_assign:
-                await db.execute(update(User).where(User.id.in_(to_assign)).values(referred_by_id=user_id))
-
-            if to_remove:
-                await db.execute(update(User).where(User.id.in_(to_remove)).values(referred_by_id=None))
-
-            await db.commit()
-
-            logger.info(
-                'Админ обновил рефералов пользователя',
-                admin_id=admin_id,
-                user_id=user_id,
-                to_add_count=len(to_add),
-                to_remove_count=len(to_remove),
-                unique_ids_count=len(unique_ids),
-            )
-
-            return True, {
-                'added': len(to_add),
-                'removed': len(to_remove),
-                'total': len(unique_ids),
-            }
-
-        except Exception as e:
-            await db.rollback()
-            logger.error('Ошибка обновления рефералов пользователя', user_id=user_id, e=e)
-            return False, {'error': 'update_failed'}
 
     async def block_user(
         self, db: AsyncSession, user_id: int, admin_id: int, reason: str = 'Заблокирован администратором'
@@ -1197,38 +941,3 @@ class UserService:
                 'new_week': 0,
                 'new_month': 0,
             }
-
-    async def cleanup_inactive_users(self, db: AsyncSession, months: int = None) -> tuple[int, int]:
-        """Clean up inactive users, skipping those with active subscriptions.
-
-        Returns:
-            Tuple of (deleted_count, skipped_active_sub_count).
-        """
-        try:
-            if months is None:
-                months = settings.INACTIVE_USER_DELETE_MONTHS
-
-            inactive_users = await get_inactive_users(db, months)
-            deleted_count = 0
-            skipped_active_sub = 0
-
-            for user in inactive_users:
-                # Skip users with active paid subscriptions
-                if any(sub.is_active for sub in (getattr(user, 'subscriptions', None) or [])):
-                    skipped_active_sub += 1
-                    continue
-
-                delete_result = await self.delete_user_account(db, user.id, 0)
-                if delete_result.bot_deleted:
-                    deleted_count += 1
-
-            if skipped_active_sub > 0:
-                logger.info(
-                    'Пропущено неактивных пользователей с активной подпиской', skipped_active_sub=skipped_active_sub
-                )
-            logger.info('Удалено неактивных пользователей', deleted_count=deleted_count)
-            return deleted_count, skipped_active_sub
-
-        except Exception as e:
-            logger.error('Ошибка очистки неактивных пользователей', e=e)
-            return 0, 0

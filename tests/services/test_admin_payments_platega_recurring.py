@@ -323,20 +323,3 @@ async def test_search_filter_by_method_returns_only_recurring(monkeypatch) -> No
 
     assert total == 1
     assert found[0].method == PaymentMethod.PLATEGA_RECURRENT
-
-
-def test_method_has_human_name_on_both_surfaces() -> None:
-    """Название метода видно и в кабинете, и в админке бота.
-
-    У обеих поверхностей свой список названий; забытая запись даёт не ошибку,
-    а сырое ``platega_recurrent`` в интерфейсе.
-    """
-    from app.handlers.admin.payments import _method_display
-    from app.services.payment_verification_service import method_display_name
-
-    cabinet = method_display_name(PaymentMethod.PLATEGA_RECURRENT)
-    bot = _method_display(PaymentMethod.PLATEGA_RECURRENT)
-
-    assert cabinet == bot
-    assert 'СБП' in cabinet
-    assert PaymentMethod.PLATEGA_RECURRENT.value not in cabinet

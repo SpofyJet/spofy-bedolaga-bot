@@ -1,3 +1,4 @@
+import contextlib
 import html
 import time
 from datetime import UTC, datetime, timedelta
@@ -1137,8 +1138,28 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
         logger.error('Error notifying user about ticket reply', error=e)
 
 
+async def delete_sent_message(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    """Кнопка «🗑 Удалить» на служебных сообщениях поддержки (админ или модератор)."""
+    try:
+        may_delete = settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(
+            callback.from_user.id
+        )
+    except Exception:
+        may_delete = False
+    texts = get_texts(db_user.language if db_user else 'ru')
+    if not may_delete:
+        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+        return
+    try:
+        await callback.message.delete()
+    finally:
+        with contextlib.suppress(Exception):
+            await callback.answer(texts.t('ADMIN_SUPPORT_MESSAGE_DELETED', 'Сообщение удалено'))
+
+
 def register_handlers(dp: Dispatcher):
     """Регистрация админских обработчиков тикетов"""
+    dp.callback_query.register(delete_sent_message, F.data == 'admin_support_delete_msg')
 
     # Просмотр тикетов
     dp.callback_query.register(show_admin_tickets, F.data == 'admin_tickets')

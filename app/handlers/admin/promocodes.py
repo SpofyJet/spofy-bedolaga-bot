@@ -7,13 +7,11 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.promo_group import get_promo_group_by_id, get_promo_groups_with_counts
 from app.database.crud.promocode import (
     create_promocode,
     delete_promocode,
     get_promocode_by_code,
     get_promocode_by_id,
-    get_promocode_statistics,
     get_promocodes_count,
     get_promocodes_list,
     update_promocode,
@@ -216,16 +214,9 @@ async def show_promocode_management(callback: types.CallbackQuery, db_user: User
 
     text += f'📅 <b>Создан:</b> {format_datetime(promo.created_at)}\n'
 
-    first_purchase_btn_text = '🆕 Первая покупка: ✅' if first_purchase_only else '🆕 Первая покупка: ❌'
-
     keyboard = [
         [
             types.InlineKeyboardButton(text='✏️ Редактировать', callback_data=f'promo_edit_{promo.id}'),
-            types.InlineKeyboardButton(text='🔄 Переключить статус', callback_data=f'promo_toggle_{promo.id}'),
-        ],
-        [types.InlineKeyboardButton(text=first_purchase_btn_text, callback_data=f'promo_toggle_first_{promo.id}')],
-        [
-            types.InlineKeyboardButton(text='📊 Статистика', callback_data=f'promo_stats_{promo.id}'),
             types.InlineKeyboardButton(text='🗑️ Удалить', callback_data=f'promo_delete_{promo.id}'),
         ],
         [types.InlineKeyboardButton(text='⬅️ К списку', callback_data='admin_promo_list')],
@@ -502,70 +493,6 @@ async def process_promocode_code(message: types.Message, db_user: User, state: F
     elif promo_type == 'discount':
         await message.answer(f'💸 <b>Промокод:</b> <code>{code}</code>\n\nВведите процент скидки (1-100):')
         await state.set_state(AdminStates.setting_promocode_value)
-    elif promo_type == 'group':
-        # Show promo group selection
-        groups_with_counts = await get_promo_groups_with_counts(db, limit=50)
-
-        if not groups_with_counts:
-            await message.answer(
-                '❌ Промогруппы не найдены. Создайте хотя бы одну промогруппу.',
-                reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_promocodes')]]
-                ),
-            )
-            await state.clear()
-            return
-
-        keyboard = []
-        text = f'🏷️ <b>Промокод:</b> <code>{code}</code>\n\nВыберите промогруппу для назначения:\n\n'
-
-        for promo_group, user_count in groups_with_counts:
-            text += (
-                f'• {html.escape(promo_group.name)} (приоритет: {promo_group.priority}, пользователей: {user_count})\n'
-            )
-            keyboard.append(
-                [
-                    types.InlineKeyboardButton(
-                        text=f'{promo_group.name} (↑{promo_group.priority})',
-                        callback_data=f'promo_select_group_{promo_group.id}',
-                    )
-                ]
-            )
-
-        keyboard.append([types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_promocodes')])
-
-        await message.answer(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
-        await state.set_state(AdminStates.selecting_promo_group)
-
-
-@admin_required
-@error_handler
-async def process_promo_group_selection(
-    callback: types.CallbackQuery, db_user: User, state: FSMContext, db: AsyncSession
-):
-    """Handle promo group selection for promocode"""
-    try:
-        promo_group_id = int(callback.data.split('_')[-1])
-    except (ValueError, IndexError):
-        await callback.answer('❌ Ошибка получения ID промогруппы', show_alert=True)
-        return
-
-    promo_group = await get_promo_group_by_id(db, promo_group_id)
-    if not promo_group:
-        await callback.answer('❌ Промогруппа не найдена', show_alert=True)
-        return
-
-    await state.update_data(promo_group_id=promo_group_id, promo_group_name=promo_group.name)
-
-    await callback.message.edit_text(
-        f'🏷️ <b>Промокод для промогруппы</b>\n\n'
-        f'Промогруппа: {html.escape(promo_group.name)}\n'
-        f'Приоритет: {promo_group.priority}\n\n'
-        f'📊 Введите количество использований промокода (или 0 для безлимита):'
-    )
-
-    await state.set_state(AdminStates.setting_promocode_uses)
-    await callback.answer()
 
 
 @admin_required
@@ -997,45 +924,6 @@ async def handle_edit_expiry(message: types.Message, db_user: User, state: FSMCo
 
 @admin_required
 @error_handler
-async def toggle_promocode_status(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    promo_id = int(callback.data.split('_')[-1])
-
-    promo = await get_promocode_by_id(db, promo_id)
-    if not promo:
-        await callback.answer('❌ Промокод не найден', show_alert=True)
-        return
-
-    new_status = not promo.is_active
-    await update_promocode(db, promo, is_active=new_status)
-
-    status_text = 'активирован' if new_status else 'деактивирован'
-    await callback.answer(f'✅ Промокод {status_text}', show_alert=True)
-
-    await show_promocode_management(callback, db_user, db)
-
-
-@admin_required
-@error_handler
-async def toggle_promocode_first_purchase(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    """Переключает режим 'только для первой покупки'."""
-    promo_id = int(callback.data.split('_')[-1])
-
-    promo = await get_promocode_by_id(db, promo_id)
-    if not promo:
-        await callback.answer('❌ Промокод не найден', show_alert=True)
-        return
-
-    new_status = not promo.first_purchase_only
-    await update_promocode(db, promo, first_purchase_only=new_status)
-
-    status_text = 'включён' if new_status else 'выключен'
-    await callback.answer(f"✅ Режим 'первая покупка' {status_text}", show_alert=True)
-
-    await show_promocode_management(callback, db_user, db)
-
-
-@admin_required
-@error_handler
 async def confirm_delete_promocode(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     try:
         promo_id = int(callback.data.split('_')[-1])
@@ -1099,101 +987,17 @@ async def delete_promocode_confirmed(callback: types.CallbackQuery, db_user: Use
         await callback.answer('❌ Ошибка удаления промокода', show_alert=True)
 
 
-@admin_required
-@error_handler
-async def show_promocode_stats(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    promo_id = int(callback.data.split('_')[-1])
-
-    promo = await get_promocode_by_id(db, promo_id)
-    if not promo:
-        await callback.answer('❌ Промокод не найден', show_alert=True)
-        return
-
-    stats = await get_promocode_statistics(db, promo_id)
-
-    text = f"""
-📊 <b>Статистика промокода</b> <code>{promo.code}</code>
-
-📈 <b>Общая статистика:</b>
-- Всего использований: {stats['total_uses']}
-- Использований сегодня: {stats['today_uses']}
-- Осталось использований: {promo.max_uses - promo.current_uses}
-
-📅 <b>Последние использования:</b>
-"""
-
-    if stats['recent_uses']:
-        for use in stats['recent_uses'][:5]:
-            use_date = format_datetime(use.used_at)
-
-            if hasattr(use, 'user_username') and use.user_username:
-                user_display = f'@{html.escape(use.user_username)}'
-            elif hasattr(use, 'user_full_name') and use.user_full_name:
-                user_display = html.escape(use.user_full_name)
-            elif hasattr(use, 'user_telegram_id'):
-                user_display = f'ID{use.user_telegram_id}'
-            else:
-                user_display = f'ID{use.user_id}'
-
-            text += f'- {use_date} | {user_display}\n'
-    else:
-        text += '- Пока не было использований\n'
-
-    keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ Назад', callback_data=f'promo_manage_{promo.id}')]]
-    )
-
-    await callback.message.edit_text(text, reply_markup=keyboard)
-    await callback.answer()
-
-
-@admin_required
-@error_handler
-async def show_general_promocode_stats(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    total_codes = await get_promocodes_count(db)
-    active_codes = await get_promocodes_count(db, is_active=True)
-
-    text = f"""
-📊 <b>Общая статистика промокодов</b>
-
-📈 <b>Основные показатели:</b>
-- Всего промокодов: {total_codes}
-- Активных: {active_codes}
-- Неактивных: {total_codes - active_codes}
-
-Для детальной статистики выберите конкретный промокод из списка.
-"""
-
-    keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [types.InlineKeyboardButton(text='🎫 К промокодам', callback_data='admin_promo_list')],
-            [types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_promocodes')],
-        ]
-    )
-
-    await callback.message.edit_text(text, reply_markup=keyboard)
-    await callback.answer()
-
-
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_promocodes_menu, F.data == 'admin_promocodes')
     dp.callback_query.register(show_promocodes_list, F.data == 'admin_promo_list')
     dp.callback_query.register(show_promocodes_list_page, F.data.startswith('admin_promo_list_page_'))
     dp.callback_query.register(start_promocode_creation, F.data == 'admin_promo_create')
     dp.callback_query.register(select_promocode_type, F.data.startswith('promo_type_'))
-    dp.callback_query.register(process_promo_group_selection, F.data.startswith('promo_select_group_'))
-
     dp.callback_query.register(show_promocode_management, F.data.startswith('promo_manage_'))
-    dp.callback_query.register(toggle_promocode_first_purchase, F.data.startswith('promo_toggle_first_'))
-    dp.callback_query.register(toggle_promocode_status, F.data.startswith('promo_toggle_'))
-    dp.callback_query.register(show_promocode_stats, F.data.startswith('promo_stats_'))
-
     dp.callback_query.register(start_edit_promocode_date, F.data.startswith('promo_edit_date_'))
     dp.callback_query.register(start_edit_promocode_amount, F.data.startswith('promo_edit_amount_'))
     dp.callback_query.register(start_edit_promocode_days, F.data.startswith('promo_edit_days_'))
     dp.callback_query.register(start_edit_promocode_uses, F.data.startswith('promo_edit_uses_'))
-    dp.callback_query.register(show_general_promocode_stats, F.data == 'admin_promo_general_stats')
-
     dp.callback_query.register(show_promocode_edit_menu, F.data.regexp(r'^promo_edit_\d+$'))
 
     dp.callback_query.register(delete_promocode_confirmed, F.data.startswith('promo_delete_confirm_'))

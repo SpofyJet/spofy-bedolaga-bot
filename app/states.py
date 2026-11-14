@@ -233,43 +233,6 @@ class AdminTicketStates(StatesGroup):
     waiting_for_block_duration = State()
 
 
-class SupportSettingsStates(StatesGroup):
-    waiting_for_desc = State()
-
-
-class BotConfigStates(StatesGroup):
-    waiting_for_value = State()
-    waiting_for_search_query = State()
-    waiting_for_import_file = State()
-
-
-class PricingStates(StatesGroup):
-    waiting_for_value = State()
-
-
-class SquadCreateStates(StatesGroup):
-    waiting_for_name = State()
-    selecting_inbounds = State()
-
-
-class SquadRenameStates(StatesGroup):
-    waiting_for_new_name = State()
-
-
-class SquadMigrationStates(StatesGroup):
-    selecting_source = State()
-    selecting_target = State()
-    confirming = State()
-
-
-class RemnaWaveSyncStates(StatesGroup):
-    waiting_for_schedule = State()
-
-
-class BlacklistStates(StatesGroup):
-    waiting_for_blacklist_url = State()
-
-
 class ReferralWithdrawalStates(StatesGroup):
     waiting_for_amount = State()
     waiting_for_payment_details = State()

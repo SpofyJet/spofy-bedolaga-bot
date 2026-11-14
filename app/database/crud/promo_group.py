@@ -1,9 +1,8 @@
 import structlog
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.database.models import PromoGroup, Subscription, User, UserPromoGroup
+from app.database.models import PromoGroup, User, UserPromoGroup
 
 
 def _normalize_period_discounts(period_discounts: dict[int, int] | None) -> dict[int, int]:
@@ -280,24 +279,6 @@ async def delete_promo_group(db: AsyncSession, group: PromoGroup) -> bool:
         _schedule_recalculation(f'удалена группа «{group_name}»')
 
     return True
-
-
-async def get_promo_group_members(
-    db: AsyncSession,
-    group_id: int,
-    *,
-    offset: int = 0,
-    limit: int = 20,
-) -> list[User]:
-    result = await db.execute(
-        select(User)
-        .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
-        .where(User.promo_group_id == group_id)
-        .order_by(User.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
-    return result.scalars().all()
 
 
 async def count_promo_group_members(db: AsyncSession, group_id: int) -> int:

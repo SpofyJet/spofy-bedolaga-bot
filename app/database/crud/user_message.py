@@ -149,17 +149,3 @@ async def delete_user_message(db: AsyncSession, message_id: int) -> bool:
 
     logger.info('🗑️ Удалено сообщение ID', message_id=message_id)
     return True
-
-
-async def get_user_messages_stats(db: AsyncSession) -> dict:
-    total_result = await db.execute(select(func.count(UserMessage.id)))
-    total_messages = total_result.scalar()
-
-    active_result = await db.execute(select(func.count(UserMessage.id)).where(UserMessage.is_active == True))
-    active_messages = active_result.scalar()
-
-    return {
-        'total_messages': total_messages,
-        'active_messages': active_messages,
-        'inactive_messages': total_messages - active_messages,
-    }
