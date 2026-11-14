@@ -73,16 +73,16 @@ def test_single_subscription_block_reuses_menu_status_builder():
 
 
 def test_trial_deeplink_wired_in_start():
-    """Диплинк /start trial: ветка сташит pending_trial, drain — рядом с купонным
+    """Диплинк /start trial: ветка сташит pending_trial, drain — сразу после подарочного
     (до state.clear() и показа меню), платный триал деплинком не активируется."""
     source = _START_PATH.read_text(encoding='utf-8')
 
     assert "if start_parameter == 'trial':" in source
     assert 'pending_trial=True' in source
 
-    coupon_drain = source.index('await _redeem_pending_coupon(db, state, user, message.answer)')
+    gift_drain = source.index('await _activate_pending_gift_after_registration(db, state, user, message.answer)')
     trial_drain = source.index('await _activate_pending_trial(db, state, user, message.answer, message.bot)')
-    assert coupon_drain < trial_drain
+    assert gift_drain < trial_drain
 
     helper = source.index('async def _activate_pending_trial(')
     assert 'is_trial_already_used' in source[helper : helper + 3000]

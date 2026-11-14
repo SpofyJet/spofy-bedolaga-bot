@@ -154,6 +154,16 @@ async def _get_admin_level(db: AsyncSession, admin: User) -> int:
     return max_level
 
 
+# Разделы, удалённые из кода. Их права остались в сохранённых ролях (bootstrap только
+# добавляет права), и редактор ролей присылает их обратно: отбрасываем молча, иначе
+# сохранение такой роли (на 15.11 — Admin с reachability:* и dpichecker:*) падает с 400.
+_RETIRED_PERMISSION_SECTIONS = frozenset({'reachability', 'dpichecker', 'coupons'})
+
+
+def _drop_retired_permissions(permissions: list[str]) -> list[str]:
+    return [p for p in permissions if p.split(':', 1)[0] not in _RETIRED_PERMISSION_SECTIONS]
+
+
 def _validate_permissions(permissions: list[str]) -> None:
     """Validate that all provided permissions exist in the registry."""
     all_valid = set(get_all_permissions())
@@ -314,6 +324,7 @@ async def create_role(
 ):
     """Create a new custom admin role."""
     # Validate permissions list
+    payload.permissions = _drop_retired_permissions(payload.permissions)
     _validate_permissions(payload.permissions)
 
     # Hierarchy enforcement: cannot create role with level >= own level
@@ -400,6 +411,7 @@ async def update_role(
 
     # Validate permissions
     if 'permissions' in update_data and update_data['permissions'] is not None:
+        update_data['permissions'] = _drop_retired_permissions(update_data['permissions'])
         _validate_permissions(update_data['permissions'])
         # Cannot raise a role's permissions beyond what the editing admin holds.
         await _ensure_can_grant(db, admin, admin_level, update_data['permissions'])

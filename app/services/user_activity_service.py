@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import (
     ButtonClickLog,
     CabinetRefreshToken,
-    Coupon,
     GuestPurchase,
     PromoCode,
     PromoCodeUse,
@@ -36,7 +35,7 @@ from app.services.user_action_log_service import CLICK_PREFIX, SCREEN_PREFIX
 class UserActivityItem(BaseModel):
     """Одна запись в таймлайне активности пользователя (бот + кабинет).
 
-    ``type`` — источник записи (transaction, event, promocode, coupon, ticket,
+    ``type`` — источник записи (transaction, event, promocode, ticket,
     wheel_spin, gift_sent, gift_received, referral_earning, cabinet_login,
     withdrawal); ``subtype`` уточняет его (тип транзакции, event_type события,
     статус тикета и т.п.). ``title`` — сырой человекочитаемый текст источника
@@ -121,9 +120,6 @@ def activity_sources(user_id: int) -> dict[str, tuple]:
     def _map_promocode(row) -> UserActivityItem:
         use, code = row
         return UserActivityItem(type='promocode', source='bot', title=code, timestamp=use.used_at)
-
-    def _map_coupon(c: Coupon) -> UserActivityItem:
-        return UserActivityItem(type='coupon', subtype=c.status, title=c.token, timestamp=c.redeemed_at)
 
     def _map_ticket(t: Ticket) -> UserActivityItem:
         return UserActivityItem(
@@ -251,12 +247,6 @@ def activity_sources(user_id: int) -> dict[str, tuple]:
             select(func.count(PromoCodeUse.id)).where(PromoCodeUse.user_id == user_id),
             PromoCodeUse.used_at,
             _map_promocode,
-        ),
-        'coupon': (
-            select(Coupon).where(Coupon.redeemed_by == user_id, Coupon.redeemed_at.is_not(None)),
-            select(func.count(Coupon.id)).where(Coupon.redeemed_by == user_id, Coupon.redeemed_at.is_not(None)),
-            Coupon.redeemed_at,
-            _map_coupon,
         ),
         'ticket': (
             select(Ticket).where(Ticket.user_id == user_id),
