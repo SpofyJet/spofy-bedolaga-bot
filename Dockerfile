@@ -24,13 +24,31 @@ ARG BUILD_DATE
 ARG VCS_REF
 
 COPY --from=builder /app/.venv /app/.venv
-ENV PATH="/app/.venv/bin:$PATH"
+# /usr/lib/postgresql/18/bin — pg_dump и psql напрямую, минуя perl-обёртку pg_wrapper (см. ниже).
+ENV PATH="/app/.venv/bin:/usr/lib/postgresql/18/bin:$PATH"
 
 # База — плавающий тег python:3.14-slim, и между её пересборками Debian успевает
 # выпустить исправления системных пакетов (util-linux, zlib, PCRE2 в отчётах
 # Trivy). Ставим их на этапе сборки: иначе образ уезжает с дырами, которые в
 # апстриме уже закрыты, а сама база подтянется неизвестно когда.
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+#
+# Клиент PostgreSQL той же major-версии, что сервер в compose (postgres:18), из
+# репозитория PGDG (в Debian trixie только 17-й, а pg_dump 17 базу 18 не снимает).
+# С ним автобэкап снимает базу pg_dump-ом: все таблицы, схему и alembic_version,
+# согласованным снимком, отдельным процессом. Без клиента BackupService уходит в
+# ORM-выгрузку JSON: держит всю базу в памяти бота (3,4 ГБ из 7 на проде; 15.11.2026
+# вместе с другой нагрузкой это кончилось OOM бота) и пропускает таблицы, которых
+# нет в его списке моделей
+# (33 из 105, среди них platega_subscriptions). Совпадение версий клиента и
+# сервера проверяет tests/test_backup_pg_client.py. Ключ PGDG — docker/postgres/
+# pgdg-apt.asc, отпечаток B97B 0AFC AA1A 47F0 44F2 44A0 7FCC 7D46 ACCC 4CF8.
+COPY docker/postgres/pgdg-apt.asc /etc/apt/keyrings/pgdg.asc
+RUN . /etc/os-release \
+    && echo "deb [signed-by=/etc/apt/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends postgresql-client-18 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Системные pip и setuptools базового образа приложению не нужны (зависимости в .venv), а Trivy
 # находит в них CVE (setuptools 70.3.0, msgpack внутри pip) — убираем из образа.

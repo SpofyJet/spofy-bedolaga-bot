@@ -606,7 +606,7 @@ class BackupService:
 
             if pg_dump_path:
                 dump_path = staging_dir / 'database.sql'
-                await self._dump_postgres(dump_path, pg_dump_path)
+                await self._dump_postgres(dump_path, pg_dump_path, include_logs=include_logs)
                 size = (
                     (await asyncio.to_thread(dump_path.stat)).st_size
                     if await asyncio.to_thread(dump_path.exists)
@@ -634,7 +634,7 @@ class BackupService:
             'format': 'file',
         }
 
-    async def _dump_postgres(self, dump_path: Path, pg_dump_path: str):
+    async def _dump_postgres(self, dump_path: Path, pg_dump_path: str, include_logs: bool = True):
         env = os.environ.copy()
         env.update(
             {
@@ -650,8 +650,15 @@ class BackupService:
             '--format=plain',
             '--no-owner',
             '--no-privileges',
-            settings.POSTGRES_DB,
+            # Таблицу под ACCESS EXCLUSIVE (миграция, VACUUM FULL) ждём минуту, а не вечно:
+            # иначе автобэкап повиснет и молча не отработает.
+            '--lock-wait-timeout=60s',
         ]
+        if not include_logs:
+            # Как и ORM-выгрузка: без BACKUP_INCLUDE_LOGS строки журнала мониторинга не нужны,
+            # схема таблицы остаётся в дампе.
+            command.append(f'--exclude-table-data={MonitoringLog.__tablename__}')
+        command.append(settings.POSTGRES_DB)
 
         logger.info('📦 Экспорт PostgreSQL через pg_dump ...', pg_dump_path=pg_dump_path)
         await asyncio.to_thread(lambda: dump_path.parent.mkdir(parents=True, exist_ok=True))
@@ -941,41 +948,30 @@ class BackupService:
             }
         )
 
+        # Одна транзакция и остановка на первой ошибке: либо база восстановлена целиком,
+        # либо осталась как была. Раньше схема удалялась отдельной командой, а psql без
+        # ON_ERROR_STOP пропускал ошибки и возвращал 0 — сбой посреди дампа оставлял
+        # пустую или наполовину залитую базу с «успешным» восстановлением.
+        restore_command = [psql_path, '--no-psqlrc', '-v', 'ON_ERROR_STOP=1', '--single-transaction']
         if clear_existing:
             logger.info('🗑️ Полная очистка схемы PostgreSQL перед восстановлением')
-            drop_command = [
-                psql_path,
-                settings.POSTGRES_DB,
+            restore_command += [
                 '-c',
                 'DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;',
             ]
-            proc = await asyncio.create_subprocess_exec(
-                *drop_command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            )
-            _, stderr = await proc.communicate()
-            if proc.returncode != 0:
-                raise RuntimeError(f'Не удалось очистить схему: {stderr.decode()}')
+        restore_command += ['-f', str(dump_path), settings.POSTGRES_DB]
 
         logger.info('📥 Восстановление PostgreSQL через psql ...', psql_path=psql_path)
-        restore_command = [
-            psql_path,
-            settings.POSTGRES_DB,
-            '-f',
-            str(dump_path),
-        ]
         proc = await asyncio.create_subprocess_exec(
             *restore_command,
-            stdout=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
-        stdout, stderr = await proc.communicate()
+        _, stderr = await proc.communicate()
 
         if proc.returncode != 0:
-            raise RuntimeError(f'Ошибка psql: {stderr.decode()}')
+            raise RuntimeError(f'Ошибка psql (база не изменена): {stderr.decode()}')
 
         logger.info('✅ PostgreSQL восстановлен', dump_path=dump_path)
 
