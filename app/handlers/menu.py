@@ -33,6 +33,7 @@ from app.services.support_settings_service import SupportSettingsService
 from app.states import RegistrationStates
 from app.utils.display_mode import is_visible_in_bot
 from app.utils.lifetime import is_lifetime_end
+from app.utils.pagination import build_page_nav_row
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.pricing_utils import format_period_description
 from app.utils.promo_offer import (
@@ -193,6 +194,43 @@ async def build_main_menu_keyboard(db_user: User, db: AsyncSession):
     return keyboard
 
 
+async def _reject_missing_user(callback: types.CallbackQuery, db_user: User | None) -> bool:
+    """Нет пользователя — алерт на языке по умолчанию; True, если обработчику пора выйти."""
+    if db_user is not None:
+        return False
+    texts = get_texts(settings.DEFAULT_LANGUAGE)
+    await callback.answer(
+        texts.t(
+            'USER_NOT_FOUND_ERROR',
+            'Ошибка: пользователь не найден.',
+        ),
+        show_alert=True,
+    )
+    return True
+
+
+async def _reject_hidden_section(callback: types.CallbackQuery, texts, display_mode: str) -> bool:
+    """Раздел скрыт в боте — алерт «временно недоступен»; True, если обработчику пора выйти."""
+    if is_visible_in_bot(display_mode):
+        return False
+    await callback.answer(
+        texts.t('INFO_SECTION_NOT_AVAILABLE', 'Раздел временно недоступен.'),
+        show_alert=True,
+    )
+    return True
+
+
+def _callback_page_number(callback: types.CallbackQuery) -> int:
+    """Номер страницы из callback_data «prefix:N»; без номера или с мусором — 1."""
+    raw_page = 1
+    if callback.data and ':' in callback.data:
+        try:
+            raw_page = int(callback.data.split(':', 1)[1])
+        except ValueError:
+            raw_page = 1
+    return max(raw_page, 1)
+
+
 async def show_main_menu(
     callback: types.CallbackQuery,
     db_user: User,
@@ -200,16 +238,7 @@ async def show_main_menu(
     *,
     skip_callback_answer: bool = False,
 ):
-    if db_user is None:
-        # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
-        await callback.answer(
-            texts.t(
-                'USER_NOT_FOUND_ERROR',
-                'Ошибка: пользователь не найден.',
-            ),
-            show_alert=True,
-        )
+    if await _reject_missing_user(callback, db_user):
         return
 
     texts = get_texts(db_user.language)
@@ -248,36 +277,17 @@ async def handle_profile_unavailable(callback: types.CallbackQuery) -> None:
 
 
 async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    if db_user is None:
-        # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
-        await callback.answer(
-            texts.t(
-                'USER_NOT_FOUND_ERROR',
-                'Ошибка: пользователь не найден.',
-            ),
-            show_alert=True,
-        )
+    if await _reject_missing_user(callback, db_user):
         return
 
     from app.database.crud.rules import get_current_rules_content
 
     texts = get_texts(db_user.language)
 
-    if not is_visible_in_bot(settings.SERVICE_RULES_DISPLAY_MODE):
-        await callback.answer(
-            texts.t('INFO_SECTION_NOT_AVAILABLE', 'Раздел временно недоступен.'),
-            show_alert=True,
-        )
+    if await _reject_hidden_section(callback, texts, settings.SERVICE_RULES_DISPLAY_MODE):
         return
 
-    raw_page = 1
-    if callback.data and ':' in callback.data:
-        try:
-            raw_page = int(callback.data.split(':', 1)[1])
-        except ValueError:
-            raw_page = 1
-    raw_page = max(raw_page, 1)
+    raw_page = _callback_page_number(callback)
 
     rules_text = await get_current_rules_content(db, db_user.language)
 
@@ -295,28 +305,9 @@ async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: A
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
 
     if total_pages > 1:
-        nav_row: list[types.InlineKeyboardButton] = []
-        if current_page > 1:
-            nav_row.append(
-                types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '⬅️'),
-                    callback_data=f'menu_rules:{current_page - 1}',
-                )
-            )
-        nav_row.append(
-            types.InlineKeyboardButton(
-                text=f'{current_page}/{total_pages}',
-                callback_data='noop',
-            )
+        keyboard_rows.append(
+            build_page_nav_row(current_page, total_pages, 'menu_rules:', texts=texts, current_callback='noop')
         )
-        if current_page < total_pages:
-            nav_row.append(
-                types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '➡️'),
-                    callback_data=f'menu_rules:{current_page + 1}',
-                )
-            )
-        keyboard_rows.append(nav_row)
 
     keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
 
@@ -332,16 +323,7 @@ async def show_info_menu(
     db_user: User,
     db: AsyncSession,
 ):
-    if db_user is None:
-        # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
-        await callback.answer(
-            texts.t(
-                'USER_NOT_FOUND_ERROR',
-                'Ошибка: пользователь не найден.',
-            ),
-            show_alert=True,
-        )
+    if await _reject_missing_user(callback, db_user):
         return
 
     texts = get_texts(db_user.language)
@@ -452,16 +434,7 @@ async def show_promo_groups_info(
     db_user: User,
     db: AsyncSession,
 ):
-    if db_user is None:
-        # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
-        await callback.answer(
-            texts.t(
-                'USER_NOT_FOUND_ERROR',
-                'Ошибка: пользователь не найден.',
-            ),
-            show_alert=True,
-        )
+    if await _reject_missing_user(callback, db_user):
         return
 
     texts = get_texts(db_user.language)
@@ -600,25 +573,12 @@ async def show_faq_pages(
     db_user: User,
     db: AsyncSession,
 ):
-    if db_user is None:
-        # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
-        await callback.answer(
-            texts.t(
-                'USER_NOT_FOUND_ERROR',
-                'Ошибка: пользователь не найден.',
-            ),
-            show_alert=True,
-        )
+    if await _reject_missing_user(callback, db_user):
         return
 
     texts = get_texts(db_user.language)
 
-    if not is_visible_in_bot(settings.FAQ_DISPLAY_MODE):
-        await callback.answer(
-            texts.t('INFO_SECTION_NOT_AVAILABLE', 'Раздел временно недоступен.'),
-            show_alert=True,
-        )
+    if await _reject_hidden_section(callback, texts, settings.FAQ_DISPLAY_MODE):
         return
 
     pages = await FaqService.get_pages(db, db_user.language)
@@ -664,25 +624,12 @@ async def show_faq_page(
     db_user: User,
     db: AsyncSession,
 ):
-    if db_user is None:
-        # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
-        await callback.answer(
-            texts.t(
-                'USER_NOT_FOUND_ERROR',
-                'Ошибка: пользователь не найден.',
-            ),
-            show_alert=True,
-        )
+    if await _reject_missing_user(callback, db_user):
         return
 
     texts = get_texts(db_user.language)
 
-    if not is_visible_in_bot(settings.FAQ_DISPLAY_MODE):
-        await callback.answer(
-            texts.t('INFO_SECTION_NOT_AVAILABLE', 'Раздел временно недоступен.'),
-            show_alert=True,
-        )
+    if await _reject_hidden_section(callback, texts, settings.FAQ_DISPLAY_MODE):
         return
 
     raw_data = callback.data or ''
@@ -762,31 +709,11 @@ async def show_faq_page(
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
 
     if total_pages > 1:
-        nav_row: list[types.InlineKeyboardButton] = []
-        if current_page > 1:
-            nav_row.append(
-                types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '⬅️'),
-                    callback_data=f'menu_faq_page:{page.id}:{current_page - 1}',
-                )
-            )
-
-        nav_row.append(
-            types.InlineKeyboardButton(
-                text=f'{current_page}/{total_pages}',
-                callback_data='noop',
+        keyboard_rows.append(
+            build_page_nav_row(
+                current_page, total_pages, f'menu_faq_page:{page.id}:', texts=texts, current_callback='noop'
             )
         )
-
-        if current_page < total_pages:
-            nav_row.append(
-                types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '➡️'),
-                    callback_data=f'menu_faq_page:{page.id}:{current_page + 1}',
-                )
-            )
-
-        keyboard_rows.append(nav_row)
 
     keyboard_rows.append(
         [
@@ -806,78 +733,42 @@ async def show_faq_page(
     await callback.answer()
 
 
-async def show_privacy_policy(
+async def _show_legal_document(
     callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
+    texts,
+    *,
+    display_mode: str,
+    load_document,
+    max_page_length: int,
+    not_available_text: str,
+    empty_text: str,
+    header: str,
+    footer_template: str,
+    page_callback_prefix: str,
 ):
-    if db_user is None:
-        # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
-        await callback.answer(
-            texts.t(
-                'USER_NOT_FOUND_ERROR',
-                'Ошибка: пользователь не найден.',
-            ),
-            show_alert=True,
-        )
+    """Постраничный показ документа (политика конфиденциальности, оферта)."""
+    if await _reject_hidden_section(callback, texts, display_mode):
         return
 
-    texts = get_texts(db_user.language)
+    raw_page = _callback_page_number(callback)
 
-    if not is_visible_in_bot(settings.PRIVACY_POLICY_DISPLAY_MODE):
-        await callback.answer(
-            texts.t('INFO_SECTION_NOT_AVAILABLE', 'Раздел временно недоступен.'),
-            show_alert=True,
-        )
+    document = await load_document()
+
+    if not document:
+        await callback.answer(not_available_text, show_alert=True)
         return
 
-    raw_page = 1
-    if callback.data and ':' in callback.data:
-        try:
-            raw_page = int(callback.data.split(':', 1)[1])
-        except ValueError:
-            raw_page = 1
-
-    raw_page = max(raw_page, 1)
-
-    policy = await PrivacyPolicyService.get_active_policy(db, db_user.language)
-
-    if not policy:
-        await callback.answer(
-            texts.t(
-                'PRIVACY_POLICY_NOT_AVAILABLE',
-                'Политика конфиденциальности временно недоступна.',
-            ),
-            show_alert=True,
-        )
-        return
-
-    pages = stored_html_to_telegram_pages(policy.content, max_length=PrivacyPolicyService.MAX_PAGE_LENGTH)
+    pages = stored_html_to_telegram_pages(document.content, max_length=max_page_length)
 
     if not pages:
-        await callback.answer(
-            texts.t(
-                'PRIVACY_POLICY_EMPTY_ALERT',
-                'Политика конфиденциальности ещё не заполнена.',
-            ),
-            show_alert=True,
-        )
+        await callback.answer(empty_text, show_alert=True)
         return
 
     total_pages = len(pages)
     current_page = min(raw_page, total_pages)
 
-    header = texts.t(
-        'PRIVACY_POLICY_HEADER',
-        '🛡️ <b>Политика конфиденциальности</b>',
-    )
     body = pages[current_page - 1]
 
-    footer_template = texts.t(
-        'PRIVACY_POLICY_PAGE_INFO',
-        'Страница {current} из {total}',
-    )
     footer = ''
     if total_pages > 1 and footer_template:
         try:
@@ -894,31 +785,9 @@ async def show_privacy_policy(
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
 
     if total_pages > 1:
-        nav_row: list[types.InlineKeyboardButton] = []
-        if current_page > 1:
-            nav_row.append(
-                types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '⬅️'),
-                    callback_data=f'menu_privacy_policy:{current_page - 1}',
-                )
-            )
-
-        nav_row.append(
-            types.InlineKeyboardButton(
-                text=f'{current_page}/{total_pages}',
-                callback_data='noop',
-            )
+        keyboard_rows.append(
+            build_page_nav_row(current_page, total_pages, page_callback_prefix, texts=texts, current_callback='noop')
         )
-
-        if current_page < total_pages:
-            nav_row.append(
-                types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '➡️'),
-                    callback_data=f'menu_privacy_policy:{current_page + 1}',
-                )
-            )
-
-        keyboard_rows.append(nav_row)
 
     keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info')])
 
@@ -928,6 +797,41 @@ async def show_privacy_policy(
         disable_web_page_preview=settings.DISABLE_WEB_PAGE_PREVIEW,
     )
     await callback.answer()
+
+
+async def show_privacy_policy(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    if await _reject_missing_user(callback, db_user):
+        return
+
+    texts = get_texts(db_user.language)
+    await _show_legal_document(
+        callback,
+        texts,
+        display_mode=settings.PRIVACY_POLICY_DISPLAY_MODE,
+        load_document=lambda: PrivacyPolicyService.get_active_policy(db, db_user.language),
+        max_page_length=PrivacyPolicyService.MAX_PAGE_LENGTH,
+        not_available_text=texts.t(
+            'PRIVACY_POLICY_NOT_AVAILABLE',
+            'Политика конфиденциальности временно недоступна.',
+        ),
+        empty_text=texts.t(
+            'PRIVACY_POLICY_EMPTY_ALERT',
+            'Политика конфиденциальности ещё не заполнена.',
+        ),
+        header=texts.t(
+            'PRIVACY_POLICY_HEADER',
+            '🛡️ <b>Политика конфиденциальности</b>',
+        ),
+        footer_template=texts.t(
+            'PRIVACY_POLICY_PAGE_INFO',
+            'Страница {current} из {total}',
+        ),
+        page_callback_prefix='menu_privacy_policy:',
+    )
 
 
 async def show_public_offer(
@@ -935,123 +839,34 @@ async def show_public_offer(
     db_user: User,
     db: AsyncSession,
 ):
-    if db_user is None:
-        # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
-        await callback.answer(
-            texts.t(
-                'USER_NOT_FOUND_ERROR',
-                'Ошибка: пользователь не найден.',
-            ),
-            show_alert=True,
-        )
+    if await _reject_missing_user(callback, db_user):
         return
 
     texts = get_texts(db_user.language)
-
-    if not is_visible_in_bot(settings.PUBLIC_OFFER_DISPLAY_MODE):
-        await callback.answer(
-            texts.t('INFO_SECTION_NOT_AVAILABLE', 'Раздел временно недоступен.'),
-            show_alert=True,
-        )
-        return
-
-    raw_page = 1
-    if callback.data and ':' in callback.data:
-        try:
-            raw_page = int(callback.data.split(':', 1)[1])
-        except ValueError:
-            raw_page = 1
-
-    raw_page = max(raw_page, 1)
-
-    offer = await PublicOfferService.get_active_offer(db, db_user.language)
-
-    if not offer:
-        await callback.answer(
-            texts.t(
-                'PUBLIC_OFFER_NOT_AVAILABLE',
-                'Публичная оферта временно недоступна.',
-            ),
-            show_alert=True,
-        )
-        return
-
-    pages = stored_html_to_telegram_pages(offer.content, max_length=PublicOfferService.MAX_PAGE_LENGTH)
-
-    if not pages:
-        await callback.answer(
-            texts.t(
-                'PUBLIC_OFFER_EMPTY_ALERT',
-                'Публичная оферта ещё не заполнена.',
-            ),
-            show_alert=True,
-        )
-        return
-
-    total_pages = len(pages)
-    current_page = min(raw_page, total_pages)
-
-    header = texts.t(
-        'PUBLIC_OFFER_HEADER',
-        '📄 <b>Публичная оферта</b>',
+    await _show_legal_document(
+        callback,
+        texts,
+        display_mode=settings.PUBLIC_OFFER_DISPLAY_MODE,
+        load_document=lambda: PublicOfferService.get_active_offer(db, db_user.language),
+        max_page_length=PublicOfferService.MAX_PAGE_LENGTH,
+        not_available_text=texts.t(
+            'PUBLIC_OFFER_NOT_AVAILABLE',
+            'Публичная оферта временно недоступна.',
+        ),
+        empty_text=texts.t(
+            'PUBLIC_OFFER_EMPTY_ALERT',
+            'Публичная оферта ещё не заполнена.',
+        ),
+        header=texts.t(
+            'PUBLIC_OFFER_HEADER',
+            '📄 <b>Публичная оферта</b>',
+        ),
+        footer_template=texts.t(
+            'PUBLIC_OFFER_PAGE_INFO',
+            'Страница {current} из {total}',
+        ),
+        page_callback_prefix='menu_public_offer:',
     )
-    body = pages[current_page - 1]
-
-    footer_template = texts.t(
-        'PUBLIC_OFFER_PAGE_INFO',
-        'Страница {current} из {total}',
-    )
-    footer = ''
-    if total_pages > 1 and footer_template:
-        try:
-            footer = footer_template.format(current=current_page, total=total_pages)
-        except Exception:
-            footer = f'{current_page}/{total_pages}'
-
-    message_text = header
-    if body:
-        message_text += f'\n\n{body}'
-    if footer:
-        message_text += f'\n\n<code>{footer}</code>'
-
-    keyboard_rows: list[list[types.InlineKeyboardButton]] = []
-
-    if total_pages > 1:
-        nav_row: list[types.InlineKeyboardButton] = []
-        if current_page > 1:
-            nav_row.append(
-                types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '⬅️'),
-                    callback_data=f'menu_public_offer:{current_page - 1}',
-                )
-            )
-
-        nav_row.append(
-            types.InlineKeyboardButton(
-                text=f'{current_page}/{total_pages}',
-                callback_data='noop',
-            )
-        )
-
-        if current_page < total_pages:
-            nav_row.append(
-                types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '➡️'),
-                    callback_data=f'menu_public_offer:{current_page + 1}',
-                )
-            )
-
-        keyboard_rows.append(nav_row)
-
-    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info')])
-
-    await callback.message.edit_text(
-        message_text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
-        disable_web_page_preview=settings.DISABLE_WEB_PAGE_PREVIEW,
-    )
-    await callback.answer()
 
 
 async def show_language_menu(
@@ -1059,16 +874,7 @@ async def show_language_menu(
     db_user: User,
     db: AsyncSession,
 ):
-    if db_user is None:
-        # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
-        await callback.answer(
-            texts.t(
-                'USER_NOT_FOUND_ERROR',
-                'Ошибка: пользователь не найден.',
-            ),
-            show_alert=True,
-        )
+    if await _reject_missing_user(callback, db_user):
         return
 
     texts = get_texts(db_user.language)
@@ -1102,16 +908,7 @@ async def process_language_change(
     db: AsyncSession,
     state: FSMContext | None = None,
 ):
-    if db_user is None:
-        # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
-        await callback.answer(
-            texts.t(
-                'USER_NOT_FOUND_ERROR',
-                'Ошибка: пользователь не найден.',
-            ),
-            show_alert=True,
-        )
+    if await _reject_missing_user(callback, db_user):
         return
 
     texts = get_texts(db_user.language)
@@ -1169,16 +966,7 @@ async def process_language_change(
 
 
 async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
-    if db_user is None:
-        # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
-        await callback.answer(
-            texts.t(
-                'USER_NOT_FOUND_ERROR',
-                'Ошибка: пользователь не найден.',
-            ),
-            show_alert=True,
-        )
+    if await _reject_missing_user(callback, db_user):
         return
 
     await state.clear()
