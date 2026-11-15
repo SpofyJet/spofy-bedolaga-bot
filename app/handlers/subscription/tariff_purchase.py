@@ -4760,6 +4760,15 @@ async def confirm_instant_switch(
     state: FSMContext,
 ):
     """Подтверждает мгновенное переключение тарифа."""
+    await _checkout_once_per_user(callback, db_user, lambda: _confirm_instant_switch_once(callback, db_user, db, state))
+
+
+async def _confirm_instant_switch_once(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
     texts = get_texts(db_user.language)
 
     tariff_id = int(callback.data.split(':')[1])
@@ -4852,8 +4861,10 @@ async def confirm_instant_switch(
         pass
 
     try:
-        # Списываем баланс если это upgrade
+        # Доплата, запись о платеже и смена тарифа — одним коммитом и до панели: сбой между
+        # ними оставлял списание без смены тарифа или без записи (сбой панели 02.11.2026).
         # upgrade_cost includes both group + offer discounts from PricingEngine
+        upgrade_payment = None
         if is_upgrade and upgrade_cost > 0:
             success = await subtract_user_balance(
                 db,
@@ -4862,6 +4873,7 @@ async def confirm_instant_switch(
                 f'Переключение на тариф {new_tariff.name}',
                 consume_promo_offer=consume_promo,
                 mark_as_paid_subscription=True,
+                commit=False,
             )
             if not success:
                 try:
@@ -4872,6 +4884,14 @@ async def confirm_instant_switch(
                 except (TelegramAPIError, AttributeError):
                     pass
                 return
+            upgrade_payment = await create_transaction(
+                db,
+                user_id=db_user.id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                amount_kopeks=upgrade_cost,
+                description=f'Переключение на тариф {new_tariff.name}',
+                commit=False,
+            )
 
         # Проверяем, суточный ли новый тариф
         is_new_daily = new_tariff.is_daily
@@ -4978,20 +4998,35 @@ async def confirm_instant_switch(
         await db.commit()
         await db.refresh(subscription)
 
+        if upgrade_payment is not None:
+            from app.database.crud.transaction import emit_transaction_side_effects
+
+            await emit_transaction_side_effects(
+                db,
+                upgrade_payment,
+                user_id=db_user.id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                amount_kopeks=upgrade_cost,
+                description=f'Переключение на тариф {new_tariff.name}',
+                payment_method=PaymentMethod.BALANCE,
+            )
+
         # Обновляем пользователя в Remnawave (сброс трафика по админ-настройке)
+        subscription_id, user_id = subscription.id, db_user.id
+        panel_result = None
         try:
             subscription_service = SubscriptionService()
             _should_create = await should_create_panel_account(db, subscription, db_user)
 
             if _should_create:
-                await subscription_service.create_remnawave_user(
+                panel_result = await subscription_service.create_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=reset_used_traffic,
                     reset_reason='мгновенное переключение тарифа',
                 )
             else:
-                await subscription_service.update_remnawave_user(
+                panel_result = await subscription_service.update_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=reset_used_traffic,
@@ -4999,17 +5034,20 @@ async def confirm_instant_switch(
                 )
         except Exception as e:
             logger.error('Ошибка обновления Remnawave при мгновенном переключении', error=e)
+        if panel_result is None:
+            # Панель не ответила (её сервис возвращает None после отката) — оплаченный тариф
+            # дойдёт до неё через очередь повторов.
             from app.services.remnawave_retry_queue import remnawave_retry_queue
 
             remnawave_retry_queue.enqueue(
-                subscription_id=subscription.id,
-                user_id=db_user.id,
+                subscription_id=subscription_id,
+                user_id=user_id,
                 action='create',
             )
 
-        # Панель не ответила — её сервис откатил сессию. Доплата уже списана: без этого запись
-        # о платеже ниже не создавалась (new_tariff.name падал), а человек видел ошибку.
-        await reload_after_panel_failure(db, subscription, new_tariff)
+        # Панель не ответила — её сервис откатил сессию. Доплата и запись о ней уже в базе:
+        # перечитываем объекты, иначе первое же чтение поля падало и человек видел ошибку.
+        await reload_after_panel_failure(db, db_user, subscription, new_tariff)
 
         # Гарантированный сброс устройств при смене тарифа
         await db.refresh(db_user)
@@ -5037,16 +5075,8 @@ async def confirm_instant_switch(
             except Exception as e:
                 logger.error('Ошибка сброса устройств при переключении тарифа', error=e)
 
-        # Создаем транзакцию если была оплата
+        # Запись о доплате уже закоммичена вместе со сменой тарифа
         if is_upgrade and upgrade_cost > 0:
-            await create_transaction(
-                db,
-                user_id=db_user.id,
-                type=TransactionType.SUBSCRIPTION_PAYMENT,
-                amount_kopeks=upgrade_cost,
-                description=f'Переключение на тариф {new_tariff.name}',
-            )
-
             # Отправляем уведомление админу
             try:
                 admin_notification_service = AdminNotificationService(callback.bot)
@@ -5141,6 +5171,11 @@ async def confirm_instant_switch(
 
     except Exception as e:
         logger.error('Ошибка при мгновенном переключении тарифа', error=e, exc_info=True)
+        # Незакоммиченная смена тарифа без доплаты не должна уйти в базу коммитом middleware.
+        try:
+            await db.rollback()
+        except Exception:
+            logger.debug('Ignored rollback error after instant switch failure', exc_info=True)
         try:
             await callback.message.edit_text(
                 texts.t('TARIFF_SWITCH_ERROR', '❌ Произошла ошибка при переключении тарифа')
