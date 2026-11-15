@@ -69,7 +69,6 @@ PERMISSION_REGISTRY: dict[str, list[str]] = {
     'remnawave': ['read', 'sync', 'manage'],
     'traffic': ['read', 'export'],
     'settings': ['read', 'edit'],
-    'audit_log': ['read', 'export'],
     'system_errors': ['read', 'manage'],
     'channels': ['read', 'edit'],
     'wheel': ['read', 'edit'],

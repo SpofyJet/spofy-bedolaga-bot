@@ -176,7 +176,6 @@ _PRESET_ROLES: list[dict] = [
             'remnawave:*',
             'traffic:*',
             'settings:*',
-            'audit_log:*',
             'channels:*',
             'wheel:*',
             'apps:*',

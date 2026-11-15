@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -73,7 +73,7 @@ class UserRoleCRUD:
 
 
 class AuditLogCRUD:
-    """Create + filtered query for admin_audit_log table."""
+    """Writes to admin_audit_log table."""
 
     @staticmethod
     async def create(
@@ -113,59 +113,3 @@ class AuditLogCRUD:
             status=status,
         )
         return entry
-
-    @staticmethod
-    async def get_logs(
-        db: AsyncSession,
-        *,
-        user_id: int | None = None,
-        action: str | None = None,
-        resource_type: str | None = None,
-        status: str | None = None,
-        date_from: datetime | None = None,
-        date_to: datetime | None = None,
-        limit: int = 50,
-        offset: int = 0,
-        load_user: bool = False,
-    ) -> tuple[list[AdminAuditLog], int]:
-        """Get filtered audit logs with total count.
-
-        Returns:
-            (logs, total_count)
-        """
-        filters = []
-        if user_id is not None:
-            filters.append(AdminAuditLog.user_id == user_id)
-        if action is not None:
-            filters.append(AdminAuditLog.action.ilike(f'%{action}%'))
-        if resource_type is not None:
-            filters.append(AdminAuditLog.resource_type == resource_type)
-        if status is not None:
-            filters.append(AdminAuditLog.status == status)
-        if date_from is not None:
-            filters.append(AdminAuditLog.created_at >= date_from)
-        if date_to is not None:
-            filters.append(AdminAuditLog.created_at <= date_to)
-
-        where_clause = and_(*filters) if filters else True
-
-        # Total count
-        count_result = await db.execute(select(func.count(AdminAuditLog.id)).where(where_clause))
-        total_count = count_result.scalar() or 0
-
-        # Paginated results
-        stmt = (
-            select(AdminAuditLog)
-            .where(where_clause)
-            .order_by(AdminAuditLog.created_at.desc())
-            .offset(offset)
-            .limit(limit)
-        )
-        if load_user:
-            from sqlalchemy.orm import selectinload
-
-            stmt = stmt.options(selectinload(AdminAuditLog.user))
-        result = await db.execute(stmt)
-        logs = list(result.scalars().all())
-
-        return logs, total_count
