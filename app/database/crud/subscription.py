@@ -5,11 +5,13 @@ from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 
 import structlog
-from sqlalchemy import and_, case, delete, func, select, update
+from sqlalchemy import and_, case, delete, func, inspect as sa_inspect, select, update
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.orm.exc import StaleDataError
+from sqlalchemy.orm.util import identity_key
 
 from app.config import settings
 from app.database.constants import ALIVE_SUBSCRIPTION_STATUSES as _ALIVE_SUBSCRIPTION_STATUSES
@@ -200,8 +202,6 @@ async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Subscri
     Multi-tariff compatible: prioritizes active subscriptions.
     For multi-tariff operations on a specific subscription, use get_subscription_by_id_for_user().
     """
-    from app.database.models import SubscriptionStatus
-
     result = await db.execute(
         select(Subscription)
         .options(
@@ -209,16 +209,7 @@ async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Subscri
             selectinload(Subscription.tariff),
         )
         .where(Subscription.user_id == user_id)
-        .order_by(
-            # Active/trial subscriptions first, then by end_date (most remaining time)
-            case(
-                (Subscription.status == SubscriptionStatus.ACTIVE.value, 0),
-                (Subscription.status == SubscriptionStatus.TRIAL.value, 1),
-                else_=2,
-            ),
-            Subscription.end_date.desc().nulls_last(),
-            Subscription.created_at.desc(),
-        )
+        .order_by(*_primary_subscription_order())
         .limit(1)
     )
     subscription = result.scalar_one_or_none()
@@ -233,6 +224,60 @@ async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Subscri
         subscription = await check_and_update_subscription_status(db, subscription)
 
     return subscription
+
+
+def _primary_subscription_order() -> tuple:
+    """Порядок выбора основной подписки человека — один для обеих выборок ниже."""
+    return (
+        # Active/trial subscriptions first, then by end_date (most remaining time)
+        case(
+            (Subscription.status == SubscriptionStatus.ACTIVE.value, 0),
+            (Subscription.status == SubscriptionStatus.TRIAL.value, 1),
+            else_=2,
+        ),
+        Subscription.end_date.desc().nulls_last(),
+        Subscription.created_at.desc(),
+    )
+
+
+async def get_subscription_by_user_id_in_session(db: AsyncSession, user_id: int) -> Subscription | None:
+    """То же, что ``get_subscription_by_user_id``, но строку, уже поднятую в сессию, не грузит заново.
+
+    Полный проход синка с панелью заранее поднимает всех людей с подписками и
+    тарифами и на каждого из ~23 тыс. дважды звал ``get_subscription_by_user_id``:
+    по три запроса (строка + selectinload человека и тарифа), ответ которых
+    отбрасывается — объект уже лежит в identity map сессии. Здесь та же строка
+    выбирается тем же порядком одним запросом по id, а объект берётся из сессии.
+    Нет его там, протух после отката или не поднят тариф — обычная загрузка.
+    """
+    subscription_id = (
+        await db.execute(
+            select(Subscription.id)
+            .where(Subscription.user_id == user_id)
+            .order_by(*_primary_subscription_order())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if subscription_id is None:
+        return None
+    subscription = db.identity_map.get(identity_key(Subscription, subscription_id))
+    if subscription is None or not _relations_ready_in_session(db, subscription):
+        return await get_subscription_by_user_id(db, user_id)
+    return await check_and_update_subscription_status(db, subscription)
+
+
+def _relations_ready_in_session(db: AsyncSession, subscription: Subscription) -> bool:
+    """Подписка из сессии годится без запроса: не протухла, тариф поднят, человек — в сессии."""
+    state = sa_inspect(subscription)
+    if state.expired_attributes or 'tariff' in state.unloaded:
+        return False
+    if 'user' in state.unloaded:
+        user = db.identity_map.get(identity_key(User, subscription.user_id))
+        if user is None or sa_inspect(user).expired_attributes:
+            return False
+        # Как selectinload(Subscription.user) в обычной загрузке: связь заполнена без запроса.
+        set_committed_value(subscription, 'user', user)
+    return True
 
 
 def apply_trial_conversion_defaults(subscription: Subscription) -> None:

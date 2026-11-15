@@ -1299,7 +1299,7 @@ class RemnaWaveService:
 
                         # Используем async запрос вместо доступа к relationship,
                         # чтобы избежать lazy-load в async контексте
-                        from app.database.crud.subscription import get_subscription_by_user_id as _get_sub
+                        from app.database.crud.subscription import get_subscription_by_user_id_in_session as _get_sub
 
                         existing_sub = await _get_sub(db, db_user.id)
                         if existing_sub:
@@ -1404,7 +1404,9 @@ class RemnaWaveService:
                                 db_user.remnawave_id = panel_user_id
 
                             # Используем async запрос вместо доступа к relationship
-                            from app.database.crud.subscription import get_subscription_by_user_id as _get_sub_email
+                            from app.database.crud.subscription import (
+                                get_subscription_by_user_id_in_session as _get_sub_email,
+                            )
 
                             existing_sub = await _get_sub_email(db, db_user.id)
                             if existing_sub:
@@ -1735,10 +1737,14 @@ class RemnaWaveService:
         snapshot_taken_at: datetime | None = None,
     ):
         try:
-            from app.database.crud.subscription import get_subscription_by_user_id, is_recently_updated_by_webhook
+            from app.database.crud.subscription import (
+                get_subscription_by_user_id_in_session,
+                is_recently_updated_by_webhook,
+            )
 
-            # Всегда используем async CRUD запрос для получения подписки
-            subscription = await get_subscription_by_user_id(db, user.id)
+            # Та же выборка, что get_subscription_by_user_id; строку, уже поднятую в сессию
+            # (полный синк поднимает всех заранее), заново не грузим.
+            subscription = await get_subscription_by_user_id_in_session(db, user.id)
 
             if not subscription:
                 await self._create_subscription_from_panel_data(db, user, panel_user)
