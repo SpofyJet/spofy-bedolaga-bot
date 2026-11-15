@@ -1380,13 +1380,18 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
                 commit=False,
             )
 
+        # Статус — до панели: при успехе её сервис сам коммитит, и продление должно уйти
+        # в базу вместе с DELIVERED. Иначе между этим коммитом и нашим блокировку строки
+        # получал второй запрос (двойное нажатие, повтор зависших), видел
+        # PENDING_ACTIVATION и продлевал ещё раз. При сбое панели откат вернёт и статус.
+        purchase.status = GuestPurchaseStatus.DELIVERED.value
+        purchase.delivered_at = datetime.now(UTC)
+
         await subscription_service.create_remnawave_user(db, subscription, reset_traffic=reset_traffic)
         await db.refresh(subscription)
 
         purchase.subscription_url = subscription.subscription_url
         purchase.subscription_crypto_link = subscription.subscription_crypto_link
-        purchase.status = GuestPurchaseStatus.DELIVERED.value
-        purchase.delivered_at = datetime.now(UTC)
         # Issue a one-click cabinet login token for any email recipient who just
         # got a fresh account — INCLUDING gift recipients claiming via the web
         # arm. Without this, an email gift recipient who never sees the emailed
