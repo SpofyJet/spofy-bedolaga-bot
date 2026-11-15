@@ -1,23 +1,16 @@
-import asyncio
 import time
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
-from typing import ParamSpec, TypeVar
 
 import structlog
-from sqlalchemy import bindparam, event, text
+from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
 from app.config import settings
 
 
 logger = structlog.get_logger(__name__)
-
-T = TypeVar('T')
-P = ParamSpec('P')
-R = TypeVar('R')
 
 # ============================================================================
 # PRODUCTION-GRADE CONNECTION POOLING
@@ -148,115 +141,6 @@ if settings.DEBUG:
             logger.debug('⚡ Query executed in', total=round(total, 3))
 
 # ============================================================================
-# ADVANCED SESSION MANAGER WITH READ REPLICAS
-# ============================================================================
-
-HEALTH_CHECK_TIMEOUT = 5.0  # секунды
-
-
-def _validate_database_url(url: str | None) -> str | None:
-    """Валидация URL базы данных."""
-    if not url:
-        return None
-    url = url.strip()
-    if not url or url.isspace():
-        return None
-    # Простая проверка на валидный формат
-    if not ('://' in url or url.startswith('sqlite')):
-        logger.warning('Невалидный DATABASE_URL (не содержит ://)')
-        return None
-    return url
-
-
-class DatabaseManager:
-    """Продвинутый менеджер БД с поддержкой реплик и кеширования"""
-
-    def __init__(self):
-        self.engine = engine
-        self.read_replica_engine: AsyncEngine | None = None
-        self._read_replica_session_factory: async_sessionmaker | None = None
-
-        # Валидация и создание read replica engine
-        replica_url = _validate_database_url(getattr(settings, 'DATABASE_READ_REPLICA_URL', None))
-        if replica_url:
-            try:
-                self.read_replica_engine = create_async_engine(
-                    replica_url,
-                    poolclass=poolclass,
-                    pool_size=30,  # Больше для read операций
-                    max_overflow=50,
-                    pool_pre_ping=True,
-                    pool_recycle=3600,
-                    echo=False,
-                )
-                # Создаём sessionmaker один раз (не при каждом вызове)
-                self._read_replica_session_factory = async_sessionmaker(
-                    bind=self.read_replica_engine,
-                    class_=AsyncSession,
-                    expire_on_commit=False,
-                    autoflush=False,
-                )
-                from sqlalchemy.engine import make_url
-
-                safe_url = make_url(replica_url).render_as_string(hide_password=True)
-                logger.info('Read replica настроена', replica_url=safe_url)
-            except Exception as e:
-                logger.error('Не удалось настроить read replica', e=e)
-                self.read_replica_engine = None
-
-    @asynccontextmanager
-    async def session(self, read_only: bool = False):
-        """Контекстный менеджер для работы с сессией БД."""
-        # Используем предсозданный sessionmaker вместо создания нового
-        if read_only and self._read_replica_session_factory:
-            session_factory = self._read_replica_session_factory
-        else:
-            session_factory = AsyncSessionLocal
-
-        async with session_factory() as session:
-            try:
-                yield session
-                if not read_only:
-                    await session.commit()
-            except Exception:
-                await session.rollback()
-                raise
-
-    async def health_check(self, timeout: float = HEALTH_CHECK_TIMEOUT) -> dict:
-        """
-        Проверка здоровья БД с таймаутом.
-
-        Args:
-            timeout: Максимальное время ожидания (секунды)
-        """
-        pool = self.engine.pool
-        status = 'unhealthy'
-        latency = None
-
-        try:
-            async with asyncio.timeout(timeout):
-                async with AsyncSessionLocal() as session:
-                    start = time.time()
-                    await session.execute(text('SELECT 1'))
-                    latency = (time.time() - start) * 1000
-            status = 'healthy'
-        except TimeoutError:
-            logger.error('Health check таймаут (сек)', timeout=timeout)
-            status = 'timeout'
-        except Exception as e:
-            logger.error('Database health check failed', e=e)
-            status = 'unhealthy'
-
-        return {
-            'status': status,
-            'latency_ms': round(latency, 2) if latency else None,
-            'pool': _collect_health_pool_metrics(pool),
-        }
-
-
-db_manager = DatabaseManager()
-
-# ============================================================================
 # SESSION DEPENDENCY FOR FASTAPI/AIOGRAM
 # ============================================================================
 
@@ -271,63 +155,6 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
             await session.rollback()
             raise
 
-
-# ============================================================================
-# BATCH OPERATIONS FOR PERFORMANCE
-# ============================================================================
-
-
-class BatchOperations:
-    """Утилиты для массовых операций"""
-
-    @staticmethod
-    async def bulk_insert(session: AsyncSession, model, data: list[dict], chunk_size: int = 1000):
-        """Массовая вставка с чанками"""
-        for i in range(0, len(data), chunk_size):
-            chunk = data[i : i + chunk_size]
-            session.add_all([model(**item) for item in chunk])
-            await session.flush()
-        await session.commit()
-
-    @staticmethod
-    async def bulk_update(session: AsyncSession, model, data: list[dict], chunk_size: int = 1000):
-        """Массовое обновление с чанками"""
-        if not data:
-            return
-
-        primary_keys = [column.name for column in model.__table__.primary_key.columns]
-        if not primary_keys:
-            raise ValueError('Model must have a primary key for bulk_update')
-
-        updatable_columns = [column.name for column in model.__table__.columns if column.name not in primary_keys]
-
-        if not updatable_columns:
-            raise ValueError('No columns available for update in bulk_update')
-
-        stmt = (
-            model.__table__.update()
-            .where(*[getattr(model.__table__.c, pk) == bindparam(pk) for pk in primary_keys])
-            .values(**{column: bindparam(column, required=False) for column in updatable_columns})
-        )
-
-        for i in range(0, len(data), chunk_size):
-            chunk = data[i : i + chunk_size]
-            filtered_chunk = []
-            for item in chunk:
-                missing_keys = [pk for pk in primary_keys if pk not in item]
-                if missing_keys:
-                    raise ValueError(f'Missing primary key values {missing_keys} for bulk_update')
-
-                filtered_item = {
-                    key: value for key, value in item.items() if key in primary_keys or key in updatable_columns
-                }
-                filtered_chunk.append(filtered_item)
-
-            await session.execute(stmt, filtered_chunk)
-        await session.commit()
-
-
-batch_ops = BatchOperations()
 
 # ============================================================================
 # INITIALIZATION AND CLEANUP
@@ -463,59 +290,4 @@ def _pool_counters(pool):
         'overflow': overflow,
         'total_connections': total_connections,
         'utilization_percent': (checked_out / total_connections * 100) if total_connections else 0.0,
-    }
-
-
-def _collect_health_pool_metrics(pool) -> dict:
-    counters = _pool_counters(pool)
-
-    if counters is None:
-        return {
-            'metrics_available': False,
-            'size': 0,
-            'checked_in': 0,
-            'checked_out': 0,
-            'overflow': 0,
-            'total_connections': 0,
-            'utilization': '0.0%',
-        }
-
-    return {
-        'metrics_available': True,
-        'size': counters['size'],
-        'checked_in': counters['checked_in'],
-        'checked_out': counters['checked_out'],
-        'overflow': counters['overflow'],
-        'total_connections': counters['total_connections'],
-        'utilization': f'{counters["utilization_percent"]:.1f}%',
-    }
-
-
-async def get_pool_metrics() -> dict:
-    """Детальные метрики пула для Prometheus/Grafana"""
-    pool = engine.pool
-
-    counters = _pool_counters(pool)
-
-    if counters is None:
-        return {
-            'metrics_available': False,
-            'pool_size': 0,
-            'checked_in_connections': 0,
-            'checked_out_connections': 0,
-            'overflow_connections': 0,
-            'total_connections': 0,
-            'max_possible_connections': 0,
-            'pool_utilization_percent': 0.0,
-        }
-
-    return {
-        'metrics_available': True,
-        'pool_size': counters['size'],
-        'checked_in_connections': counters['checked_in'],
-        'checked_out_connections': counters['checked_out'],
-        'overflow_connections': counters['overflow'],
-        'total_connections': counters['total_connections'],
-        'max_possible_connections': counters['total_connections'] + (getattr(pool, '_max_overflow', 0) or 0),
-        'pool_utilization_percent': round(counters['utilization_percent'], 2),
     }
