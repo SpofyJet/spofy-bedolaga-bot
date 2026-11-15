@@ -50,3 +50,28 @@ def plain_alert_text(text: str) -> str:
     if len(plain) > ALERT_TEXT_LIMIT:
         plain = plain[: ALERT_TEXT_LIMIT - 1].rstrip() + '…'
     return plain
+
+
+# Знак обходов: в текстах локали и на кнопках это щит Spofy (премиум-эмодзи), а в названии тарифа из базы
+# («🏴‍☠️ С Обходами») стоит обычный флаг — на одном экране выходило два разных значка у одного тарифа.
+BYPASS_SIGN_EMOJI_ID = '5470133780557631227'
+_BYPASS_FLAG = '\U0001f3f4\u200d\u2620'
+# Уже обёрнутый знак, содержимое <code>/<pre> (там вложенная разметка запрещена) и сами теги пропускаем целиком.
+_BYPASS_SIGN_RE = re.compile(
+    r'(<tg-emoji\b[^>]*>.*?</tg-emoji>|<code\b[^>]*>.*?</code>|<pre\b[^>]*>.*?</pre>|<[^<>]*>)'
+    '|' + _BYPASS_FLAG + '\ufe0f?',
+    re.DOTALL,
+)
+
+
+def brand_bypass_sign(text: str | None) -> str | None:
+    """«Голый» 🏴‍☠️ в HTML-тексте → тот же щит Spofy, что в локали и на кнопках. Только для parse_mode=HTML."""
+    if not text or _BYPASS_FLAG not in text:
+        return text
+
+    def wrap(match: re.Match[str]) -> str:
+        if match.group(1) is not None:
+            return match.group(0)
+        return f"<tg-emoji emoji-id='{BYPASS_SIGN_EMOJI_ID}'>{match.group(0)}</tg-emoji>"
+
+    return _BYPASS_SIGN_RE.sub(wrap, text)
