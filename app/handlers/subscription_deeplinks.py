@@ -79,9 +79,7 @@ def _renew_reply(texts, subscription) -> tuple[str, str, types.InlineKeyboardBut
     return (
         'trial' if subscription.is_trial else 'renew',
         texts.get('DEEPLINK_RENEW_TEXT', '⏰ <b>Продление подписки</b>'),
-        build_subscription_extend_button(
-            texts.get('BYPASS_RENEW_BUTTON', '⏰ Продлить подписку'), subscription.id, style='success'
-        ),
+        build_subscription_extend_button(texts.get('BYPASS_RENEW_BUTTON', '⏰ Продлить подписку'), style='success'),
     )
 
 

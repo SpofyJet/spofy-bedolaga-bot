@@ -710,17 +710,7 @@ async def _merge_phantom_into_active_user(
         for sub in phantom_subs:
             sub.user_id = active_user.id
         # Transfer remnawave_id (clear first to avoid unique constraint violation on flush)
-        if settings.is_multi_tariff_enabled():
-            # In multi-tariff, transfer user-level panel id only if no subscription-level ids exist
-            if phantom.remnawave_id and not active_user.remnawave_id:
-                phantom_subs = phantom.subscriptions or []
-                has_sub_ids = any(getattr(s, 'remnawave_id', None) for s in phantom_subs)
-                if not has_sub_ids:
-                    panel_id_to_transfer = phantom.remnawave_id
-                    phantom.remnawave_id = None
-                    await db.flush()
-                    active_user.remnawave_id = panel_id_to_transfer
-        elif phantom.remnawave_id and not active_user.remnawave_id:
+        if phantom.remnawave_id and not active_user.remnawave_id:
             panel_id_to_transfer = phantom.remnawave_id
             phantom.remnawave_id = None
             await db.flush()

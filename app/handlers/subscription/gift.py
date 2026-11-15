@@ -18,7 +18,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config import settings
 from app.database.models import GuestPurchase, GuestPurchaseStatus, User
 from app.handlers.subscription.purchase import show_subscription_info
 from app.keyboards.inline import get_insufficient_balance_keyboard
@@ -815,14 +814,8 @@ async def handle_gift_cancel(
         and (cart_data.get('gift_checkout_id') or cart_data.get('idempotency_key')) == checkout_id
     ):
         await user_cart_service.delete_processed_cart(db_user.id, cart_data)
-    origin = data.get('gift_origin_callback', 'menu_subscription')
 
-    if origin == 'my_subscriptions' and settings.is_multi_tariff_enabled():
-        from app.handlers.subscription.my_subscriptions import show_my_subscriptions
-
-        await show_my_subscriptions(callback, db_user, db, state)
-    else:
-        await show_subscription_info(callback, db_user, db)
+    await show_subscription_info(callback, db_user, db)
 
 
 async def handle_gift_confirm(

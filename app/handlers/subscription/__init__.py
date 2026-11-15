@@ -71,14 +71,6 @@ from .links import (
     handle_connect_subscription,
     handle_open_subscription_link,
 )
-from .my_subscriptions import (
-    handle_subscription_devices,
-    handle_subscription_extend,
-    handle_subscription_link,
-    handle_subscription_traffic,
-    show_my_subscriptions,
-    show_subscription_detail,
-)
 from .promo import (
     claim_discount_offer,
     handle_promo_offer_close,
@@ -166,11 +158,7 @@ __all__ = [
     'handle_single_device_reset',
     'handle_specific_app_guide',
     'handle_subscription_cancel',
-    'handle_subscription_devices',
-    'handle_subscription_extend',
-    'handle_subscription_link',
     'handle_subscription_settings',
-    'handle_subscription_traffic',
     'handle_switch_traffic',
     'invalidate_app_config_cache',
     'load_app_config_async',
@@ -186,8 +174,6 @@ __all__ = [
     'show_autopay_period',
     'show_device_connection_help',
     'show_devices_page',
-    'show_my_subscriptions',
-    'show_subscription_detail',
     'show_subscription_info',
     'show_trial_offer',
     'start_subscription_purchase',

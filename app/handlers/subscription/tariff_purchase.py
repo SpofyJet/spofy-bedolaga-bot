@@ -114,62 +114,11 @@ async def _resolve_subscription(callback, db_user, db, state=None):
 
 
 async def _resolve_switch_subscription(callback, db_user, db, state=None):
-    """Resolve the subscription for tariff-switch flows (issue #3012).
+    """Подписка пользователя для смены тарифа: одна на человека."""
+    from app.database.crud.subscription import get_subscription_by_user_id
 
-    Unlike the generic resolver, this NEVER reads the trailing callback segment as
-    a subscription_id — switch callbacks end in tariff_id/period, which the generic
-    resolver would mistake for a sub_id (and renew/switch the WRONG subscription
-    when that number equals one of the user's subscription ids). The switch entry
-    (show_tariff_switch_list / show_instant_switch_list) stores the chosen
-    subscription in FSM ``active_subscription_id``, so it is authoritative for
-    continuation callbacks. Only ``tariff_switch_for`` carries an explicit source.
-    """
-    from app.database.crud.subscription import (
-        get_active_subscriptions_by_user_id,
-        get_subscription_by_id_for_user,
-        get_subscription_by_user_id,
-    )
-
-    if (callback.data or '').startswith('tariff_switch_for:'):
-        try:
-            selected_id = int(callback.data.split(':', 1)[1])
-        except (ValueError, TypeError):
-            selected_id = 0
-        sub = (
-            await get_subscription_by_id_for_user(db, selected_id, db_user.id)
-            if selected_id > 0 and settings.is_multi_tariff_enabled()
-            else None
-        )
-        if not sub or sub.is_pending_trial:
-            await callback.answer(
-                get_texts(db_user.language).t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True
-            )
-            return None, None
-        return sub, sub.id
-
-    if not settings.is_multi_tariff_enabled():
-        sub = await get_subscription_by_user_id(db, db_user.id)
-        return sub, (sub.id if sub else None)
-
-    if state:
-        try:
-            data = await state.get_data()
-            fsm_sub_id = data.get('active_subscription_id')
-            if fsm_sub_id:
-                sub = await get_subscription_by_id_for_user(db, fsm_sub_id, db_user.id)
-                if sub:
-                    return sub, fsm_sub_id
-        except Exception:
-            logger.warning('Ignored error in _resolve_switch_subscription', exc_info=True)
-
-    active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-    if len(active_subs) == 1:
-        return active_subs[0], active_subs[0].id
-
-    await callback.answer(
-        get_texts(db_user.language).t('TARIFF_PURCHASE_SELECT_SUBSCRIPTION', 'Выберите подписку'), show_alert=True
-    )
-    return None, None
+    sub = await get_subscription_by_user_id(db, db_user.id)
+    return sub, (sub.id if sub else None)
 
 
 def _tariff_available_for_user(tariff: Tariff, user: User) -> bool:
@@ -248,13 +197,10 @@ def format_tariffs_list_text(
     tariffs: list[Tariff],
     db_user: User | None = None,
     has_period_discounts: bool = False,
-    purchased_tariff_ids: set[int] | None = None,
 ) -> str:
     """Форматирует текст со списком тарифов для отображения."""
     texts = get_texts(db_user.language if db_user else 'ru')
     lines = [texts.t('TARIFF_PURCHASE_LIST_TITLE', '📦 <b>Выберите тариф</b>')]
-    if purchased_tariff_ids is None:
-        purchased_tariff_ids = set()
 
     if has_period_discounts:
         lines.append(texts.t('TARIFF_PURCHASE_PERIOD_DISCOUNTS_HINT', '🎁 <i>Скидки по периодам</i>'))
@@ -318,10 +264,7 @@ def format_tariffs_list_text(
                     )
 
         # Компактный формат: Название — 250 ГБ / 10 📱 179 ₽🔥 за 30 дней
-        purchased_mark = ' ✅' if tariff.id in purchased_tariff_ids else ''
-        lines.append(
-            f'<b>{html.escape(tariff.name)}</b>{purchased_mark} — {traffic} / {tariff.device_limit} 📱 {price_text}'
-        )
+        lines.append(f'<b>{html.escape(tariff.name)}</b> — {traffic} / {tariff.device_limit} 📱 {price_text}')
 
         # Описание тарифа если есть
         if tariff.description:
@@ -335,21 +278,14 @@ def format_tariffs_list_text(
 def get_tariffs_keyboard(
     tariffs: list[Tariff],
     language: str,
-    purchased_tariff_ids: set[int] | None = None,
 ) -> InlineKeyboardMarkup:
     """Создает компактную клавиатуру выбора тарифов (только названия)."""
     texts = get_texts(language)
-    if purchased_tariff_ids is None:
-        purchased_tariff_ids = set()
     buttons = []
 
     badge = texts.t('TARIFF_BEST_VALUE_BADGE', '⭐ выгодно')
     for tariff in tariffs:
-        if tariff.id in purchased_tariff_ids:
-            # Уже купленный тариф важнее подсказки: галочка отвечает на вопрос
-            # «а этот у меня есть?», отметка выгоды тут уже ничего не решает.
-            title = f'✅ {tariff.name}'
-        elif getattr(tariff, 'is_highlighted', False):
+        if getattr(tariff, 'is_highlighted', False):
             title = f'{badge} · {tariff.name}'
         else:
             title = tariff.name
@@ -657,10 +593,7 @@ def get_tariff_extend_insufficient_balance_keyboard(
     передаёт явно через ``sbp_rows``.
     """
     texts = get_texts(language)
-    back_callback = (
-        f'se:{subscription_id}' if settings.is_multi_tariff_enabled() and subscription_id else 'subscription_extend'
-    )
-    back_button = InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)
+    back_button = InlineKeyboardButton(text=texts.BACK, callback_data='subscription_extend')
     sbp_rows = sbp_rows or []
 
     # Способы оплаты на недостающую сумму — сразу, и без автопокупки: корзина сохранена, после зачисления
@@ -995,25 +928,7 @@ def _calculate_custom_tariff_price(
 
 
 async def _resolve_purchase_subscription(db, db_user, tariff, state=None, *, source_data=None):
-    if not settings.is_multi_tariff_enabled():
-        return await get_subscription_by_user_id(db, db_user.id)
-
-    from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-    if source_data is None:
-        source_data = await state.get_data() if state else {}
-    source_id = source_data.get('target_subscription_id') or source_data.get('active_subscription_id')
-    if source_id:
-        selected = await get_subscription_by_id_for_user(db, int(source_id), db_user.id)
-        if selected is None:
-            raise LookupError('Selected subscription is missing or belongs to another user')
-        if selected.tariff_id in (None, tariff.id):
-            return selected
-    active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-    existing = next((subscription for subscription in active_subs if subscription.tariff_id == tariff.id), None)
-    if existing is not None:
-        return existing
-    return await get_subscription_by_user_and_tariff(db, db_user.id, tariff.id, include_inactive=True)
+    return await get_subscription_by_user_id(db, db_user.id)
 
 
 async def _bind_tariff_purchase_keyboard(
@@ -1186,28 +1101,9 @@ async def show_tariffs_list(
         return
 
     # Один доступный тариф — сразу к периоду/подтверждению, без экрана «выбора из одной кнопки».
-    # Кроме случая, когда покупать нечего: в мультитарифе `_proceed_with_selected_tariff`
-    # на уже активном тарифе только показывает всплывающее уведомление и выходит,
-    # ничего не перерисовывая, — кнопка «Купить подписку» выглядела бы мёртвой.
-    # Тогда показываем список: там тариф помечен галочкой и понятно, почему.
     if len(tariffs) == 1:
-        _already_owned = False
-        if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-            _active = await get_active_subscriptions_by_user_id(db, db_user.id)
-            _already_owned = any(s.tariff_id == tariffs[0].id and not s.is_trial for s in _active)
-        if not _already_owned:
-            await _proceed_with_selected_tariff(callback, db_user, db, state, tariffs[0].id, skip_selection=True)
-            return
-
-    # В мульти-тарифе определяем какие тарифы уже куплены
-    purchased_tariff_ids: set[int] = set()
-    if settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        purchased_tariff_ids = {s.tariff_id for s in active_subs if s.tariff_id and not s.is_trial}
+        await _proceed_with_selected_tariff(callback, db_user, db, state, tariffs[0].id, skip_selection=True)
+        return
 
     # Проверяем есть ли у пользователя скидки по периодам
     promo_group = db_user.get_primary_promo_group() if hasattr(db_user, 'get_primary_promo_group') else None
@@ -1220,11 +1116,11 @@ async def show_tariffs_list(
             has_period_discounts = True
 
     # Формируем текст со списком тарифов и их характеристиками
-    tariffs_text = format_tariffs_list_text(tariffs, db_user, has_period_discounts, purchased_tariff_ids)
+    tariffs_text = format_tariffs_list_text(tariffs, db_user, has_period_discounts)
 
     await callback.message.edit_text(
         tariffs_text,
-        reply_markup=get_tariffs_keyboard(tariffs, db_user.language, purchased_tariff_ids),
+        reply_markup=get_tariffs_keyboard(tariffs, db_user.language),
     )
 
     await callback.answer()
@@ -1287,32 +1183,13 @@ async def _proceed_with_selected_tariff(
         return
 
     # В мульти-тарифе проверяем не куплен ли уже этот тариф
-    if settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-        _active = await get_active_subscriptions_by_user_id(db, db_user.id)
-        _existing = next((s for s in _active if s.tariff_id == tariff_id and not s.is_trial), None)
-        if _existing:
-            days_left = local_days_until(_existing.end_date) if _existing.end_date else 0
-            await callback.answer(
-                texts.t(
-                    'TARIFF_PURCHASE_ALREADY_ACTIVE',
-                    'Тариф «{name}» уже активен ({days} дн.). Продлите через "Мои подписки".',
-                ).format(name=tariff.name, days=days_left),
-                show_alert=True,
-            )
-            return
 
     # Проверяем, суточный ли это тариф
     is_daily = tariff.is_daily
 
     if is_daily:
         # Для суточного тарифа показываем подтверждение без выбора периода
-        try:
-            _daily_existing_sub = await _resolve_purchase_subscription(db, db_user, tariff, state)
-        except LookupError:
-            await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
-            return
+        _daily_existing_sub = await _resolve_purchase_subscription(db, db_user, tariff, state)
         effective_device_limit = resolve_tariff_purchase_device_limit(tariff, _daily_existing_sub)
         from app.services.pricing_engine import pricing_engine
 
@@ -1485,12 +1362,7 @@ async def _proceed_with_selected_tariff(
             # докупленными устройствами на кнопках — честные цены периода с
             # доплатой (device_limit), а не базовые цены тарифа.
             _existing_device_limit = None
-            if settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-                _period_sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff_id)
-            else:
-                _period_sub = await get_subscription_by_user_id(db, db_user.id)
+            _period_sub = await get_subscription_by_user_id(db, db_user.id)
             if _period_sub and _period_sub.tariff_id == tariff.id:
                 _existing_device_limit = _period_sub.device_limit
 
@@ -1700,18 +1572,6 @@ async def _confirm_tariff_checkout(callback, state, db_user, db, tariff, period)
             texts.t('TARIFF_PURCHASE_CART_CORRUPTED', '❌ Данные корзины повреждены'), show_alert=True
         )
         return True
-    if checkout.get('fresh_fixed') and settings.is_multi_tariff_enabled() and cart.get('subscription_id') is None:
-        selected = await _resolve_purchase_subscription(db, db_user, tariff, state)
-        if selected is None:
-            active = await get_active_subscriptions_by_user_id(db, user_id)
-            if sum(not sub.is_trial for sub in active) >= settings.get_max_active_subscriptions():
-                await callback.answer(
-                    texts.t('TARIFF_PURCHASE_MAX_SUBSCRIPTIONS', '❌ Максимум подписок: {max}').format(
-                        max=settings.get_max_active_subscriptions()
-                    ),
-                    show_alert=True,
-                )
-                return True
     if await _reject_unavailable_checkout_squads(callback, tariff.allowed_squads, texts):
         return True
 
@@ -1785,9 +1645,7 @@ async def _confirm_tariff_checkout(callback, state, db_user, db, tariff, period)
                 [
                     InlineKeyboardButton(
                         text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
-                        callback_data=f'sm:{subscription.id}'
-                        if settings.is_multi_tariff_enabled()
-                        else 'menu_subscription',
+                        callback_data='menu_subscription',
                     )
                 ],
                 [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
@@ -1967,23 +1825,7 @@ async def select_tariff_period(
 
     # Существующая подписка этого тарифа нужна ДО расчёта цены: confirm передаёт
     # её device_limit в движок, и превью обязано считать так же.
-    if settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-        source_data = await state.get_data() if state else {}
-        source_id = source_data.get('target_subscription_id') or source_data.get('active_subscription_id')
-        _existing_sub = None
-        if source_id:
-            selected = await get_subscription_by_id_for_user(db, int(source_id), db_user.id)
-            if selected is None:
-                await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
-                return
-            if selected.tariff_id in (None, tariff_id):
-                _existing_sub = selected
-        if _existing_sub is None:
-            _existing_sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff_id, include_inactive=True)
-    else:
-        _existing_sub = await get_subscription_by_user_id(db, db_user.id)
+    _existing_sub = await get_subscription_by_user_id(db, db_user.id)
 
     device_limit = resolve_tariff_purchase_device_limit(tariff, _existing_sub)
 
@@ -2152,23 +1994,12 @@ async def select_tariff_period(
             parse_mode='HTML',
         )
 
-    # Pin the resolved subscription_id in FSM (resolved above, before pricing).
-    # Without this, ``confirm_tariff_purchase`` re-queries by
-    # ``(user_id, tariff_id)`` and can race with concurrent panel
-    # webhooks that briefly flip the active sub's status — falling
-    # through to ``create_paid_subscription`` and hitting the partial
-    # UNIQUE ``uq_subscriptions_user_tariff_active`` (logs "Тариф уже
-    # активен", refunds, leaves user confused).
-    target_subscription_id: int | None = None
-    if settings.is_multi_tariff_enabled():
-        target_subscription_id = _existing_sub.id if _existing_sub else None
-
     await state.update_data(
         selected_tariff_id=tariff_id,
         selected_period=period,
         final_price=final_price,
         tariff_discount_percent=discount_percent,
-        target_subscription_id=target_subscription_id,
+        target_subscription_id=None,
     )
     await callback.answer()
 
@@ -2245,13 +2076,7 @@ async def confirm_daily_tariff_purchase(
 
     selection_state = await state.get_state()
     selection_data = await state.get_data()
-    try:
-        existing_subscription = await _resolve_purchase_subscription(
-            db, db_user, tariff, state, source_data=selection_data
-        )
-    except LookupError:
-        await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
-        return
+    existing_subscription = await _resolve_purchase_subscription(db, db_user, tariff, state, source_data=selection_data)
     from app.database.crud.subscription import get_subscription_by_user_and_tariff
 
     active_target = await get_subscription_by_user_and_tariff(db, db_user.id, tariff.id)
@@ -2287,11 +2112,7 @@ async def confirm_daily_tariff_purchase(
     checkout_cart = None
     source_id = existing_subscription.id if existing_subscription else None
     try:
-        candidate = (
-            await user_cart_service.get_subscription_cart(db_user.id, source_id)
-            if source_id and settings.is_multi_tariff_enabled()
-            else await user_cart_service.get_user_cart(db_user.id)
-        )
+        candidate = await user_cart_service.get_user_cart(db_user.id)
         if (
             isinstance(candidate, dict)
             and candidate.get('cart_mode') == 'daily_tariff_purchase'
@@ -2521,9 +2342,7 @@ async def confirm_daily_tariff_purchase(
                     [
                         InlineKeyboardButton(
                             text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
-                            callback_data=f'sm:{subscription.id}'
-                            if settings.is_multi_tariff_enabled() and subscription
-                            else 'menu_subscription',
+                            callback_data='menu_subscription',
                         )
                     ],
                     [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
@@ -2593,7 +2412,6 @@ def get_tariff_extend_keyboard(
     db_user: User | None = None,
     subscription_device_limit: int | None = None,
     subscription_id: int | None = None,
-    show_switch: bool = False,
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру выбора периода для продления по тарифу с учетом скидок по периодам."""
     from app.services.pricing_engine import PricingEngine
@@ -2626,15 +2444,6 @@ def get_tariff_extend_keyboard(
             ]
         )
 
-    if show_switch and subscription_id is not None:
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('CHANGE_TARIFF_BUTTON', '📦 Тариф'),
-                    callback_data=f'tariff_switch_for:{subscription_id}',
-                )
-            ]
-        )
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -2720,74 +2529,11 @@ async def show_tariff_extend(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
-    subscription_id: int | None = None,
 ):
-    """Показывает экран продления по текущему тарифу.
-
-    ``subscription_id`` передаётся явно из кнопки «Назад» (где хвост callback —
-    это tariff_id, а не id подписки). Если не задан — берём из ``se:{id}`` (хвост
-    = реальный id подписки).
-    """
+    """Показывает экран продления по текущему тарифу."""
     texts = get_texts(db_user.language)
 
-    if settings.is_multi_tariff_enabled():
-        sub_id = subscription_id
-        if sub_id is None:
-            parts = (callback.data or '').split(':')
-            if len(parts) >= 2:
-                try:
-                    sub_id = int(parts[-1])
-                except (ValueError, TypeError):
-                    pass
-        if sub_id:
-            subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
-        else:
-            active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-            if len(active_subs) > 1:
-                # Show subscription picker for extending
-                keyboard = []
-                for sub in sorted(active_subs, key=lambda s: s.id):
-                    tariff_name = ''
-                    if sub.tariff_id:
-                        _t = await get_tariff_by_id(db, sub.tariff_id)
-                        tariff_name = _t.name if _t else f'#{sub.id}'
-                    else:
-                        tariff_name = texts.t('TARIFF_PURCHASE_SUBSCRIPTION_FALLBACK', 'Подписка #{id}').format(
-                            id=sub.id
-                        )
-                    if is_lifetime_end(sub.end_date):
-                        continue
-                    days_left = local_days_until(sub.end_date) if sub.end_date else 0
-                    keyboard.append(
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t('TARIFF_RENEW_SUB_BUTTON', '🔄 {name} ({days}д.)').format(
-                                    name=tariff_name, days=days_left
-                                ),
-                                callback_data=f'se:{sub.id}',
-                                style='success',
-                            )
-                        ]
-                    )
-                keyboard.append(
-                    [InlineKeyboardButton(text=texts.t('BACK_BUTTON', '⬅️ Назад'), callback_data='back_to_menu')]
-                )
-                await callback.message.edit_text(
-                    texts.t(
-                        'TARIFF_RENEW_PICK_SUBSCRIPTION',
-                        '🔄 <b>Продление подписки</b>\n\nВыберите подписку для продления:',
-                    ),
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
-                    parse_mode='HTML',
-                )
-                await callback.answer()
-                return
-            if active_subs:
-                subscription = active_subs[0]
-            else:
-                subscription = None
-    else:
-        subscription = await get_subscription_by_user_id(db, db_user.id)
+    subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription:
         await callback.answer(texts.t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True)
         return
@@ -2907,13 +2653,6 @@ async def show_tariff_extend(
             db_user=db_user,
             subscription_device_limit=actual_device_limit,
             subscription_id=subscription.id,
-            show_switch=bool(
-                settings.is_multi_tariff_enabled()
-                and not subscription.is_trial
-                and subscription.end_date
-                and subscription.end_date > datetime.now(UTC)
-                and (settings.TARIFF_SWITCH_UPGRADE_ENABLED or settings.TARIFF_SWITCH_DOWNGRADE_ENABLED)
-            ),
         ),
         parse_mode='HTML',
     )
@@ -2936,7 +2675,7 @@ async def select_tariff_extend_period(
 
     # Кнопка «Назад» шлёт tariff_extend:{sub_id}:{tariff_id} без периода — экран выбора периода
     if len(parts) < 4:
-        await show_tariff_extend(callback, db_user, db, subscription_id=sub_id)
+        await show_tariff_extend(callback, db_user, db)
         return
 
     period = int(parts[3])
@@ -3309,10 +3048,7 @@ async def confirm_tariff_extend(
         # Очищаем корзину после успешной покупки (per-subscription в multi-tariff)
         try:
             _cart_sub_id = getattr(subscription, 'id', None) if subscription else None
-            if _cart_sub_id and settings.is_multi_tariff_enabled():
-                await user_cart_service.delete_subscription_cart(db_user.id, _cart_sub_id)
-            else:
-                await user_cart_service.delete_user_cart(db_user.id)
+            await user_cart_service.delete_user_cart(db_user.id)
             logger.info('Корзина очищена после продления тарифа для пользователя', telegram_id=db_user.telegram_id)
         except Exception as e:
             logger.error('Ошибка очистки корзины', error=e)
@@ -3624,12 +3360,7 @@ async def show_tariff_switch_list(
     tariffs = await get_tariffs_for_user(db, promo_group_id)
 
     # Filter out ALL tariffs user already has active subscriptions for
-    if settings.is_multi_tariff_enabled():
-        _all_active = await get_active_subscriptions_by_user_id(db, db_user.id)
-        _purchased_ids = {s.tariff_id for s in _all_active if s.tariff_id}
-        available_tariffs = [t for t in tariffs if t.id not in _purchased_ids]
-    else:
-        available_tariffs = [t for t in tariffs if t.id != current_tariff_id]
+    available_tariffs = [t for t in tariffs if t.id != current_tariff_id]
 
     # Фильтруем по разрешённым направлениям (upgrade/downgrade)
     current_tariff = await get_tariff_by_id(db, current_tariff_id) if current_tariff_id else None
@@ -4215,16 +3946,7 @@ async def confirm_tariff_switch(
 
         # Гарантированный сброс устройств при смене тарифа
         await db.refresh(db_user)
-        _reset_panel_id = (
-            subscription.remnawave_id
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_id
-            else db_user.remnawave_id
-        )
-        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_id', None):
-            logger.warning(
-                'Multi-tariff: subscription missing remnawave_id, using user fallback',
-                subscription_id=getattr(subscription, 'id', None),
-            )
+        _reset_panel_id = db_user.remnawave_id
         if _reset_panel_id:
             try:
                 from app.services.remnawave_service import RemnaWaveService
@@ -4261,10 +3983,7 @@ async def confirm_tariff_switch(
         # Очищаем корзину после успешной покупки (per-subscription в multi-tariff)
         try:
             _cart_sub_id = getattr(subscription, 'id', None) if subscription else None
-            if _cart_sub_id and settings.is_multi_tariff_enabled():
-                await user_cart_service.delete_subscription_cart(db_user.id, _cart_sub_id)
-            else:
-                await user_cart_service.delete_user_cart(db_user.id)
+            await user_cart_service.delete_user_cart(db_user.id)
             logger.info('Корзина очищена после смены тарифа для пользователя', telegram_id=db_user.telegram_id)
         except Exception as e:
             logger.error('Ошибка очистки корзины', error=e)
@@ -4541,16 +4260,7 @@ async def confirm_daily_tariff_switch(
 
         # Гарантированный сброс устройств при смене тарифа
         await db.refresh(db_user)
-        _reset_panel_id_daily = (
-            subscription.remnawave_id
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_id
-            else db_user.remnawave_id
-        )
-        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_id', None):
-            logger.warning(
-                'Multi-tariff: subscription missing remnawave_id, using user fallback',
-                subscription_id=getattr(subscription, 'id', None),
-            )
+        _reset_panel_id_daily = db_user.remnawave_id
         if _reset_panel_id_daily:
             try:
                 from app.services.remnawave_service import RemnaWaveService
@@ -4949,12 +4659,7 @@ async def show_instant_switch_list(
     tariffs = await get_tariffs_for_user(db, promo_group_id)
 
     # Filter out ALL tariffs user already has active subscriptions for
-    if settings.is_multi_tariff_enabled():
-        _all_active_instant = await get_active_subscriptions_by_user_id(db, db_user.id)
-        _purchased_ids_instant = {s.tariff_id for s in _all_active_instant if s.tariff_id}
-        available_tariffs = [t for t in tariffs if t.id not in _purchased_ids_instant]
-    else:
-        available_tariffs = [t for t in tariffs if t.id != current_tariff.id]
+    available_tariffs = [t for t in tariffs if t.id != current_tariff.id]
 
     # Фильтруем по разрешённым направлениям (upgrade/downgrade)
     available_tariffs = _filter_tariffs_by_switch_direction(available_tariffs, current_tariff, remaining_days, db_user)
@@ -5564,16 +5269,7 @@ async def confirm_instant_switch(
 
         # Гарантированный сброс устройств при смене тарифа
         await db.refresh(db_user)
-        _reset_panel_id_instant = (
-            subscription.remnawave_id
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_id
-            else db_user.remnawave_id
-        )
-        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_id', None):
-            logger.warning(
-                'Multi-tariff: subscription missing remnawave_id, using user fallback',
-                subscription_id=getattr(subscription, 'id', None),
-            )
+        _reset_panel_id_instant = db_user.remnawave_id
         if _reset_panel_id_instant:
             try:
                 from app.services.remnawave_service import RemnaWaveService
@@ -5799,18 +5495,6 @@ async def load_saved_tariff_cart(
         subscription = await _resolve_purchase_subscription(db, db_user, tariff)
     if cart_mode == 'extend' and (subscription is None or subscription.tariff_id != tariff_id):
         return None, _CART_SUBSCRIPTION_NOT_FOUND
-    if (
-        settings.is_multi_tariff_enabled()
-        and subscription is not None
-        and subscription.tariff_id not in (None, tariff_id)
-    ):
-        # An explicit saved source is part of the purchase intent. Do not
-        # reinterpret an old cart as a purchase for a different subscription.
-        if source_id is not None:
-            return None, SavedTariffCartRejection(
-                'TARIFF_PURCHASE_CONFIRMATION_EXPIRED', 'Подтверждение устарело. Выберите тариф заново.'
-            )
-        subscription = await _resolve_purchase_subscription(db, db_user, tariff)
 
     fixed_price = tariff.get_price_for_period(period)
     if (cart_mode == 'daily_tariff_purchase' and (not tariff.is_daily or tariff.daily_price_kopeks <= 0)) or (
@@ -5885,10 +5569,7 @@ async def _restore_saved_tariff_cart(
         if rejection.drop_cart:
             # Очищаем корзину (per-subscription в multi-tariff)
             _cart_sub_id = cart_data.get('subscription_id')
-            if _cart_sub_id and settings.is_multi_tariff_enabled():
-                await user_cart_service.delete_subscription_cart(db_user.id, _cart_sub_id)
-            else:
-                await user_cart_service.delete_user_cart(db_user.id)
+            await user_cart_service.delete_user_cart(db_user.id)
         return None
 
     await state.update_data(
@@ -6266,12 +5947,7 @@ async def purchase_tariff_with_sbp(
     try:
         from app.services.recurrent_amount import get_active_recurrent_engines, recurrent_engines_warning
 
-        if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-            _target_sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff.id, include_inactive=True)
-        else:
-            _target_sub = await get_subscription_by_user_id(db, db_user.id)
+        _target_sub = await get_subscription_by_user_id(db, db_user.id)
         if _target_sub is not None:
             _engines = await get_active_recurrent_engines(db, _target_sub)
             _warning = recurrent_engines_warning(texts, _engines, enabling='platega')
@@ -6376,6 +6052,5 @@ def register_tariff_purchase_handlers(dp: Dispatcher):
 
     # Мгновенное переключение тарифов (без выбора периода)
     dp.callback_query.register(show_instant_switch_list, F.data == 'instant_switch')
-    dp.callback_query.register(show_instant_switch_list, F.data.startswith('tariff_switch_for:'))
     dp.callback_query.register(preview_instant_switch, F.data.startswith('instant_sw_preview:'))
     dp.callback_query.register(confirm_instant_switch, F.data.startswith('instant_sw_confirm:'))

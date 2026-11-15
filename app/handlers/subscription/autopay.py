@@ -33,7 +33,7 @@ async def _resolve_subscription(callback, db_user, db, state=None):
 
 async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
             texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
@@ -60,8 +60,7 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
                     )
                 ]
             )
-        back_cb = f'sm:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'menu_subscription'
-        daily_keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)])
+        daily_keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')])
 
         await callback.message.edit_text(
             texts.t(
@@ -97,7 +96,7 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
         ),
     ).format(status=status, days=days, period=period_text)
 
-    keyboard = get_autopay_keyboard(db_user.language, sub_id=sub_id)
+    keyboard = get_autopay_keyboard(db_user.language)
     if settings.is_platega_recurrent_enabled():
         # Вставляем перед последней строкой (Back), чтобы кнопка СБП была
         # среди основных действий, а не под ней.

@@ -91,22 +91,13 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             # Re-enable in RemnaWave panel
             service = SubscriptionService()
             for subscription in disabled_subs:
-                # Сначала id самой подписки, потом пользователя — в ОБОИХ режимах.
+                # Сначала id самой подписки, потом пользователя.
                 panel_user_id = subscription.remnawave_id or db_user.remnawave_id
                 if not panel_user_id:
                     logger.warning(
                         'Панельный id не найден ни у подписки, ни у пользователя — панель не тронута',
                         subscription_id=getattr(subscription, 'id', None),
                         user_id=db_user.id,
-                    )
-                elif not subscription.remnawave_id and settings.is_multi_tariff_enabled():
-                    # В мультитарифе у каждой подписки свой аккаунт, поэтому
-                    # падение на пользовательский id — это адресация соседнего
-                    # тарифа. Сигнал нужен: молча так делать нельзя.
-                    logger.warning(
-                        'Мультитариф: у подписки нет своего панельного id, адресуем через пользователя',
-                        subscription_id=getattr(subscription, 'id', None),
-                        remnawave_id=panel_user_id,
                     )
                 if panel_user_id:
                     try:
@@ -185,22 +176,13 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             # Disable in RemnaWave panel
             service = SubscriptionService()
             for subscription in active_subs:
-                # Сначала id самой подписки, потом пользователя — в ОБОИХ режимах.
+                # Сначала id самой подписки, потом пользователя.
                 panel_user_id = subscription.remnawave_id or db_user.remnawave_id
                 if not panel_user_id:
                     logger.warning(
                         'Панельный id не найден ни у подписки, ни у пользователя — панель не тронута',
                         subscription_id=getattr(subscription, 'id', None),
                         user_id=db_user.id,
-                    )
-                elif not subscription.remnawave_id and settings.is_multi_tariff_enabled():
-                    # В мультитарифе у каждой подписки свой аккаунт, поэтому
-                    # падение на пользовательский id — это адресация соседнего
-                    # тарифа. Сигнал нужен: молча так делать нельзя.
-                    logger.warning(
-                        'Мультитариф: у подписки нет своего панельного id, адресуем через пользователя',
-                        subscription_id=getattr(subscription, 'id', None),
-                        remnawave_id=panel_user_id,
                     )
                 if panel_user_id:
                     try:

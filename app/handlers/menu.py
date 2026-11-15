@@ -1297,54 +1297,6 @@ def _insert_random_message(base_text: str, random_message: str, action_prompt: s
     return f'{base_text}\n\n{random_message}'
 
 
-async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, str]:
-    """Build subscription status text and tariff block for multi-tariff mode.
-
-    Returns (subscription_status, tariff_info_block).
-    """
-    from app.database.crud.subscription import get_all_subscriptions_by_user_id
-
-    subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
-    # Неоплаченные черновики триала не показываем как существующую подписку
-    subscriptions = [sub for sub in subscriptions if not getattr(sub, 'is_pending_trial', False)]
-
-    if not subscriptions:
-        return texts.t('SUB_STATUS_NONE', '❌ Отсутствует'), ''
-
-    current_time = datetime.now(UTC)
-    lines: list[str] = []
-    for sub in subscriptions:
-        tariff_name = html.escape(sub.tariff.name) if sub.tariff else 'Подписка'
-        actual = sub.actual_status
-
-        if actual in ('active', 'trial'):
-            emoji = '🟢'
-        elif actual == 'limited':
-            emoji = '🟡'
-        else:
-            emoji = '🔴'
-
-        if actual == 'expired':
-            status_suffix = ' — истекла'
-        elif actual == 'disabled':
-            status_suffix = ' — отключена'
-        elif actual == 'limited':
-            status_suffix = ' — лимит трафика'
-        elif is_lifetime_end(sub.end_date):
-            status_suffix = ' — навсегда'
-        elif sub.end_date and sub.end_date > current_time:
-            days_left = local_days_until(sub.end_date, current_time)
-            end_str = format_local_datetime(sub.end_date, '%d.%m.%Y')
-            status_suffix = f' — до {end_str} ({days_left} дн.)'
-        else:
-            status_suffix = ''
-
-        lines.append(f'{emoji} <b>{tariff_name}</b>{status_suffix}')
-
-    status_text = '\n<blockquote>' + '\n'.join(lines) + '</blockquote>'
-    return status_text, ''
-
-
 def _get_website_line(texts) -> str:
     """Строка «Наш сайт» для главного меню. Пустая, если URL не настроен.
 
@@ -1390,51 +1342,32 @@ def _new_user_menu_text(texts) -> str:
 
 
 async def get_main_menu_text(user, texts, db: AsyncSession):
-    from app.config import settings
 
     if is_new_user_with_free_trial(user):
         return _new_user_menu_text(texts)
 
     website_line = _get_website_line(texts)
 
-    # Multi-tariff: show summary of all subscriptions
-    if settings.is_multi_tariff_enabled():
-        subscriptions_status, tariff_info_block = await _get_multi_tariff_status(user, texts, db)
+    tariff = None
+    is_daily_tariff = False
 
-        base_text = texts.MAIN_MENU.format(
-            user_name=html.escape(user.full_name or ''),
-            subscription_status=subscriptions_status,
-            website_line=website_line,
-        )
+    subscription = getattr(user, 'subscription', None)
+    if subscription and subscription.tariff_id:
+        try:
+            from app.database.crud.tariff import get_tariff_by_id
 
-        if tariff_info_block:
-            action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-            if action_prompt_text in base_text:
-                base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
-    else:
-        # Single-tariff mode: legacy behavior
-        tariff = None
-        is_daily_tariff = False
-        tariff_info_block = ''
+            tariff = await get_tariff_by_id(db, subscription.tariff_id)
+            if tariff:
+                is_daily_tariff = getattr(tariff, 'is_daily', False)
+        except Exception as e:
+            logger.debug('Не удалось загрузить тариф для главного меню', error=e)
 
-        subscription = getattr(user, 'subscription', None)
-        if subscription and subscription.tariff_id:
-            try:
-                from app.database.crud.tariff import get_tariff_by_id
-
-                tariff = await get_tariff_by_id(db, subscription.tariff_id)
-                if tariff:
-                    is_daily_tariff = getattr(tariff, 'is_daily', False)
-                    tariff_info_block = f'\n📦 Тариф: {html.escape(tariff.name)}'
-            except Exception as e:
-                logger.debug('Не удалось загрузить тариф для главного меню', error=e)
-
-        base_text = texts.MAIN_MENU.format(
-            user_name=html.escape(user.full_name or ''),
-            subscription_status=_get_subscription_status(user, texts, is_daily_tariff),
-            website_line=website_line,
-        )
-        # Название тарифа в главном меню не дублируем — оно есть на экране подписки
+    base_text = texts.MAIN_MENU.format(
+        user_name=html.escape(user.full_name or ''),
+        subscription_status=_get_subscription_status(user, texts, is_daily_tariff),
+        website_line=website_line,
+    )
+    # Название тарифа в главном меню не дублируем — оно есть на экране подписки
 
     action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
 
@@ -1506,16 +1439,7 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
     from app.services.subscription_renewal_service import SubscriptionRenewalService
     from app.services.subscription_service import SubscriptionService
 
-    if settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        # For menu display: prefer non-daily, most days remaining
-        non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
-        _eligible = non_daily or active_subs
-        subscription = max(_eligible, key=lambda s: s.days_left) if _eligible else None
-    else:
-        subscription = await get_subscription_by_user_id(db, db_user.id)
+    subscription = await get_subscription_by_user_id(db, db_user.id)
 
     # Если подписка активна — ничего не делаем
     if subscription and subscription.status == 'ACTIVE' and subscription.end_date > datetime.now(UTC):

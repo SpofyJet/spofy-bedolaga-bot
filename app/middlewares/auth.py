@@ -245,23 +245,6 @@ class AuthMiddleware(BaseMiddleware):
                             )
                         )
 
-                    # Multi-tariff: sync all per-subscription panel users
-                    if settings.is_multi_tariff_enabled():
-                        description = settings.format_remnawave_user_description(
-                            full_name=db_user.full_name,
-                            username=db_user.username,
-                            telegram_id=db_user.telegram_id,
-                        )
-                        for sub in db_user.subscriptions or []:
-                            if sub.remnawave_id and sub.remnawave_id != db_user.remnawave_id:
-                                spawn_background_task(
-                                    _refresh_remnawave_description(
-                                        remnawave_id=sub.remnawave_id,
-                                        description=description,
-                                        telegram_id=db_user.telegram_id,
-                                    )
-                                )
-
                 data['db'] = db
                 data['db_user'] = db_user
                 data['is_admin'] = settings.is_admin(user.id)

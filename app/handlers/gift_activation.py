@@ -6,7 +6,6 @@ import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.types import InaccessibleMessage, InlineKeyboardButton, InlineKeyboardMarkup
 
-from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import AsyncSessionLocal
 from app.localization.texts import get_texts
@@ -30,11 +29,7 @@ def _menu_keyboard(texts, *, with_subscription: bool = False) -> InlineKeyboardM
     """«Моя подписка» (после активации) и «В главное меню» — чтобы экран не был тупиком."""
     rows: list[list[InlineKeyboardButton]] = []
     if with_subscription:
-        subscription_text = (
-            texts.t('MY_SUBSCRIPTIONS_BUTTON', '📱 Мои подписки')
-            if settings.is_multi_tariff_enabled()
-            else texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка')
-        )
+        subscription_text = texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка')
         rows.append([InlineKeyboardButton(text=subscription_text, callback_data='menu_subscription')])
     rows.append(
         [

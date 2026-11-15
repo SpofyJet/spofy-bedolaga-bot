@@ -438,14 +438,6 @@ class MenuLayoutService:
             or 'connect' in str(action).lower()
         )
         callback_action = action
-        if (
-            action == 'subscription_connect'
-            and settings.is_multi_tariff_enabled()
-            and not (context.has_active_subscription and context.subscription_is_active)
-        ):
-            subscription_id = getattr(context.subscription, 'id', None)
-            if subscription_id is not None:
-                callback_action = f'sl:{subscription_id}'
 
         if is_connect_button:
             logger.info(

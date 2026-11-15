@@ -47,7 +47,6 @@ async def claim_promo_link(
     from app.database.crud.promocode import check_promocode_validity
     from app.handlers.promocode import (
         activate_promocode_for_registration,
-        promo_subscription_choice_keyboard,
         promocode_error_text,
         wheel_spin_keyboard,
     )
@@ -99,12 +98,6 @@ async def claim_promo_link(
         await message.answer(
             texts.PROMOCODE_SUCCESS.format(description=result['description']),
             reply_markup=wheel_spin_keyboard(result, texts),
-        )
-    elif result.get('error') == 'select_subscription':
-        # Несколько подписок — тот же выбор, что при ручном вводе (promo_sub:<id>:<код>).
-        await message.answer(
-            texts.t('PROMOCODE_SELECT_SUBSCRIPTION', '🎟️ К какой подписке применить промокод?'),
-            reply_markup=promo_subscription_choice_keyboard(result, code),
         )
     else:
         error = result.get('error')

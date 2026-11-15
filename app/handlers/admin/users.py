@@ -39,7 +39,7 @@ from app.utils.formatters import format_datetime, format_time_ago
 from app.utils.formatting import user_html_link
 from app.utils.notification_keyboards import keyboard, subscription_button
 from app.utils.photo_message import safe_edit_or_resend
-from app.utils.subscription_time import format_time_left, local_days_until
+from app.utils.subscription_time import format_time_left
 from app.utils.user_utils import get_effective_referral_commission_percent
 
 
@@ -202,9 +202,7 @@ async def start_user_search(callback: types.CallbackQuery, db_user: User, state:
     await callback.answer()
 
 
-async def _render_user_subscription_overview(
-    callback: types.CallbackQuery, db: AsyncSession, user_id: int, subscription_id: int | None = None
-) -> bool:
+async def _render_user_subscription_overview(callback: types.CallbackQuery, db: AsyncSession, user_id: int) -> bool:
     user_service = UserService()
     profile = await user_service.get_user_profile(db, user_id)
 
@@ -214,61 +212,7 @@ async def _render_user_subscription_overview(
 
     user = profile['user']
 
-    # Multi-tariff: show subscription picker if multiple subscriptions and no explicit choice
-    if settings.is_multi_tariff_enabled() and not subscription_id:
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-        all_subs = await get_active_subscriptions_by_user_id(db, user_id)
-        await db.refresh(user, ['subscriptions'])
-        all_user_subs = getattr(user, 'subscriptions', []) or []
-        subs_list = all_user_subs if len(all_user_subs) > len(all_subs) else all_subs
-
-        if len(subs_list) > 1:
-            user_link = user_html_link(user)
-            user_id_display = user.telegram_id or user.email or f'#{user.id}'
-            text = '📱 <b>Выберите подписку для управления</b>\n\n'
-            text += f'👤 {user_link} (ID: <code>{user_id_display}</code>)\n\n'
-            text += f'У пользователя <b>{len(subs_list)}</b> подписок:\n\n'
-
-            picker_keyboard = []
-            for sub in sorted(subs_list, key=lambda s: s.id):
-                status_emoji = '✅' if sub.is_active else ('⏸' if sub.status == 'disabled' else '❌')
-                tariff_name = ''
-                if sub.tariff_id:
-                    tariff = await get_tariff_by_id(db, sub.tariff_id)
-                    tariff_name = f' • {html.escape(tariff.name)}' if tariff else ''
-
-                days_left = local_days_until(sub.end_date) if sub.end_date else 0
-                btn_text = f'{status_emoji} #{sub.id}{tariff_name} ({days_left}д.)'
-                picker_keyboard.append(
-                    [
-                        types.InlineKeyboardButton(
-                            text=btn_text,
-                            callback_data=f'admin_user_sub_select_{user_id}_{sub.id}',
-                        )
-                    ]
-                )
-
-            picker_keyboard.append(
-                [types.InlineKeyboardButton(text='⬅️ К пользователю', callback_data=f'admin_user_manage_{user_id}')]
-            )
-            await callback.message.edit_text(
-                text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=picker_keyboard)
-            )
-            return True
-        if len(subs_list) == 1:
-            subscription_id = subs_list[0].id
-
-    # Fetch specific subscription if subscription_id provided
-    if subscription_id and settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_subscription_by_id_for_user
-
-        subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-    else:
-        subscription = profile['subscription']
-
-    # Suffix routes back to this exact subscription in multi-tariff mode
-    _sid = f'_s{subscription.id}' if settings.is_multi_tariff_enabled() and subscription else ''
+    subscription = profile['subscription']
 
     text = '📱 <b>Подписка и настройки пользователя</b>\n\n'
     user_link = user_html_link(user)
@@ -324,20 +268,16 @@ async def _render_user_subscription_overview(
 
         keyboard = [
             [
-                types.InlineKeyboardButton(text='⏰ Продлить', callback_data=f'admin_sub_extend_{user_id}{_sid}'),
-                types.InlineKeyboardButton(text='💳 Купить подписку', callback_data=f'admin_sub_buy_{user_id}{_sid}'),
+                types.InlineKeyboardButton(text='⏰ Продлить', callback_data=f'admin_sub_extend_{user_id}'),
+                types.InlineKeyboardButton(text='💳 Купить подписку', callback_data=f'admin_sub_buy_{user_id}'),
+            ],
+            [
+                types.InlineKeyboardButton(text='🔄 Тип подписки', callback_data=f'admin_sub_change_type_{user_id}'),
+                types.InlineKeyboardButton(text='📊 Добавить трафик', callback_data=f'admin_sub_traffic_{user_id}'),
             ],
             [
                 types.InlineKeyboardButton(
-                    text='🔄 Тип подписки', callback_data=f'admin_sub_change_type_{user_id}{_sid}'
-                ),
-                types.InlineKeyboardButton(
-                    text='📊 Добавить трафик', callback_data=f'admin_sub_traffic_{user_id}{_sid}'
-                ),
-            ],
-            [
-                types.InlineKeyboardButton(
-                    text='🌍 Сменить сервер', callback_data=f'admin_user_change_server_{user_id}{_sid}'
+                    text='🌍 Сменить сервер', callback_data=f'admin_user_change_server_{user_id}'
                 ),
             ],
         ]
@@ -345,33 +285,25 @@ async def _render_user_subscription_overview(
         # Кнопки тарифов в режиме тарифов
         keyboard.append(
             [
-                types.InlineKeyboardButton(
-                    text='📦 Сменить тариф', callback_data=f'admin_sub_change_tariff_{user_id}{_sid}'
-                ),
+                types.InlineKeyboardButton(text='📦 Сменить тариф', callback_data=f'admin_sub_change_tariff_{user_id}'),
             ]
         )
 
         if subscription.is_active:
             keyboard.append(
-                [
-                    types.InlineKeyboardButton(
-                        text='🚫 Деактивировать', callback_data=f'admin_sub_deactivate_{user_id}{_sid}'
-                    )
-                ]
+                [types.InlineKeyboardButton(text='🚫 Деактивировать', callback_data=f'admin_sub_deactivate_{user_id}')]
             )
         else:
             keyboard.append(
                 [
-                    types.InlineKeyboardButton(
-                        text='✅ Активировать', callback_data=f'admin_sub_activate_{user_id}{_sid}'
-                    ),
+                    types.InlineKeyboardButton(text='✅ Активировать', callback_data=f'admin_sub_activate_{user_id}'),
                 ]
             )
 
         # Обнулить подписку «как будто не оформляли»: сбросить наспамленные дни и доступ,
         # отключить в панели — но СОХРАНИТЬ пользователя и его тикеты (в отличие от удаления).
         keyboard.append(
-            [types.InlineKeyboardButton(text='🧹 Обнулить подписку', callback_data=f'admin_sub_reset_{user_id}{_sid}')]
+            [types.InlineKeyboardButton(text='🧹 Обнулить подписку', callback_data=f'admin_sub_reset_{user_id}')]
         )
     else:
         text += '❌ <b>Подписка отсутствует</b>\n\n'
@@ -418,12 +350,11 @@ async def show_user_subscription(callback: types.CallbackQuery, db_user: User, d
 @admin_required
 @error_handler
 async def admin_select_user_subscription(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    """Handle subscription picker selection in multi-tariff mode."""
+    """«К подписке» из экранов с явным ``_s{id}``: подписка у пользователя одна."""
     parts = callback.data.split('_')
     user_id = int(parts[-2])
-    subscription_id = int(parts[-1])
 
-    if await _render_user_subscription_overview(callback, db, user_id, subscription_id=subscription_id):
+    if await _render_user_subscription_overview(callback, db, user_id):
         await callback.answer()
 
 
@@ -1879,33 +1810,21 @@ async def process_subscription_grant_text(message: types.Message, db_user: User,
 @admin_required
 @error_handler
 async def show_server_selection(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    user_id, subscription_id = _extract_admin_sub_context(callback.data)
-    await _show_servers_for_user(callback, user_id, db, subscription_id=subscription_id)
+    user_id, _ = _extract_admin_sub_context(callback.data)
+    await _show_servers_for_user(callback, user_id, db)
     await callback.answer()
 
 
-async def _show_servers_for_user(
-    callback: types.CallbackQuery, user_id: int, db: AsyncSession, subscription_id: int | None = None
-):
+async def _show_servers_for_user(callback: types.CallbackQuery, user_id: int, db: AsyncSession):
     try:
         user = await get_user_by_id(db, user_id)
         current_squads = []
         if user:
-            if subscription_id and settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import get_subscription_by_id_for_user
-
-                subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-            else:
-                subscription = await _resolve_admin_subscription(db, user_id)
+            subscription = await _resolve_admin_subscription(db, user_id)
             if subscription:
                 current_squads = subscription.connected_squads or []
 
-        _sid = f'_s{subscription_id}' if subscription_id and settings.is_multi_tariff_enabled() else ''
-        back_cb = (
-            f'admin_user_sub_select_{user_id}_{subscription_id}'
-            if subscription_id and settings.is_multi_tariff_enabled()
-            else f'admin_user_subscription_{user_id}'
-        )
+        back_cb = f'admin_user_subscription_{user_id}'
 
         all_servers, _ = await get_all_server_squads(db, available_only=False)
 
@@ -1954,7 +1873,7 @@ async def _show_servers_for_user(
                 [
                     types.InlineKeyboardButton(
                         text=f'{emoji} {display_name}',
-                        callback_data=f'admin_user_toggle_server_{user_id}_{server.id}{_sid}',
+                        callback_data=f'admin_user_toggle_server_{user_id}_{server.id}',
                     )
                 ]
             )
@@ -1981,16 +1900,10 @@ async def toggle_user_server(callback: types.CallbackQuery, db_user: User, db: A
     parts = callback.data.split('_')
     user_id = int(parts[4])
     server_id = int(parts[5])
-    subscription_id = int(parts[6][1:]) if len(parts) > 6 and parts[6].startswith('s') else None
 
     try:
         user = await get_user_by_id(db, user_id)
-        if subscription_id and settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_subscription_by_id_for_user
-
-            subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-        else:
-            subscription = await _resolve_admin_subscription(db, user_id)
+        subscription = await _resolve_admin_subscription(db, user_id)
         if not user or not subscription:
             await callback.answer('❌ Пользователь или подписка не найдены', show_alert=True)
             return
@@ -2027,7 +1940,7 @@ async def toggle_user_server(callback: types.CallbackQuery, db_user: User, db: A
             user_id=user_id,
         )
 
-        await refresh_server_selection_screen(callback, user_id, db_user, db, subscription_id=subscription_id)
+        await refresh_server_selection_screen(callback, user_id, db_user, db)
 
     except Exception as e:
         logger.error('Ошибка переключения сервера', error=e)
@@ -2039,27 +1952,16 @@ async def refresh_server_selection_screen(
     user_id: int,
     db_user: User,
     db: AsyncSession,
-    subscription_id: int | None = None,
 ):
     try:
         user = await get_user_by_id(db, user_id)
         current_squads = []
         if user:
-            if subscription_id and settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import get_subscription_by_id_for_user
-
-                subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-            else:
-                subscription = await _resolve_admin_subscription(db, user_id)
+            subscription = await _resolve_admin_subscription(db, user_id)
             if subscription:
                 current_squads = subscription.connected_squads or []
 
-        _sid = f'_s{subscription_id}' if subscription_id and settings.is_multi_tariff_enabled() else ''
-        back_cb = (
-            f'admin_user_sub_select_{user_id}_{subscription_id}'
-            if subscription_id and settings.is_multi_tariff_enabled()
-            else f'admin_user_subscription_{user_id}'
-        )
+        back_cb = f'admin_user_subscription_{user_id}'
 
         servers, _ = await get_all_server_squads(db, available_only=True)
 
@@ -2084,7 +1986,7 @@ async def refresh_server_selection_screen(
                 [
                     types.InlineKeyboardButton(
                         text=f'{emoji} {server.display_name}',
-                        callback_data=f'admin_user_toggle_server_{user_id}_{server.id}{_sid}',
+                        callback_data=f'admin_user_toggle_server_{user_id}_{server.id}',
                     )
                 ]
             )
@@ -2142,48 +2044,10 @@ async def _push_narrow_change_to_panel(db, user, subscription, *, fields: set[st
 async def _resolve_admin_subscription(
     db: AsyncSession, user_id: int, subscription_id: int | None = None, tariff_id: int | None = None
 ) -> 'Subscription | None':
-    """Resolve subscription for admin operations.
+    """Подписка пользователя для админ-операций: одна на человека.
 
-    In multi-tariff without explicit subscription_id:
-    - If tariff_id provided → find active sub with that tariff only
-    - 1 active sub → use it
-    - Multiple → prefer non-daily with most days remaining
-    - 0 active → return None
+    ``subscription_id`` и ``tariff_id`` не влияют на выбор — подписка у пользователя одна.
     """
-    if settings.is_multi_tariff_enabled():
-        if subscription_id:
-            from app.database.crud.subscription import get_subscription_by_id_for_user
-
-            return await get_subscription_by_id_for_user(db, subscription_id, user_id)
-
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-        active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-
-        if not active_subs:
-            return None
-
-        # When buying a specific tariff, only match subscription with the same tariff_id
-        if tariff_id is not None:
-            matching = [s for s in active_subs if s.tariff_id == tariff_id]
-            if matching:
-                return matching[0]
-            # No subscription for this tariff — must create a new one
-            return None
-
-        if len(active_subs) == 1:
-            return active_subs[0]
-
-        non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
-        eligible = non_daily or active_subs
-        selected = max(eligible, key=lambda s: s.days_left)
-        logger.warning(
-            'Admin operation: multiple active subscriptions, auto-selected best',
-            user_id=user_id,
-            selected_sub_id=selected.id,
-            total_active=len(active_subs),
-        )
-        return selected
     from app.database.crud.subscription import get_subscription_by_user_id
 
     return await get_subscription_by_user_id(db, user_id)
@@ -2253,12 +2117,10 @@ async def _add_subscription_traffic(
 
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
         if subscription.status == 'active':
-            panel_user_id = subscription.remnawave_id if settings.is_multi_tariff_enabled() else None
-            if not panel_user_id:
-                from app.database.crud.user import get_user_by_id
+            from app.database.crud.user import get_user_by_id
 
-                user = await get_user_by_id(db, user_id)
-                panel_user_id = getattr(user, 'remnawave_id', None)
+            user = await get_user_by_id(db, user_id)
+            panel_user_id = getattr(user, 'remnawave_id', None)
             if panel_user_id:
                 await subscription_service.enable_remnawave_user(panel_user_id)
 
@@ -2288,10 +2150,8 @@ async def _deactivate_user_subscription(
         await deactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
-        panel_user_id = subscription.remnawave_id if settings.is_multi_tariff_enabled() else None
-        if not panel_user_id:
-            user = await get_user_by_id(db, user_id)
-            panel_user_id = getattr(user, 'remnawave_id', None)
+        user = await get_user_by_id(db, user_id)
+        panel_user_id = getattr(user, 'remnawave_id', None)
         if panel_user_id:
             await subscription_service.disable_remnawave_user(panel_user_id)
 
@@ -2346,7 +2206,7 @@ async def _grant_paid_subscription(
         from app.services.subscription_service import SubscriptionService
 
         existing_subscription = await _resolve_admin_subscription(db, user_id, subscription_id)
-        if existing_subscription and not settings.is_multi_tariff_enabled():
+        if existing_subscription:
             logger.error('У пользователя уже есть подписка', user_id=user_id)
             return False
 
@@ -2433,12 +2293,7 @@ async def change_subscription_type(callback: types.CallbackQuery, db_user: User,
         await callback.answer('❌ Пользователь или подписка не найдены', show_alert=True)
         return
 
-    if subscription_id and settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_subscription_by_id_for_user
-
-        subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-    else:
-        subscription = profile['subscription']
+    subscription = profile['subscription']
 
     if not subscription:
         await callback.answer('❌ Пользователь или подписка не найдены', show_alert=True)
@@ -2926,12 +2781,9 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
 
         try:
             if callback.bot and target_user.telegram_id and settings.is_notifications_enabled():
-                tariff_line = ''
-                if settings.is_multi_tariff_enabled() and getattr(subscription, 'tariff', None):
-                    tariff_line = f'\n📦 Тариф: «{subscription.tariff.name}»'
                 await callback.bot.send_message(
                     chat_id=target_user.telegram_id,
-                    text=f'✅ <b>Подписка продлена до {format_datetime(subscription.end_date)}</b>{tariff_line}\n\n'
+                    text=f'✅ <b>Подписка продлена до {format_datetime(subscription.end_date)}</b>\n\n'
                     f'Продлили на {period_days} дн., с баланса списано {settings.format_price(price_kopeks)}.',
                     parse_mode='HTML',
                     reply_markup=keyboard(subscription_button(get_texts(target_user.language))),
@@ -2995,7 +2847,7 @@ async def _change_subscription_type(
     try:
         from app.services.subscription_service import SubscriptionService
 
-        if subscription_id is not None and (subscription_id <= 0 or not settings.is_multi_tariff_enabled()):
+        if subscription_id is not None:
             return False
         subscription = await _resolve_admin_subscription(db, user_id, subscription_id)
         if not subscription:
@@ -3063,12 +2915,7 @@ async def show_admin_tariff_change(callback: types.CallbackQuery, db_user: User,
         await callback.answer('❌ Пользователь не найден', show_alert=True)
         return
 
-    if subscription_id and settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_subscription_by_id_for_user
-
-        subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-    else:
-        subscription = await _resolve_admin_subscription(db, user_id)
+    subscription = await _resolve_admin_subscription(db, user_id)
 
     if not subscription:
         await callback.answer('❌ У пользователя нет подписки', show_alert=True)
@@ -3161,12 +3008,7 @@ async def select_admin_tariff_change(callback: types.CallbackQuery, db_user: Use
         await callback.answer('❌ Тариф не найден', show_alert=True)
         return
 
-    if subscription_id and settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_subscription_by_id_for_user
-
-        subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-    else:
-        subscription = await _resolve_admin_subscription(db, user_id)
+    subscription = await _resolve_admin_subscription(db, user_id)
 
     if not subscription:
         await callback.answer('❌ У пользователя нет подписки', show_alert=True)
@@ -3231,12 +3073,7 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
         await callback.answer('❌ Тариф не найден', show_alert=True)
         return
 
-    if subscription_id and settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_subscription_by_id_for_user
-
-        subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-    else:
-        subscription = await _resolve_admin_subscription(db, user_id)
+    subscription = await _resolve_admin_subscription(db, user_id)
 
     if not subscription:
         await callback.answer('❌ У пользователя нет подписки', show_alert=True)

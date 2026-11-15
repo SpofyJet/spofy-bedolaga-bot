@@ -67,15 +67,9 @@ async def _resolve_subscription(callback, db_user, db, state=None):
 def _get_panel_user_id(subscription, db_user):
     """Get the numeric Remnawave user id for device operations.
 
-    Multi-tariff: each subscription owns its OWN panel user, so use the
-    subscription's id and do NOT fall back to the user-level id — the
-    fallback would read/enforce HWID devices against another tariff's panel
-    user, making the device limit look shared across tariffs (баг с общим
-    лимитом «по наименьшему тарифу»). Single-tariff: one panel user per user,
-    fall back to it as before.
+    One panel user per user: the subscription's own id first, then the
+    user-level one.
     """
-    if subscription is not None and settings.is_multi_tariff_enabled():
-        return getattr(subscription, 'remnawave_id', None)
     return getattr(subscription, 'remnawave_id', None) or db_user.remnawave_id
 
 
@@ -152,7 +146,7 @@ async def handle_change_devices(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
 ):
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -258,8 +252,7 @@ async def handle_change_devices(
             ),
         ).format(current_devices=current_devices)
 
-    # В мульти-тарифе кнопка "назад" ведёт к детальному виду подписки
-    back_cb = f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings'
+    back_cb = 'subscription_settings'
 
     await callback.message.edit_text(
         prompt_text,
@@ -285,7 +278,7 @@ async def confirm_change_devices(
     except (ValueError, IndexError):
         await callback.answer(texts.t('INVALID_REQUEST', 'Invalid request'), show_alert=True)
         return
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -540,7 +533,7 @@ async def confirm_change_devices(
             new_devices_count,
             price,
             db_user.language,
-            back_callback=f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings',
+            back_callback='subscription_settings',
         ),
     )
 
@@ -973,11 +966,8 @@ async def _enrich_devices_with_aliases(devices_list: list[dict], user_id: int) -
 def _devices_back_callback(db_user: User, sub_id: int | None = None) -> str:
     """trial-nav-fix: куда ведёт «Назад» из управления устройствами.
 
-    Мульти-тариф → карточка подписки (sm:{id}). Триал → «Моя подписка»
-    (настройки доступны только платным). Платные → настройки.
+    Триал → «Моя подписка» (настройки доступны только платным). Платные → настройки.
     """
-    if settings.is_multi_tariff_enabled() and sub_id:
-        return f'sm:{sub_id}'
     try:
         sub = db_user.subscription
     except Exception:
@@ -1088,7 +1078,7 @@ def _device_limit_text(db_user: User, sub_id: int | None) -> str:
 
 def _all_device_slots_taken(db_user: User, sub_id: int | None, connected: int) -> bool:
     """Показывать ли «Все места заняты» + «Добавить место» (одиночный режим, не триал)."""
-    if settings.is_multi_tariff_enabled() or not settings.is_devices_selection_enabled():
+    if not settings.is_devices_selection_enabled():
         return False
     sub = _device_subscription(db_user, sub_id)
     if sub is None or getattr(sub, 'is_trial', False):
@@ -1300,7 +1290,7 @@ async def process_device_rename(message: types.Message, db_user: User, db: Async
         # Сообщения от FSM-handler'а — не callback, поэтому отдельный пост.
         devices_list = await _enrich_devices_with_aliases(devices_list, db_user.id)
         pagination = paginate_list(devices_list, page=page, per_page=5)
-        back_cb = f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings'
+        back_cb = 'subscription_settings'
 
         await message.answer(
             texts.t('DEVICE_RENAME_OPEN_LIST', '📱 Откройте список устройств, чтобы продолжить'),
@@ -1912,7 +1902,7 @@ async def confirm_reset_devices(
 async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     device_type = callback.data.split('_')[2]
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
     subscription_link = get_display_subscription_link(subscription)
@@ -2018,7 +2008,6 @@ async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: 
             device_type,
             db_user.language,
             has_other_apps=bool(other_apps),
-            sub_id=sub_id,
         ),
         parse_mode='HTML',
     )
@@ -2062,7 +2051,7 @@ async def handle_specific_app_guide(
         return
     _, device_type, app_id = parts
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -2126,7 +2115,6 @@ async def handle_specific_app_guide(
             app,
             device_type,
             db_user.language,
-            sub_id=sub_id,
         ),
         parse_mode='HTML',
     )

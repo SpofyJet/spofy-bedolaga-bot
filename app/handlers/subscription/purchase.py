@@ -35,13 +35,6 @@ from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subs
 logger = structlog.get_logger(__name__)
 
 
-async def _resolve_subscription(callback, db_user, db, state=None):
-    """Resolve subscription — delegates to shared resolve_subscription_from_context."""
-    from .common import resolve_subscription_from_context
-
-    return await resolve_subscription_from_context(callback, db_user, db, state)
-
-
 from app.states import SubscriptionStates
 from app.utils.lifetime import is_lifetime_end
 from app.utils.subscription_time import format_expiry_warning, format_time_left
@@ -102,13 +95,6 @@ from .traffic import (
 
 
 async def show_subscription_info(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    # Multi-tariff: redirect to "My subscriptions" list
-    if settings.is_multi_tariff_enabled():
-        from app.handlers.subscription.my_subscriptions import show_my_subscriptions
-
-        await show_my_subscriptions(callback, db_user, db)
-        return
-
     # Проверяем, доступно ли сообщение для редактирования
     if isinstance(callback.message, InaccessibleMessage):
         await callback.answer()
@@ -118,9 +104,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
     texts = get_texts(db_user.language)
     gift_enabled = True
-    # Multi-tariff: this branch is only reached in single-tariff mode (multi-tariff
-    # is redirected to show_my_subscriptions above). db_user.subscription returns
-    # the first active or most recent subscription, which is correct here.
+    # db_user.subscription returns the first active or most recent subscription.
     subscription = db_user.subscription
 
     if not subscription:
@@ -239,11 +223,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         devices_used_str = '—'
     elif show_devices:
         try:
-            _device_panel_id = (
-                getattr(subscription, 'remnawave_id', None)
-                if settings.is_multi_tariff_enabled() and subscription
-                else None
-            ) or db_user.remnawave_id
+            _device_panel_id = db_user.remnawave_id
             if _device_panel_id:
                 from app.services.remnawave_service import RemnaWaveService
 
@@ -1074,12 +1054,7 @@ async def handle_extend_subscription(
 
     texts = get_texts(db_user.language)
 
-    if settings.is_multi_tariff_enabled():
-        subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
-        if subscription is None:
-            return
-    else:
-        subscription = db_user.subscription
+    subscription = db_user.subscription
 
     if not subscription:
         await callback.message.edit_text(
@@ -1211,10 +1186,6 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
 
     texts = get_texts(db_user.language)
 
-    if settings.is_multi_tariff_enabled():
-        await callback.answer('Настройки доступны через "Мои подписки"', show_alert=True)
-        return
-
     subscription = db_user.subscription
 
     # Получаем тариф подписки если есть
@@ -1312,16 +1283,6 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
     from app.database.crud.tariff import get_tariff_by_id
 
     texts = get_texts(db_user.language)
-
-    if settings.is_multi_tariff_enabled():
-        await callback.answer(
-            texts.t(
-                'DAILY_PAUSE_MULTI_TARIFF_REDIRECT',
-                'Управление суточными подписками доступно через "Мои подписки"',
-            ),
-            show_alert=True,
-        )
-        return
 
     subscription = db_user.subscription
 
@@ -1446,14 +1407,7 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
             reset_reason = 'суточное списание (возобновление)' if reset_traffic else None
 
             subscription_service = SubscriptionService()
-            # В multi-tariff панельная идентичность живёт на подписке, а
-            # User.remnawave_id не заполняется вовсе. Гейт только по User здесь
-            # означал бы новый панельный дубль на каждом возобновлении.
-            _panel_user_id = (
-                subscription.remnawave_id
-                if settings.is_multi_tariff_enabled() and subscription.remnawave_id
-                else getattr(db_user, 'remnawave_id', None)
-            )
+            _panel_user_id = getattr(db_user, 'remnawave_id', None)
             if _panel_user_id:
                 await subscription_service.update_remnawave_user(
                     db,
@@ -1471,11 +1425,7 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                 )
                 # POST может игнорировать activeInternalSquads — отправляем PATCH
                 await db.refresh(db_user)
-                _panel_user_id = (
-                    subscription.remnawave_id
-                    if settings.is_multi_tariff_enabled() and subscription.remnawave_id
-                    else getattr(db_user, 'remnawave_id', None)
-                )
+                _panel_user_id = getattr(db_user, 'remnawave_id', None)
                 if _panel_user_id and subscription.connected_squads:
                     try:
                         # Досыл сквадов — часть того же события оплаты:
@@ -1549,39 +1499,14 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(show_subscription_info, F.data == 'menu_subscription')
 
-    # Multi-tariff: "My subscriptions" list and detail views
-    from app.handlers.subscription.my_subscriptions import show_my_subscriptions, show_subscription_detail
-
-    dp.callback_query.register(show_my_subscriptions, F.data == 'my_subscriptions')
-    dp.callback_query.register(show_subscription_detail, F.data.startswith('sm:'))
-
-    # Multi-tariff delegation handlers from subscription detail view
-    from app.handlers.subscription.my_subscriptions import (
-        handle_change_devices_menu,
-        handle_device_management_menu,
-        handle_subscription_devices,
-        handle_subscription_extend,
-        handle_subscription_link,
-        handle_subscription_traffic,
-    )
-
-    dp.callback_query.register(handle_subscription_link, F.data.startswith('sl:'))
-    dp.callback_query.register(handle_subscription_extend, F.data.startswith('se:'))
-    dp.callback_query.register(handle_subscription_traffic, F.data.startswith('st:'))
-    dp.callback_query.register(handle_subscription_devices, F.data.startswith('sd:'))
-    dp.callback_query.register(handle_change_devices_menu, F.data.startswith('change_devices_menu:'))
-    dp.callback_query.register(handle_device_management_menu, F.data.startswith('device_management:'))
-
     # Subscription revoke (reissue)
     from app.handlers.subscription.revoke import (
         confirm_subscription_revoke,
-        start_multi_revoke,
         start_subscription_revoke,
     )
 
     dp.callback_query.register(start_subscription_revoke, F.data == 'subscription_revoke')
     dp.callback_query.register(confirm_subscription_revoke, F.data == 'subscription_revoke_confirm')
-    dp.callback_query.register(start_multi_revoke, F.data.startswith('sr:'))
 
     dp.callback_query.register(show_trial_offer, F.data == 'menu_trial')
 

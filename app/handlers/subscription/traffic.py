@@ -29,7 +29,6 @@ from app.utils.legacy_subscription import is_legacy_subscription
 from app.utils.pricing_utils import (
     calculate_prorated_price,
 )
-from app.utils.subscription_time import local_days_until
 
 from .common import (
     _get_period_hint_from_subscription,
@@ -48,45 +47,11 @@ async def _resolve_subscription(callback, db_user, db, state=None):
 
 async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     from app.config import settings
-    from app.database.crud.subscription import get_active_subscriptions_by_user_id
     from app.database.crud.tariff import get_tariff_by_id
 
     texts = get_texts(db_user.language)
 
-    # В режиме мульти-тарифов без явного sub_id в callback — показываем выбор подписки.
-    if settings.is_multi_tariff_enabled() and callback.data == 'buy_traffic':
-        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        if len(active_subs) > 1:
-            from app.database.crud.tariff import get_tariff_by_id as _get_tariff
-
-            keyboard = []
-            for sub in sorted(active_subs, key=lambda s: s.id):
-                if sub.is_trial:
-                    continue
-                tariff_name = ''
-                if sub.tariff_id:
-                    _t = await _get_tariff(db, sub.tariff_id)
-                    tariff_name = _t.name if _t else f'#{sub.id}'
-                else:
-                    tariff_name = f'Подписка #{sub.id}'
-                days_left = local_days_until(sub.end_date) if sub.end_date else 0
-                keyboard.append(
-                    [
-                        types.InlineKeyboardButton(
-                            text=f'📊 {tariff_name} ({days_left} дн.)',
-                            callback_data=f'st:{sub.id}',
-                        )
-                    ]
-                )
-            keyboard.append([types.InlineKeyboardButton(text='⬅️ Назад', callback_data='back_to_menu')])
-            await callback.message.edit_text(
-                '📊 <b>Докупить трафик</b>\n\nВыберите подписку:',
-                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
-            )
-            await callback.answer()
-            return
-
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -155,7 +120,6 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
                 packages,
                 subscription.end_date,
                 traffic_discount_percent,
-                sub_id=sub_id,
             ),
             parse_mode='HTML',
         )
@@ -203,7 +167,6 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
             db_user.language,
             subscription.end_date,
             traffic_discount_percent,
-            sub_id=sub_id,
         ),
         parse_mode='HTML',
     )
@@ -318,12 +281,6 @@ async def confirm_reset_traffic(
         await callback.answer('⚠️ В текущем режиме трафик фиксированный', show_alert=True)
         return
 
-    if settings.is_multi_tariff_enabled():
-        _state_data = await state.get_data() if state else {}
-        if not _state_data.get('active_subscription_id'):
-            await callback.answer('Выберите подписку через "Мои подписки"', show_alert=True)
-            return
-
     from app.database.crud.user import lock_user_for_pricing
 
     db_user = await lock_user_for_pricing(db, db_user.id)
@@ -379,11 +336,8 @@ async def confirm_reset_traffic(
         remnawave_service = RemnaWaveService()
 
         user = db_user
-        # В multi-tariff у каждой подписки СВОЙ панельный юзер: фолбэк на
-        # user-уровень обнулил бы трафик соседнему тарифу, за который тут
-        # никто не платил, а нужный остался бы на лимите.
         panel_user_id = getattr(subscription, 'remnawave_id', None)
-        if not panel_user_id and not settings.is_multi_tariff_enabled():
+        if not panel_user_id:
             panel_user_id = user.remnawave_id
         async with remnawave_service.get_api_client() as api:
             if not panel_user_id:
@@ -397,8 +351,7 @@ async def confirm_reset_traffic(
                     if _adopted is not None:
                         panel_user_id = _adopted.id
                         subscription.remnawave_id = _adopted.id
-                        if not settings.is_multi_tariff_enabled():
-                            user.remnawave_id = _adopted.id
+                        user.remnawave_id = _adopted.id
                         await db.commit()
             if panel_user_id:
                 await api.reset_user_traffic(panel_user_id)
@@ -589,11 +542,7 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         await subscription_service.update_remnawave_user(db, subscription)
 
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        _en_panel_id = (
-            subscription.remnawave_id
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_id
-            else db_user.remnawave_id
-        )
+        _en_panel_id = db_user.remnawave_id
         if _en_panel_id and subscription.status == 'active':
             await subscription_service.enable_remnawave_user(_en_panel_id)
 
@@ -664,7 +613,7 @@ async def handle_switch_traffic(
         return
 
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -709,7 +658,7 @@ async def handle_switch_traffic(
             subscription.end_date,
             traffic_discount_percent,
             base_traffic_gb=base_traffic,
-            back_callback=f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings',
+            back_callback='subscription_settings',
         ),
     )
 
@@ -721,7 +670,7 @@ async def confirm_switch_traffic(
 ):
     new_traffic_gb = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
     if _traffic_switch_blocked(subscription):
@@ -817,7 +766,7 @@ async def confirm_switch_traffic(
             new_traffic_gb,
             total_price_difference,
             db_user.language,
-            back_callback=f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings',
+            back_callback='subscription_settings',
         ),
         parse_mode='HTML',
     )
@@ -904,11 +853,7 @@ async def execute_switch_traffic(
         await subscription_service.update_remnawave_user(db, subscription)
 
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        _en_panel_id = (
-            subscription.remnawave_id
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_id
-            else db_user.remnawave_id
-        )
+        _en_panel_id = db_user.remnawave_id
         if _en_panel_id and subscription.status == 'active':
             await subscription_service.enable_remnawave_user(_en_panel_id)
 

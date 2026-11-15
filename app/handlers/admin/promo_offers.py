@@ -795,21 +795,8 @@ async def _send_offer_to_users(
                         return await _send_prepaid_tariff_offer(
                             bot, new_db, template, user, db_user.language, active_minutes
                         )
-                    if settings.is_multi_tariff_enabled():
-                        _user_subs = getattr(user, 'subscriptions', None) or []
-                        _active_subs = [s for s in _user_subs if s.is_active]
-                        if _active_subs:
-                            _non_daily = [s for s in _active_subs if not getattr(s, 'is_daily_tariff', False)]
-                            _eligible = _non_daily or _active_subs
-                            _best = max(_eligible, key=lambda s: s.days_left)
-                            _offer_sub_id = _best.id
-                        elif _user_subs:
-                            _offer_sub_id = _user_subs[0].id
-                        else:
-                            _offer_sub_id = None
-                    else:
-                        _offer_sub = getattr(user, 'subscription', None)
-                        _offer_sub_id = _offer_sub.id if _offer_sub else None
+                    _offer_sub = getattr(user, 'subscription', None)
+                    _offer_sub_id = _offer_sub.id if _offer_sub else None
                     offer_record = await upsert_discount_offer(
                         new_db,
                         user_id=user.id,
@@ -964,14 +951,8 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
     if template.offer_type == 'test_access' and squad_uuid:
         filtered_users: list[User] = []
         for user in users:
-            if settings.is_multi_tariff_enabled():
-                all_squads: set[str] = set()
-                for s in getattr(user, 'subscriptions', None) or []:
-                    all_squads.update(s.connected_squads or [])
-                connected = all_squads
-            else:
-                subscription = getattr(user, 'subscription', None)
-                connected = set(subscription.connected_squads or []) if subscription else set()
+            subscription = getattr(user, 'subscription', None)
+            connected = set(subscription.connected_squads or []) if subscription else set()
             if squad_uuid in connected:
                 continue
             filtered_users.append(user)
