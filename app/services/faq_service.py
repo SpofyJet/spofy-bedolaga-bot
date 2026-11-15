@@ -6,9 +6,8 @@ from app.database.crud.faq import (
     get_faq_page_by_id,
     get_faq_pages,
     get_faq_setting,
-    set_faq_enabled,
 )
-from app.database.models import FaqPage, FaqSetting
+from app.database.models import FaqPage
 
 
 logger = structlog.get_logger(__name__)
@@ -30,29 +29,6 @@ class FaqService:
     async def is_enabled(cls, db: AsyncSession, language: str) -> bool:
         pages = await cls.get_pages(db, language)
         return bool(pages)
-
-    @classmethod
-    async def set_enabled(
-        cls,
-        db: AsyncSession,
-        language: str,
-        enabled: bool,
-    ) -> FaqSetting:
-        lang = cls._normalize_language(language)
-        return await set_faq_enabled(db, lang, enabled)
-
-    @classmethod
-    async def toggle_enabled(
-        cls,
-        db: AsyncSession,
-        language: str,
-    ) -> FaqSetting:
-        lang = cls._normalize_language(language)
-        setting = await get_faq_setting(db, lang)
-        new_status = True
-        if setting:
-            new_status = not setting.is_enabled
-        return await set_faq_enabled(db, lang, new_status)
 
     @classmethod
     async def get_pages(
@@ -121,58 +97,3 @@ class FaqService:
             return page
 
         return None
-
-    @staticmethod
-    def split_content_into_pages(
-        content: str,
-        *,
-        max_length: int | None = None,
-    ) -> list[str]:
-        if not content:
-            return []
-
-        normalized = content.replace('\r\n', '\n').strip()
-        if not normalized:
-            return []
-
-        limit = max_length or FaqService.MAX_PAGE_LENGTH
-        if len(normalized) <= limit:
-            return [normalized]
-
-        paragraphs = [paragraph.strip() for paragraph in normalized.split('\n\n') if paragraph.strip()]
-
-        pages: list[str] = []
-        current = ''
-
-        def flush_current() -> None:
-            nonlocal current
-            if current:
-                pages.append(current.strip())
-                current = ''
-
-        for paragraph in paragraphs:
-            candidate = f'{current}\n\n{paragraph}'.strip() if current else paragraph
-            if len(candidate) <= limit:
-                current = candidate
-                continue
-
-            flush_current()
-
-            if len(paragraph) <= limit:
-                current = paragraph
-                continue
-
-            start = 0
-            while start < len(paragraph):
-                chunk = paragraph[start : start + limit]
-                pages.append(chunk.strip())
-                start += limit
-
-            current = ''
-
-        flush_current()
-
-        if not pages:
-            return [normalized[:limit]]
-
-        return pages

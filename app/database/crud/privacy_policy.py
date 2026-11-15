@@ -44,33 +44,3 @@ async def upsert_privacy_policy(
     logger.info('✅ Политика конфиденциальности обновлена', language=language, policy_id=policy.id)
 
     return policy
-
-
-async def set_privacy_policy_enabled(
-    db: AsyncSession,
-    language: str,
-    enabled: bool,
-) -> PrivacyPolicy:
-    policy = await get_privacy_policy(db, language)
-
-    if policy:
-        policy.is_enabled = bool(enabled)
-        policy.updated_at = datetime.now(UTC)
-    else:
-        policy = PrivacyPolicy(
-            language=language,
-            content='',
-            is_enabled=bool(enabled),
-        )
-        db.add(policy)
-
-    await db.commit()
-    await db.refresh(policy)
-
-    logger.info(
-        '✅ Статус политики конфиденциальности для языка %s обновлен: %s',
-        language,
-        'enabled' if policy.is_enabled else 'disabled',
-    )
-
-    return policy

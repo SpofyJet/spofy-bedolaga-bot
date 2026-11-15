@@ -44,33 +44,3 @@ async def upsert_public_offer(
     logger.info('✅ Публичная оферта обновлена', language=language, offer_id=offer.id)
 
     return offer
-
-
-async def set_public_offer_enabled(
-    db: AsyncSession,
-    language: str,
-    enabled: bool,
-) -> PublicOffer:
-    offer = await get_public_offer(db, language)
-
-    if offer:
-        offer.is_enabled = bool(enabled)
-        offer.updated_at = datetime.now(UTC)
-    else:
-        offer = PublicOffer(
-            language=language,
-            content='',
-            is_enabled=bool(enabled),
-        )
-        db.add(offer)
-
-    await db.commit()
-    await db.refresh(offer)
-
-    logger.info(
-        '✅ Статус публичной оферты для языка %s обновлен: %s',
-        language,
-        'enabled' if offer.is_enabled else 'disabled',
-    )
-
-    return offer
