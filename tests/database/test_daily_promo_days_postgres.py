@@ -79,8 +79,11 @@ async def test_daily_promo_days_defer_charge_and_keep_access(postgres_database, 
         user = await get_user_by_id(db, 1)
         service = PromoCodeService()
         if flow == 'cabinet':
+            monkeypatch.setattr(cabinet.RateLimitCache, 'is_rate_limited', AsyncMock(return_value=False))
+            monkeypatch.setattr(cabinet.RateLimitCache, 'is_ip_rate_limited', AsyncMock(return_value=False))
+            monkeypatch.setattr(cabinet, 'get_client_ip', lambda request: '203.0.113.7')
             result = await cabinet.activate_promocode(
-                cabinet.PromocodeActivateRequest(code='FREE3', subscription_id=10), user, db
+                cabinet.PromocodeActivateRequest(code='FREE3', subscription_id=10), raw_request=None, user=user, db=db
             )
             assert result.success
         else:

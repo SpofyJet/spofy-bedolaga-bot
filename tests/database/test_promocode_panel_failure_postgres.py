@@ -3,6 +3,7 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
@@ -49,6 +50,9 @@ async def test_trial_provisioning_failure_releases_usage_and_allows_retry(
             await db.rollback()
 
     monkeypatch.setattr(SubscriptionService, 'create_remnawave_user', failed_panel)
+    monkeypatch.setattr(cabinet.RateLimitCache, 'is_rate_limited', AsyncMock(return_value=False))
+    monkeypatch.setattr(cabinet.RateLimitCache, 'is_ip_rate_limited', AsyncMock(return_value=False))
+    monkeypatch.setattr(cabinet, 'get_client_ip', lambda request: '203.0.113.7')
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
         db.add_all(
             [
@@ -75,7 +79,9 @@ async def test_trial_provisioning_failure_releases_usage_and_allows_retry(
             result = await PromoCodeService().activate_promocode(db, 1, 'TRIAL3')
         else:
             try:
-                response = await cabinet.activate_promocode(cabinet.PromocodeActivateRequest(code='TRIAL3'), user, db)
+                response = await cabinet.activate_promocode(
+                    cabinet.PromocodeActivateRequest(code='TRIAL3'), raw_request=None, user=user, db=db
+                )
             except HTTPException as error:
                 assert error.status_code == 400
                 result = {'success': False, 'error': error.detail['code']}

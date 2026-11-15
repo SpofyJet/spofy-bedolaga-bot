@@ -55,8 +55,11 @@ async def _seed(db, *, paid=False):
     return user, transaction
 
 
-def _fail_event_flush(monkeypatch):
+def _fail_event_flush(monkeypatch, db):
     create_event = notifications.create_subscription_event
+    # После сбоя в сессии вызывающего событие пишется повторно в новой сессии
+    # (AsyncSessionLocal) — направляем её в ту же тестовую базу.
+    monkeypatch.setattr('app.database.database.AsyncSessionLocal', async_sessionmaker(db.bind, expire_on_commit=False))
 
     async def invalid_event(db, **kwargs):
         # Настоящий PostgreSQL NOT NULL error оставляет SQLAlchemy session
@@ -78,7 +81,7 @@ def _fail_event_flush(monkeypatch):
 async def test_event_failure_logs_original_error_and_rolls_back(postgres_database, monkeypatch):
     async with postgres_session(postgres_database, TABLES) as db:
         user, transaction = await _seed(db, paid=True)
-        errors = _fail_event_flush(monkeypatch)
+        errors = _fail_event_flush(monkeypatch, db)
         service = notifications.AdminNotificationService(MagicMock())
 
         recorded = await service._record_subscription_event(
@@ -92,7 +95,9 @@ async def test_event_failure_logs_original_error_and_rolls_back(postgres_databas
 
         assert recorded is False
         assert db.is_active
-        assert [kind for _, kind, _ in errors] == ['IntegrityError']
+        # Причина (IntegrityError) пишется с exc_info при повторе в новой сессии,
+        # итоговая строка — без исключения.
+        assert [kind for _, kind, _ in errors] == ['IntegrityError', 'NoneType']
         assert errors[0][2]['exc_info'] is True
         assert await db.scalar(select(User.balance_kopeks)) == 35000
         assert await db.scalar(select(func.count(Transaction.id))) == 1
@@ -107,7 +112,7 @@ async def test_admin_event_does_not_repeat_cryptobot_credit(postgres_database, m
 
     async with postgres_session(postgres_database, TABLES) as db:
         await _seed(db)
-        errors = _fail_event_flush(monkeypatch) if event_flush_fails else []
+        errors = _fail_event_flush(monkeypatch, db) if event_flush_fails else []
         monkeypatch.setattr(cryptobot, 'AsyncSessionLocal', async_sessionmaker(db.bind, expire_on_commit=False))
         monkeypatch.setattr(cryptobot.currency_converter, 'usd_to_rub', AsyncMock(return_value=350.0))
         monkeypatch.setattr(transaction_crud, 'emit_transaction_side_effects', AsyncMock())
@@ -124,7 +129,7 @@ async def test_admin_event_does_not_repeat_cryptobot_credit(postgres_database, m
         assert await service.process_cryptobot_webhook(db, payload) is True
         assert admin_send.await_count == 1
         assert '350' in admin_send.call_args.args[0]
-        assert [kind for _, kind, _ in errors] == (['IntegrityError'] if event_flush_fails else [])
+        assert [kind for _, kind, _ in errors] == (['IntegrityError', 'NoneType'] if event_flush_fails else [])
         assert await db.scalar(select(User.balance_kopeks)) == 35000
         assert await db.scalar(select(func.count(Transaction.id))) == 1
         payment = await db.scalar(select(CryptoBotPayment))
@@ -142,7 +147,7 @@ async def test_admin_event_does_not_repeat_cryptobot_credit(postgres_database, m
 async def test_topup_reload_failure_does_not_read_expired_orm_in_error_log(postgres_database, monkeypatch, loader):
     async with postgres_session(postgres_database, TABLES) as db:
         user, transaction = await _seed(db, paid=True)
-        errors = _fail_event_flush(monkeypatch)
+        errors = _fail_event_flush(monkeypatch, db)
         monkeypatch.setattr(notifications, loader, AsyncMock(side_effect=RuntimeError('masked-load-error')))
         service = notifications.AdminNotificationService(MagicMock())
         service._send_message = AsyncMock(return_value=True)
@@ -160,7 +165,7 @@ async def test_topup_reload_failure_does_not_read_expired_orm_in_error_log(postg
         )
 
         assert result is False
-        assert [kind for _, kind, _ in errors] == ['IntegrityError', 'RuntimeError']
+        assert [kind for _, kind, _ in errors] == ['IntegrityError', 'NoneType', 'RuntimeError']
         assert db.is_active
         service._send_message.assert_not_awaited()
 
@@ -168,7 +173,7 @@ async def test_topup_reload_failure_does_not_read_expired_orm_in_error_log(postg
 async def test_rollback_failure_also_logs_scalar_identity(postgres_database, monkeypatch):
     async with postgres_session(postgres_database, TABLES) as db:
         user, transaction = await _seed(db, paid=True)
-        errors = _fail_event_flush(monkeypatch)
+        errors = _fail_event_flush(monkeypatch, db)
         rollback = db.rollback
         monkeypatch.setattr(db, 'rollback', AsyncMock(side_effect=RuntimeError('masked-rollback-error')))
         service = notifications.AdminNotificationService(MagicMock())
@@ -183,6 +188,7 @@ async def test_rollback_failure_also_logs_scalar_identity(postgres_database, mon
         )
 
         assert recorded is False
-        assert [kind for _, kind, _ in errors] == ['IntegrityError', 'RuntimeError']
+        # Сбой rollback пишется в debug; причина — IntegrityError повтора в новой сессии.
+        assert [kind for _, kind, _ in errors] == ['IntegrityError', 'NoneType']
         assert all(details['user_id'] == 1 for _, _, details in errors)
         await rollback()

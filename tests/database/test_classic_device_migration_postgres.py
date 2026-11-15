@@ -281,8 +281,10 @@ async def test_selected_classic_devices_are_priced_and_preserved(
                     if b.callback_data and b.callback_data.startswith('custom_confirm:')
                 )
                 await inspect.unwrap(telegram.handle_custom_confirm)(callback, user, db, state)
+                # Экран «Оплата принята» показывает тариф, срок и списание; число
+                # устройств проверяется ниже по базе и запросу в панель.
                 success_text = callback.message.edit_text.await_args.args[0]
-                assert f'Устройств: {expected}' in success_text
+                assert f'Списано: {telegram.format_price_kopeks(expected_price)}' in success_text
             else:
                 callback.data = f'tariff_period:1:{days}'
                 await inspect.unwrap(telegram.select_tariff_period)(callback, user, db, state)

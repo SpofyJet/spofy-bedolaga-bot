@@ -233,5 +233,8 @@ async def test_tariff_switch_commits_target_and_payment_despite_panel_failure(po
         assert len(transactions) == 1 and transactions[0].amount_kopeks == -25000
         assert c.sub.tariff_id == 2 and c.sub.device_limit == 2
         assert c.sub.traffic_limit_gb == 200
-        assert c.sub.end_date == c.end + timedelta(days=30)
+        # Остаток переносится на тариф дороже по стоимости (carried_seconds_by_value):
+        # 5 дней по 200 ₽ за 30 дней становятся 4 днями по 250 ₽ за 30 дней.
+        carried = (c.end - c.now) * 20000 / 25000
+        assert abs((c.sub.end_date - (c.now + timedelta(days=30) + carried)).total_seconds()) < 5
         assert c.sub.pending_panel_expire_at == c.sub.end_date
