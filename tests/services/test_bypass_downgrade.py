@@ -23,7 +23,9 @@ from app.services.panel_sync import (
 )
 
 
-NOW = datetime(2026, 10, 2, 12, 0, tzinfo=UTC)
+# Сервис сверяет срок с текущим временем, поэтому «сейчас» в тесте — настоящее:
+# с фиксированной датой подписки «истекали» через месяц после написания теста.
+NOW = datetime.now(UTC).replace(microsecond=0)
 BYPASS = 'dbdb505a-245e-412b-8eee-38cf6db1a383'
 OFF = '61515668-7488-4c46-9835-062600802bf0'
 REGULAR = 'a7291803-07a3-4ca8-943e-25a1d4e649f6'

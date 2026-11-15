@@ -12,6 +12,7 @@ from aiohttp import web
 from app.config import settings
 from app.services import startup_notification_service as startup
 from app.utils import rich_admin, rich_menu, rich_notify
+from tests.fixtures.loopback import requires_loopback
 from tests.services.test_startup_notification_summary import _stats
 
 
@@ -90,6 +91,7 @@ async def bot_api_server():
         await runner.cleanup()
 
 
+@requires_loopback
 @pytest.mark.asyncio
 async def test_startup_logo_crosses_real_sdk_http_boundary(bot_api_server, monkeypatch):
     base, requests = bot_api_server

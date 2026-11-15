@@ -7,6 +7,7 @@ import pytest
 from app.external.remnawave_api import RemnaWaveAPIError, RemnaWaveTransientError
 from app.services.panel_sync import push_subscription
 from app.services.panel_sync.identity import PanelIdentity
+from tests.fixtures.loopback import requires_loopback
 from tests.services.panel_sync.test_writer import NOW, _panel_user, _sub, _user
 
 
@@ -194,6 +195,7 @@ async def test_second_failure_is_propagated_without_retry_loop():
     assert len(api.calls) == 2
 
 
+@requires_loopback
 @pytest.mark.parametrize('panel_id', [None, 42])
 async def test_recovery_through_real_http_client_and_catalog_parser(panel_id):
     from unittest.mock import AsyncMock
