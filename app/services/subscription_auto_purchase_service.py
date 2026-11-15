@@ -1558,8 +1558,11 @@ async def _auto_add_devices(
     """Auto-purchase devices from saved cart after balance topup."""
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+    from app.database.crud.subscription import reactivate_subscription
+    from app.database.crud.transaction import emit_transaction_side_effects
     from app.database.crud.user import lock_user_for_pricing, subtract_user_balance
     from app.database.models import PaymentMethod
+    from app.services.remnawave_retry_queue import remnawave_retry_queue
     from app.utils.pricing_utils import calculate_device_addon_price, count_chargeable_devices
 
     devices_to_add = _safe_int(cart_data.get('devices_to_add'))
@@ -1687,120 +1690,83 @@ async def _auto_add_devices(
         )
         return False
 
-    # Списываем баланс (бесплатные места и 100% скидка — без списания и без пустой транзакции)
+    # Списание, запись о платеже и новый лимит — одним коммитом и до панели. Строки
+    # пользователя и подписки заблокированы выше и до коммита не отпускаются; сбой панели
+    # откатывает сессию, и всё незакоммиченное к тому моменту пропало бы. Бесплатные места
+    # и 100% скидка — без списания и без пустой транзакции.
     description = f'Покупка {devices_to_add} доп. устройств'
-    if price_kopeks > 0:
-        try:
-            success = await subtract_user_balance(
-                db,
-                user,
-                price_kopeks,
-                description,
-                create_transaction=True,
-                payment_method=PaymentMethod.BALANCE,
-                transaction_type=TransactionType.SUBSCRIPTION_PAYMENT,
-            )
+    log_user_id = _format_user_id(user)
+    user_id, subscription_id = user.id, subscription.id
+    payment = None
+    try:
+        if price_kopeks > 0:
+            success = await subtract_user_balance(db, user, price_kopeks, description, commit=False)
             if not success:
                 logger.warning(
                     '❌ Автопокупка устройств: не удалось списать баланс пользователя',
-                    format_user_id=_format_user_id(user),
+                    format_user_id=log_user_id,
                 )
                 return False
-        except Exception as error:
-            logger.error(
-                '❌ Автопокупка устройств: ошибка списания баланса пользователя',
-                format_user_id=_format_user_id(user),
-                error=error,
-                exc_info=True,
-            )
-            return False
-
-    # Re-lock subscription after subtract_user_balance committed (released locks)
-    user = await lock_user_for_pricing(db, user.id)
-    relock_result = await db.execute(
-        select(Subscription)
-        .where(Subscription.id == subscription.id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    subscription = relock_result.scalar_one()
-
-    old_device_limit = subscription.device_limit or 1
-    new_device_limit = old_device_limit + devices_to_add
-
-    if subscription.device_limit == 0 or (tariff_max_device_limit and new_device_limit > tariff_max_device_limit):
-        # Concurrent modification exceeded limit — refund
-        if price_kopeks > 0:
-            user_refund = await db.execute(
-                select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
-            )
-            refund_user = user_refund.scalar_one()
-            refund_user.balance_kopeks += price_kopeks
-            from app.database.crud.transaction import create_transaction
-
-            await create_transaction(
+            payment = await create_transaction(
                 db,
-                user.id,
-                TransactionType.REFUND,
+                user_id,
+                TransactionType.SUBSCRIPTION_PAYMENT,
                 price_kopeks,
-                'Возврат отменённой докупки устройств: условия подписки изменились',
+                description,
                 payment_method=PaymentMethod.BALANCE,
                 commit=False,
             )
-        await db.commit()
-        logger.warning(
-            '🔁 Автопокупка устройств: лимит превышен после оплаты, баланс возвращён',
-            format_user_id=_format_user_id(user),
-        )
-        await _delete_cart_for_subscription(user.id, cart_data)
-        return False
 
-    # Добавляем устройства (under lock)
-    subscription.device_limit = new_device_limit
-
-    try:
+        # Добавляем устройства (under lock)
+        subscription.device_limit = new_device_limit
+        # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
+        await reactivate_subscription(db, subscription, commit=False)
         await db.commit()
         await db.refresh(subscription)
     except Exception as error:
         logger.error(
-            '❌ Автопокупка устройств: ошибка сохранения подписки пользователя',
-            format_user_id=_format_user_id(user),
+            '❌ Автопокупка устройств: ошибка списания и выдачи устройств пользователю',
+            format_user_id=log_user_id,
             error=error,
             exc_info=True,
         )
         await db.rollback()
         return False
 
-    # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
-    from app.database.crud.subscription import reactivate_subscription
+    if payment is not None:
+        await emit_transaction_side_effects(
+            db,
+            payment,
+            amount_kopeks=price_kopeks,
+            user_id=user_id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            payment_method=PaymentMethod.BALANCE,
+            description=description,
+        )
 
-    await reactivate_subscription(db, subscription)
-
-    # Синхронизация с RemnaWave
+    # Синхронизация с RemnaWave. При её сбое сервис панели откатывает сессию и возвращает
+    # None: оплата уже закоммичена — перечитываем объекты и ставим лимит в очередь повторов.
     try:
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, subscription)
-        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        _panel_user_id = getattr(user, 'remnawave_id', None)
-        if _panel_user_id is not None and subscription.status == 'active':
-            await subscription_service.enable_remnawave_user(_panel_user_id)
+        panel_result = await subscription_service.update_remnawave_user(db, subscription)
+        await reload_after_panel_failure(db, user, subscription)
+        if panel_result is None:
+            remnawave_retry_queue.enqueue(subscription_id=subscription_id, user_id=user_id, action='update')
+        else:
+            # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+            _panel_user_id = getattr(user, 'remnawave_id', None)
+            if _panel_user_id is not None and subscription.status == 'active':
+                await subscription_service.enable_remnawave_user(_panel_user_id)
     except Exception as error:
         logger.warning(
             '⚠️ Автопокупка устройств: не удалось обновить Remnawave для пользователя',
-            format_user_id=_format_user_id(user),
+            format_user_id=log_user_id,
             error=error,
         )
-        from app.services.remnawave_retry_queue import remnawave_retry_queue
+        await reload_after_panel_failure(db, user, subscription)
+        remnawave_retry_queue.enqueue(subscription_id=subscription_id, user_id=user_id, action='update')
 
-        if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
-            remnawave_retry_queue.enqueue(
-                subscription_id=subscription.id,
-                user_id=subscription.user_id,
-                action='update',
-            )
-
-    # Очищаем корзину (транзакция уже создана в subtract_user_balance)
-    await _delete_cart_for_subscription(user.id, cart_data)
+    await _delete_cart_for_subscription(user_id, cart_data)
 
     logger.info(
         '✅ Автопокупка устройств: пользователь добавил устройства',
@@ -1905,9 +1871,15 @@ async def _auto_add_traffic(
     """Auto-purchase traffic from saved cart after balance topup."""
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-    from app.database.crud.subscription import add_subscription_traffic, get_subscription_by_user_id
+    from app.database.crud.subscription import (
+        add_subscription_traffic,
+        get_subscription_by_user_id,
+        reactivate_subscription,
+    )
+    from app.database.crud.transaction import emit_transaction_side_effects
     from app.database.crud.user import lock_user_for_pricing, subtract_user_balance
     from app.database.models import PaymentMethod
+    from app.services.remnawave_retry_queue import remnawave_retry_queue
     from app.utils.pricing_utils import calculate_prorated_price
 
     traffic_gb = _safe_int(cart_data.get('traffic_gb'))
@@ -2027,102 +1999,74 @@ async def _auto_add_traffic(
         )
         return False
 
-    # Deduct balance
+    # Списание, запись о платеже и трафик — одним коммитом и до панели (коммитит
+    # add_subscription_traffic). Сбой выдачи откатывает всё вместе: ни списания, ни
+    # трафика, возврат не нужен. Сбой панели откатывает сессию — всё незакоммиченное
+    # к тому моменту пропало бы.
     description = f'Докупка {traffic_gb} ГБ трафика'
-    try:
-        success = await subtract_user_balance(
-            db,
-            user,
-            price_kopeks,
-            description,
-            create_transaction=True,
-            payment_method=PaymentMethod.BALANCE,
-            transaction_type=TransactionType.SUBSCRIPTION_PAYMENT,
-        )
-        if not success:
-            logger.warning(
-                '❌ Автопокупка трафика: не удалось списать баланс пользователя', format_user_id=_format_user_id(user)
-            )
-            return False
-    except Exception as error:
-        logger.error(
-            '❌ Автопокупка трафика: ошибка списания баланса пользователя',
-            format_user_id=_format_user_id(user),
-            error=error,
-            exc_info=True,
-        )
-        return False
-
-    # Add traffic
+    log_user_id = _format_user_id(user)
+    user_id, subscription_id = user.id, subscription.id
     old_traffic_limit = subscription.traffic_limit_gb or 0
     try:
+        success = await subtract_user_balance(db, user, price_kopeks, description, commit=False)
+        if not success:
+            logger.warning('❌ Автопокупка трафика: не удалось списать баланс пользователя', format_user_id=log_user_id)
+            return False
+        payment = await create_transaction(
+            db,
+            user_id,
+            TransactionType.SUBSCRIPTION_PAYMENT,
+            price_kopeks,
+            description,
+            payment_method=PaymentMethod.BALANCE,
+            commit=False,
+        )
+        # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
+        await reactivate_subscription(db, subscription, commit=False)
         await add_subscription_traffic(db, subscription, traffic_gb)
-        await db.commit()
-        await db.refresh(subscription)
     except Exception as error:
         logger.error(
-            '❌ Автопокупка трафика: ошибка добавления трафика пользователю',
-            format_user_id=_format_user_id(user),
+            '❌ Автопокупка трафика: ошибка списания и добавления трафика пользователю',
+            format_user_id=log_user_id,
             error=error,
             exc_info=True,
         )
         await db.rollback()
-        # Compensating refund: balance was already committed by subtract_user_balance
-        try:
-            from app.database.crud.user import add_user_balance
-
-            await add_user_balance(
-                db,
-                user,
-                price_kopeks,
-                'Возврат: ошибка автопокупки трафика',
-                create_transaction=True,
-                transaction_type=TransactionType.REFUND,
-            )
-            logger.info(
-                '💰 Автопокупка трафика: возврат средств после ошибки добавления трафика',
-                format_user_id=_format_user_id(user),
-                refund_kopeks=price_kopeks,
-            )
-        except Exception as refund_error:
-            logger.critical(
-                'CRITICAL: Автопокупка трафика: не удалось вернуть средства',
-                format_user_id=_format_user_id(user),
-                price_kopeks=price_kopeks,
-                refund_error=refund_error,
-            )
         return False
 
-    # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
-    from app.database.crud.subscription import reactivate_subscription
+    await emit_transaction_side_effects(
+        db,
+        payment,
+        amount_kopeks=price_kopeks,
+        user_id=user_id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        payment_method=PaymentMethod.BALANCE,
+        description=description,
+    )
 
-    await reactivate_subscription(db, subscription)
-
-    # Sync with RemnaWave
+    # Sync with RemnaWave. При её сбое сервис панели откатывает сессию и возвращает None:
+    # оплата уже закоммичена — перечитываем объекты и ставим лимит в очередь повторов.
     try:
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, subscription)
-        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        _panel_user_id = getattr(user, 'remnawave_id', None)
-        if _panel_user_id is not None and subscription.status == 'active':
-            await subscription_service.enable_remnawave_user(_panel_user_id)
+        panel_result = await subscription_service.update_remnawave_user(db, subscription)
+        await reload_after_panel_failure(db, user, subscription)
+        if panel_result is None:
+            remnawave_retry_queue.enqueue(subscription_id=subscription_id, user_id=user_id, action='update')
+        else:
+            # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+            _panel_user_id = getattr(user, 'remnawave_id', None)
+            if _panel_user_id is not None and subscription.status == 'active':
+                await subscription_service.enable_remnawave_user(_panel_user_id)
     except Exception as error:
         logger.warning(
             '⚠️ Автопокупка трафика: не удалось обновить Remnawave для пользователя',
-            format_user_id=_format_user_id(user),
+            format_user_id=log_user_id,
             error=error,
         )
-        from app.services.remnawave_retry_queue import remnawave_retry_queue
+        await reload_after_panel_failure(db, user, subscription)
+        remnawave_retry_queue.enqueue(subscription_id=subscription_id, user_id=user_id, action='update')
 
-        if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
-            remnawave_retry_queue.enqueue(
-                subscription_id=subscription.id,
-                user_id=subscription.user_id,
-                action='update',
-            )
-
-    # Clear cart (transaction already created in subtract_user_balance)
-    await _delete_cart_for_subscription(user.id, cart_data)
+    await _delete_cart_for_subscription(user_id, cart_data)
 
     logger.info(
         '✅ Автопокупка трафика: пользователь добавил трафик',
