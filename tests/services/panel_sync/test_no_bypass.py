@@ -21,11 +21,9 @@ _ALLOWED = {
     'app/services/panel_sync/writer.py',
     # Клиент панели: это и есть обёртка над HTTP.
     'app/external/remnawave_api.py',
-    # Согласователь грейса ведёт двухфазные переходы со своей блокировкой и
-    # сверкой результата, работая не с подпиской, а со своим снимком. Правила
-    # даты и «жива ли подписка» он берёт у сервиса, а запись оставляет себе:
-    # push_subscription этим переходам не адрес.
-    'app/services/grace_access_runtime.py',
+    # Усыновление уже существующего аккаунта панели: это create_call, который
+    # админские пути передают в push_subscription, — payload собирает сервис.
+    'app/services/panel_sync/adopt.py',
 }
 
 
@@ -54,13 +52,4 @@ def test_nobody_writes_to_the_panel_directly(path):
         f'{path}: запись в панель мимо app/services/panel_sync — строки {lines}. '
         f'Нужна подписка целиком — push_subscription; одно-два поля — only_fields; '
         f'карточка аккаунта — patch_panel_account; сквады тарифа — patch_panel_squads.'
-    )
-
-
-def test_grace_is_still_the_only_exception_that_needs_one():
-    """Переведут грейс на сервис — убрать его из списка, иначе тот начнёт врать."""
-    grace = pathlib.Path('app/services/grace_access_runtime.py')
-
-    assert _direct_panel_writes(grace), (
-        'согласователь грейса больше не пишет в панель напрямую — уберите его из списка исключений'
     )

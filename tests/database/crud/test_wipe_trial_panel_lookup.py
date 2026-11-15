@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-import app.services.grace_access_runtime as grace_runtime_mod
 import app.services.subscription_service as subscription_service_mod
 from app.config import Settings, settings
 from app.database.crud.subscription import wipe_trial_subscriptions
@@ -48,8 +47,6 @@ def patched_service(monkeypatch, api):
     # `wipe_trial_subscriptions` импортирует зависимости внутри функции, поэтому
     # подменять их надо в модулях-источниках.
     monkeypatch.setattr(subscription_service_mod, 'SubscriptionService', _Service)
-    # Grace-guard ходит в реальный bind — здесь проверяется не он.
-    monkeypatch.setattr(grace_runtime_mod, 'ensure_no_open_grace_for_subscriptions', AsyncMock(return_value=None))
     return api
 
 

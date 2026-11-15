@@ -1192,9 +1192,6 @@ class RemnaWaveService:
             from sqlalchemy.orm import selectinload
 
             from app.database.models import Subscription, User
-            from app.services.grace_access_runtime import get_open_grace_subscription_ids
-
-            open_grace_ids = await get_open_grace_subscription_ids(db)
 
             # Получаем всех пользователей с их подписками за один запрос
             bot_users_result = await db.execute(
@@ -1319,7 +1316,6 @@ class RemnaWaveService:
                                     db,
                                     db_user,
                                     panel_user,
-                                    open_grace_ids=open_grace_ids,
                                     snapshot_taken_at=snapshot_taken_at,
                                 )
                                 stats['updated'] += 1
@@ -1377,7 +1373,6 @@ class RemnaWaveService:
                                 db,
                                 db_user,
                                 panel_user,
-                                open_grace_ids=open_grace_ids,
                                 snapshot_taken_at=snapshot_taken_at,
                             )
                         else:
@@ -1508,7 +1503,6 @@ class RemnaWaveService:
                                     db,
                                     db_user,
                                     panel_user,
-                                    open_grace_ids=open_grace_ids,
                                     snapshot_taken_at=snapshot_taken_at,
                                 )
                             else:
@@ -1782,10 +1776,6 @@ class RemnaWaveService:
                 if _sub_panel_id is not None:
                     subs_by_panel_id[_sub_panel_id] = sub
 
-            from app.services.grace_access_runtime import get_open_grace_subscription_ids
-
-            open_grace_ids = await get_open_grace_subscription_ids(db)
-
             # Fallback: build user-level panel id → user map for legacy migration
             from app.database.models import User
 
@@ -1908,7 +1898,6 @@ class RemnaWaveService:
                         continue
                 if subscription is not None:
                     subs_by_panel_id[panel_user_id] = subscription
-                grace_open = bool(subscription and subscription.id in open_grace_ids)
 
                 if not subscription:
                     # Check MAX_ACTIVE_SUBSCRIPTIONS
@@ -2044,7 +2033,6 @@ class RemnaWaveService:
                         subscription,
                         read_panel_user(panel_user),
                         now=self._now_utc(),
-                        grace_open=grace_open,
                         policy=BULK_SNAPSHOT,
                         snapshot_taken_at=snapshot_taken_at,
                         trust_status=not is_recently_updated_by_webhook(subscription),
@@ -2167,7 +2155,6 @@ class RemnaWaveService:
         user,
         panel_user,
         *,
-        open_grace_ids: set[int] | None = None,
         snapshot_taken_at: datetime | None = None,
     ):
         try:
@@ -2198,17 +2185,6 @@ class RemnaWaveService:
                 await self._create_subscription_from_panel_data(db, user, panel_user)
                 return
 
-            if open_grace_ids is None:
-                from app.services.grace_access_runtime import get_open_grace_subscription_ids
-
-                open_grace_ids = await get_open_grace_subscription_ids(db)
-            grace_open = subscription.id in open_grace_ids
-            if grace_open:
-                logger.debug(
-                    'Panel-to-bot sync masks grace-owned fields',
-                    subscription_id=subscription.id,
-                )
-
             # Skip if recently updated by webhook (prevent stale data overwrite)
             if is_recently_updated_by_webhook(subscription):
                 logger.debug(
@@ -2225,7 +2201,6 @@ class RemnaWaveService:
                 subscription,
                 read_panel_user(panel_user),
                 now=self._now_utc(),
-                grace_open=grace_open,
                 policy=BULK_SNAPSHOT,
                 snapshot_taken_at=snapshot_taken_at,
                 paid_at=await get_last_subscription_payment_at(db, user.id),

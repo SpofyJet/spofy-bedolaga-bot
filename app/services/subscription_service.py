@@ -17,6 +17,7 @@ from app.external.remnawave_api import (
     RemnaWaveUser,
     is_user_not_found_error,
 )
+from app.external.remnawave_errors import coerce_panel_user_id
 
 # Правила поля стратегии живут в пакете синхронизации; имя оставлено здесь для
 # внешнего кода, который импортировал его из сервиса.
@@ -28,7 +29,6 @@ from app.services.panel_sync import (
     link_subscription_panel_identity,
     panel_date_is_closing,
     panel_id_is_free_for,
-    patch_panel_account,
     push_subscription,
     resolve_panel_user_tag,
 )
@@ -234,24 +234,15 @@ class SubscriptionService:
                 logger.error('Пользователь не найден', user_id=subscription.user_id)
                 return None
 
-            from app.services.grace_access_runtime import lock_grace_sensitive_panel_updates
-
-            await lock_grace_sensitive_panel_updates(db, (subscription.id,))
             validation_success = await self.validate_and_clean_subscription(db, subscription, user)
             if not validation_success:
                 logger.error('Ошибка валидации подписки для пользователя', _format_user_log=self._format_user_log(user))
                 await db.rollback()
                 return None
 
-            open_grace_ids = await lock_grace_sensitive_panel_updates(db, (subscription.id,))
             await db.flush((subscription, user))
             await db.refresh(subscription)
             await db.refresh(user)
-            preserve_open_grace = (
-                subscription.id in open_grace_ids
-                and user.status == 'active'
-                and subscription.actual_status in (SubscriptionStatus.EXPIRED.value, SubscriptionStatus.LIMITED.value)
-            )
 
             # Загружаем tariff заранее, чтобы избежать lazy loading в async контексте
             try:
@@ -267,40 +258,6 @@ class SubscriptionService:
 
             async with self.get_api_client() as api:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
-
-                if preserve_open_grace:
-                    remnawave_id = (
-                        subscription.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
-                    )
-                    if not remnawave_id:
-                        logger.warning(
-                            'Remnawave create/update deferred while grace is open and panel id is missing',
-                            subscription_id=subscription.id,
-                        )
-                        await db.commit()
-                        return None
-                    # Открыт грейс: состояние подписки трогать нельзя, обновляем
-                    # только карточку аккаунта.
-                    updated_user = await patch_panel_account(
-                        api,
-                        user_id=remnawave_id,
-                        description=settings.format_remnawave_user_description(
-                            full_name=user.full_name,
-                            username=user.username,
-                            telegram_id=user.telegram_id,
-                            email=user.email,
-                            user_id=user.id,
-                        ),
-                        telegram_id=user.telegram_id,
-                        email=user.email,
-                        hwid_device_limit=hwid_limit,
-                        tag=user_tag,
-                    )
-                    subscription.remnawave_short_uuid = updated_user.short_uuid
-                    subscription.subscription_url = updated_user.subscription_url
-                    subscription.subscription_crypto_link = updated_user.happ_crypto_link
-                    await db.commit()
-                    return updated_user
 
                 # Multi-tariff mode: each subscription has its own Remnawave user
                 if settings.is_multi_tariff_enabled():
@@ -567,54 +524,11 @@ class SubscriptionService:
                 )
                 return None
 
-            # Routine outbound updates must not replace a temporary Telegram-only
-            # overlay with the still-expired/limited billing state. A real renewal
-            # changes actual_status to active and is intentionally allowed.
-            from app.services.grace_access_runtime import (
-                apply_recovered_grace_update_locked,
-                lock_grace_sensitive_panel_updates,
-            )
-
-            open_grace_ids = await lock_grace_sensitive_panel_updates(db, (subscription.id,))
             await db.flush((subscription, user))
-            # The caller may have loaded these objects before waiting for the
-            # grace lock.  Re-read scalar billing/user state under that lock so
-            # an older sync cannot overwrite a renewal that just completed.
+            # Вызывающий мог загрузить объекты давно: перечитываем состояние, чтобы
+            # старая синхронизация не затёрла только что закоммиченное продление.
             await db.refresh(subscription)
             await db.refresh(user)
-            preserve_open_grace = (
-                subscription.id in open_grace_ids
-                and user.status == 'active'
-                and subscription.actual_status in (SubscriptionStatus.EXPIRED.value, SubscriptionStatus.LIMITED.value)
-            )
-            if preserve_open_grace:
-                logger.info(
-                    'Routine Remnawave update masks grace-owned fields',
-                    subscription_id=subscription.id,
-                )
-                async with self.get_api_client() as api:
-                    # Открыт грейс: состояние подписки трогать нельзя, обновляем
-                    # только карточку аккаунта.
-                    updated_user = await patch_panel_account(
-                        api,
-                        user_id=remnawave_id,
-                        description=settings.format_remnawave_user_description(
-                            full_name=user.full_name,
-                            username=user.username,
-                            telegram_id=user.telegram_id,
-                            email=user.email,
-                            user_id=user.id,
-                        ),
-                        telegram_id=user.telegram_id,
-                        email=user.email,
-                        hwid_device_limit=resolve_hwid_device_limit_for_payload(subscription),
-                        tag=self._resolve_user_tag(subscription),
-                    )
-                subscription.subscription_url = updated_user.subscription_url
-                subscription.subscription_crypto_link = updated_user.happ_crypto_link
-                await db.commit()
-                return updated_user
-
             # Загружаем tariff заранее, чтобы избежать lazy loading в async контексте
             try:
                 await db.refresh(subscription, ['tariff'])
@@ -686,42 +600,25 @@ class SubscriptionService:
                     hwid_device_limit=hwid_limit,
                     external_squad_uuid=ext_squad_uuid,
                 )
-                # Грейс принимает готовый набор полей: у него своя блокировка и
-                # своя фазовая запись, но собирает запрос всё равно сервис.
-                update_kwargs = panel_payload.update_kwargs(
-                    user_id=remnawave_id, only_fields=only_fields, now=current_time
-                )
-
-                completed_grace = False
-                updated_user = None
-                if subscription.id in open_grace_ids:
-                    completed_grace, updated_user = await apply_recovered_grace_update_locked(
-                        db,
+                # Аккаунт уже известен: адрес не перепроверяем, а «такого нет»
+                # разбирает ветка ниже — у неё своя проверка, стоит ли
+                # воскрешать подписку.
+                updated_user = (
+                    await push_subscription(
                         api,
-                        subscription.id,
-                        update_kwargs=update_kwargs,
-                        source='subscription_service.update_remnawave_user',
+                        user,
+                        subscription,
+                        db=db,
+                        multi_tariff=multi_tariff,
+                        payload=panel_payload,
+                        only_fields=only_fields,
+                        identity=await self._known_panel_identity(api, user, subscription, remnawave_id),
+                        create_if_missing=False,
+                        recreate_on_missing=False,
+                        reset_devices=False,
+                        now=current_time,
                     )
-                if not completed_grace:
-                    # Аккаунт уже известен: адрес не перепроверяем, а «такого нет»
-                    # разбирает ветка ниже — у неё своя проверка, стоит ли
-                    # воскрешать подписку.
-                    updated_user = (
-                        await push_subscription(
-                            api,
-                            user,
-                            subscription,
-                            db=db,
-                            multi_tariff=multi_tariff,
-                            payload=panel_payload,
-                            only_fields=only_fields,
-                            identity=await self._known_panel_identity(api, user, subscription, remnawave_id),
-                            create_if_missing=False,
-                            recreate_on_missing=False,
-                            reset_devices=False,
-                            now=current_time,
-                        )
-                    ).panel_user
+                ).panel_user
                 if updated_user is None:
                     raise RemnaWaveAPIError('Remnawave returned no user after subscription renewal update')
 
@@ -771,8 +668,6 @@ class SubscriptionService:
                 )
                 logger.error('HWID limit reconciliation deferred', error=e)
                 return None
-            # Rollback ДО пересоздания: advisory-локи grace должны быть отпущены
-            # прежде, чем recreate re-входит в create_remnawave_user со своим локом.
             await db.rollback()
             if is_user_not_found_error(e):
                 # Пользователя удалили из панели, пока подписка жива в боте, —
@@ -883,8 +778,6 @@ class SubscriptionService:
         if not panel_user_id:
             return False
         try:
-            from app.services.grace_access_runtime import update_panel_user_grace_safe
-
             async with self.get_api_client() as api:
                 result = await push_subscription(
                     api,
@@ -897,7 +790,6 @@ class SubscriptionService:
                     create_if_missing=False,
                     recreate_on_missing=False,
                     reset_devices=False,
-                    update_call=lambda **kwargs: update_panel_user_grace_safe(api, subscription.id, **kwargs),
                 )
                 return result.panel_user is not None and panel_date_is_closing(result.panel_user.expire_at)
         except Exception as error:
@@ -906,20 +798,10 @@ class SubscriptionService:
             )
             return False
 
-    async def disable_remnawave_user(self, panel_user_id: int, db: AsyncSession | None = None) -> bool:
-        """``db`` — сессия вызывающего, уже держащего grace-локи (пути удаления
-        после ensure_no_open_grace_*): без её проброса grace-обёртка открыла бы
-        вторую сессию и самодедлочилась об advisory-локи первой."""
+    async def disable_remnawave_user(self, panel_user_id: int) -> bool:
         try:
-            from app.services.grace_access_runtime import set_panel_user_enabled_state_grace_safe
-
             async with self.get_api_client() as api:
-                await set_panel_user_enabled_state_grace_safe(
-                    api,
-                    panel_user_id,
-                    enabled=False,
-                    db=db,
-                )
+                await api.disable_user(coerce_panel_user_id(panel_user_id))
                 logger.info('✅ Отключен RemnaWave пользователь', panel_user_id=panel_user_id)
                 return True
 
@@ -948,21 +830,11 @@ class SubscriptionService:
             logger.error('Ошибка удаления RemnaWave пользователя', error=e, panel_user_id=panel_user_id)
             return False
 
-    async def enable_remnawave_user(self, panel_user_id: int, db: AsyncSession | None = None) -> bool:
-        """Включить пользователя в RemnaWave (реактивация).
-
-        ``db`` — сессия вызывающего, уже держащего grace-локи этих подписок
-        (см. disable_remnawave_user)."""
+    async def enable_remnawave_user(self, panel_user_id: int) -> bool:
+        """Включить пользователя в RemnaWave (реактивация)."""
         try:
-            from app.services.grace_access_runtime import set_panel_user_enabled_state_grace_safe
-
             async with self.get_api_client() as api:
-                await set_panel_user_enabled_state_grace_safe(
-                    api,
-                    panel_user_id,
-                    enabled=True,
-                    db=db,
-                )
+                await api.enable_user(coerce_panel_user_id(panel_user_id))
                 logger.info('✅ Включен RemnaWave пользователь', panel_user_id=panel_user_id)
                 return True
 

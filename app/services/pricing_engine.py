@@ -939,11 +939,8 @@ class PricingEngine:
         Thin wrapper that extracts raw params from a Subscription
         and delegates to _calculate_classic_core.
         """
-        # Сквады и лимит — без оверлея грейса, осевшего в подписке (v4.10–4.11):
-        # продление вернёт свои серверы, и цена считается по ним, а не по скваду грейса.
-        from app.services.grace_access_echo import terms_without_grace_echo
-
-        connected_squads, own_traffic_limit_gb = await terms_without_grace_echo(db, subscription)
+        connected_squads = list(subscription.connected_squads or [])
+        own_traffic_limit_gb = subscription.traffic_limit_gb
         traffic_limit_gb = (
             own_traffic_limit_gb if own_traffic_limit_gb is not None else settings.DEFAULT_TRAFFIC_LIMIT_GB
         )

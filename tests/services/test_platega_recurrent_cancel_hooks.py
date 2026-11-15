@@ -360,9 +360,6 @@ async def test_cancel_safe_wiring_proof_multi_tariff_delete_subscription(monkeyp
     async def fake_get_subscription(db, subscription_id, user_id):
         return subscription
 
-    async def fake_ensure_no_open_grace(db, subscription_ids):
-        call_order.append('grace_check')
-
     async def fake_decrement_counts(db, subscription):
         return None
 
@@ -372,26 +369,17 @@ async def test_cancel_safe_wiring_proof_multi_tariff_delete_subscription(monkeyp
         'app.services.subscription_deletion_service.decrement_subscription_server_counts',
         fake_decrement_counts,
     )
-    monkeypatch.setattr(
-        'app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions',
-        fake_ensure_no_open_grace,
-    )
 
     db = AsyncMock()
     db.delete = AsyncMock()
-    db.get.return_value = subscription  # The row still exists after the final grace guard.
+    db.get.return_value = subscription
 
     result = await multi_tariff.delete_subscription(subscription_id=42, user=user, db=db)
 
     assert result == {'message': 'Subscription deleted'}
     assert recorded == [(db, 42)]  # cancel called with the subscription being deleted, before db.delete
     db.delete.assert_awaited_once_with(subscription)
-    # The Platega cancel commits its own transaction, releasing the grace
-    # guard's advisory lock acquired by the first check — so the guard MUST
-    # be re-acquired (called again) right after cancel and before db.delete,
-    # closing that window before the irreversible delete. Regression guard
-    # for that ordering, not just its net effect.
-    assert call_order == ['grace_check', 'platega_cancel', 'grace_check']
+    assert call_order == ['platega_cancel']
 
 
 async def test_cancel_safe_wiring_proof_admin_bulk_delete_subscription(monkeypatch):
@@ -410,14 +398,7 @@ async def test_cancel_safe_wiring_proof_admin_bulk_delete_subscription(monkeypat
         recorded.append((db, subscription_id))
         call_order.append('platega_cancel')
 
-    async def fake_ensure_no_open_grace(db, subscription_ids):
-        call_order.append('grace_check')
-
     monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', fake_cancel)
-    monkeypatch.setattr(
-        'app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions',
-        fake_ensure_no_open_grace,
-    )
 
     sub = SimpleNamespace(
         id=77,
@@ -435,11 +416,7 @@ async def test_cancel_safe_wiring_proof_admin_bulk_delete_subscription(monkeypat
 
     assert result.success is True
     assert recorded == [(db, 77)]  # cancel called with the subscription being deleted, before its DB delete
-    # Same ordering constraint as the other two sites: the Platega cancel
-    # commits its own transaction, releasing the grace guard's advisory lock
-    # acquired by the first check, so the guard must be re-acquired right
-    # after cancel and before the irreversible delete statements.
-    assert call_order == ['grace_check', 'platega_cancel', 'grace_check']
+    assert call_order == ['platega_cancel']
 
 
 # --- Optional/lower-priority sites: full-user deletion paths ----------------
@@ -452,39 +429,26 @@ async def test_cancel_safe_wiring_proof_admin_bulk_delete_subscription(monkeypat
 # since both insertion points turned out to be straightforward.
 
 
-async def test_delete_user_account_cancels_platega_between_grace_checks(monkeypatch):
-    """UserService.delete_user_account (app/services/user_service.py) already
-    had its own grace-access guard before this fix. This forces the SECOND
-    grace check to raise so the test doesn't need to mock the rest of this
-    ~600-line function's downstream DB operations (a dozen+ nested
-    ``db.begin_nested()`` blocks unrelated to Platega) — the early return on
-    the second check is itself proof the cancel loop ran strictly between
-    the two checks, the same grace-lock ordering Task 11 established at the
-    other delete sites (the cancel call commits internally, releasing the
-    advisory lock the first check acquired).
+async def test_delete_user_account_cancels_platega_for_each_subscription(monkeypatch):
+    """UserService.delete_user_account (app/services/user_service.py) cancels
+    Platega autopay for every subscription before anything else. The next step
+    is forced to fail so the test doesn't need to mock the rest of this
+    ~400-line function's downstream DB operations — the cancels must already
+    have happened by then.
     """
-    from app.services.grace_access_runtime import GraceAccessDeletionBlocked
+    from app.config import Settings
     from app.services.user_service import UserService
 
     recorded: list[tuple[object, int]] = []
-    call_order: list[str] = []
-    calls = {'n': 0}
 
     async def fake_cancel(db, subscription_id):
         recorded.append((db, subscription_id))
-        call_order.append('platega_cancel')
 
-    async def fake_ensure_no_open_grace(db, subscription_ids):
-        calls['n'] += 1
-        call_order.append('grace_check')
-        if calls['n'] == 2:
-            raise GraceAccessDeletionBlocked(tuple(subscription_ids))
+    def stop_after_cancel(self):
+        raise RuntimeError('stop after cancel')
 
     monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', fake_cancel)
-    monkeypatch.setattr(
-        'app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions',
-        fake_ensure_no_open_grace,
-    )
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', stop_after_cancel)
 
     subs = [SimpleNamespace(id=11, remnawave_id=None), SimpleNamespace(id=12, remnawave_id=None)]
     user = SimpleNamespace(id=5, telegram_id=555, email=None, subscriptions=subs, remnawave_id=None)
@@ -494,18 +458,15 @@ async def test_delete_user_account_cancels_platega_between_grace_checks(monkeypa
 
     result = await UserService().delete_user_account(db, user_id=5, admin_id=1)
 
-    assert recorded == [(db, 11), (db, 12)]  # cancelled for every subscription, before the second check
-    assert call_order == ['grace_check', 'platega_cancel', 'platega_cancel', 'grace_check']
-    assert result.grace_blocked is True
+    assert recorded == [(db, 11), (db, 12)]  # cancelled for every subscription
     assert result.bot_deleted is False
 
 
 async def test_delete_user_from_db_cancels_platega_for_each_subscription(monkeypatch):
     """blocked_users_service.py::delete_user_from_db (blocked-user cleanup)
     deletes the whole user, CASCADE-dropping subscriptions and their
-    platega_subscriptions rows. Unlike delete_user_account, it has no
-    grace-access guard, so a plain best-effort cancel loop before the
-    deletes is enough — no lock to re-acquire.
+    platega_subscriptions rows, so a plain best-effort cancel loop before the
+    deletes is enough.
     """
     from app.services.blocked_users_service import BlockedUsersService
 

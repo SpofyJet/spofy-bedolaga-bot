@@ -59,7 +59,6 @@ async def test_paid_expiry_survives_restart_and_stale_event(postgres_database, m
         subscription = await db.get(Subscription, subscription_id)
         service = RemnaWaveWebhookService(AsyncMock())
         monkeypatch.setattr(service, '_notify_user', AsyncMock())
-        monkeypatch.setattr('app.services.grace_access_runtime.grace_access_runtime.consider_candidate', AsyncMock())
         await service._process_user_event(
             db,
             event,
@@ -210,7 +209,6 @@ async def test_pending_intent_does_not_prevent_actual_expiry(postgres_database, 
         await db.commit()
         service = RemnaWaveWebhookService(AsyncMock())
         monkeypatch.setattr(service, '_notify_user', AsyncMock())
-        monkeypatch.setattr('app.services.grace_access_runtime.grace_access_runtime.consider_candidate', AsyncMock())
         payload = {
             'id': 555,
             'status': 'EXPIRED',

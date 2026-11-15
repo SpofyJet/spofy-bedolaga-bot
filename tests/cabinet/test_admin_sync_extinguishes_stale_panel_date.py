@@ -75,11 +75,11 @@ def _panel_double(monkeypatch, *, panel_expire_at: datetime) -> list[dict]:
         async def find_users_by_email(self, _email):
             return []
 
-    async def update_panel_user(_api, _sub_id, **kwargs):
-        updates.append(kwargs)
-        return SimpleNamespace(subscription_url='https://p/sub', happ_crypto_link='c', short_uuid='s1')
+        async def update_user(self, **kwargs):
+            updates.append(kwargs)
+            return SimpleNamespace(subscription_url='https://p/sub', happ_crypto_link='c', short_uuid='s1')
 
-    async def create_panel_user(_api, _sub_id, **kwargs):
+    async def create_panel_user(_api, _short_uuid, **kwargs):
         raise AssertionError('пользователь в панели есть — создавать нечего')
 
     class Service:
@@ -93,8 +93,7 @@ def _panel_double(monkeypatch, *, panel_expire_at: datetime) -> list[dict]:
 
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr('app.services.remnawave_service.RemnaWaveService', Service)
-    monkeypatch.setattr('app.services.grace_access_runtime.update_panel_user_grace_safe', update_panel_user)
-    monkeypatch.setattr('app.services.grace_access_runtime.create_panel_user_grace_safe', create_panel_user)
+    monkeypatch.setattr('app.services.panel_sync.adopt.adopt_or_create_panel_user', create_panel_user)
     monkeypatch.setattr('app.services.panel_sync.payload.get_traffic_reset_strategy', lambda _tariff: 'NO_RESET')
     monkeypatch.setattr('app.utils.subscription_utils.resolve_hwid_device_limit_for_payload', lambda _sub: None)
     return updates

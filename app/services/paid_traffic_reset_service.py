@@ -103,7 +103,6 @@ def _valid(user, sub, intent) -> bool:
         and sub.status in ('active', 'limited')
         and not sub.is_trial
         and not sub.is_daily_paused
-        and not sub.grace_session_open
         and sub.end_date > datetime.now(UTC)
         and sub.last_daily_charge_at == intent.charge_at
     )

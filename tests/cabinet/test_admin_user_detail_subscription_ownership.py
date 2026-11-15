@@ -361,6 +361,9 @@ async def test_selected_sync_uses_only_selected_panel_id_when_legacy_mode_is_ena
             looked_up.append(panel_user_id)
             return SimpleNamespace(id=panel_user_id)
 
+        async def update_user(self, **kwargs):
+            return await update_panel_user(self, None, **kwargs)
+
     class Service:
         is_configured = True
 
@@ -381,7 +384,6 @@ async def test_selected_sync_uses_only_selected_panel_id_when_legacy_mode_is_ena
 
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr('app.services.remnawave_service.RemnaWaveService', Service)
-    monkeypatch.setattr('app.services.grace_access_runtime.update_panel_user_grace_safe', update_panel_user)
     monkeypatch.setattr('app.services.panel_sync.payload.get_traffic_reset_strategy', lambda _tariff: 'NO_RESET')
     monkeypatch.setattr('app.utils.subscription_utils.resolve_hwid_device_limit_for_payload', lambda _sub: None)
     user = SimpleNamespace(

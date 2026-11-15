@@ -26,7 +26,6 @@
   (``snapshot_taken_at``): подписку, изменённую в боте после снимка (оплата,
   продление), снимок не трогает — иначе он откатывал бы только что оплаченный
   срок. Расход трафика и ссылки переносятся всё равно.
-* Пока открыт грейс-доступ, биллинговое состояние — собственность бота.
 
 Политики ``ROUTINE`` (фоновое чтение), ``BULK_SNAPSHOT`` (полный проход) и
 ``ADMIN_PULL`` (кнопка «из панели в бота») теперь одно и то же — ``PANEL_TRUTH``;
@@ -188,48 +187,6 @@ def read_panel_user(panel_user) -> PanelSnapshot:
     )
 
 
-#: Панель хранит миллисекунды и округляет; секунды хватает с запасом.
-_GRACE_TAIL_TOLERANCE_SECONDS = 2
-
-#: Поля подписки, по которым проекция узнаёт грейс. Подписку, загруженную до снимка
-#: панели, перед переносом перечитывают целиком по этому списку: хранилище пишет их
-#: до отправки оверлея, и только прочитанные после снимка видят любой грейс, который
-#: снимок мог показать (сторож ``test_projection_reads_grace_marker_after_snapshot``).
-GRACE_MARKER_FIELDS = ('grace_session_open', 'grace_tail_expire_at', 'grace_overlay_expire_at')
-
-
-def panel_date_is_grace_tail(subscription, snapshot: PanelSnapshot) -> bool:
-    """Совпадает ли дата в панели с той, что грейс-доступ там оставил."""
-    tail = getattr(subscription, 'grace_tail_expire_at', None)
-    if tail is None or snapshot.expire_at is None:
-        return False
-    return abs((panel_datetime_to_utc(tail) - snapshot.expire_at).total_seconds()) <= _GRACE_TAIL_TOLERANCE_SECONDS
-
-
-def panel_date_is_grace_overlay(subscription, snapshot: PanelSnapshot) -> bool:
-    """Совпадает ли дата в панели с «концом грейса», который выставил оверлей.
-
-    Такую дату (``сейчас + срок грейса`` до миллисекунд) даёт только грейс: ни
-    продление, ни админ её не повторят. Хранилище пишет её на подписку до
-    отправки оверлея в панель и при закрытии сессии не стирает.
-    """
-    marker = getattr(subscription, 'grace_overlay_expire_at', None)
-    if marker is None or snapshot.expire_at is None:
-        return False
-    return abs((panel_datetime_to_utc(marker) - snapshot.expire_at).total_seconds()) <= _GRACE_TAIL_TOLERANCE_SECONDS
-
-
-def _tail_confirms_own_expiry(
-    subscription, snapshot: PanelSnapshot, *, policy: ProjectionPolicy, trust_status: bool, now: datetime
-) -> bool:
-    """В хвосте грейса панель говорит «истёк», и по своей дате подписка тоже истекла."""
-    if not trust_status or policy.status_mode == 'webhook' or snapshot.status != 'EXPIRED':
-        return False
-    if subscription.status not in _RENEWABLE_STATUSES or subscription.end_date is None:
-        return False
-    return panel_datetime_to_utc(subscription.end_date) <= now
-
-
 def _next_status_from_webhook(subscription, snapshot: PanelSnapshot, *, now: datetime) -> str:
     """Статус по событию панели.
 
@@ -328,7 +285,6 @@ def project_onto_subscription(
     *,
     now: datetime | None = None,
     policy: ProjectionPolicy = ROUTINE,
-    grace_open: bool = False,
     trust_status: bool = True,
     snapshot_taken_at: datetime | None = None,
     paid_at: datetime | None = None,
@@ -351,7 +307,7 @@ def project_onto_subscription(
     биллинговые поля не трогаем вовсе, а расход и ссылки переносим.
 
     Ссылки на подписку (``shortUuid``, url, крипто-ссылка) переносятся всегда:
-    они описывают аккаунт панели, а не биллинговое состояние, и грейсу не мешают.
+    они описывают аккаунт панели, а не биллинговое состояние.
     """
     moment = now or datetime.now(UTC)
     changed: set[str] = set()
@@ -372,8 +328,7 @@ def project_onto_subscription(
             # Подписку изменили уже после того, как снимок был снят: применять
             # его поверх свежей правки — значит откатывать оплату.
             trust_status = False
-            # Сквады — тоже: снимок со старыми сквадами откатывал бы сквады покупки
-            # (или приносил сквад грейса, если снимок сняли во время грейса).
+            # Сквады — тоже: снимок со старыми сквадами откатывал бы сквады покупки.
             policy = replace(
                 policy, takes_date=False, takes_traffic_limit=False, takes_device_limit=False, takes_squads=False
             )
@@ -398,38 +353,6 @@ def project_onto_subscription(
         if abs(current - snapshot.traffic_used_gb) > _TRAFFIC_TOLERANCE_GB:
             subscription.traffic_used_gb = snapshot.traffic_used_gb
             changed.add('traffic_used_gb')
-
-    if grace_open or getattr(subscription, 'grace_session_open', False):
-        # Грейс — временное состояние, которое бот держит сам: дату, статус,
-        # лимит и сквады панель в это время не переписывает. Признак лежит на
-        # самой подписке (его ведёт хранилище грейс-сессий в той же транзакции),
-        # поэтому защищён любой вызывающий, даже забывший передать ``grace_open``:
-        # 2026-09-15 мониторинг так перенёс в бота дату и сквад грейса, и воркер
-        # принял это за продление.
-        return changed
-
-    if panel_date_is_grace_tail(subscription, snapshot):
-        # Хвост грейса: в панели стоит дата, которую оставил сам грейс-доступ
-        # (прошедшую дату PATCH не принимает, настоящую не вернуть). Это не
-        # правка в панели и не продление — дату подписки не трогаем, иначе
-        # истёкшая подписка «истекала» бы заново в конец грейса, а воркер
-        # выдавал грейс снова. Настоящее продление в панели даёт другую дату
-        # и импортируется как обычно.
-        if _tail_confirms_own_expiry(subscription, snapshot, policy=policy, trust_status=trust_status, now=moment):
-            # Панель погасила аккаунт, и собственный срок подписки вышел — «истекла»
-            # правда. Платные гасит мониторинг по своей дате, а триал и суточную —
-            # только этот импорт: без него они навсегда оставались «trial»/«active»
-            # (стенд, 2026-09-15). В кандидаты грейса не метим — инцидент его уже получил.
-            subscription.status = SubscriptionStatus.EXPIRED.value
-            changed.add('status')
-        return changed
-
-    if panel_date_is_grace_overlay(subscription, snapshot):
-        # Снимок оверлея, обработанный уже после закрытия грейса (досрочный откат,
-        # конфликт, слив; снимок полного прохода, снятый раньше), — не продление:
-        # признак открытой сессии уже снят, хвост — другая дата, а дата, сквад и
-        # лимит в снимке — грейса.
-        return changed
 
     # Срок в панели отстаёт от недавно оплаченного: запись нового срока в панель
     # не прошла. Устаревшую дату не берём — и статус, выведенный из неё, тоже.
@@ -468,14 +391,11 @@ def project_onto_subscription(
         # «Истекла» здесь выведено из той же старой даты, которую мы только что
         # не приняли: ACTIVE с прошедшим сроком или EXPIRED, выставленный панелью
         # по нему. Иначе оплаченная подписка на всё окно удержания показывалась
-        # истёкшей и попадала в кандидаты грейса. DISABLED и LIMITED — настоящие
+        # истёкшей. DISABLED и LIMITED — настоящие
         # действия (админ, трафик) и по-прежнему принимаются.
         new_status = subscription.status
     if new_status != subscription.status:
         subscription.status = new_status
-        if new_status in (SubscriptionStatus.EXPIRED.value, SubscriptionStatus.LIMITED.value):
-            subscription.grace_candidate_reason = new_status
-            subscription.grace_candidate_at = moment
         changed.add('status')
 
     # Bypass-Off в панели — форма «обходы отключены за трафик», а не смена тарифа:

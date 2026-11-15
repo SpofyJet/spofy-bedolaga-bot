@@ -2115,7 +2115,6 @@ async def _push_narrow_change_to_panel(db, user, subscription, *, fields: set[st
     расходиться. Описание аккаунта уезжает всегда: оно про пользователя, а не
     про подписку.
     """
-    from app.services.grace_access_runtime import update_panel_user_grace_safe
     from app.services.panel_sync import push_subscription
     from app.services.panel_sync.fields import PANEL_ACCOUNT_METADATA_FIELDS
 
@@ -2137,7 +2136,6 @@ async def _push_narrow_change_to_panel(db, user, subscription, *, fields: set[st
             only_fields=fields | PANEL_ACCOUNT_METADATA_FIELDS,
             reset_devices=False,
             create_if_missing=False,
-            update_call=lambda **kwargs: update_panel_user_grace_safe(api, subscription.id, **kwargs),
         )
 
 
@@ -2207,7 +2205,6 @@ async def _extend_subscription_by_days(
         now = datetime.now(UTC)
         if days < 0 and subscription.end_date <= now:
             subscription.status = SubscriptionStatus.EXPIRED.value
-            subscription.grace_suppressed_until = now
         await db.commit()
         await db.refresh(subscription)
 
@@ -2319,10 +2316,6 @@ async def _activate_user_subscription(
             logger.error('Подписка не найдена для пользователя', user_id=user_id)
             return False
 
-        # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
-        from app.services.grace_access_echo import undo_grace_overlay_echo
-
-        await undo_grace_overlay_echo(db, subscription)
         subscription.status = SubscriptionStatus.ACTIVE.value
         if subscription.end_date <= datetime.now(UTC):
             subscription.end_date = datetime.now(UTC) + timedelta(days=1)
@@ -2816,10 +2809,6 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
             return
 
         if subscription:
-            # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
-            from app.services.grace_access_echo import undo_grace_overlay_echo
-
-            await undo_grace_overlay_echo(db, subscription)
             current_time = datetime.now(UTC)
             bonus_period = timedelta()
 
@@ -2895,22 +2884,15 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                     logger.debug('Ignored error in admin_buy_subscription_execute', exc_info=True)
 
                 async with remnawave_service.get_api_client() as api:
-                    from app.services.grace_access_runtime import (
-                        create_panel_user_grace_safe,
-                        update_panel_user_grace_safe,
-                    )
+                    from app.services.panel_sync.adopt import adopt_or_create_panel_user
 
                     result = await push_subscription(
                         api,
                         target_user,
                         subscription,
                         db=db,
-                        update_call=lambda **kwargs: update_panel_user_grace_safe(api, subscription.id, **kwargs),
-                        create_call=lambda **kwargs: create_panel_user_grace_safe(
-                            api,
-                            subscription.id,
-                            adopt_short_uuid=subscription.remnawave_short_uuid,
-                            **kwargs,
+                        create_call=lambda **kwargs: adopt_or_create_panel_user(
+                            api, subscription.remnawave_short_uuid, **kwargs
                         ),
                     )
                     remnawave_user = result.panel_user

@@ -15,7 +15,6 @@ from app.database.models import SubscriptionStatus
 from app.services.panel_sync import (
     ADMIN_PULL,
     BULK_SNAPSHOT,
-    WEBHOOK,
     PanelSnapshot,
     project_onto_subscription,
     read_panel_user,
@@ -37,11 +36,6 @@ def _sub(**kw):
         remnawave_short_uuid='abc',
         subscription_url='https://old',
         subscription_crypto_link='old-crypto',
-        grace_candidate_reason=None,
-        grace_candidate_at=None,
-        grace_tail_expire_at=None,
-        grace_session_open=False,
-        grace_overlay_expire_at=None,
         updated_at=None,
         last_webhook_update_at=None,
     )
@@ -157,7 +151,6 @@ def test_expired_in_the_panel_takes_the_panel_date_and_expires():
 
     assert subscription.end_date == NOW - timedelta(hours=1)
     assert subscription.status == SubscriptionStatus.EXPIRED.value
-    assert subscription.grace_candidate_reason == SubscriptionStatus.EXPIRED.value
 
 
 def test_a_few_seconds_of_difference_are_ignored():
@@ -182,11 +175,9 @@ def test_limited_in_the_panel_becomes_limited_in_the_bot():
     project_onto_subscription(subscription, PanelSnapshot(status='LIMITED'), now=NOW)
 
     assert subscription.status == SubscriptionStatus.LIMITED.value
-    assert subscription.grace_candidate_reason == SubscriptionStatus.LIMITED.value
-    assert subscription.grace_candidate_at == NOW
 
 
-def test_expired_by_date_marks_a_grace_candidate():
+def test_trial_past_its_date_takes_the_disabled_status_of_the_panel():
     subscription = _sub(status=SubscriptionStatus.TRIAL.value, end_date=NOW - timedelta(days=1))
 
     project_onto_subscription(subscription, PanelSnapshot(status='DISABLED', expire_at=None), now=NOW)
@@ -287,28 +278,6 @@ def test_links_are_refreshed():
     assert {'remnawave_short_uuid', 'subscription_url', 'subscription_crypto_link'} <= changed
 
 
-# ==================== грейс ====================
-
-
-def test_open_grace_freezes_the_billing_state_but_keeps_links():
-    subscription = _sub()
-
-    changed = project_onto_subscription(
-        subscription,
-        PanelSnapshot(status='DISABLED', expire_at=NOW, traffic_used_gb=99.0, short_uuid='new-short'),
-        now=NOW,
-        grace_open=True,
-    )
-
-    assert subscription.status == SubscriptionStatus.ACTIVE.value
-    assert subscription.end_date == NOW + timedelta(days=30)
-    assert subscription.connected_squads == ['squad-a']
-    assert subscription.remnawave_short_uuid == 'new-short'
-    # Трафик и ссылки ничего не решают: показывать устаревшие цифры незачем.
-    assert subscription.traffic_used_gb == 99.0
-    assert changed == {'remnawave_short_uuid', 'traffic_used_gb'}
-
-
 def test_status_can_be_frozen_for_a_subscription_just_touched_by_a_webhook():
     """Свежая оплата важнее любого снимка панели."""
     subscription = _sub(status=SubscriptionStatus.ACTIVE.value)
@@ -328,7 +297,7 @@ def test_status_can_be_frozen_for_a_subscription_just_touched_by_a_webhook():
 
 # Полный проход по панели выгружает весь список и применяет его минутами позже.
 # К этому моменту подписка могла быть оплачена — и доверчивое применение снимка
-# откатывало её в LIMITED/EXPIRED и отправляло в грейс.
+# откатывало её в LIMITED/EXPIRED.
 
 
 def test_stale_snapshot_still_takes_the_date_of_a_live_account():
@@ -523,225 +492,6 @@ def test_reads_limits_from_both_shapes_of_the_answer():
 
     assert from_dict.traffic_limit_gb == 10 and from_dict.device_limit == 4
     assert from_object.traffic_limit_gb == 10 and from_object.device_limit == 4
-
-
-# ==================== хвост грейса ====================
-#
-# После грейса в панели остаётся его дата: прошедшую дату PATCH не принимает, а
-# вернуть настоящую нельзя. Бот запоминает эту дату на подписке
-# (``grace_tail_expire_at``). Импорт «панель — истина», увидев в панели ровно её,
-# не двигает дату окончания и статус в боте — иначе истёкшая подписка «истекала»
-# заново в конец грейса, воркер видел свежее истечение и выдавал грейс снова.
-
-
-def test_open_grace_marked_on_the_subscription_is_never_imported():
-    """Баг 2026-09-15: мониторинг, гася истёкшую подписку, спросил панель «может,
-    продлили?» — увидел ACTIVE до конца грейса и перенёс в бота дату, статус,
-    сквад грейса и лимит «расход + 1 ГБ». Воркер решил «человек продлил».
-
-    Признак открытого грейса лежит на самой подписке — ни одному вызывающему не
-    нужно помнить про ``grace_open``.
-    """
-    grace_until = NOW + timedelta(hours=72)
-    subscription = _sub(
-        status=SubscriptionStatus.ACTIVE.value,
-        end_date=NOW - timedelta(minutes=30),
-        traffic_limit_gb=0,
-        connected_squads=['tariff-squad'],
-        grace_session_open=True,
-    )
-
-    for policy in (BULK_SNAPSHOT, WEBHOOK, ADMIN_PULL):
-        changed = project_onto_subscription(
-            subscription,
-            PanelSnapshot(
-                status='ACTIVE',
-                expire_at=grace_until,
-                traffic_used_gb=102.2,
-                traffic_limit_gb=103,
-                squads=('grace-squad',),
-            ),
-            now=NOW,
-            policy=policy,
-        )
-
-        assert subscription.end_date == NOW - timedelta(minutes=30)
-        assert subscription.status == SubscriptionStatus.ACTIVE.value
-        assert subscription.traffic_limit_gb == 0
-        assert subscription.connected_squads == ['tariff-squad']
-        # Расход настоящий — его переносим и во время грейса.
-        assert subscription.traffic_used_gb == 102.2
-        assert changed <= {'traffic_used_gb'}
-
-
-def test_grace_tail_date_is_not_imported_after_grace_ended():
-    tail = NOW - timedelta(minutes=1)
-    subscription = _sub(
-        status=SubscriptionStatus.EXPIRED.value,
-        end_date=NOW - timedelta(days=3),
-        grace_tail_expire_at=tail,
-    )
-
-    changed = project_onto_subscription(
-        subscription,
-        PanelSnapshot(status='EXPIRED', expire_at=tail, traffic_used_gb=7.0, short_uuid='new-short'),
-        now=NOW,
-    )
-
-    assert subscription.end_date == NOW - timedelta(days=3)
-    assert subscription.status == SubscriptionStatus.EXPIRED.value
-    assert subscription.traffic_used_gb == 7.0
-    assert subscription.remnawave_short_uuid == 'new-short'
-    assert changed == {'traffic_used_gb', 'remnawave_short_uuid'}
-
-
-def test_grace_tail_masks_the_status_while_the_panel_is_still_closing():
-    """Погашенная дата стоит на несколько минут вперёд: панель ещё ACTIVE."""
-    tail = NOW + timedelta(minutes=5)
-    subscription = _sub(
-        status=SubscriptionStatus.EXPIRED.value,
-        end_date=NOW - timedelta(days=3),
-        grace_tail_expire_at=tail,
-    )
-
-    for policy in (BULK_SNAPSHOT, WEBHOOK):
-        project_onto_subscription(
-            subscription,
-            PanelSnapshot(status='ACTIVE', expire_at=tail, traffic_used_gb=1.0),
-            now=NOW,
-            policy=policy,
-        )
-
-        assert subscription.status == SubscriptionStatus.EXPIRED.value
-        assert subscription.end_date == NOW - timedelta(days=3)
-
-
-def test_a_real_panel_renewal_after_grace_is_still_imported():
-    subscription = _sub(
-        status=SubscriptionStatus.EXPIRED.value,
-        end_date=NOW - timedelta(days=3),
-        grace_tail_expire_at=NOW - timedelta(minutes=1),
-    )
-
-    project_onto_subscription(
-        subscription,
-        PanelSnapshot(status='ACTIVE', expire_at=NOW + timedelta(days=30), traffic_used_gb=1.0),
-        now=NOW,
-    )
-
-    assert subscription.status == SubscriptionStatus.ACTIVE.value
-    assert subscription.end_date == NOW + timedelta(days=30)
-
-
-def test_grace_tail_tolerates_the_panel_millisecond_rounding():
-    tail = NOW - timedelta(minutes=1)
-    subscription = _sub(
-        status=SubscriptionStatus.EXPIRED.value,
-        end_date=NOW - timedelta(days=3),
-        grace_tail_expire_at=tail,
-    )
-
-    project_onto_subscription(
-        subscription,
-        PanelSnapshot(status='EXPIRED', expire_at=tail + timedelta(milliseconds=800)),
-        now=NOW,
-    )
-
-    assert subscription.end_date == NOW - timedelta(days=3)
-
-
-def test_trial_that_ended_in_grace_is_expired_by_the_panel_status_in_the_tail():
-    """Стенд 2026-09-15: у триалов и суточных после грейса статус оставался «trial»/«active».
-
-    Платные гасит мониторинг по своей дате, а триал и суточную — только импорт статуса
-    панели. Хвост грейса блокировал его навсегда. Дату хвоста по-прежнему не берём,
-    но «истекла» — правда: панель погасила аккаунт, и собственный срок подписки вышел.
-    """
-    tail = NOW - timedelta(minutes=1)
-    subscription = _sub(
-        status=SubscriptionStatus.TRIAL.value,
-        end_date=NOW - timedelta(days=3),
-        grace_tail_expire_at=tail,
-    )
-
-    changed = project_onto_subscription(
-        subscription,
-        PanelSnapshot(status='EXPIRED', expire_at=tail, traffic_used_gb=7.0),
-        now=NOW,
-        policy=BULK_SNAPSHOT,
-    )
-
-    assert subscription.status == SubscriptionStatus.EXPIRED.value
-    assert subscription.end_date == NOW - timedelta(days=3), 'дата хвоста грейса не переносится'
-    assert 'status' in changed
-    # Этот инцидент грейс уже получил — повторно в кандидаты не метим.
-    assert subscription.grace_candidate_reason is None
-
-
-def test_grace_tail_never_expires_a_subscription_whose_own_term_is_still_running():
-    """Продлили в боте, а в панели ещё хвост с EXPIRED (запись в панель не прошла) — не гасим."""
-    tail = NOW - timedelta(minutes=1)
-    subscription = _sub(
-        status=SubscriptionStatus.ACTIVE.value,
-        end_date=NOW + timedelta(days=30),
-        grace_tail_expire_at=tail,
-    )
-
-    project_onto_subscription(subscription, PanelSnapshot(status='EXPIRED', expire_at=tail), now=NOW)
-
-    assert subscription.status == SubscriptionStatus.ACTIVE.value
-    assert subscription.end_date == NOW + timedelta(days=30)
-
-
-def test_webhook_in_the_grace_tail_still_does_not_declare_expiry():
-    """Вебхук истечение не объявляет (это работа мониторинга) — и в хвосте тоже."""
-    tail = NOW - timedelta(minutes=1)
-    subscription = _sub(
-        status=SubscriptionStatus.TRIAL.value,
-        end_date=NOW - timedelta(days=3),
-        grace_tail_expire_at=tail,
-    )
-
-    project_onto_subscription(subscription, PanelSnapshot(status='EXPIRED', expire_at=tail), now=NOW, policy=WEBHOOK)
-
-    assert subscription.status == SubscriptionStatus.TRIAL.value
-
-
-def test_overlay_snapshot_processed_after_an_early_grace_close_is_not_imported():
-    """Ревью 2026-09-15: снимок сняли при открытом грейсе, обработали после досрочного закрытия.
-
-    Признак снят, хвост — «ближайший допустимый момент», а не дата оверлея, — и
-    раньше оверлей переносился в подписку. Дата оверлея на подписке его узнаёт.
-    """
-    overlay_until = NOW + timedelta(hours=71)
-    subscription = _sub(
-        status=SubscriptionStatus.EXPIRED.value,
-        end_date=NOW - timedelta(hours=1),
-        traffic_limit_gb=0,
-        connected_squads=['tariff-squad'],
-        grace_session_open=False,
-        grace_tail_expire_at=NOW + timedelta(minutes=5),
-        grace_overlay_expire_at=overlay_until,
-    )
-
-    for policy in (BULK_SNAPSHOT, WEBHOOK, ADMIN_PULL):
-        project_onto_subscription(
-            subscription,
-            PanelSnapshot(
-                status='ACTIVE',
-                expire_at=overlay_until + timedelta(milliseconds=700),
-                traffic_used_gb=7.3,
-                traffic_limit_gb=8,
-                squads=('grace-squad',),
-            ),
-            now=NOW,
-            policy=policy,
-        )
-
-        assert subscription.status == SubscriptionStatus.EXPIRED.value
-        assert subscription.end_date == NOW - timedelta(hours=1)
-        assert subscription.connected_squads == ['tariff-squad']
-        assert subscription.traffic_limit_gb == 0
 
 
 def test_stale_bulk_snapshot_does_not_roll_back_squads_either():

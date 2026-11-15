@@ -614,10 +614,6 @@ class FortuneWheelService:
                         outcome['balance_kopeks'] = prize.prize_value_kopeks
                         logger.info('💰 Дни конвертированы в баланс для user_id', user_id=user.id)
                 else:
-                    # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
-                    from app.services.grace_access_echo import undo_grace_overlay_echo
-
-                    await undo_grace_overlay_echo(db, subscription)
                     # Обычная подписка - добавляем дни и синхронизируем с RemnaWave.
                     # Истёкшей — от сейчас и снова активна; отключённую (disabled) и
                     # упёршуюся в трафик (limited) приз не включает — статус за админом и трафиком.

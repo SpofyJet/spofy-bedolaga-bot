@@ -73,7 +73,7 @@ _pg_connect_args = {
     'timeout': 10,  # Уменьшен с 60, быстрый провал при недоступности PostgreSQL
 }
 _sqlite_connect_args = {
-    # Grace-safe panel writes deliberately hold a SQLite writer transaction
+    # Panel-sync leases deliberately hold a SQLite writer transaction
     # across one HTTP request.  Let competing local work wait instead of
     # failing with a short default "database is locked" timeout.
     'timeout': 60,

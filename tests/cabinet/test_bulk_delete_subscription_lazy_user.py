@@ -166,7 +166,6 @@ async def test_delete_subscription_survives_unloaded_collection():
     params = SimpleNamespace(force_delete_active_paid=False)
 
     with (
-        patch('app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions', AsyncMock()),
         patch('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', AsyncMock()),
     ):
         result = await bulk._do_delete_subscription(db, user, params, dry_run=False, sub_override=sub)

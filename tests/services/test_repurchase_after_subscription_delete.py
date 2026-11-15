@@ -32,13 +32,7 @@ NEW_PANEL_ID = 777
 
 
 def _quiet_side_effects(monkeypatch, api: AsyncMock) -> None:
-    """Грейс, автоплатежи и счётчики серверов живут в своих таблицах и к сценарию не относятся."""
-    monkeypatch.setattr(
-        'app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions', AsyncMock(return_value=None)
-    )
-    monkeypatch.setattr(
-        'app.services.grace_access_runtime.lock_grace_sensitive_panel_updates', AsyncMock(return_value=set())
-    )
+    """Автоплатежи и счётчики серверов живут в своих таблицах и к сценарию не относятся."""
     monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', AsyncMock())
     monkeypatch.setattr(deletion, 'decrement_subscription_server_counts', AsyncMock())
     monkeypatch.setattr(

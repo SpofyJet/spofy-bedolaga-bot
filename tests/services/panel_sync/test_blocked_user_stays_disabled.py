@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 import app.database.crud.subscription as crud_sub_mod
-import app.services.grace_access_runtime as grace_runtime_mod
+import app.services.panel_sync.lease as lease_mod
 from app.cabinet.routes import admin_users
 from app.config import Settings
 from app.database.models import SubscriptionStatus
@@ -82,10 +82,10 @@ async def test_bulk_sync_does_not_reactivate_a_blocked_user(monkeypatch):
 
     @asynccontextmanager
     async def fake_lease(subscription_id):
-        yield SimpleNamespace(allowed=True, subscription=subscription, has_open_grace=False)
+        yield SimpleNamespace(allowed=True, subscription=subscription)
 
     monkeypatch.setattr(crud_sub_mod, 'get_subscriptions_batch', fake_batch)
-    monkeypatch.setattr(grace_runtime_mod, 'grace_sensitive_panel_update', fake_lease)
+    monkeypatch.setattr(lease_mod, 'subscription_update_lease', fake_lease)
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
 
     service = RemnaWaveService()
@@ -116,11 +116,11 @@ async def test_cabinet_sync_does_not_reactivate_a_blocked_user(monkeypatch):
         async def find_users_by_email(self, _email):
             return []
 
-    async def update_panel_user(_api, _sub_id, **kwargs):
-        updates.append(kwargs)
-        return SimpleNamespace(subscription_url='https://p/sub', happ_crypto_link='c', short_uuid='s1')
+        async def update_user(self, **kwargs):
+            updates.append(kwargs)
+            return SimpleNamespace(subscription_url='https://p/sub', happ_crypto_link='c', short_uuid='s1')
 
-    async def create_panel_user(_api, _sub_id, **kwargs):
+    async def create_panel_user(_api, _short_uuid, **kwargs):
         raise AssertionError('аккаунт в панели есть — создавать нечего')
 
     class Service:
@@ -134,8 +134,7 @@ async def test_cabinet_sync_does_not_reactivate_a_blocked_user(monkeypatch):
 
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr('app.services.remnawave_service.RemnaWaveService', Service)
-    monkeypatch.setattr('app.services.grace_access_runtime.update_panel_user_grace_safe', update_panel_user)
-    monkeypatch.setattr('app.services.grace_access_runtime.create_panel_user_grace_safe', create_panel_user)
+    monkeypatch.setattr('app.services.panel_sync.adopt.adopt_or_create_panel_user', create_panel_user)
     monkeypatch.setattr('app.services.panel_sync.payload.get_traffic_reset_strategy', lambda _tariff: 'NO_RESET')
     monkeypatch.setattr('app.utils.subscription_utils.resolve_hwid_device_limit_for_payload', lambda _sub: None)
 

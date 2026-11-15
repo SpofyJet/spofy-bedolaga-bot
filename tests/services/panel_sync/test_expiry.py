@@ -100,16 +100,12 @@ def test_naive_panel_date_is_read_as_utc():
 #: Прежняя формула. Любая её копия — это ещё одно место, которое затирает дату.
 OLD_FORMULA = re.compile(r'(now|current_time|datetime\.now\(UTC\))\s*\+\s*timedelta\(minutes=1\)')
 
-#: Кто вправе считать дату сам: пакет синхронизации (там правило и живёт) и
-#: согласователь грейса — он строит цель перехода со своей сверкой с панелью, но
-#: дату всё равно берёт из общего правила.
+#: Кто вправе считать дату сам: пакет синхронизации (там правило и живёт).
 _RULE_OWNERS = ('app/services/panel_sync/',)
 
 
 #: Вызовы, которыми бот пишет в панель.
-_PANEL_WRITE_CALLS = frozenset(
-    {'update_user', 'create_user', 'update_panel_user_grace_safe', 'create_panel_user_grace_safe'}
-)
+_PANEL_WRITE_CALLS = frozenset({'update_user', 'create_user'})
 #: Поля панельного запроса — по ним узнаём словарь-payload, собранный руками.
 _PANEL_PAYLOAD_KEYS = frozenset({'status', 'traffic_limit_bytes', 'active_internal_squads', 'username'})
 
@@ -131,32 +127,12 @@ def _sends_a_date_itself(path: pathlib.Path) -> bool:
     return False
 
 
-#: Пишут словари с ``expire_at`` в базу, а не в панель: эвристика выше их путает с
-#: payload. Каждый обязан не звать запись в панель (test_snapshot_stores_never_write_to_the_panel).
-_SNAPSHOT_STORES = {
-    'app/services/grace_access_codec.py': 'снимки грейса (биллинг, панель, оверлей) в строке сессии',
-}
-
-
 def _modules_sending_a_date_to_the_panel() -> list[pathlib.Path]:
     return [
         path
         for path in sorted(pathlib.Path('app').rglob('*.py'))
-        if not any(str(path).startswith(owner) for owner in _RULE_OWNERS)
-        and str(path) not in _SNAPSHOT_STORES
-        and _sends_a_date_itself(path)
+        if not any(str(path).startswith(owner) for owner in _RULE_OWNERS) and _sends_a_date_itself(path)
     ]
-
-
-@pytest.mark.parametrize('path', sorted(_SNAPSHOT_STORES))
-def test_snapshot_stores_never_write_to_the_panel(path):
-    tree = ast.parse(pathlib.Path(path).read_text(encoding='utf-8'))
-    calls = {
-        getattr(node.func, 'attr', getattr(node.func, 'id', ''))
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-    }
-    assert not calls & _PANEL_WRITE_CALLS, f'{path} исключён как хранилище снимков, но пишет в панель'
 
 
 @pytest.mark.parametrize('path', sorted(pathlib.Path('app').rglob('*.py')), ids=str)
@@ -206,89 +182,6 @@ def test_every_module_sending_a_date_uses_the_shared_rule():
             offenders.append(str(path))
 
     assert not offenders, f'отправляют дату в панель мимо общего правила: {offenders}'
-
-
-# ==================== грейс-доступ ====================
-
-# Полная синхронизация помечает истёкшие подписки кандидатами в грейс, а
-# согласователь грейса раз в минуту приводит панель к «биллинговой реальности» —
-# и раньше на этом шаге снова проставлял «сейчас плюс минута». Именно поэтому
-# после нажатия «Полная синхронизация» дата в панели становилась «истекла минуту
-# назад», хотя сама синхронизация панель не пишет.
-
-
-def _billing_state(**overrides):
-    from app.services.grace_access_runtime import GraceBillingState
-
-    base = dict(
-        subscription_id=1,
-        remnawave_id=42,
-        status='expired',
-        user_status='active',
-        end_at=PAST,
-        traffic_limit_bytes=0,
-        used_traffic_bytes=0,
-        squad_uuids=(),
-        external_squad_uuid=None,
-        device_limit=None,
-    )
-    base.update(overrides)
-    return GraceBillingState(**base)
-
-
-def test_billing_target_leaves_the_date_alone_for_disabled():
-    from app.services.grace_access_runtime import _build_billing_target
-
-    target = _build_billing_target(_billing_state(), now=NOW)
-
-    assert target.expire_at is None, 'дата отключённой подписки в панели не переписывается'
-
-
-def test_billing_target_keeps_the_real_date_for_a_live_subscription():
-    from app.services.grace_access_runtime import _build_billing_target
-
-    target = _build_billing_target(_billing_state(status='active', end_at=FUTURE), now=NOW)
-
-    assert target.expire_at == FUTURE
-
-
-def test_restore_target_leaves_the_date_alone_for_disabled():
-    from app.services.grace_access_runtime import (
-        GracePanelSnapshot,
-        _build_restore_target,
-    )
-
-    snapshot = GracePanelSnapshot(
-        remnawave_id=42,
-        status='expired',
-        expire_at=PAST,
-        traffic_limit_bytes=0,
-        used_traffic_bytes=0,
-        squad_uuids=(),
-        external_squad_uuid=None,
-        traffic_is_known=True,
-        last_traffic_reset_at=None,
-    )
-
-    assert _build_restore_target(snapshot, now=NOW).expire_at is None
-
-
-def test_payload_without_a_date_does_not_carry_it_from_the_base():
-    """Базовый набор собран для другого перехода: оставленная дата затёрла бы настоящую."""
-    from app.external.remnawave_api import UserStatus
-    from app.services.grace_access_runtime import _PanelTarget, _serialize_panel_target
-
-    target = _PanelTarget(
-        status=UserStatus.DISABLED,
-        expire_at=None,
-        traffic_limit_bytes=0,
-        squad_uuids=(),
-        external_squad_uuid=None,
-    )
-
-    payload = _serialize_panel_target(42, target, base_kwargs={'expire_at': NOW})
-
-    assert 'expire_at' not in payload
 
 
 # ==================== повторная синхронизация ====================

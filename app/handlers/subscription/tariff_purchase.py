@@ -5358,10 +5358,6 @@ async def confirm_instant_switch(
     if await _reject_unavailable_checkout_squads(callback, squads, texts):
         return
 
-    # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
-    from app.services.grace_access_echo import undo_grace_overlay_echo
-
-    await undo_grace_overlay_echo(db, subscription)
     remaining_days = remaining_days_for_switch(subscription.end_date)
 
     # Use full TariffSwitchResult to access offer_discount_pct for consume_promo_offer flag

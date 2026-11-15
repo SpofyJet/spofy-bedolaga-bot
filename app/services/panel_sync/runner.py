@@ -1,7 +1,7 @@
 """Массовые проходы синхронизации.
 
 Здесь живёт только механика прохода: пачки подписок из базы, ограничение
-параллельности, грейс-лиза на каждую подписку и подсчёт итогов. Что именно
+параллельности, свежее чтение подписки под блокировкой и подсчёт итогов. Что именно
 отправлять в панель, решает ``push_subscription``.
 
 Раньше эта механика была вплетена в трёхсотстрочный метод сервиса вместе со
@@ -81,7 +81,7 @@ async def push_all_subscriptions(
     # Поздние импорты: тесты подменяют эти имена в своих модулях, а раннер должен
     # видеть подмену — как это делал прежний метод сервиса.
     from app.database.crud.subscription import get_subscriptions_batch
-    from app.services.grace_access_runtime import grace_sensitive_panel_update
+    from app.services.panel_sync.lease import subscription_update_lease
 
     created = updated = errors = skipped = 0
     offset = 0
@@ -109,10 +109,10 @@ async def push_all_subscriptions(
 
         async def process(subscription):
             async with semaphore, AsyncExitStack() as stack:
-                lease = await stack.enter_async_context(grace_sensitive_panel_update(subscription.id))
+                lease = await stack.enter_async_context(subscription_update_lease(subscription.id))
                 if not lease.allowed:
                     logger.debug(
-                        'Синхронизация в панель пропущена: подписки нет или открыт грейс',
+                        'Синхронизация в панель пропущена: подписки уже нет',
                         subscription_id=subscription.id,
                     )
                     return 'skipped'
@@ -166,7 +166,7 @@ async def push_all_subscriptions(
         outcomes = await asyncio.gather(*(process(s) for s in valid), return_exceptions=True)
         for subscription, outcome in zip(valid, outcomes, strict=True):
             if isinstance(outcome, BaseException):
-                # Падение ДО тела задачи (взятие грейс-лизы, отмена) иначе
+                # Падение ДО тела задачи (взятие блокировки, отмена) иначе
                 # молча превращалось в «errors += 1» без единой строки в логе.
                 logger.error(
                     'Подписку не удалось отправить в панель',

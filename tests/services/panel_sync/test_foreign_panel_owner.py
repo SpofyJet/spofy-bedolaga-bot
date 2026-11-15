@@ -352,7 +352,7 @@ def _runner_batches(monkeypatch, subs):
         yield SimpleNamespace(allowed=True, subscription=next(s for s in subs if s.id == subscription_id), db=None)
 
     monkeypatch.setattr('app.database.crud.subscription.get_subscriptions_batch', fake_batch)
-    monkeypatch.setattr('app.services.grace_access_runtime.grace_sensitive_panel_update', fake_lease)
+    monkeypatch.setattr('app.services.panel_sync.lease.subscription_update_lease', fake_lease)
 
 
 @pytest.mark.asyncio

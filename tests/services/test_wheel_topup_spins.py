@@ -431,7 +431,6 @@ async def test_days_prize_reactivates_only_expired(status, expected):
     prize = SimpleNamespace(prize_type=WheelPrizeType.SUBSCRIPTION_DAYS.value, prize_value=3, prize_value_kopeks=2100)
     user = SimpleNamespace(id=7)
     with (
-        patch('app.services.grace_access_echo.undo_grace_overlay_echo', AsyncMock()),
         patch('app.database.crud.subscription.reconcile_tariff_traffic_limit', AsyncMock()),
     ):
         await svc._apply_prize(AsyncMock(), user, prize, _config(), sub, {})

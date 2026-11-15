@@ -11,15 +11,14 @@ import httpx
 import pytest
 
 from app.config import settings
-from app.external.remnawave_api import RemnaWaveAPI, RemnaWaveAPIError, UserStatus
-from app.services import grace_access_runtime as grace
+from app.external.remnawave_api import RemnaWaveAPI, RemnaWaveAPIError
 from app.services.panel_sync import push_subscription
 from app.services.panel_sync.identity import PanelIdentity
 from tests.services.panel_sync.test_writer import _sub, _user
 
 
 @pytest.mark.parametrize('multi', [False, True], ids=['single', 'multi'])
-@pytest.mark.parametrize('write_path', ['create', 'update', 'grace-update'])
+@pytest.mark.parametrize('write_path', ['create', 'update'])
 @pytest.mark.parametrize('has_survivor', [False, True], ids=['all-deleted', 'one-survives'])
 async def test_deleted_squads_against_real_panel(monkeypatch, write_path, has_survivor, multi):
     url, token_file = os.environ.get('TEST_REMNAWAVE_URL'), os.environ.get('TEST_REMNAWAVE_TOKEN_FILE')
@@ -62,20 +61,6 @@ async def test_deleted_squads_against_real_panel(monkeypatch, write_path, has_su
             async with RemnaWaveAPI(url, token) as api:
 
                 async def write_subscription():
-                    if write_path == 'grace-update':
-                        target = grace._PanelTarget(
-                            status=UserStatus.ACTIVE,
-                            expire_at=sub.end_date,
-                            traffic_limit_bytes=10 * 1024**3,
-                            squad_uuids=tuple(sub.connected_squads),
-                            external_squad_uuid=None,
-                            device_limit=0,
-                        )
-                        updated, effective_target = await grace._write_recovered_billing_target(api, account_id, target)
-                        assert grace._panel_user_matches_target(updated, effective_target)
-                        assert effective_target.squad_uuids == tuple(squads[:1])
-                        assert target.squad_uuids == tuple(sub.connected_squads)
-                        return account_id
                     result = await push_subscription(
                         api,
                         _user(),

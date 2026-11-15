@@ -442,10 +442,6 @@ async def _revive_paid_subscription(
     Mirrors the classic extend branch — extend from the current end_date if still
     alive, otherwise start a fresh period from now and reset used traffic.
     """
-    # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
-    from app.services.grace_access_echo import undo_grace_overlay_echo
-
-    await undo_grace_overlay_echo(db, subscription)
     now = datetime.now(UTC)
     was_alive = subscription.end_date is not None and subscription.end_date > now
 
@@ -1101,10 +1097,7 @@ async def reconcile_tariff_traffic_limit(
     продлениям, которые идут мимо него — рекуррентным списаниям Platega,
     продлевающим через метод модели, — иначе подписка, которой прошлая ошибка
     выдала безлимит, на таком продлении так и оставалась бы безлимитной.
-    Подписку без тарифа не трогает. Оверлей грейса, осевший в подписке, отсюда не
-    убрать — к этому моменту дату уже сдвинули; такие продления зовут
-    ``undo_grace_overlay_echo`` до расчёта срока (сторож
-    ``test_renewal_undoes_grace_echo_first``).
+    Подписку без тарифа не трогает.
     """
     if subscription.tariff_id is None:
         return
@@ -1461,14 +1454,6 @@ async def extend_subscription(
     # Повторный lock в той же транзакции — noop (SubscriptionRenewalService уже мог
     # взять lock через with_for_update).
     await _lock_subscription_row(db, subscription)
-
-    if days > 0:
-        # Оверлей грейса, осевший в подписке (v4.10–4.11 принимали его за продление
-        # в панели), — не условия подписки: сквад грейса, «расход + квота», дата
-        # конца грейса. Возвращаем прежние значения до расчёта нового срока.
-        from app.services.grace_access_echo import undo_grace_overlay_echo
-
-        await undo_grace_overlay_echo(db, subscription)
 
     logger.info('🔄 Продление подписки', subscription_id=subscription.id, days=days)
     logger.info(
@@ -2199,19 +2184,11 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
     Чистит ссылку на удалённый аккаунт у `User` (в мультитарифе — только совпадающий
     id, аккаунт живой соседней подписки остаётся). НЕ коммитит — это делает
     вызывающий; исключение — когда НИ ОДНО панельное удаление не удалось: тогда в БД
-    мутировать нечего и транзакция откатывается, чтобы снять grace-локи pre-delete
-    guard'а (не вызывайте с несохранёнными изменениями в сессии). Возвращает число
-    реально удалённых подписок.
+    мутировать нечего и транзакция откатывается (не вызывайте с несохранёнными
+    изменениями в сессии). Возвращает число реально удалённых подписок.
     """
     if not subscriptions:
         return 0
-
-    from app.services.grace_access_runtime import ensure_no_open_grace_for_subscriptions
-
-    await ensure_no_open_grace_for_subscriptions(
-        db,
-        tuple(int(subscription.id) for subscription in subscriptions),
-    )
 
     import asyncio
 

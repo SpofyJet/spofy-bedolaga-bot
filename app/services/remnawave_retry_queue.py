@@ -99,7 +99,6 @@ class RemnaWaveRetryQueue:
                 Subscription.end_date > datetime.now(UTC),
                 Subscription.status.in_(('active', 'trial', 'limited')),
                 Subscription.is_daily_paused.is_(False),
-                Subscription.grace_session_open.is_(False),
                 User.status == 'active',
             )
             .order_by(Subscription.id)

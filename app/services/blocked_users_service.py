@@ -319,9 +319,7 @@ class BlockedUsersService:
             # this user before anything is deleted — the platega_subscriptions
             # record CASCADE-deletes with its subscription below, so cancelling
             # afterwards would find nothing to cancel on Platega's side and the
-            # user keeps getting charged for a deleted account. This path has
-            # no grace-access guard (unlike UserService.delete_user_account), so
-            # a plain best-effort cancel loop is enough — no lock to re-acquire.
+            # user keeps getting charged for a deleted account.
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
             for sub in getattr(user, 'subscriptions', None) or []:
@@ -437,26 +435,6 @@ class BlockedUsersService:
 
         for i, user_result in enumerate(blocked_users):
             try:
-                if action in (
-                    BlockedUserAction.DELETE_FROM_REMNAWAVE,
-                    BlockedUserAction.DELETE_FROM_DB,
-                    BlockedUserAction.DELETE_BOTH,
-                ):
-                    from app.services.grace_access_runtime import (
-                        GraceAccessDeletionBlocked,
-                        ensure_no_open_grace_for_user,
-                    )
-
-                    try:
-                        await ensure_no_open_grace_for_user(db, user_result.user_id)
-                    except GraceAccessDeletionBlocked:
-                        result.errors.append(
-                            f'Удаление {user_result.telegram_id} пропущено: сначала завершите grace-доступ'
-                        )
-                        if progress_callback:
-                            await progress_callback(i + 1, total)
-                        continue
-
                 if action in (BlockedUserAction.DELETE_FROM_REMNAWAVE, BlockedUserAction.DELETE_BOTH):
                     ids_to_delete = user_result.remnawave_ids or (
                         [user_result.remnawave_id] if user_result.remnawave_id else []

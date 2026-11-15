@@ -28,7 +28,6 @@ def _sub(**kw) -> MagicMock:
 @pytest.fixture(autouse=True)
 def _no_grace_history(monkeypatch):
     """Реанимация сначала возвращает затёртое оверлеем грейса; у этих подписок истории нет."""
-    monkeypatch.setattr('app.services.grace_access_echo.undo_grace_overlay_echo', AsyncMock(return_value=set()))
 
 
 def _db() -> AsyncMock:

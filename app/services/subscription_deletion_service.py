@@ -1,23 +1,15 @@
-"""Единый порядок удаления подписки: грейс-гард, автоплатежи, панель, строка.
+"""Единый порядок удаления подписки: автоплатежи, панель, строка.
 
 Порядок шагов здесь не косметический, а выстраданный:
 
-* грейс-гард берёт advisory-lock, поэтому проверка идёт первой — удалять
-  подписку с открытым временным доступом нельзя;
 * отмена автоплатежей идёт ДО удаления строки: записи платёжек уходят по
-  CASCADE вместе с ней, и отменять потом было бы уже нечего. Отмена
-  коммитит свою транзакцию и тем самым отпускает advisory-lock — поэтому
-  сразу за ней гард берётся повторно, закрывая окно перед необратимыми
-  шагами;
+  CASCADE вместе с ней, и отменять потом было бы уже нечего;
 * удаление юзера в панели помечается как намеренное, иначе прилетевший
   ``user.deleted`` вебхук своей чисткой заденет соседние живые подписки
   того же владельца.
 
 Панельный аккаунт адресуется по-разному в двух режимах, см.
 ``_resolve_panel_target``.
-
-Вызывающий сам решает, как отвечать на ``GraceAccessDeletionBlocked``:
-кабинет отдаёт 409, массовые действия — пропуск с пояснением.
 """
 
 from __future__ import annotations
@@ -158,21 +150,15 @@ async def delete_subscription_record(
     *,
     deleted_by: str,
 ) -> None:
-    """Удалить подписку целиком. Грейс-гард пробрасывается наружу.
+    """Удалить подписку целиком.
 
     ``deleted_by`` попадает в лог — по нему видно, кто инициировал:
     сам владелец из кабинета или администратор из карточки.
     """
-    from app.services.grace_access_runtime import ensure_no_open_grace_for_subscriptions
-
-    await ensure_no_open_grace_for_subscriptions(db, (subscription.id,))
-
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
     await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
-    # Автоплатёжки закоммитили своё — advisory-lock отпущен, берём заново.
-    await ensure_no_open_grace_for_subscriptions(db, (subscription.id,))
     # A concurrent delete can have finished while we waited for the guard.
     # The request's identity-map copy is not proof that the row still exists.
     subscription = await db.get(Subscription, subscription.id, populate_existing=True)

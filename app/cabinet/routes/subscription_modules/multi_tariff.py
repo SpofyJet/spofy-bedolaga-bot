@@ -125,15 +125,8 @@ async def delete_subscription(
             detail='Trial subscriptions cannot be deleted',
         )
 
-    from app.services.grace_access_runtime import GraceAccessDeletionBlocked
     from app.services.subscription_deletion_service import delete_subscription_record
 
-    try:
-        await delete_subscription_record(db, subscription, deleted_by='user')
-    except GraceAccessDeletionBlocked as error:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='Temporary renewal access is still active. Finish or restore grace access before deletion.',
-        ) from error
+    await delete_subscription_record(db, subscription, deleted_by='user')
 
     return {'message': 'Subscription deleted'}

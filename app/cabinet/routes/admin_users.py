@@ -52,7 +52,6 @@ from app.database.models import (
 )
 from app.services.panel_sync import (
     ADMIN_PULL,
-    GRACE_MARKER_FIELDS,
     ROUTINE,
     PanelAccountOwnedByAnotherUser,
     find_foreign_panel_owner,
@@ -204,18 +203,6 @@ def _row_subscription(subs: list[Subscription], highlight: str | None) -> Subscr
     return _soonest(live) if live else subs[0]
 
 
-def _grace_until(subscription: Subscription | None) -> datetime | None:
-    """До какого числа открыт временный доступ; ``None`` — обычная подписка.
-
-    Пока грейс-сессия открыта, в панели стоит её оверлей: человек с истёкшей
-    подпиской продолжает пользоваться VPN. По списку это было не отличить от
-    просто истёкшей — админ видел «истекла» и не понимал, почему человек в сети.
-    """
-    if subscription is None or not subscription.grace_session_open:
-        return None
-    return subscription.grace_overlay_expire_at
-
-
 def _build_user_list_item(user: User, spending_stats: dict = None, highlight: str | None = None) -> UserListItem:
     """Build UserListItem from User model."""
     stats = spending_stats or {}
@@ -269,7 +256,6 @@ def _build_user_list_item(user: User, spending_stats: dict = None, highlight: st
                     traffic_used_gb=s.traffic_used_gb or 0.0,
                     traffic_limit_gb=s.traffic_limit_gb or 0,
                     device_limit=s.device_limit or 0,
-                    grace_until=_grace_until(s),
                 )
             )
 
@@ -295,7 +281,6 @@ def _build_user_list_item(user: User, spending_stats: dict = None, highlight: st
         traffic_limit_gb=traffic_limit_gb,
         device_limit=device_limit,
         days_remaining=days_remaining,
-        grace_until=_grace_until(subscription),
         subscriptions=sub_list,
         promo_group_id=user.promo_group_id,
         promo_group_name=user.promo_group.name if user.promo_group else None,
@@ -331,7 +316,6 @@ def _build_subscription_info(subscription: Subscription, tariff_name: str | None
         autopay_enabled=subscription.autopay_enabled,
         is_active=is_active,
         days_remaining=days_remaining,
-        grace_until=_grace_until(subscription),
     )
 
 
@@ -415,11 +399,8 @@ async def _sync_subscription_to_panel(
 
     try:
         from app.config import settings
-        from app.services.grace_access_runtime import (
-            create_panel_user_grace_safe,
-            update_panel_user_grace_safe,
-        )
         from app.services.panel_sync import push_subscription
+        from app.services.panel_sync.adopt import adopt_or_create_panel_user
         from app.services.remnawave_service import RemnaWaveService
 
         service = RemnaWaveService()
@@ -443,12 +424,8 @@ async def _sync_subscription_to_panel(
                 db=db,
                 multi_tariff=pinned_subscription_identity or settings.is_multi_tariff_enabled(),
                 pinned=pinned_subscription_identity,
-                update_call=lambda **kwargs: update_panel_user_grace_safe(api, subscription.id, **kwargs),
-                create_call=lambda **kwargs: create_panel_user_grace_safe(
-                    api,
-                    subscription.id,
-                    adopt_short_uuid=subscription.remnawave_short_uuid,
-                    **kwargs,
+                create_call=lambda **kwargs: adopt_or_create_panel_user(
+                    api, subscription.remnawave_short_uuid, **kwargs
                 ),
             )
 
@@ -497,7 +474,6 @@ async def list_users(
     purchase_count: int | None = Query(None, ge=0, le=0),
     traffic_used_percent_min: int | None = Query(None, ge=1, le=100),
     online: bool | None = Query(None),
-    in_grace: bool | None = Query(None),
     sort_by: SortByEnum = Query(SortByEnum.CREATED_AT),
     sort_order: SortOrderEnum | None = Query(None),
     admin: User = Depends(require_permission('users:read')),
@@ -514,12 +490,11 @@ async def list_users(
     - **expires_within_days**: Active subscription ends within N days (daily tariffs excluded)
     - **active_within_minutes**: Last activity in the bot or cabinet within N minutes
     - **online**: Only users connected to the VPN right now (by the panel's onlineAt)
-    - **in_grace**: Only users with temporary access open right now (the «temporary until» mark); false — everyone else
     - **has_restrictions** / **has_subscription**: Restriction flags / any subscription at all
     - **purchase_count**: Only 0 is supported — users without a completed subscription payment
     - **traffic_used_percent_min**: Live subscription with at least N % of its traffic limit used (unlimited excluded)
-    - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count, subscription_end_date, grace_until)
-    - **sort_order**: asc / desc; omitted — soonest first for subscription_end_date and grace_until, largest/newest first otherwise
+    - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count, subscription_end_date)
+    - **sort_order**: asc / desc; omitted — soonest first for subscription_end_date, largest/newest first otherwise
     """
     # Convert status enum to model enum
     user_status = None
@@ -533,7 +508,6 @@ async def list_users(
     order_by_total_spent = sort_by == SortByEnum.TOTAL_SPENT
     order_by_purchase_count = sort_by == SortByEnum.PURCHASE_COUNT
     order_by_subscription_end = sort_by == SortByEnum.SUBSCRIPTION_END_DATE
-    order_by_grace = sort_by == SortByEnum.GRACE_UNTIL
 
     # Parse comma-separated tariff_ids
     tariff_ids: list[int] | None = None
@@ -578,14 +552,12 @@ async def list_users(
         purchase_count=purchase_count,
         traffic_used_percent_min=traffic_used_percent_min,
         connected=online_filter,
-        in_grace=in_grace,
         order_by_balance=order_by_balance,
         order_by_traffic=order_by_traffic,
         order_by_last_activity=order_by_last_activity,
         order_by_total_spent=order_by_total_spent,
         order_by_purchase_count=order_by_purchase_count,
         order_by_subscription_end=order_by_subscription_end,
-        order_by_grace=order_by_grace,
         sort_descending=None if sort_order is None else sort_order == SortOrderEnum.DESC,
     )
 
@@ -606,7 +578,6 @@ async def list_users(
         purchase_count=purchase_count,
         traffic_used_percent_min=traffic_used_percent_min,
         connected=online_filter,
-        in_grace=in_grace,
     )
 
     # Get spending stats for all users
@@ -615,7 +586,7 @@ async def list_users(
 
     # Строка обязана показать ту подписку, по которой человек попал в выборку,
     # иначе у владельца нескольких тарифов «Трафик на исходе» рисует полосу
-    # пустого тарифа. См. tests/cabinet/test_admin_users_multi_tariff_and_grace.py.
+    # пустого тарифа. См. tests/cabinet/test_admin_users_multi_tariff.py.
     if traffic_used_percent_min is not None:
         highlight = HIGHLIGHT_TRAFFIC
     elif subscription_status:
@@ -1397,7 +1368,6 @@ async def update_user_subscription(
         now = datetime.now(UTC)
         if subscription.end_date <= now:
             subscription.status = SubscriptionStatus.EXPIRED.value
-            subscription.grace_suppressed_until = now
         await db.commit()
         await db.refresh(subscription)
 
@@ -1434,7 +1404,6 @@ async def update_user_subscription(
             subscription.status = SubscriptionStatus.ACTIVE.value
         else:
             subscription.status = SubscriptionStatus.EXPIRED.value
-            subscription.grace_suppressed_until = datetime.now(UTC)
 
         await db.commit()
         await db.refresh(subscription)
@@ -1618,7 +1587,6 @@ async def update_user_subscription(
 
         subscription.status = SubscriptionStatus.EXPIRED.value
         subscription.end_date = datetime.now(UTC)
-        subscription.grace_suppressed_until = subscription.end_date
         # For daily tariffs: mark as paused to prevent auto-resume by DailySubscriptionService
         if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
             subscription.is_daily_paused = True
@@ -1915,7 +1883,6 @@ async def delete_user_subscription(
     сносится оплаченный доступ.
     """
     from app.database.crud.subscription import get_subscription_by_id_for_user
-    from app.services.grace_access_runtime import GraceAccessDeletionBlocked
     from app.services.subscription_deletion_service import delete_subscription_record
 
     subscription = await get_subscription_by_id_for_user(db, sub_id, user_id)
@@ -1928,13 +1895,7 @@ async def delete_user_subscription(
             detail='Subscription is active and paid; pass force=true to delete it anyway',
         )
 
-    try:
-        await delete_subscription_record(db, subscription, deleted_by=f'admin:{admin.id}')
-    except GraceAccessDeletionBlocked as error:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='Temporary renewal access is still active. Finish or restore grace access before deletion.',
-        ) from error
+    await delete_subscription_record(db, subscription, deleted_by=f'admin:{admin.id}')
 
     logger.info(
         'Admin deleted user subscription',
@@ -2836,14 +2797,6 @@ async def full_delete_user(
         db, user_id, admin_id_val, force_panel_delete=request.delete_from_panel
     )
 
-    if delete_result.grace_blocked:
-        # Паритет с обычным delete-эндпоинтом: блокировка открытым grace — это
-        # конфликт состояния, а не «успешный» ответ с success=false.
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='Open grace access must be drained or restored before permanent deletion.',
-        )
-
     reason_text = f' (reason: {request.reason})' if request.reason else ''
     logger.info(
         'Admin fully deleted user',
@@ -3232,13 +3185,6 @@ async def get_user_sync_status(
         bot_device_limit = active_sub.device_limit or 0
         bot_squads = active_sub.connected_squads or []
 
-    # Пока открыт временный доступ, в панели стоит его оверлей: дата, статус, лимит
-    # и сквад — грейса, а не подписки. Бот их намеренно не перенимает
-    # (app/services/panel_sync/projection.py), поэтому и расхождением они не являются:
-    # иначе карточка сверки кричала бы «Есть отличия» на каждом человеке в грейсе.
-    grace_open = bool(active_sub and active_sub.grace_session_open)
-    grace_until = active_sub.grace_overlay_expire_at if grace_open and active_sub else None
-
     # In multi-tariff mode, the panel identity lives on subscription, not user
     effective_panel_user_id = (
         active_sub.remnawave_id
@@ -3301,13 +3247,13 @@ async def get_user_sync_status(
                     ]
 
                     # Check differences
-                    if bot_sub_status and panel_status and not grace_open:
+                    if bot_sub_status and panel_status:
                         bot_active = bot_sub_status in ('active', 'trial')
                         panel_active = panel_status.upper() == 'ACTIVE'
                         if bot_active != panel_active:
                             differences.append(f'Status: bot={bot_sub_status}, panel={panel_status}')
 
-                    if bot_sub_end_date and panel_expire_at and not grace_open:
+                    if bot_sub_end_date and panel_expire_at:
                         bot_end_utc = bot_sub_end_date if bot_sub_end_date.tzinfo else bot_sub_end_date
                         panel_end_utc = panel_datetime_to_utc(panel_expire_at)
 
@@ -3318,7 +3264,7 @@ async def get_user_sync_status(
                         if diff_seconds > 3600 and not is_timezone_diff:  # More than 1 hour and not timezone
                             differences.append(f'End date differs by {diff_seconds / 3600:.1f} hours')
 
-                    if not grace_open and abs(bot_traffic_limit - panel_traffic_limit) > 1:
+                    if abs(bot_traffic_limit - panel_traffic_limit) > 1:
                         differences.append(
                             f'Traffic limit: bot={bot_traffic_limit}GB, panel={panel_traffic_limit:.1f}GB'
                         )
@@ -3335,7 +3281,7 @@ async def get_user_sync_status(
                     # Compare squads
                     bot_squads_set = set(bot_squads) if bot_squads else set()
                     panel_squads_set = set(panel_squads) if panel_squads else set()
-                    if not grace_open and bot_squads_set != panel_squads_set:
+                    if bot_squads_set != panel_squads_set:
                         only_in_bot = bot_squads_set - panel_squads_set
                         only_in_panel = panel_squads_set - bot_squads_set
                         squad_diff_parts = []
@@ -3387,8 +3333,6 @@ async def get_user_sync_status(
         panel_traffic_used_gb=panel_traffic_used,
         panel_device_limit=panel_device_limit,
         panel_squads=panel_squads,
-        grace_open=grace_open,
-        grace_until=grace_until,
         has_differences=len(differences) > 0,
         differences=differences,
     )
@@ -3599,10 +3543,6 @@ async def sync_user_from_panel(
                         f'Panel value applied — check if auto-purchase extended subscription.'
                     )
 
-                # Подписка загружена до запроса в панель: грейс мог открыться между
-                # ними, а снимок — уже показывать его оверлей. Признак, прочитанный
-                # после снимка, это видит (хранилище пишет его до оверлея в панели).
-                await db.refresh(sync_sub, list(GRACE_MARKER_FIELDS))
                 changed_fields = project_onto_subscription(
                     sync_sub,
                     snapshot,
@@ -3717,11 +3657,8 @@ async def sync_user_to_panel(
         )
 
     try:
-        from app.services.grace_access_runtime import (
-            create_panel_user_grace_safe,
-            update_panel_user_grace_safe,
-        )
         from app.services.panel_sync import push_subscription
+        from app.services.panel_sync.adopt import adopt_or_create_panel_user
         from app.services.remnawave_service import RemnaWaveService
 
         service = RemnaWaveService()
@@ -3756,13 +3693,7 @@ async def sync_user_to_panel(
                 only_fields=only_fields,
                 reset_devices=False,
                 create_if_missing=request.create_if_missing,
-                update_call=lambda **kwargs: update_panel_user_grace_safe(api, push_sub.id, **kwargs),
-                create_call=lambda **kwargs: create_panel_user_grace_safe(
-                    api,
-                    push_sub.id,
-                    adopt_short_uuid=push_sub.remnawave_short_uuid,
-                    **kwargs,
-                ),
+                create_call=lambda **kwargs: adopt_or_create_panel_user(api, push_sub.remnawave_short_uuid, **kwargs),
             )
 
             action = result.action

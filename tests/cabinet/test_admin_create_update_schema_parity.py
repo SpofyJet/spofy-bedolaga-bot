@@ -109,7 +109,7 @@ ADMIN = SimpleNamespace(id=1, telegram_id=777)
 
 
 def _override_permission_dependencies(app: FastAPI) -> None:
-    """Пропустить RBAC, оставив всё остальное настоящим (см. test_admin_grace_access_http)."""
+    """Пропустить RBAC, оставив всё остальное настоящим."""
     for candidate in route.router.routes:
         for dependant in candidate.dependant.dependencies:
             call = dependant.call

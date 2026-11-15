@@ -1,4 +1,4 @@
-"""Список пользователей при нескольких тарифах у одного человека и на временном доступе.
+"""Список пользователей при нескольких тарифах у одного человека.
 
 Выборки по статусу подписки спрашивали «есть ли у человека ХОТЬ ОДНА такая
 подписка». В мультитарифе это врало в обе стороны: человек с тремя живыми
@@ -8,9 +8,6 @@
 Второе: строка показывала подписку, ближайшую к окончанию, независимо от того,
 какую выборку открыли. В «Трафике на исходе» это давало полосу «0 / 600 ГБ» у
 человека, попавшего туда из-за другого тарифа, забитого под завязку.
-
-Третье: у истёкшей подписки бывает открыт временный доступ (грейс), и по списку
-это было никак не отличить от простого «истекла».
 """
 
 from __future__ import annotations
@@ -179,7 +176,6 @@ async def _rows(db, monkeypatch: pytest.MonkeyPatch, **params):
         'purchase_count': None,
         'traffic_used_percent_min': None,
         'online': None,
-        'in_grace': None,
         'sort_by': admin_users.SortByEnum.CREATED_AT,
         'sort_order': None,
     }
@@ -236,58 +232,3 @@ async def test_row_shows_the_expired_tariff_in_the_expired_view(monkeypatch: pyt
         rows = await _rows(db, monkeypatch, subscription_status='expired')
 
         assert [r.tariff_name for r in rows] == ['Истёкший']
-
-
-async def test_row_says_the_person_is_on_temporary_access(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Грейс: подписка истекла, но доступ ещё открыт — по списку это обязано быть видно."""
-
-    grace_until = NOW + timedelta(days=2)
-
-    async with memory_session(monkeypatch, TABLES) as db:
-        on_grace = _user(3, 'ongrace')
-        plain = _user(4, 'plain')
-        db.add_all([on_grace, plain])
-        await db.flush()
-        db.add_all(
-            [
-                _sub(
-                    on_grace,
-                    'a',
-                    SubscriptionStatus.EXPIRED.value,
-                    -1,
-                    grace_session_open=True,
-                    grace_overlay_expire_at=grace_until,
-                ),
-                _sub(plain, 'b', SubscriptionStatus.EXPIRED.value, -1),
-            ]
-        )
-        await db.commit()
-
-        rows = {r.username: r for r in await _rows(db, monkeypatch, subscription_status='expired')}
-
-        assert rows['ongrace'].grace_until == grace_until
-        assert rows['plain'].grace_until is None
-        assert rows['ongrace'].subscriptions[0].grace_until == grace_until
-
-
-async def test_closed_grace_leaves_no_mark(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Дата оверлея остаётся в подписке и после закрытия грейса — это не «временный доступ»."""
-    async with memory_session(monkeypatch, TABLES) as db:
-        closed = _user(5, 'closed')
-        db.add(closed)
-        await db.flush()
-        db.add(
-            _sub(
-                closed,
-                'a',
-                SubscriptionStatus.EXPIRED.value,
-                -1,
-                grace_session_open=False,
-                grace_overlay_expire_at=NOW - timedelta(days=1),
-            )
-        )
-        await db.commit()
-
-        rows = await _rows(db, monkeypatch, subscription_status='expired')
-
-        assert rows[0].grace_until is None

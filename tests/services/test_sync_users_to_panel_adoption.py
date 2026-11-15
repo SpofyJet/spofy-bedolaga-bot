@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 import app.database.crud.subscription as crud_sub_mod
-import app.services.grace_access_runtime as grace_runtime_mod
+import app.services.panel_sync.lease as lease_mod
 from app.config import Settings
 from app.database.models import SubscriptionStatus
 from app.services.remnawave_service import RemnaWaveService
@@ -76,10 +76,10 @@ def harness(monkeypatch):
 
     @asynccontextmanager
     async def fake_lease(subscription_id):
-        yield SimpleNamespace(allowed=True, subscription=subscription, has_open_grace=False)
+        yield SimpleNamespace(allowed=True, subscription=subscription)
 
     monkeypatch.setattr(crud_sub_mod, 'get_subscriptions_batch', fake_batch)
-    monkeypatch.setattr(grace_runtime_mod, 'grace_sensitive_panel_update', fake_lease)
+    monkeypatch.setattr(lease_mod, 'subscription_update_lease', fake_lease)
 
     service = RemnaWaveService()
     service._config_error = None
@@ -204,9 +204,9 @@ async def test_identity_is_written_into_the_session_that_owns_the_locked_row(mon
 
     @asynccontextmanager
     async def fake_lease(subscription_id):
-        yield SimpleNamespace(allowed=True, subscription=harness.subscription, has_open_grace=False, db=lease_db)
+        yield SimpleNamespace(allowed=True, subscription=harness.subscription, db=lease_db)
 
-    monkeypatch.setattr(grace_runtime_mod, 'grace_sensitive_panel_update', fake_lease)
+    monkeypatch.setattr(lease_mod, 'subscription_update_lease', fake_lease)
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
     harness.api.get_user_by_short_uuid.return_value = SimpleNamespace(
         id=8812, short_uuid='aBcD12', subscription_url='https://s/aBcD12'

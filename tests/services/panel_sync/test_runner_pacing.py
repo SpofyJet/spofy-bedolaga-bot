@@ -30,7 +30,7 @@ def _batches(monkeypatch):
         yield SimpleNamespace(allowed=True, subscription=subs[subscription_id - 1], db=None)
 
     monkeypatch.setattr('app.database.crud.subscription.get_subscriptions_batch', fake_batch)
-    monkeypatch.setattr('app.services.grace_access_runtime.grace_sensitive_panel_update', fake_lease)
+    monkeypatch.setattr('app.services.panel_sync.lease.subscription_update_lease', fake_lease)
     return subs
 
 

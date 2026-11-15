@@ -46,8 +46,6 @@ from app.localization.texts import get_texts
 from app.services.activation_funnel_service import EVENT_TRIAL_FIRST_CONNECTED, _record_event
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.bypass_downgrade_service import bypass_downgrade_service
-from app.services.grace_access_runtime import get_open_grace_subscription_ids, grace_access_runtime
-from app.services.grace_access_service import GraceReason
 from app.services.notification_delivery_service import NotificationType, notification_delivery_service
 from app.services.panel_sync import WEBHOOK, panel_date_behind_paid_renewal, project_onto_subscription, read_panel_user
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button, build_subscription_extend_button
@@ -411,19 +409,6 @@ class RemnaWaveWebhookService:
                 short_uuid=short_uuid,
             )
             return False
-
-        if subscription and await grace_access_runtime.should_suppress_webhook(
-            subscription.id,
-            event_name,
-            data,
-            db=db,
-        ):
-            logger.info(
-                'RemnaWave webhook suppressed as a grace overlay echo',
-                event_name=event_name,
-                subscription_id=subscription.id,
-            )
-            return True
 
         user_id = user.id
         try:
@@ -1222,9 +1207,6 @@ class RemnaWaveWebhookService:
             await db.commit()
             return
 
-        candidate_at = datetime.now(UTC)
-        subscription.grace_candidate_reason = GraceReason.EXPIRED.value
-        subscription.grace_candidate_at = candidate_at
         self._stamp_webhook_update(subscription)
         # Подписку погасил мониторинг раньше вебхука — он же и написал человеку
         # (SUBSCRIPTION_EXPIRED). Второе «подписка истекла» в ту же минуту не шлём.
@@ -1234,12 +1216,6 @@ class RemnaWaveWebhookService:
             logger.info('Webhook: subscription expired for user', subscription_id=subscription.id, user_id=user.id)
         else:
             await db.commit()
-
-        await grace_access_runtime.consider_candidate(
-            subscription.id,
-            GraceReason.EXPIRED,
-            source='webhook',
-        )
 
         if already_expired:
             return
@@ -1283,8 +1259,6 @@ class RemnaWaveWebhookService:
             await db.commit()
             return
 
-        subscription.grace_candidate_reason = None
-        subscription.grace_candidate_at = None
         self._stamp_webhook_update(subscription)
         if subscription.status != SubscriptionStatus.DISABLED.value:
             await deactivate_subscription(db, subscription)
@@ -1322,15 +1296,12 @@ class RemnaWaveWebhookService:
             return
 
         # Spofy: на тарифе с обходами лимит — это квота на обходы. Отключаем только
-        # их (сквад Bypass-Off), обычные серверы остаются; без LIMITED и грейса.
+        # их (сквад Bypass-Off), обычные серверы остаются; без LIMITED.
         if await bypass_downgrade_service.handle_limited_webhook(db, user, subscription, data):
             self._stamp_webhook_update(subscription)
             await db.commit()
             return
 
-        candidate_at = datetime.now(UTC)
-        subscription.grace_candidate_reason = GraceReason.LIMITED.value
-        subscription.grace_candidate_at = candidate_at
         self._stamp_webhook_update(subscription)
         if subscription.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value):
             subscription.status = SubscriptionStatus.LIMITED.value
@@ -1342,12 +1313,6 @@ class RemnaWaveWebhookService:
             )
         else:
             await db.commit()
-
-        await grace_access_runtime.consider_candidate(
-            subscription.id,
-            GraceReason.LIMITED,
-            source='webhook',
-        )
 
         await self._notify_user(
             user, 'WEBHOOK_SUB_LIMITED', reply_markup=self._get_traffic_keyboard(user), subscription=subscription
@@ -1366,14 +1331,6 @@ class RemnaWaveWebhookService:
         if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.LIMITED.value):
             await reactivate_subscription(db, subscription)
         logger.info('Webhook: traffic reset for subscription', subscription_id=subscription.id, user_id=user.id)
-
-        # Истёкшей подписке счётчик обнуляет сам grace при выдаче
-        # (GRACE_ACCESS_RESET_TRAFFIC_ON_START): «трафик сброшен» рядом с
-        # сообщением о grace читалось бы как продление.
-        if subscription.status == SubscriptionStatus.EXPIRED.value and subscription.id in (
-            await get_open_grace_subscription_ids(db)
-        ):
-            return
 
         # Spofy: обходы были отключены за трафик — вернуть их; человеку вместо
         # «трафик сброшен» уходит «обходы снова работают».
@@ -1394,8 +1351,6 @@ class RemnaWaveWebhookService:
         if not subscription:
             return
 
-        grace_open = subscription.id in await get_open_grace_subscription_ids(db)
-
         snapshot = read_panel_user(data)
         # Ссылки приходят по сети: сохраняем только то, что прошло проверку, иначе
         # в базу попадает чужой адрес и уезжает пользователю (хранимый XSS).
@@ -1411,7 +1366,6 @@ class RemnaWaveWebhookService:
             subscription,
             snapshot,
             policy=WEBHOOK,
-            grace_open=grace_open,
             paid_at=paid_at,
         )
         changed = bool(changed_fields)
@@ -1430,11 +1384,6 @@ class RemnaWaveWebhookService:
 
         # Always stamp to protect from sync overwrite, even if no fields changed
         self._stamp_webhook_update(subscription)
-        if grace_open:
-            logger.debug(
-                'Webhook user.modified: grace-owned fields masked; usage/links still synchronized',
-                subscription_id=subscription.id,
-            )
         if changed:
             subscription.updated_at = datetime.now(UTC)
             logger.info(

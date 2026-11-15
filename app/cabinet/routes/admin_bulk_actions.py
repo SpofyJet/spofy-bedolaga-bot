@@ -201,7 +201,6 @@ async def _do_cancel_subscription(
 
     sub.status = SubscriptionStatus.EXPIRED.value
     sub.end_date = datetime.now(UTC)
-    sub.grace_suppressed_until = sub.end_date
     # For daily tariffs: mark as paused to prevent auto-resume by DailySubscriptionService
     if sub.tariff and getattr(sub.tariff, 'is_daily', False):
         sub.is_daily_paused = True
@@ -249,10 +248,6 @@ async def _do_activate_subscription(
             username=user.username,
         )
 
-    # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
-    from app.services.grace_access_echo import undo_grace_overlay_echo
-
-    await undo_grace_overlay_echo(db, sub)
     sub.status = SubscriptionStatus.ACTIVE.value
     if sub.end_date and sub.end_date <= datetime.now(UTC):
         # Extend by 30 days if expired
@@ -557,47 +552,12 @@ async def _do_delete_subscription(
             username=user.username,
         )
 
-    from app.services.grace_access_runtime import (
-        GraceAccessDeletionBlocked,
-        ensure_no_open_grace_for_subscriptions,
-    )
-
-    blocked_user_id = user.id
-    blocked_username = user.username
-    blocked_subscriptions = _build_subscription_info(_known_subscriptions(user, sub))
-    try:
-        await ensure_no_open_grace_for_subscriptions(db, (sub.id,))
-    except GraceAccessDeletionBlocked:
-        return BulkUserResult(
-            user_id=blocked_user_id,
-            success=False,
-            message=f'Skipped: {tariff_name} has open grace access; drain/restore it first',
-            username=blocked_username,
-            subscriptions=blocked_subscriptions,
-        )
-
     # Best-effort: stop Platega SBP autopay before the row disappears — the
     # platega_subscriptions record CASCADE-deletes with it, so cancelling
     # after the delete would find nothing to cancel on Platega's side.
-    # NOTE: this commits its own transaction internally, which releases the
-    # grace-guard's Postgres advisory lock acquired just above. It therefore
-    # runs BEFORE any irreversible panel/DB step, and the guard is
-    # re-acquired immediately below — closing that window before anything
-    # that can't be undone happens.
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
     await cancel_platega_recurring_for_subscription_safe(db, sub.id)
-
-    try:
-        await ensure_no_open_grace_for_subscriptions(db, (sub.id,))
-    except GraceAccessDeletionBlocked:
-        return BulkUserResult(
-            user_id=blocked_user_id,
-            success=False,
-            message=f'Skipped: {tariff_name} has open grace access; drain/restore it first',
-            username=blocked_username,
-            subscriptions=blocked_subscriptions,
-        )
 
     # Deactivate in RemnaWave panel first
     _sub_panel_user_id = sub.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
@@ -991,7 +951,7 @@ async def bulk_execute(
     dry_run = request.dry_run
 
     # Идентичность админа снимаем ДО работы: любой откат внутри цикла
-    # (ensure_no_open_grace_for_subscriptions, обработчик ошибок _execute_for_*)
+    # (обработчик ошибок _execute_for_*)
     # экспайрит все объекты сессии, включая самого админа, и следующее чтение
     # admin.id уронило бы MissingGreenlet весь запрос — вместе с уже
     # закоммиченными результатами. Та же дисциплина, что в _do_delete_subscription.

@@ -55,19 +55,15 @@ from app.external.remnawave_api import (
 from app.localization.texts import get_texts
 from app.services.autopay_guard import lock_autopay_target_checked
 from app.services.autopay_period import resolve_autopay_period_candidate
-from app.services.grace_access_runtime import update_panel_user_grace_safe
 from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
 )
 from app.services.notification_settings_service import NotificationSettingsService
 from app.services.panel_sync import (
-    GRACE_MARKER_FIELDS,
     PanelAccountOwnedByAnotherUser,
     PanelSnapshot,
     is_subscription_live,
-    panel_date_is_grace_overlay,
-    panel_date_is_grace_tail,
     project_onto_subscription,
     push_subscription,
     read_panel_user,
@@ -769,22 +765,13 @@ class MonitoringService:
         расписание раз в сутки) — берём дату и статус оттуда и подписку не гасим.
         Панель молчит, аккаунта нет или он истёк — гасим по своей дате, как раньше.
 
-        Во время грейса (и в его хвосте) ACTIVE в панели — это оверлей грейса, а не
-        продление: его дата, сквад и лимит в бота не переносятся, подписка гасится
-        по своей дате. 2026-09-15 мониторинг принял оверлей за продление, и воркер
-        закрыл грейс «человек продлил», оставив аккаунт в скваде грейса.
-
         Подписку перечитываем из базы ПОСЛЕ снимка панели. Список истёкших взят в
         начале прохода, а проход идёт с запросом в панель на каждую подписку: за это
-        время воркер успевает выдать грейс, а человек — продлить. Хранилище сессий
-        фиксирует признак грейса до того, как оверлей уходит в панель, поэтому
-        признак, прочитанный после снимка, видит любой грейс, который снимок мог
-        показать. Без этого на стенде (волна истечения, 2026-09-15) оверлей
-        переносился в подписку у 5% людей, а только что продлённая подписка гасилась.
+        время человек успевает продлить, и только что продлённая подписка гасилась бы.
         """
         snapshot = await self._read_panel_before_expiry(db, subscription)
-        # Всё, на чём стоит решение гасить: свой срок и признаки грейса.
-        await db.refresh(subscription, ['status', 'end_date', *GRACE_MARKER_FIELDS])
+        # Всё, на чём стоит решение гасить: свой срок и статус.
+        await db.refresh(subscription, ['status', 'end_date'])
         now = datetime.now(UTC)
         if not _expires_by_own_date(subscription, now=now):
             logger.info(
@@ -793,17 +780,7 @@ class MonitoringService:
                 status=subscription.status,
             )
             return True
-        if getattr(subscription, 'grace_session_open', False):
-            logger.info(
-                'Открыт грейс — ACTIVE в панели это его оверлей, гасим по своей дате',
-                subscription_id=subscription.id,
-            )
-            return False
         if snapshot is None or snapshot.status != 'ACTIVE' or snapshot.expire_at is None or snapshot.expire_at <= now:
-            return False
-        if panel_date_is_grace_tail(subscription, snapshot) or panel_date_is_grace_overlay(subscription, snapshot):
-            # Хвост грейса (панель ещё несколько минут ACTIVE с погашенной датой) или
-            # снимок оверлея, снятый до досрочного закрытия грейса, — не продление.
             return False
         from app.database.crud.transaction import get_last_subscription_payment_at
 
@@ -933,7 +910,6 @@ class MonitoringService:
                     # «Пользователя нет» разбирает ветка ниже: у неё своя проверка,
                     # что подписку вообще стоит воскрешать.
                     recreate_on_missing=False,
-                    update_call=lambda **kwargs: update_panel_user_grace_safe(api, subscription.id, **kwargs),
                     now=current_time,
                 )
                 updated_user = result.panel_user

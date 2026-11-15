@@ -113,7 +113,7 @@ async def lift_panel_traffic_limit(
         return
 
     try:
-        await service.enable_remnawave_user(panel_user_id, db=db)
+        await service.enable_remnawave_user(panel_user_id)
     except Exception as exc:
         logger.warning(
             'Не удалось снять лимит трафика в панели после оплаты суток',

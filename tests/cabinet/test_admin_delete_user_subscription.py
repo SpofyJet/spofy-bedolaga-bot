@@ -4,10 +4,9 @@
 (например, отработавший триал) можно было только через «Массовые действия»
 — в самой карточке кнопки не было.
 
-Тесты фиксируют три границы нового маршрута: чужая подписка не удаляется по
-одному лишь ``sub_id`` (IDOR), активная платная защищена от случайного
-удаления без ``force``, а открытый временный доступ (grace) отдаёт 409, а не
-рвёт подписку под ним.
+Тесты фиксируют две границы нового маршрута: чужая подписка не удаляется по
+одному лишь ``sub_id`` (IDOR), а активная платная защищена от случайного
+удаления без ``force``.
 """
 
 from __future__ import annotations
@@ -111,23 +110,3 @@ async def test_active_paid_needs_force():
         result = await admin_users.delete_user_subscription(USER_ID, SUB_ID, force=True, admin=_admin(), db=MagicMock())
     assert result == {'status': 'deleted'}
     deleter.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_open_grace_blocks_deletion():
-    """Пока открыт временный доступ, подписку из-под него не вырывают."""
-    from app.services.grace_access_runtime import GraceAccessDeletionBlocked
-
-    sub = _subscription(is_active=False, is_trial=True)
-
-    with (
-        patch('app.database.crud.subscription.get_subscription_by_id_for_user', AsyncMock(return_value=sub)),
-        patch(
-            'app.services.subscription_deletion_service.delete_subscription_record',
-            AsyncMock(side_effect=GraceAccessDeletionBlocked([SUB_ID])),
-        ),
-    ):
-        with pytest.raises(HTTPException) as exc:
-            await admin_users.delete_user_subscription(USER_ID, SUB_ID, force=False, admin=_admin(), db=MagicMock())
-    assert exc.value.status_code == 409
-    assert 'grace' in exc.value.detail.lower()

@@ -194,7 +194,6 @@ class BotConfigurationService:
         'DEBUG': '🧪 Режим разработки',
         'MODERATION': '🛡️ Модерация и фильтры',
         'INFO_PAGES': '📄 Инфо-страницы',
-        'GRACE_ACCESS': '🛟 Grace-доступ',
         'BYPASS_DOWNGRADE': '🏴‍☠️ Обходы при исчерпании трафика',
     }
 
@@ -254,11 +253,6 @@ class BotConfigurationService:
             'Тариф с обходами: когда лимит трафика исчерпан, подписка переходит в сквад Bypass-Off — '
             'обходы недоступны, обычные серверы работают. Обходы возвращаются после докупки трафика, '
             'продления или сброса трафика.'
-        ),
-        'GRACE_ACCESS': (
-            'Временный ограниченный доступ для истёкших и лимитных подписок. '
-            'Здесь ключи лежат по отдельности; связанный экран с проверкой конфигурации и состоянием '
-            'сессий — в админке кабинета, раздел «Grace-доступ».'
         ),
     }
 
@@ -463,7 +457,6 @@ class BotConfigurationService:
         'WEB_API_': 'WEB_API',
         'DEBUG': 'DEBUG',
         'DISPLAY_NAME_': 'MODERATION',
-        'GRACE_ACCESS_': 'GRACE_ACCESS',
         'BYPASS_': 'BYPASS_DOWNGRADE',
     }
 
@@ -472,12 +465,6 @@ class BotConfigurationService:
             ChoiceOption('false', '⛔️ Выключен', 'На лимите панель отключает все серверы, как раньше'),
             ChoiceOption('observe', '👀 Наблюдение', 'Кандидаты только логируются, панель не меняется'),
             ChoiceOption('true', '🏴‍☠️ Включён', 'На лимите отключаются только обходы, обычные серверы работают'),
-        ],
-        'GRACE_ACCESS_MODE': [
-            ChoiceOption('false', '⛔️ Выключен', 'Grace-сессии не выдаются и не завершаются'),
-            ChoiceOption('observe', '👀 Наблюдение', 'Кандидаты только логируются, панель не меняется'),
-            ChoiceOption('true', '🛟 Включён', 'Выдаёт и завершает grace-доступ'),
-            ChoiceOption('drain', '🚰 Слив', 'Новых сессий нет, открытые доводятся до конца'),
         ],
         'REFERRAL_REWARD_SCHEME': [
             ChoiceOption('legacy', '💰 Классическая', 'Проценты и фиксированные бонусы из настроек REFERRAL_*'),
@@ -686,78 +673,6 @@ class BotConfigurationService:
             'example': '5',
             'warning': 'Подписки старше 30 дней после истечения не рассматриваются.',
             'dependencies': 'NOTIFICATION_EXPIRED_WAVE3_ENABLED',
-        },
-        'GRACE_ACCESS_MODE': {
-            'description': (
-                'Режим grace-доступа: временного ограниченного VPN-доступа для истёкшей или упёршейся '
-                'в лимит подписки, чтобы человек успел продлить её.'
-            ),
-            'format': 'false — выключен, observe — только журнал, true — включён, drain — доводит открытые сессии.',
-            'example': 'false',
-            'warning': (
-                'Режим читается один раз при старте бота — сохранённое значение начнёт действовать только '
-                'после перезапуска. С true и незаполненными сквадами бот запустится с выключенным grace.'
-            ),
-            'dependencies': 'GRACE_ACCESS_EXPIRED_SQUAD_UUID, GRACE_ACCESS_LIMITED_SQUAD_UUID, GRACE_ACCESS_TRAFFIC_GB',
-        },
-        'GRACE_ACCESS_EXPIRED_SQUAD_UUID': {
-            'description': 'Сквад, в который переводится пользователь с истёкшей подпиской на время grace-доступа.',
-            'format': 'UUID сквада из панели RemnaWave.',
-            'example': '3fa85f64-5717-4562-b3fc-2c963f66afa6',
-            'warning': 'Обязателен при режиме true. Пустое или некорректное значение отключает grace при старте.',
-        },
-        'GRACE_ACCESS_LIMITED_SQUAD_UUID': {
-            'description': 'Сквад для подписки, упёршейся в лимит трафика, на время grace-доступа.',
-            'format': 'UUID сквада из панели RemnaWave.',
-            'example': '3fa85f64-5717-4562-b3fc-2c963f66afa6',
-            'warning': 'Обязателен при режиме true. Пустое или некорректное значение отключает grace при старте.',
-        },
-        'GRACE_ACCESS_EXTERNAL_SQUAD_UUID': {
-            'description': 'Что делать с внешним сквадом пользователя на время grace-доступа.',
-            'format': 'Пусто — отцепить, keep — оставить как есть, либо UUID аварийного сквада.',
-            'example': 'keep',
-            'warning': 'Исходное состояние сохраняется в снимке сессии и возвращается при завершении grace.',
-        },
-        'GRACE_ACCESS_TRAFFIC_GB': {
-            'description': 'Лимит трафика, который выдаётся на время grace-доступа.',
-            'format': 'Целое число гигабайт.',
-            'example': '1',
-            'warning': 'При режиме true должно быть не меньше 1, иначе grace выключится при старте.',
-        },
-        'GRACE_ACCESS_RESET_TRAFFIC_ON_START': {
-            'description': (
-                'Обнулять счётчик трафика при выдаче grace, чтобы панель и приложение показывали '
-                '«0 из N ГБ», а не почти исчерпанный лимит «расход + квота».'
-            ),
-            'format': 'Булево значение.',
-            'example': 'false',
-            'warning': (
-                'Действует только на истёкшие подписки с безлимитным трафиком — там счётчик чисто '
-                'информационный. Расход до grace при этом теряется. Упёршиеся в лимит не обнуляются никогда.'
-            ),
-            'dependencies': 'GRACE_ACCESS_TRAFFIC_GB',
-        },
-        'GRACE_ACCESS_DURATION_HOURS': {
-            'description': 'Сколько действует grace-доступ, если подписку так и не продлили.',
-            'format': 'Целое число часов.',
-            'example': '72',
-            'warning': 'По истечении срока панельное состояние возвращается к исходному из снимка сессии.',
-        },
-        'GRACE_ACCESS_NOTIFY_ADMINS': {
-            'description': 'Сообщать админам в чат уведомлений о каждой выдаче и завершении grace-доступа: кому, почему, до какого срока и чем закончилось.',
-            'format': 'Булево значение.',
-            'example': 'true',
-            'dependencies': 'ADMIN_NOTIFICATIONS_ENABLED, ADMIN_NOTIFICATIONS_RENEWALS_ENABLED',
-        },
-        'GRACE_ACCESS_ALLOWED_SERVICES': {
-            'description': 'Что остаётся доступным во время grace — так, как это увидит человек в сообщении бота и в письме: «Telegram», «Telegram и личный кабинет», «сайт проекта». Сам доступ определяют ноды сквада grace, бот только сообщает.',
-            'format': 'Короткая фраза.',
-            'example': 'Telegram и личный кабинет',
-        },
-        'GRACE_ACCESS_NOTIFY_USER': {
-            'description': 'Сообщать человеку в бота, что подписка закончилась, но на время grace оставлен доступ к тому, что названо в GRACE_ACCESS_ALLOWED_SERVICES, и когда этот доступ закрылся.',
-            'format': 'Булево значение.',
-            'example': 'true',
         },
         'MAIN_MENU_RICH_ENABLED': {
             'description': (

@@ -17,7 +17,6 @@ from unittest.mock import AsyncMock
 import pytest
 import structlog
 
-import app.services.grace_access_runtime as grace_runtime_mod
 from app.config import Settings
 from app.services.remnawave_service import RemnaWaveService
 
@@ -66,7 +65,6 @@ def service(monkeypatch) -> RemnaWaveService:
         yield api
 
     monkeypatch.setattr(svc, 'get_api_client', fake_client)
-    monkeypatch.setattr(grace_runtime_mod, 'get_open_grace_subscription_ids', AsyncMock(return_value=set()))
     return svc
 
 

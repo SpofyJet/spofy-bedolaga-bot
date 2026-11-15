@@ -78,14 +78,8 @@ class BypassDowngradeService:
         already = subscription.bypass_suspended_at is not None
         if not already:
             subscription.bypass_suspended_at = now
-        if subscription.status == SubscriptionStatus.LIMITED.value and not await self._has_open_grace(
-            db, subscription.id
-        ):
-            # При открытом грейсе статус не трогаем: иначе пуш затрёт его оверлей.
+        if subscription.status == SubscriptionStatus.LIMITED.value:
             subscription.status = SubscriptionStatus.ACTIVE.value
-        # Не грейс: человек не потерял доступ, обычные серверы работают.
-        subscription.grace_candidate_reason = None
-        subscription.grace_candidate_at = None
         subscription.updated_at = now
         await db.commit()
 
@@ -130,20 +124,6 @@ class BypassDowngradeService:
         if notify and subscription.actual_status == 'active':
             await self.notify(user, 'BYPASS_RESTORED', subscription)
         return pushed
-
-    async def _has_open_grace(self, db: AsyncSession, subscription_id: int) -> bool:
-        from app.database.models import GraceAccessSessionModel
-        from app.services.grace_access_runtime import _OPEN_STATES
-
-        result = await db.execute(
-            select(GraceAccessSessionModel.id)
-            .where(
-                GraceAccessSessionModel.subscription_id == subscription_id,
-                GraceAccessSessionModel.state.in_(_OPEN_STATES),
-            )
-            .limit(1)
-        )
-        return result.scalar_one_or_none() is not None
 
     async def _push(self, db: AsyncSession, subscription: Subscription) -> bool:
         from app.services.subscription_service import SubscriptionService

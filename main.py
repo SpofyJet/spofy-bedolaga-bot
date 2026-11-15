@@ -23,7 +23,6 @@ from app.services.backup_service import backup_service
 from app.services.broadcast_service import broadcast_service
 from app.services.bypass_downgrade_service import bypass_downgrade_service
 from app.services.daily_subscription_service import daily_subscription_service
-from app.services.grace_access_runtime import grace_access_runtime
 from app.services.log_rotation_service import log_rotation_service
 from app.services.maintenance_service import maintenance_service
 from app.services.monitoring_service import monitoring_service
@@ -350,7 +349,6 @@ async def main():
         await configure_bot_commands(bot)
 
         monitoring_service.bot = bot
-        grace_access_runtime.bot = bot
         maintenance_service.set_bot(bot)
         broadcast_service.set_bot(bot)
         from app.services.mass_send_service import mass_send_service
@@ -478,18 +476,6 @@ async def main():
             except Exception as e:
                 stage.warning(f'Ошибка запуска автосинхронизации: {e}')
                 logger.error('❌ Ошибка запуска автосинхронизации RemnaWave', error=e)
-
-        async with timeline.stage(
-            'Grace-доступ для продления',
-            '🛟',
-            success_message='Сервис grace-доступа готов',
-        ) as stage:
-            try:
-                await grace_access_runtime.start()
-                stage.log(f'Режим: {grace_access_runtime.mode.value}')
-            except Exception as e:
-                stage.warning(f'Grace-доступ безопасно отключён из-за ошибки конфигурации: {e}')
-                logger.error('Ошибка запуска grace-доступа; основной бот продолжает работу', error=e)
 
         # Разовая фоновая чистка накопившихся дублей тарифных подписок (multi-tariff):
         # лишние истёкшие дубли удаляются из БД и панели вместе, как штатное удаление.
@@ -936,12 +922,6 @@ async def main():
             logger.error('Ошибка остановки сервиса отчетов', error=e)
 
         logger.info('ℹ️ Остановка сервиса конкурсов...')
-
-        logger.info('ℹ️ Остановка сервиса grace-доступа...')
-        try:
-            await grace_access_runtime.stop()
-        except Exception as e:
-            logger.error('Ошибка остановки grace-доступа', error=e)
 
         logger.info('ℹ️ Остановка сервиса автосинхронизации RemnaWave...')
         try:

@@ -249,34 +249,6 @@ class Settings(BaseSettings):
     REMNAWAVE_WEBHOOK_NODE_COALESCE_WINDOW_SECONDS: float = 10.0
     REMNAWAVE_WEBHOOK_NODE_BUFFER_MAX: int = 500
 
-    # Ограниченный grace-доступ для продления истёкшей подписки.
-    # Режимы: false (выключено), observe (только журнал), true (активно),
-    # drain (не выдавать новые grace-сессии, но завершать уже открытые).
-    GRACE_ACCESS_MODE: Literal['false', 'observe', 'true', 'drain'] = 'false'
-    GRACE_ACCESS_DURATION_HOURS: int = 72
-    GRACE_ACCESS_EXPIRED_SQUAD_UUID: str = ''
-    GRACE_ACCESS_LIMITED_SQUAD_UUID: str = ''
-    # Внешний сквад для grace-доступа: пусто = сброс в None, 'keep' = сохранять текущий, либо UUID аварийного внешнего сквада
-    GRACE_ACCESS_EXTERNAL_SQUAD_UUID: str = ''
-    GRACE_ACCESS_TRAFFIC_GB: int = 1
-    # Обнулять счётчик трафика при выдаче grace, чтобы панель и клиент показывали
-    # «0 из N ГБ», а не «64.76 из 65.76 GiB». Только истёкшие подписки с безлимитом:
-    # там счётчик чисто информационный. Расход до grace при этом теряется.
-    GRACE_ACCESS_RESET_TRAFFIC_ON_START: bool = False
-    GRACE_ACCESS_TRIAL_ENABLED: bool = False
-    GRACE_ACCESS_DAILY_ENABLED: bool = False
-    GRACE_ACCESS_FREE_ENABLED: bool = False
-    # Уведомления о выдаче и завершении grace: админам в чат уведомлений (категория
-    # «Продления») и самому человеку в бота. Молчаливая выдача — «втухлую» — оставляла
-    # и админа, и человека в неведении, что доступ временный и только к Telegram.
-    GRACE_ACCESS_NOTIFY_ADMINS: bool = True
-    GRACE_ACCESS_NOTIFY_USER: bool = True
-    # Что остаётся доступным во время grace — словами оператора для сообщений
-    # человеку («Telegram», «Telegram и личный кабинет», «сайт проекта»…). Сквад
-    # grace пропускает то, что настроено на нодах; бот об этом только сообщает.
-    GRACE_ACCESS_ALLOWED_SERVICES: str = 'Telegram'
-    GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS: int = 60
-
     # Spofy: исчерпан лимит трафика на тарифе с обходами — отключаются только
     # обходы, обычные серверы работают (app/services/bypass_downgrade.py).
     # Режимы: false (как раньше: панель выключает всё), observe (только журнал),
@@ -297,9 +269,6 @@ class Settings(BaseSettings):
     PROMO_OFFER_TARIFF_ID: int = 4
     # Повторная выдача скидки по ссылке /start ultima — не раньше чем через N часов (0 = без ограничений).
     PROMO_LINK_COOLDOWN_HOURS: int = 12
-    GRACE_ACCESS_RECONCILE_BATCH_SIZE: int = 200
-
-    GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES: int = 30
 
     # Webhook user notification toggles (what Telegram messages users receive from webhook events)
     WEBHOOK_NOTIFY_USER_ENABLED: bool = True
@@ -1083,36 +1052,6 @@ class Settings(BaseSettings):
         if normalized not in {'false', 'observe', 'true'}:
             raise ValueError('BYPASS_DOWNGRADE_MODE must be one of: false, observe, true')
         return normalized
-
-    @field_validator('GRACE_ACCESS_MODE', mode='before')
-    @classmethod
-    def normalize_grace_access_mode(cls, value: str | None) -> str:
-        normalized = str(value or 'false').strip().lower()
-        if normalized not in {'false', 'observe', 'true', 'drain'}:
-            raise ValueError('GRACE_ACCESS_MODE must be one of: false, observe, true, drain')
-        return normalized
-
-    @field_validator(
-        'GRACE_ACCESS_DURATION_HOURS',
-        'GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS',
-        'GRACE_ACCESS_RECONCILE_BATCH_SIZE',
-        'GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES',
-        mode='before',
-    )
-    @classmethod
-    def ensure_positive_grace_access_value(cls, value: int | str) -> int:
-        parsed = int(value)
-        if parsed < 1:
-            raise ValueError('Grace access duration, intervals, batch size and lookback must be positive')
-        return parsed
-
-    @field_validator('GRACE_ACCESS_TRAFFIC_GB', mode='before')
-    @classmethod
-    def ensure_nonnegative_grace_access_traffic(cls, value: int | str) -> int:
-        parsed = int(value)
-        if parsed < 0:
-            raise ValueError('Grace access traffic must not be negative')
-        return parsed
 
     @field_validator('REDIS_MAX_CONNECTIONS', mode='before')
     @classmethod

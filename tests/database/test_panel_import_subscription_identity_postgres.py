@@ -86,12 +86,6 @@ async def test_created_from_panel_carries_panel_id(postgres_database):
 
 @pytest.mark.usefixtures('single_tariff')
 async def test_update_from_panel_binds_row_left_empty_by_old_import(postgres_database, monkeypatch):
-    import app.services.grace_access_runtime as grace_runtime
-
-    async def no_grace(_db):
-        return set()
-
-    monkeypatch.setattr(grace_runtime, 'get_open_grace_subscription_ids', no_grace)
     async with postgres_session(postgres_database, TABLES) as db:
         user = await _user(db, 777002, remnawave_id=5)
         db.add(_subscription(user, short_id='old5'))

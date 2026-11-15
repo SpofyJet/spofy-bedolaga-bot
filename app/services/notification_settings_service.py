@@ -18,7 +18,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.services.settings_store import import_legacy_values, read_legacy_json, store_setting
+from app.services.settings_store import import_legacy_values, read_legacy_json
 
 
 logger = structlog.get_logger(__name__)
@@ -75,12 +75,6 @@ class NotificationSettingsService:
     """Фасад над ``settings``: чтение живьём, запись — через слой системных настроек (база + процесс)."""
 
     _legacy_path: Path = Path('data/notification_settings.json')
-
-    # ------------------------------------------------------------ запись
-
-    @staticmethod
-    async def _store(db: AsyncSession, key: str, value: Any) -> bool:
-        return await store_setting(db, key, value)
 
     # ------------------------------------------------------------ чтение
 

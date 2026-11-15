@@ -20,7 +20,6 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.database.models import SubscriptionStatus
-from app.services import remnawave_webhook_service as webhook_mod
 from app.services.remnawave_webhook_service import RemnaWaveWebhookService
 
 
@@ -28,11 +27,7 @@ NOW = datetime.now(UTC)
 
 
 @pytest.fixture
-def service(monkeypatch):
-    async def no_grace(_db):
-        return set()
-
-    monkeypatch.setattr(webhook_mod, 'get_open_grace_subscription_ids', no_grace)
+def service():
     return RemnaWaveWebhookService(bot=SimpleNamespace())
 
 
@@ -178,26 +173,3 @@ async def test_every_event_stamps_the_subscription(service):
     await service._handle_user_modified(_db(), SimpleNamespace(id=1), subscription, _payload())
 
     assert subscription.last_webhook_update_at is not None
-
-
-@pytest.mark.asyncio
-async def test_open_grace_freezes_the_billing_fields(monkeypatch):
-    async def grace_is_open(_db):
-        return {10}
-
-    monkeypatch.setattr(webhook_mod, 'get_open_grace_subscription_ids', grace_is_open)
-    service = RemnaWaveWebhookService(bot=SimpleNamespace())
-    subscription = _subscription()
-    original_end = subscription.end_date
-
-    await service._handle_user_modified(
-        _db(),
-        SimpleNamespace(id=1),
-        subscription,
-        _payload(status='DISABLED', trafficLimitBytes=1024**3, userTraffic={'usedTrafficBytes': 7 * 1024**3}),
-    )
-
-    assert subscription.end_date == original_end
-    assert subscription.status == SubscriptionStatus.ACTIVE.value
-    assert subscription.traffic_limit_gb == 100
-    assert subscription.traffic_used_gb == 7.0, 'расход показываем: он ничего не решает'

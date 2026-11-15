@@ -60,9 +60,6 @@ def _service(monkeypatch, accounts: list[SimpleNamespace]) -> RemnaWaveService:
 
     monkeypatch.setattr(RemnaWaveService, 'get_api_client', _client)
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    monkeypatch.setattr(
-        'app.services.grace_access_runtime.get_open_grace_subscription_ids', AsyncMock(return_value=set())
-    )
     return RemnaWaveService()
 
 

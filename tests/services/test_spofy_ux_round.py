@@ -61,7 +61,6 @@ def _user() -> SimpleNamespace:
 
 
 async def test_expired_webhook_after_monitoring_does_not_notify_twice(monkeypatch):
-    monkeypatch.setattr('app.services.remnawave_webhook_service.grace_access_runtime.consider_candidate', AsyncMock())
     # Апстрим сверяет дату последней оплаты через запрос в БД — «сессия» тут MagicMock.
     monkeypatch.setattr('app.database.crud.transaction.get_last_subscription_payment_at', AsyncMock(return_value=None))
     svc = _service()
@@ -77,7 +76,6 @@ async def test_expired_webhook_after_monitoring_does_not_notify_twice(monkeypatc
 
 
 async def test_expired_webhook_first_still_notifies(monkeypatch):
-    monkeypatch.setattr('app.services.remnawave_webhook_service.grace_access_runtime.consider_candidate', AsyncMock())
     monkeypatch.setattr('app.services.remnawave_webhook_service.expire_subscription', AsyncMock())
     monkeypatch.setattr('app.database.crud.transaction.get_last_subscription_payment_at', AsyncMock(return_value=None))
     svc = _service()

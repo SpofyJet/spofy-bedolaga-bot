@@ -205,9 +205,6 @@ class _PanelSpy:
             self.order.append('decrement')
 
         monkeypatch.setattr(
-            'app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions', _record('grace')
-        )
-        monkeypatch.setattr(
             'app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', _record('platega')
         )
         monkeypatch.setattr(deletion, 'decrement_subscription_server_counts', fake_decrement)
@@ -280,50 +277,11 @@ async def test_multi_tariff_deletion_deletes_own_account(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_open_grace_aborts_before_anything_irreversible(monkeypatch):
-    """Грейс-гард обязан пробрасываться наружу, а не глохнуть внутри сервиса.
-
-    Проглоченное исключение означало бы удаление подписки из-под открытого
-    временного доступа — ровно то, ради чего гард и стоит.
-    """
-    from app.services.grace_access_runtime import GraceAccessDeletionBlocked
-
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-    spy = _PanelSpy()
-    spy.install(monkeypatch)
-
-    async def blocked(_db, subscription_ids):
-        raise GraceAccessDeletionBlocked(tuple(subscription_ids))
-
-    monkeypatch.setattr('app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions', blocked)
-
-    async with memory_session(monkeypatch, TABLES) as db:
-        db.add(_user(remnawave_id=None))
-        target = _sub(1, status=SubscriptionStatus.EXPIRED.value, remnawave_id=PANEL_ID)
-        db.add(target)
-        await db.commit()
-
-        with pytest.raises(GraceAccessDeletionBlocked):
-            await deletion.delete_subscription_record(db, target, deleted_by='admin:1')
-
-        survived = await db.scalar(select(Subscription.id).where(Subscription.id == 1))
-
-    assert survived == 1
-    assert spy.deleted == []
-    assert spy.disabled == []
-    # Ни один шаг после гарда не начался: иначе автоплатёж оказался бы снят
-    # у подписки, которую в итоге так и не удалили.
-    assert spy.order == []
-
-
-@pytest.mark.asyncio
 async def test_step_order_is_pinned(monkeypatch):
     """Порядок шагов удаления — не косметика, каждый стоит там не случайно.
 
-    Гард идёт ПЕРВЫМ: если отмена автоплатежей случится раньше проверки, у
-    заблокированной грейсом подписки автоплатёж уже будет снят, а сама она
-    останется жить. Второй гард закрывает окно, которое открывает коммит
-    отмены, отпускающий advisory-lock.
+    Автоплатёж снимается до удаления в панели: строка Platega удаляется каскадом
+    вместе с подпиской, и после удаления отменять было бы уже нечего.
     """
     monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
     spy = _PanelSpy()
@@ -337,7 +295,7 @@ async def test_step_order_is_pinned(monkeypatch):
 
         await deletion.delete_subscription_record(db, target, deleted_by='user')
 
-    assert spy.order == ['grace', 'platega', 'grace', 'panel_delete', 'decrement']
+    assert spy.order == ['platega', 'panel_delete', 'decrement']
 
 
 @pytest.mark.asyncio

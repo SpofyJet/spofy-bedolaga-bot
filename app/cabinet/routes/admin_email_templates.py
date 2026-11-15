@@ -124,30 +124,6 @@ TEMPLATE_TYPES = [
         ],
     },
     {
-        'type': 'grace_access_granted',
-        'label': {
-            'ru': 'Grace-доступ выдан',
-            'en': 'Grace access granted',
-        },
-        'description': {
-            'ru': 'Подписка закончилась, но на время оставлен доступ к тому, что назвал оператор ({allowed})',
-            'en': 'The subscription ended, but access to what the operator named ({allowed}) is kept for a while',
-        },
-        'context_vars': ['allowed', 'hours', 'traffic_gb', 'until', 'reason', 'tariff_name'],
-    },
-    {
-        'type': 'grace_access_ended',
-        'label': {
-            'ru': 'Grace-доступ закончился',
-            'en': 'Grace access ended',
-        },
-        'description': {
-            'ru': 'Временный доступ закрыт: подписку так и не продлили',
-            'en': 'Temporary access is closed: the subscription was never renewed',
-        },
-        'context_vars': ['allowed', 'hours', 'traffic_gb', 'until', 'reason', 'tariff_name'],
-    },
-    {
         'type': 'balance_topup',
         'label': {'ru': 'Пополнение баланса', 'en': 'Balance Top-up'},
         'description': {
@@ -593,22 +569,6 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
         'server_discount': 10,
         'traffic_discount': 5,
         'device_discount': 0,
-    },
-    'grace_access_granted': {
-        'allowed': 'Telegram и личный кабинет',
-        'hours': 72,
-        'traffic_gb': '1',
-        'until': '17.09.2026 12:00',
-        'reason': 'expired',
-        'tariff_name': 'Стартовый',
-    },
-    'grace_access_ended': {
-        'allowed': 'Telegram и личный кабинет',
-        'hours': 72,
-        'traffic_gb': '1',
-        'until': '17.09.2026 12:00',
-        'reason': 'expired',
-        'tariff_name': 'Стартовый',
     },
     EMAIL_LAYOUT_TYPE: {'content': SAMPLE_LAYOUT_CONTENT},
     'balance_topup': {
