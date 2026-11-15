@@ -25,7 +25,7 @@ from app.utils.cache import RateLimitCache
 from app.utils.chat_scope import callback_from_group
 from app.utils.pagination import build_page_nav_row
 from app.utils.photo_message import safe_edit_or_resend
-from app.utils.ticket_media import get_ticket_media, ticket_media_chunks
+from app.utils.ticket_media import delete_ticket_media_notice, get_ticket_media, send_ticket_media
 from app.utils.ticket_text import (
     TICKET_MESSAGE_MAX_LENGTH,
     TICKET_PAGE_MAX_LEN,
@@ -38,12 +38,70 @@ from app.utils.timezone import format_local_datetime
 logger = structlog.get_logger(__name__)
 
 
+def _acts_as_moderator(telegram_id: int) -> bool:
+    """Действует модератор поддержки, а не админ — так помечается запись в журнале."""
+    return not settings.is_admin(telegram_id) and SupportSettingsService.is_moderator(telegram_id)
+
+
+async def _deny_non_staff(callback: types.CallbackQuery, db_user: User) -> bool:
+    """Не админ и не модератор — «доступ запрещён»; True, если обработчику пора выйти."""
+    if settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id):
+        return False
+    texts = get_texts(db_user.language)
+    await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+    return True
+
+
+def _delete_notice_keyboard() -> types.InlineKeyboardMarkup:
+    """Кнопка «🗑 Удалить» под служебным сообщением поддержки."""
+    return types.InlineKeyboardMarkup(
+        inline_keyboard=[[types.InlineKeyboardButton(text='🗑 Удалить', callback_data='admin_support_delete_msg')]]
+    )
+
+
+async def _audit_ticket_action(
+    db: AsyncSession,
+    callback: types.CallbackQuery,
+    db_user: User,
+    ticket_id: int,
+    action: str,
+    *,
+    log_context: str,
+) -> None:
+    """Запись в журнал поддержки с контактами владельца тикета; сбой журнала действие не ломает."""
+    try:
+        is_mod = _acts_as_moderator(callback.from_user.id)
+        # обогатим details контактами пользователя тикета
+        details = {}
+        try:
+            t = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_user=True)
+            if t and t.user:
+                details.update(
+                    {
+                        'target_telegram_id': t.user.telegram_id,
+                        'target_username': t.user.username,
+                    }
+                )
+        except Exception:
+            logger.debug(f'Ignored error in {log_context}', exc_info=True)
+        await TicketCRUD.add_support_audit(
+            db,
+            actor_user_id=db_user.id if db_user else None,
+            actor_telegram_id=callback.from_user.id,
+            is_moderator=is_mod,
+            action=action,
+            ticket_id=ticket_id,
+            target_user_id=None,
+            details=details,
+        )
+    except Exception:
+        logger.debug(f'Ignored error in {log_context}', exc_info=True)
+
+
 async def show_admin_tickets(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     """Показать все тикеты для админов"""
     # permission gate: admin or active moderator only
-    if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
-        texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+    if await _deny_non_staff(callback, db_user):
         return
     texts = get_texts(db_user.language)
 
@@ -166,9 +224,7 @@ async def view_admin_ticket(
     ticket_id: int | None = None,
 ):
     """Показать детали тикета для админа с пагинацией"""
-    if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
-        texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+    if await _deny_non_staff(callback, db_user):
         return
 
     # Парсим ticket_id и page из callback_data
@@ -321,9 +377,7 @@ async def view_admin_ticket(
 
 async def reply_to_admin_ticket(callback: types.CallbackQuery, state: FSMContext, db_user: User):
     """Начать ответ на тикет от админа"""
-    if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
-        texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+    if await _deny_non_staff(callback, db_user):
         return
     ticket_id = int(callback.data.replace('admin_reply_ticket_', ''))
 
@@ -499,9 +553,7 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
 
 async def close_all_open_admin_tickets(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     """Закрыть все открытые тикеты."""
-    if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
-        texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+    if await _deny_non_staff(callback, db_user):
         return
 
     texts = get_texts(db_user.language)
@@ -522,9 +574,7 @@ async def close_all_open_admin_tickets(callback: types.CallbackQuery, db_user: U
         return
 
     try:
-        is_moderator = not settings.is_admin(callback.from_user.id) and SupportSettingsService.is_moderator(
-            callback.from_user.id
-        )
+        is_moderator = _acts_as_moderator(callback.from_user.id)
         await TicketCRUD.add_support_audit(
             db,
             actor_user_id=db_user.id if db_user else None,
@@ -548,9 +598,7 @@ async def close_all_open_admin_tickets(callback: types.CallbackQuery, db_user: U
         count=closed_count
     )
 
-    notification_keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='🗑 Удалить', callback_data='admin_support_delete_msg')]]
-    )
+    notification_keyboard = _delete_notice_keyboard()
 
     try:
         await callback.message.answer(success_text, reply_markup=notification_keyboard)
@@ -564,9 +612,7 @@ async def close_all_open_admin_tickets(callback: types.CallbackQuery, db_user: U
 
 async def close_admin_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     """Закрыть тикет админом"""
-    if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
-        texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+    if await _deny_non_staff(callback, db_user):
         return
     ticket_id = int(callback.data.replace('admin_close_ticket_', ''))
 
@@ -575,45 +621,15 @@ async def close_admin_ticket(callback: types.CallbackQuery, db_user: User, db: A
 
         if success:
             # audit
-            try:
-                is_mod = not settings.is_admin(callback.from_user.id) and SupportSettingsService.is_moderator(
-                    callback.from_user.id
-                )
-                # обогатим details контактами пользователя тикета
-                details = {}
-                try:
-                    t = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_user=True)
-                    if t and t.user:
-                        details.update(
-                            {
-                                'target_telegram_id': t.user.telegram_id,
-                                'target_username': t.user.username,
-                            }
-                        )
-                except Exception:
-                    logger.debug('Ignored error in close_admin_ticket', exc_info=True)
-                await TicketCRUD.add_support_audit(
-                    db,
-                    actor_user_id=db_user.id if db_user else None,
-                    actor_telegram_id=callback.from_user.id,
-                    is_moderator=is_mod,
-                    action='close_ticket',
-                    ticket_id=ticket_id,
-                    target_user_id=None,
-                    details=details,
-                )
-            except Exception:
-                logger.debug('Ignored error in close_admin_ticket', exc_info=True)
+            await _audit_ticket_action(
+                db, callback, db_user, ticket_id, 'close_ticket', log_context='close_admin_ticket'
+            )
             texts = get_texts(db_user.language)
             # Notify with deletable inline message
             try:
                 await callback.message.answer(
                     texts.t('TICKET_CLOSED', '✅ Тикет закрыт.'),
-                    reply_markup=types.InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [types.InlineKeyboardButton(text='🗑 Удалить', callback_data='admin_support_delete_msg')]
-                        ]
-                    ),
+                    reply_markup=_delete_notice_keyboard(),
                 )
             except Exception:
                 await callback.answer(texts.t('TICKET_CLOSED', '✅ Тикет закрыт.'), show_alert=True)
@@ -638,9 +654,7 @@ async def close_admin_ticket(callback: types.CallbackQuery, db_user: User, db: A
 
 async def cancel_admin_ticket_reply(callback: types.CallbackQuery, state: FSMContext, db_user: User):
     """Отменить ответ админа на тикет"""
-    if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
-        texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+    if await _deny_non_staff(callback, db_user):
         return
     await state.clear()
 
@@ -662,9 +676,7 @@ async def cancel_admin_ticket_reply(callback: types.CallbackQuery, state: FSMCon
 
 
 async def block_user_in_ticket(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
-    if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
-        texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+    if await _deny_non_staff(callback, db_user):
         return
     ticket_id = int(callback.data.replace('admin_block_user_ticket_', ''))
     texts = get_texts(db_user.language)
@@ -890,9 +902,7 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
 
 
 async def unblock_user_in_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
-        texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+    if await _deny_non_staff(callback, db_user):
         return
     ticket_id = int(callback.data.replace('admin_unblock_user_ticket_', ''))
     ok = await TicketCRUD.set_user_reply_block(db, ticket_id, permanent=False, until=None)
@@ -900,44 +910,14 @@ async def unblock_user_in_ticket(callback: types.CallbackQuery, db_user: User, d
         try:
             await callback.message.answer(
                 '✅ Блок снят',
-                reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [types.InlineKeyboardButton(text='🗑 Удалить', callback_data='admin_support_delete_msg')]
-                    ]
-                ),
+                reply_markup=_delete_notice_keyboard(),
             )
         except Exception:
             await callback.answer('✅ Блок снят')
         # audit
-        try:
-            is_mod = not settings.is_admin(callback.from_user.id) and SupportSettingsService.is_moderator(
-                callback.from_user.id
-            )
-            ticket_id = int(callback.data.replace('admin_unblock_user_ticket_', ''))
-            details = {}
-            try:
-                t = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_user=True)
-                if t and t.user:
-                    details.update(
-                        {
-                            'target_telegram_id': t.user.telegram_id,
-                            'target_username': t.user.username,
-                        }
-                    )
-            except Exception:
-                logger.debug('Ignored error in unblock_user_in_ticket', exc_info=True)
-            await TicketCRUD.add_support_audit(
-                db,
-                actor_user_id=db_user.id if db_user else None,
-                actor_telegram_id=callback.from_user.id,
-                is_moderator=is_mod,
-                action='unblock_user',
-                ticket_id=ticket_id,
-                target_user_id=None,
-                details=details,
-            )
-        except Exception:
-            logger.debug('Ignored error in unblock_user_in_ticket', exc_info=True)
+        await _audit_ticket_action(
+            db, callback, db_user, ticket_id, 'unblock_user', log_context='unblock_user_in_ticket'
+        )
         if _card_in_group(callback):
             await _refresh_group_ticket_card(callback, db, ticket_id)
         else:
@@ -947,9 +927,7 @@ async def unblock_user_in_ticket(callback: types.CallbackQuery, db_user: User, d
 
 
 async def block_user_permanently(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
-        texts = get_texts(db_user.language)
-        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+    if await _deny_non_staff(callback, db_user):
         return
     ticket_id = int(callback.data.replace('admin_block_user_perm_ticket_', ''))
     ok = await TicketCRUD.set_user_reply_block(db, ticket_id, permanent=True, until=None)
@@ -957,43 +935,14 @@ async def block_user_permanently(callback: types.CallbackQuery, db_user: User, d
         try:
             await callback.message.answer(
                 '✅ Пользователь заблокирован навсегда',
-                reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [types.InlineKeyboardButton(text='🗑 Удалить', callback_data='admin_support_delete_msg')]
-                    ]
-                ),
+                reply_markup=_delete_notice_keyboard(),
             )
         except Exception:
             await callback.answer('✅ Пользователь заблокирован')
         # audit
-        try:
-            is_mod = not settings.is_admin(callback.from_user.id) and SupportSettingsService.is_moderator(
-                callback.from_user.id
-            )
-            details = {}
-            try:
-                t = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_user=True)
-                if t and t.user:
-                    details.update(
-                        {
-                            'target_telegram_id': t.user.telegram_id,
-                            'target_username': t.user.username,
-                        }
-                    )
-            except Exception:
-                logger.debug('Ignored error in block_user_permanently', exc_info=True)
-            await TicketCRUD.add_support_audit(
-                db,
-                actor_user_id=db_user.id if db_user else None,
-                actor_telegram_id=callback.from_user.id,
-                is_moderator=is_mod,
-                action='block_user_perm',
-                ticket_id=ticket_id,
-                target_user_id=None,
-                details=details,
-            )
-        except Exception:
-            logger.debug('Ignored error in block_user_permanently', exc_info=True)
+        await _audit_ticket_action(
+            db, callback, db_user, ticket_id, 'block_user_perm', log_context='block_user_permanently'
+        )
         if _card_in_group(callback):
             await _refresh_group_ticket_card(callback, db, ticket_id)
         else:
@@ -1186,9 +1135,7 @@ def register_handlers(dp: Dispatcher):
     # Вложения в тикете (админ)
     async def send_admin_ticket_attachments(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
         # permission gate for attachments view
-        if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
-            texts = get_texts(db_user.language)
-            await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+        if await _deny_non_staff(callback, db_user):
             return
         texts = get_texts(db_user.language)
         try:
@@ -1204,28 +1151,9 @@ def register_handlers(dp: Dispatcher):
         if not attachments:
             await callback.answer(texts.t('NO_ATTACHMENTS', 'Вложений нет.'), show_alert=True)
             return
-        from aiogram.types import InputMediaDocument, InputMediaPhoto, InputMediaVideo
-
-        chunks = ticket_media_chunks(attachments)
-        last_group_message = None
-        for chunk in chunks:
-            media = [
-                {'photo': InputMediaPhoto, 'video': InputMediaVideo, 'document': InputMediaDocument}[m['type']](
-                    media=m['file_id']
-                )
-                for m in chunk
-            ]
-            try:
-                if len(media) == 1:
-                    item = media[0]
-                    sender = getattr(callback.message.bot, f'send_{item.type.value}')
-                    messages = [await sender(chat_id=callback.from_user.id, **{item.type: item.media})]
-                else:
-                    messages = await callback.message.bot.send_media_group(chat_id=callback.from_user.id, media=media)
-                if messages:
-                    last_group_message = messages[-1]
-            except Exception:
-                logger.debug('Ignored error in send_admin_ticket_attachments', exc_info=True)
+        last_group_message = await send_ticket_media(
+            callback.message.bot, callback.from_user.id, attachments, log_context='send_admin_ticket_attachments'
+        )
         # После отправки добавим кнопку удалить под последним сообщением группы
         if last_group_message:
             try:
@@ -1252,16 +1180,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(send_admin_ticket_attachments, F.data.startswith('admin_ticket_attachments_'))
 
     async def admin_delete_message(callback: types.CallbackQuery):
-        try:
-            msg_id = int(callback.data.replace('admin_delete_message_', ''))
-        except ValueError:
-            await callback.answer('❌')
-            return
-        try:
-            await callback.message.bot.delete_message(chat_id=callback.from_user.id, message_id=msg_id)
-            await callback.message.delete()
-        except (TelegramAPIError, AttributeError):
-            pass
-        await callback.answer('✅')
+        await delete_ticket_media_notice(callback, 'admin_delete_message_')
 
     dp.callback_query.register(admin_delete_message, F.data.startswith('admin_delete_message_'))
