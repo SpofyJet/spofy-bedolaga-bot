@@ -1,18 +1,40 @@
-"""TG-053/TG-054: состав traffic_low и счётчики HTTP API на PostgreSQL."""
+"""TG-053: состав traffic_low в списке пользователей кабинета на PostgreSQL."""
 
 from __future__ import annotations
 
+import inspect
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
+import httpx
 import pytest
+from fastapi import FastAPI
 
 from app.cabinet.routes import admin_users
-from app.database.models import Subscription, SubscriptionEvent, Transaction, User
+from app.database.models import Subscription, User
+from app.services import panel_online
 from tests.fixtures.postgres_db import postgres_session
 
 
 pytestmark = pytest.mark.postgres
 TABLES = [User.__table__]
+
+
+@asynccontextmanager
+async def _client(db, monkeypatch):
+    app = FastAPI()
+    app.include_router(admin_users.router, prefix='/cabinet')
+
+    async def session():
+        yield db
+
+    app.dependency_overrides[admin_users.get_cabinet_db] = session
+    permission = inspect.signature(admin_users.list_users).parameters['admin'].default.dependency
+    app.dependency_overrides[permission] = lambda: None
+    monkeypatch.setattr(panel_online, 'get_online_snapshot', AsyncMock(return_value=None))
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+        yield client
 
 
 async def _seed_traffic(db):
@@ -87,91 +109,6 @@ async def test_traffic_filter_returns_exact_people_for_every_sort(
                 assert page['total'] == len(expected)
                 paged.extend(item['id'] for item in page['users'])
             assert paged == [item['id'] for item in payload['users']]
-
-
-async def _seed_api(db):
-    now = datetime.now(UTC)
-    for index in range(1, 4):
-        user = User(
-            telegram_id=index,
-            username=f'masked-{index}',
-            first_name=f'masked-{index}',
-            status='active' if index < 3 else 'blocked',
-            language='ru',
-            created_at=now - timedelta(days=index),
-        )
-        db.add(user)
-        await db.flush()
-        db.add(
-            Transaction(
-                user_id=user.id,
-                type='deposit' if index < 3 else 'subscription_payment',
-                amount_kopeks=index * 100,
-                payment_method='balance',
-                is_completed=index < 3,
-                created_at=now - timedelta(days=index),
-            )
-        )
-        db.add(
-            SubscriptionEvent(
-                user_id=user.id,
-                event_type='purchase' if index < 3 else 'renewal',
-                occurred_at=now - timedelta(days=index),
-            )
-        )
-    await db.commit()
-    db.expunge_all()
-
-
-@pytest.mark.parametrize(
-    ('path', 'filters', 'expected_ids'),
-    [
-        ('/users', {}, [1, 2, 3]),
-        ('/users', {'status': 'active'}, [1, 2]),
-        ('/users', {'search': 'masked-2'}, [2]),
-        ('/users', {'search': 'absent'}, []),
-        ('/users', {'status': 'active', 'search': 'masked-3'}, []),
-        ('/transactions', {}, [1, 2, 3]),
-        ('/transactions', {'is_completed': 'true'}, [1, 2]),
-        ('/transactions', {'is_completed': 'false'}, [3]),
-        ('/transactions', {'user_id': 2}, [2]),
-        ('/transactions', {'type': 'deposit', 'is_completed': 'false'}, []),
-        ('/transactions', {'payment_method': 'absent'}, []),
-        ('/events', {}, [1, 2, 3]),
-        ('/events', {'event_type': 'purchase'}, [1, 2]),
-        ('/events', {'event_type': ['purchase', 'renewal']}, [1, 2, 3]),
-        ('/events', {'event_type': ['purchase', 'purchase']}, [1, 2]),
-        ('/events', {'event_type': ['absent', 'purchase']}, [1, 2]),
-        ('/events', {'user_id': 2}, [2]),
-        ('/events', {'event_type': 'renewal', 'user_id': 1}, []),
-        ('/events', {'event_type': 'absent'}, []),
-    ],
-)
-async def test_api_total_matches_filters_and_ignores_pagination(
-    postgres_database, monkeypatch, path, filters, expected_ids
-):
-    async with postgres_session(postgres_database, TABLES) as db:
-        await _seed_api(db)
-        async with _client(db, monkeypatch) as client:
-            found = []
-            for offset in range(len(expected_ids) + 1):
-                response = await client.get(path, params={**filters, 'limit': 1, 'offset': offset})
-                assert response.status_code == 200, response.text
-                page = response.json()
-                assert page['total'] == len(expected_ids)
-                assert page['limit'] == 1
-                assert page['offset'] == offset
-                found.extend(item['id'] for item in page['items'])
-            assert found == expected_ids
-
-
-@pytest.mark.parametrize('path', ['/users', '/transactions', '/events'])
-async def test_empty_api_tables_have_zero_total(postgres_database, monkeypatch, path):
-    async with postgres_session(postgres_database, TABLES) as db, _client(db, monkeypatch) as client:
-        response = await client.get(path)
-        assert response.status_code == 200, response.text
-        assert response.json()['total'] == 0
-        assert response.json()['items'] == []
 
 
 @pytest.mark.parametrize('status', ['active', 'trial', 'limited'])

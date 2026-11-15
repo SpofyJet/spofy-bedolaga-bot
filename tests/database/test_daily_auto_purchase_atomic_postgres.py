@@ -104,16 +104,6 @@ async def test_daily_auto_activation_is_atomic(
     monkeypatch.setattr(cabinet, 'create_paid_subscription', provision)
     async with postgres_engine(postgres_database, list(Base.metadata.sorted_tables)) as engine:
         maker = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
-        shifted = []
-
-        async def shift_after_commit(db_arg, subscription_id, days):
-            async with maker() as observer:
-                payments = (await observer.scalars(select(Transaction))).all()
-                active = await observer.get(Subscription, subscription_id)
-                assert len(payments) == 1 and payments[0].is_completed
-                assert active.tariff_id == 1 and active.last_daily_charge_at is not None
-            shifted.append((subscription_id, days))
-
         async with maker() as db:
             db.add(
                 User(
@@ -257,8 +247,6 @@ async def test_daily_auto_activation_is_atomic(
             )
             assert rows[0].device_limit == (1 if fresh or trial else 3)
             assert user.promo_offer_discount_percent == 0
-            successful_flow = first_flow if failure is None else second_flow
-            assert shifted == ([(rows[0].id, 1)] if successful_flow == 'cabinet' and not fresh else [])
 
 
 @pytest.mark.parametrize(

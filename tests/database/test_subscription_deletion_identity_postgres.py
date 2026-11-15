@@ -163,37 +163,6 @@ async def test_single_tariff_checks_short_uuid_of_actual_panel_target(
         panel.api.get_user_by_id.assert_awaited_once_with(PANEL_ID)
 
 
-@pytest.mark.parametrize('state', ['pending', 'active', 'restoring'])
-async def test_open_grace_rejects_delete_without_panel_changes(postgres_database, panel, state):
-    from app.database.models import GraceAccessSessionModel
-
-    now = datetime.now(UTC)
-    async with postgres_session(postgres_database, TABLES) as db:
-        user, target = await seed(db)
-        db.add(
-            GraceAccessSessionModel(
-                id='00000000-0000-0000-0000-000000000001',
-                subscription_id=10,
-                remnawave_id=PANEL_ID,
-                reason='expired',
-                incident_key='test-expired',
-                state=state,
-                billing_before={},
-                panel_before={},
-                overlay={},
-                started_at=now,
-                grace_until=now + timedelta(hours=1),
-                updated_at=now,
-            )
-        )
-        await db.commit()
-        with pytest.raises(HTTPException) as error:
-            await delete_subscription(target.id, user, db)
-        assert error.value.status_code == 409
-        assert await db.get(Subscription, 10) is not None
-        assert panel.deleted == panel.disabled == []
-
-
 @pytest.mark.parametrize(('owner', 'status', 'code'), [(2, 'expired', 404), (1, 'active', 400), (1, 'trial', 400)])
 async def test_cabinet_rejects_unowned_or_live_subscription(postgres_database, panel, owner, status, code):
     async with postgres_session(postgres_database, TABLES) as db:

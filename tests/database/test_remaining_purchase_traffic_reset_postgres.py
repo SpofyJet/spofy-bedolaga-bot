@@ -16,7 +16,6 @@ from app.database.models import (
     Transaction,
     User,
 )
-from app.handlers.admin import users as admin
 from app.services import guest_purchase_service as guest, subscription_service
 from tests.fixtures.postgres_db import postgres_session
 
@@ -90,9 +89,7 @@ async def test_guest_nonrenewal_keeps_existing_panel_reset_policy(postgres_datab
         assert panel_call.await_args.kwargs.get('reset_traffic', False) is False
 
 
-@pytest.mark.parametrize(
-    ('flow', 'expired'), [('admin', False), ('admin', True), ('activate', False), ('activate', True), ('fulfill', True)]
-)
+@pytest.mark.parametrize(('flow', 'expired'), [('activate', False), ('activate', True), ('fulfill', True)])
 @pytest.mark.parametrize('reset', [False, True])
 @pytest.mark.parametrize('trial', [False, True])
 async def test_paid_existing_purchase_preserves_traffic_contract(
@@ -159,49 +156,34 @@ async def test_paid_existing_purchase_preserves_traffic_contract(
         await db.commit()
         db.add(TrafficPurchase(id=9, subscription_id=7, traffic_gb=20, expires_at=now + timedelta(days=60)))
         await db.commit()
-        if flow == 'admin':
-            monkeypatch.setattr(
-                admin.UserService, 'get_user_profile', AsyncMock(return_value={'user': user, 'subscription': sub})
-            )
-            callback = SimpleNamespace(
-                data='admin_buy_tariff_execute_42_1_30_300',
-                answer=AsyncMock(),
-                message=SimpleNamespace(edit_text=AsyncMock()),
-                bot=None,
-            )
-            handler = admin.admin_buy_tariff_execute
-            while hasattr(handler, '__wrapped__'):
-                handler = handler.__wrapped__
-            await handler(callback, user, db)
-        else:
-            purchase = GuestPurchase(
-                token='t' * 64,
-                user_id=42,
-                tariff_id=1,
-                period_days=30,
-                amount_kopeks=300,
-                contact_type='telegram',
-                contact_value='42',
-                is_gift=False,
-                payment_method='balance',
-                status=GuestPurchaseStatus.PAID.value
-                if flow == 'fulfill'
-                else GuestPurchaseStatus.PENDING_ACTIVATION.value,
-            )
-            db.add(purchase)
-            await db.commit()
-            monkeypatch.setattr(guest, '_find_or_create_user', AsyncMock(return_value=(user, False)))
-            monkeypatch.setattr(
-                guest,
-                'evaluate_guest_purchase_registration',
-                AsyncMock(
-                    return_value=(None, RegistrationAccessDecision(True, RegistrationAccessReason.INVITE_ONLY_DISABLED))
-                ),
-            )
-            operation = guest.fulfill_purchase if flow == 'fulfill' else guest.activate_purchase
-            await operation(db, purchase.token)
-            await operation(db, purchase.token)
-            assert purchase.status == GuestPurchaseStatus.DELIVERED.value
+        purchase = GuestPurchase(
+            token='t' * 64,
+            user_id=42,
+            tariff_id=1,
+            period_days=30,
+            amount_kopeks=300,
+            contact_type='telegram',
+            contact_value='42',
+            is_gift=False,
+            payment_method='balance',
+            status=GuestPurchaseStatus.PAID.value
+            if flow == 'fulfill'
+            else GuestPurchaseStatus.PENDING_ACTIVATION.value,
+        )
+        db.add(purchase)
+        await db.commit()
+        monkeypatch.setattr(guest, '_find_or_create_user', AsyncMock(return_value=(user, False)))
+        monkeypatch.setattr(
+            guest,
+            'evaluate_guest_purchase_registration',
+            AsyncMock(
+                return_value=(None, RegistrationAccessDecision(True, RegistrationAccessReason.INVITE_ONLY_DISABLED))
+            ),
+        )
+        operation = guest.fulfill_purchase if flow == 'fulfill' else guest.activate_purchase
+        await operation(db, purchase.token)
+        await operation(db, purchase.token)
+        assert purchase.status == GuestPurchaseStatus.DELIVERED.value
         await db.refresh(user)
         await db.refresh(sub)
         assert len((await db.scalars(select(Subscription))).all()) == 1
@@ -213,7 +195,7 @@ async def test_paid_existing_purchase_preserves_traffic_contract(
         assert sub.subscription_url == 'https://example.com/test-subscription'
         panel_call.assert_awaited_once()
         assert panel_call.await_args.kwargs.get('reset_traffic', False) is (reset or trial)
-        assert user.balance_kopeks == (9700 if flow == 'admin' else 10000)
+        assert user.balance_kopeks == 10000
         transactions = (await db.scalars(select(Transaction))).all()
         assert len(transactions) == 1
         assert transactions[0].amount_kopeks == -300

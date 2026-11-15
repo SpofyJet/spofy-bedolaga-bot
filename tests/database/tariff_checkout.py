@@ -29,7 +29,6 @@ class QuickRenewalPanel(Panel):
 @asynccontextmanager
 async def checkout(postgres_database, monkeypatch):
     for name, value in {
-        'SALES_MODE': 'tariffs',
         'DEFAULT_DEVICE_LIMIT': 1,
         'PRICE_30_DAYS': 45000,
         'PRICE_PER_DEVICE': 10000,

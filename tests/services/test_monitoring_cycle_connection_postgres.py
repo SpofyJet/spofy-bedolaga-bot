@@ -18,12 +18,12 @@ STEPS = (
     '_check_expired_subscriptions',
     '_check_expiring_subscriptions',
     '_check_trial_expiring_soon',
+    '_run_activation_funnel',
     '_check_traffic_warnings',
     '_check_low_balance_alerts',
     '_retry_stuck_guest_purchases',
     '_cleanup_expired_refresh_tokens',
     '_cleanup_button_click_logs',
-    '_cleanup_inactive_users',
     '_sync_with_remnawave',
 )
 
