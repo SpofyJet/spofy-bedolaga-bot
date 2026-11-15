@@ -1243,44 +1243,6 @@ class Subscription(Base):
 
         return self.status
 
-    @property
-    def status_display(self) -> str:
-        actual_status = self.actual_status
-
-        if actual_status == 'expired':
-            return '🔴 Истекла'
-        if actual_status == 'active':
-            if self.is_trial:
-                return '🎯 Тестовая'
-            return '🟢 Активна'
-        if actual_status == 'disabled':
-            return '⚫ Отключена'
-        if actual_status == 'limited':
-            return '⚠️ Трафик исчерпан'
-        if actual_status == 'trial':
-            return '🎯 Тестовая'
-
-        return '❓ Неизвестно'
-
-    @property
-    def status_emoji(self) -> str:
-        actual_status = self.actual_status
-
-        if actual_status == 'expired':
-            return '🔴'
-        if actual_status == 'active':
-            if self.is_trial:
-                return '🎁'
-            return '💎'
-        if actual_status == 'disabled':
-            return '⚫'
-        if actual_status == 'limited':
-            return '⚠️'
-        if actual_status == 'trial':
-            return '🎁'
-
-        return '❓'
-
     @validates('end_date')
     def _normalize_lifetime_end_date(self, _key, value):
         # Срок дальше ~5,5 лет = «Навсегда» (ULTIMA): одна отметка 31.12.2099 для
@@ -3596,10 +3558,6 @@ class UserReminder(Base):
     button_target = Column(String(500), nullable=True)
     created_at = Column(AwareDateTime(), default=func.now())
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
-
-    @property
-    def is_builtin(self) -> bool:
-        return self.builtin_key is not None
 
 
 class UserReminderState(Base):
