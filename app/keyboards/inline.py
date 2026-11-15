@@ -175,7 +175,9 @@ async def get_main_menu_keyboard_async(
     )
 
 
-def _spins_word(count: int) -> str:
+def _spins_word(count: int, language: str = 'ru') -> str:
+    if language == 'en':
+        return 'spin' if count == 1 else 'spins'
     if count % 10 == 1 and count % 100 != 11:
         return 'спин'
     if 2 <= count % 10 <= 4 and not 12 <= count % 100 <= 14:
@@ -196,7 +198,7 @@ def _wheel_menu_button(texts, spins: int | None) -> InlineKeyboardButton | None:
     if spins <= 0:
         return InlineKeyboardButton(text=texts.t('MENU_WHEEL', '🎡 Колесо призов'), web_app=types.WebAppInfo(url=url))
     text = texts.t('MENU_WHEEL_SPINS', '🎡 Колесо призов · {count} {spins_word}').format(
-        count=spins, spins_word=_spins_word(spins)
+        count=spins, spins_word=_spins_word(spins, texts.language)
     )
     return InlineKeyboardButton(text=text, web_app=types.WebAppInfo(url=url), style='success')
 

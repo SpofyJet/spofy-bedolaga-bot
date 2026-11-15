@@ -2246,5 +2246,11 @@
   "GIFT_ACTIVATION_LIFETIME_ERROR": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> You have a Forever subscription, so the gift can't be applied to it. It stays unactivated. If you need help, write to @spofysup.",
   "GIFT_ACTIVATION_UPDATED_LINE": "Your subscription has been updated.",
   "GIFT_ACTIVATION_VALID_FOREVER": "Your subscription is valid forever.",
-  "GIFT_ACTIVATION_VALID_UNTIL": "Your subscription is valid until {end_date}."
+  "GIFT_ACTIVATION_VALID_UNTIL": "Your subscription is valid until {end_date}.",
+  "MENU_WHEEL": "🎡 Prize wheel",
+  "MENU_WHEEL_SPINS": "🎡 Prize wheel · {count} {spins_word}",
+  "PAYMENT_SUPPORT_INFO": "<b>Payment help</b>\n\nYou were charged but your balance or subscription wasn't topped up, or you need a refund — write to us with the date, amount and payment method.",
+  "BTN_MY_SUBSCRIPTION": "📱 My subscription",
+  "PROMOCODE_PAID_SUBSCRIPTION_REQUIRED": "❌ This promo code works only with an active paid subscription. It is not available during the trial.",
+  "PROMOCODE_WHEEL_BUTTON": "🎡 Spin the wheel"
 }

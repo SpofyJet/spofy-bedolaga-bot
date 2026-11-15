@@ -2249,5 +2249,8 @@
   "GIFT_ACTIVATION_LIFETIME_ERROR": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> У вас подписка «Навсегда» — подарок к ней не применяется. Он остался неактивированным. Если нужна помощь, напишите @spofysup.",
   "GIFT_ACTIVATION_UPDATED_LINE": "Ваша подписка обновлена.",
   "GIFT_ACTIVATION_VALID_FOREVER": "Подписка действует навсегда.",
-  "GIFT_ACTIVATION_VALID_UNTIL": "Подписка действует до {end_date}."
+  "GIFT_ACTIVATION_VALID_UNTIL": "Подписка действует до {end_date}.",
+  "BTN_MY_SUBSCRIPTION": "📱 Моя подписка",
+  "PROMOCODE_PAID_SUBSCRIPTION_REQUIRED": "❌ Этот промокод работает только с активной платной подпиской. На пробном периоде он недоступен.",
+  "PROMOCODE_WHEEL_BUTTON": "🎡 Крутить колесо"
 }

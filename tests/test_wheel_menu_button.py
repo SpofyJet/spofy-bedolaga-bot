@@ -72,6 +72,11 @@ def test_spins_word(count, word):
     assert _spins_word(count) == word
 
 
+@pytest.mark.parametrize(('count', 'word'), [(1, 'spin'), (2, 'spins'), (21, 'spins')])
+def test_spins_word_in_english(count, word):
+    assert _spins_word(count, 'en') == word
+
+
 async def test_spins_for_menu_counts_only_when_topup_spins_enabled(monkeypatch):
     from app.database.crud import wheel as wheel_crud
     from app.services import wheel_service as ws
