@@ -904,40 +904,20 @@ class BotConfigurationService:
             'warning': 'Применяется на следующем круге проверки, перезапуск не нужен.',
             'dependencies': 'REFERRAL_WITHDRAWAL_REMINDER_ENABLED',
         },
-        'USER_REMINDERS_CHECK_INTERVAL_MINUTES': {
-            'description': 'Как часто бот отправляет пользователям напоминания в Telegram.',
-            'format': 'Целое число от 1 до 1440 (минуты).',
-            'example': '15',
-            'warning': 'Применяется на следующем проходе, перезапуск не нужен.',
-            'dependencies': 'USER_REMINDERS_MAX_PER_PASS',
-        },
         'USER_REMINDERS_QUIET_HOURS_START': {
-            'description': 'С какого часа (по TIMEZONE) бот перестаёт отправлять напоминания.',
+            'description': 'С какого часа (по TIMEZONE) бот не шлёт несрочные уведомления: воронку, '
+            'догоняющие после окончания подписки, предупреждения о трафике.',
             'format': 'Целое число от 0 до 23.',
             'example': '21',
             'warning': 'Одинаковые начало и конец — тихих часов нет.',
             'dependencies': 'USER_REMINDERS_QUIET_HOURS_END',
         },
         'USER_REMINDERS_QUIET_HOURS_END': {
-            'description': 'До какого часа (по TIMEZONE) бот не отправляет напоминания.',
+            'description': 'До какого часа (по TIMEZONE) бот не шлёт несрочные уведомления.',
             'format': 'Целое число от 0 до 23.',
             'example': '10',
             'warning': 'Одинаковые начало и конец — тихих часов нет.',
             'dependencies': 'USER_REMINDERS_QUIET_HOURS_START',
-        },
-        'USER_REMINDERS_DAILY_LIMIT_ENABLED': {
-            'description': 'Не больше одного напоминания в сутки на человека по всем напоминаниям вместе.',
-            'format': 'Булево значение.',
-            'example': 'true',
-            'warning': 'Выключение позволит нескольким напоминаниям прийти в один день.',
-            'dependencies': 'USER_REMINDERS_CHECK_INTERVAL_MINUTES',
-        },
-        'USER_REMINDERS_MAX_PER_PASS': {
-            'description': 'Сколько сообщений бот отправляет за один проход; остальное — следующим.',
-            'format': 'Целое число от 1 до 10000.',
-            'example': '500',
-            'warning': 'Большое значение растягивает проход: темп 25 сообщений в секунду.',
-            'dependencies': 'USER_REMINDERS_CHECK_INTERVAL_MINUTES',
         },
         'MAINTENANCE_MODE': {
             'description': 'Переводит бота в режим технического обслуживания и скрывает действия для пользователей.',

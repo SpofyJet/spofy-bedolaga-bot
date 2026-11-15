@@ -30,7 +30,6 @@ from .admin_tariffs import router as admin_tariffs_router
 from .admin_tickets import router as admin_tickets_router
 from .admin_traffic import router as admin_traffic_router
 from .admin_updates import router as admin_updates_router
-from .admin_user_reminders import router as admin_user_reminders_router
 from .admin_users import router as admin_users_router
 from .admin_wheel import router as admin_wheel_router
 from .admin_withdrawals import router as admin_withdrawals_router
@@ -47,7 +46,6 @@ from .partner_application import router as partner_application_router
 from .promo import router as promo_router
 from .promocode import router as promocode_router
 from .referral import router as referral_router
-from .reminders import router as reminders_router
 from .spofy_subpage import router as spofy_subpage_router
 from .subscription import router as subscription_router
 from .subscription_modules.multi_tariff import router as multi_tariff_subscription_router
@@ -97,7 +95,6 @@ router.include_router(info_router)
 router.include_router(branding_router)
 router.include_router(landing_router)
 router.include_router(media_router)
-router.include_router(reminders_router)
 
 # Wheel routes
 router.include_router(wheel_router)
@@ -131,7 +128,6 @@ router.include_router(admin_email_queue_router)
 router.include_router(admin_updates_router)
 router.include_router(admin_traffic_router)
 router.include_router(admin_pinned_messages_router)
-router.include_router(admin_user_reminders_router)
 router.include_router(admin_button_styles_router)
 router.include_router(admin_menu_layout_router)
 router.include_router(admin_channels_router)

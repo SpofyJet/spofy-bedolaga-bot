@@ -28,7 +28,7 @@ TABLES = list(Base.metadata.sorted_tables)
 @pytest.fixture(autouse=True)
 def _env(monkeypatch):
     monkeypatch.setattr(NotificationSettingsService, 'are_notifications_globally_enabled', staticmethod(lambda: True))
-    monkeypatch.setattr('app.services.user_reminders.dispatcher.is_quiet_time', lambda *a, **kw: False)
+    monkeypatch.setattr('app.utils.quiet_hours.is_quiet_time', lambda *a, **kw: False)
     # Redis «лежит»: чтение ничего не находит, запись не проходит.
     monkeypatch.setattr(monitoring_module.cache, 'get', AsyncMock(return_value=None))
     monkeypatch.setattr(monitoring_module.cache, 'set', AsyncMock(return_value=False))

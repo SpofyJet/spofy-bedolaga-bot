@@ -241,7 +241,6 @@ class MonitoringService:
         self._sla_task = None
         self._withdrawal_reminder_task = None
         self._abandoned_payment_task = None
-        self._user_reminder_task = None
         self._live_menu_task = None
         # In-memory fallback состояния уведомлений об ошибке автоплатежа (на случай
         # недоступности Redis). Ключ — (subscription_id, cycle_token=int(end_date.timestamp())).
@@ -399,12 +398,6 @@ class MonitoringService:
                 self._abandoned_payment_task = asyncio.create_task(self._abandoned_payment_loop())
         except Exception as e:
             logger.error('Не удалось запустить напоминания о заявках на вывод', error=e)
-        # Напоминания пользователям (раздел «Напоминания» в кабинете)
-        try:
-            if not self._user_reminder_task or self._user_reminder_task.done():
-                self._user_reminder_task = asyncio.create_task(self._user_reminder_loop())
-        except Exception as e:
-            logger.error('Не удалось запустить напоминания пользователям', error=e)
         try:
             if not self._live_menu_task or self._live_menu_task.done():
                 from app.services.live_menu_service import live_menu_loop
@@ -434,8 +427,6 @@ class MonitoringService:
             self._withdrawal_reminder_task.cancel()
         if self._abandoned_payment_task and not self._abandoned_payment_task.done():
             self._abandoned_payment_task.cancel()
-        if self._user_reminder_task and not self._user_reminder_task.done():
-            self._user_reminder_task.cancel()
         if self._live_menu_task and not self._live_menu_task.done():
             self._live_menu_task.cancel()
 
@@ -1479,7 +1470,7 @@ class MonitoringService:
 
             # Догоняющие письма после окончания не срочные — ночью не будим. Окна у
             # них 24–48 ч, тихие часы короче, так что письмо уйдёт днём того же окна.
-            from app.services.user_reminders.dispatcher import is_quiet_time
+            from app.utils.quiet_hours import is_quiet_time
             from app.utils.timezone import get_local_timezone
 
             if is_quiet_time(
@@ -2830,7 +2821,7 @@ class MonitoringService:
             return
 
         # Не срочно: ночью не будим, письмо уйдёт утром (ключ «уже отправлено» ещё не стоит).
-        from app.services.user_reminders.dispatcher import is_quiet_time
+        from app.utils.quiet_hours import is_quiet_time
         from app.utils.timezone import get_local_timezone
 
         if is_quiet_time(
@@ -3833,30 +3824,6 @@ class MonitoringService:
             except Exception as e:
                 logger.warning('Ошибка в цикле напоминаний о брошенной оплате', error=str(e))
             await asyncio.sleep(120)
-
-    async def _user_reminder_loop(self):
-        from app.services.user_reminders.dispatcher import bot_delivery, run_reminder_pass
-
-        deliver = bot_delivery(notification_delivery_service)
-        while self.is_running:
-            try:
-                if self.bot:
-                    async with AsyncSessionLocal() as db:
-                        try:
-                            await run_reminder_pass(db, self.bot, deliver=deliver)
-                        except Exception as e:
-                            # warning, не error: сбой одного прохода не повод писать в админ-чат
-                            logger.warning('Сбой прохода напоминаний пользователям', error=str(e))
-                            await db.rollback()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.warning('Ошибка в цикле напоминаний пользователям', error=str(e))
-            try:
-                interval_seconds = max(1, int(settings.USER_REMINDERS_CHECK_INTERVAL_MINUTES)) * 60
-            except Exception:
-                interval_seconds = 900
-            await asyncio.sleep(interval_seconds)
 
     async def _log_monitoring_event(
         self, db: AsyncSession, event_type: str, message: str, data: dict[str, Any] = None, is_success: bool = True

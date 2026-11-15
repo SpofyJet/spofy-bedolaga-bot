@@ -146,7 +146,7 @@ async def test_followups_skip_quiet_hours(monkeypatch):
     svc.bot = MagicMock()
     monkeypatch.setattr(ms.NotificationSettingsService, 'are_notifications_globally_enabled', lambda: True)
     monkeypatch.setattr(ms.NotificationSettingsService, 'is_expired_1d_enabled', lambda: True)
-    monkeypatch.setattr('app.services.user_reminders.dispatcher.is_quiet_time', lambda *a, **k: True)
+    monkeypatch.setattr('app.utils.quiet_hours.is_quiet_time', lambda *a, **k: True)
     db = MagicMock()
     db.execute = AsyncMock()
 

@@ -80,9 +80,6 @@ class NotificationType(Enum):
     # Промогруппа назначена автоматически за сумму трат
     PROMO_GROUP_AUTO_ASSIGNED = 'promo_group_auto_assigned'
 
-    # User reminders (раздел «Напоминания» в кабинете) — служебный тип, не рассылка
-    USER_REMINDER = 'user_reminder'
-
     # Other
     BROADCAST = 'broadcast'
     PAYMENT_RECEIVED = 'payment_received'

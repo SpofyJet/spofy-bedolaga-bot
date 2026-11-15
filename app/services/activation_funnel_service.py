@@ -292,7 +292,7 @@ class ActivationFunnelService:
             return
         # Напоминания воронки не срочные, а окна у них — от суток: ночью не будим, письмо
         # уйдёт утром того же окна. Брошенная оплата идёт отдельным циклом — она по горячим следам.
-        from app.services.user_reminders.dispatcher import is_quiet_time
+        from app.utils.quiet_hours import is_quiet_time
         from app.utils.timezone import get_local_timezone
 
         if is_quiet_time(

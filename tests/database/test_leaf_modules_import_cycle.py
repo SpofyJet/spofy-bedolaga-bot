@@ -1,9 +1,10 @@
-"""Модули напоминаний не должны дотягиваться импортами до мониторинга.
+"""Модули-листья не должны дотягиваться импортами до мониторинга.
 
-Мониторинг запускает проход напоминаний, а сам достижим почти из любого модуля
-(crud.subscription → payment.platega → monitoring_service). Любой импорт отсюда в
-CRUD или сервисы замыкает кольцо — CodeQL py/cyclic-import на PR #3280. Учитываются
-и импорты внутри функций: CodeQL их тоже считает.
+Мониторинг достижим почти из любого модуля (crud.subscription → payment.platega →
+monitoring_service), а способы входа и константы импортирует, в свою очередь,
+crud.user. Любой импорт отсюда в CRUD или сервисы замыкает кольцо — CodeQL
+py/cyclic-import на PR #3280. Учитываются и импорты внутри функций: CodeQL их тоже
+считает.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from pathlib import Path
 import pytest
 
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 MONITORING = 'app.services.monitoring_service'
 
 
@@ -68,35 +69,11 @@ def _path(graph: dict[str, set[str]], start: str, goal: str) -> list[str] | None
 @pytest.mark.parametrize(
     'module',
     [
-        'app.services.user_reminders.conditions',
-        'app.services.user_reminders.dispatcher',
-        'app.services.user_reminders.texts',
-        'app.database.crud.user_reminder',
         'app.database.auth_methods',
         'app.database.constants',
+        'app.utils.quiet_hours',
     ],
 )
-def test_reminder_modules_do_not_reach_monitoring(module: str) -> None:
+def test_leaf_modules_do_not_reach_monitoring(module: str) -> None:
     chain = _path(_graph(), module, MONITORING)
     assert chain is None, 'кольцо импортов: ' + ' → '.join(chain or [])
-
-
-@pytest.mark.asyncio
-async def test_bot_delivery_sends_through_the_given_service() -> None:
-    from types import SimpleNamespace
-    from unittest.mock import AsyncMock
-
-    from app.services.notification_types import NotificationType
-    from app.services.user_reminders.dispatcher import bot_delivery
-
-    service = SimpleNamespace(send_notification=AsyncMock(return_value=True))
-    reminder = SimpleNamespace(
-        id=7, texts={'ru': {'title': 't', 'body': 'b'}}, button_kind='none', button_target=None, category='service'
-    )
-    user = SimpleNamespace(language='ru')
-
-    assert await bot_delivery(service)(user, reminder, bot='bot') is True
-
-    args, kwargs = service.send_notification.await_args
-    assert args[:3] == (user, NotificationType.USER_REMINDER, {'reminder_id': 7})
-    assert kwargs['bot'] == 'bot' and kwargs['use_websocket'] is False
