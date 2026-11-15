@@ -1,7 +1,7 @@
-"""Multi-tariff subscription endpoints for cabinet API.
+"""Список подписок пользователя для кабинета.
 
-GET /subscriptions — list all user subscriptions (multi-tariff)
-GET /subscriptions/{id} — get specific subscription details
+GET /subscriptions — подписки пользователя (кабинет читает и в режиме одной подписки)
+DELETE /subscriptions/{id} — удалить истёкшую/отключённую подписку
 """
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.database.crud.subscription import (
     get_all_subscriptions_by_user_id,
     get_subscription_by_id_for_user,
@@ -83,12 +82,12 @@ async def list_subscriptions(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> SubscriptionsListResponse:
-    """List all user subscriptions. Returns all subscriptions regardless of multi-tariff mode."""
+    """Подписки пользователя; ``multi_tariff_enabled`` всегда False — поле читает кабинет."""
     subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
     items = [_subscription_to_list_item(sub) for sub in subscriptions if not sub.is_pending_trial]
     return SubscriptionsListResponse(
         subscriptions=items,
-        multi_tariff_enabled=settings.is_multi_tariff_enabled(),
+        multi_tariff_enabled=False,
     )
 
 

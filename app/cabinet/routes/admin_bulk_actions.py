@@ -227,19 +227,6 @@ async def _do_activate_subscription(
     if not sub:
         return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
 
-    # Проверка дубликата в мультитарифном режиме
-    if settings.is_multi_tariff_enabled() and sub.tariff_id:
-        from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-        existing = await get_subscription_by_user_and_tariff(db, user.id, sub.tariff_id)
-        if existing and existing.id != sub.id:
-            return BulkUserResult(
-                user_id=user.id,
-                success=False,
-                message='Cannot activate: user already has an active subscription for this tariff',
-                username=user.username,
-            )
-
     if dry_run:
         return BulkUserResult(
             user_id=user.id,
@@ -277,19 +264,6 @@ async def _do_change_tariff(
     sub = _resolve_subscription(user, sub_override)
     if not sub:
         return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
-
-    # Проверка дубликата в мультитарифном режиме
-    if settings.is_multi_tariff_enabled() and tariff.id != sub.tariff_id:
-        from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-        existing = await get_subscription_by_user_and_tariff(db, user.id, tariff.id)
-        if existing and existing.id != sub.id:
-            return BulkUserResult(
-                user_id=user.id,
-                success=False,
-                message='User already has an active subscription for the target tariff',
-                username=user.username,
-            )
 
     if dry_run:
         return BulkUserResult(
@@ -395,7 +369,7 @@ async def _do_add_traffic(
     await _sync_subscription_to_panel(db, user, sub)
 
     # Explicitly enable user on panel (PATCH may not clear LIMITED status)
-    _enable_panel_user_id = sub.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
+    _enable_panel_user_id = user.remnawave_id
     if _enable_panel_user_id and sub.status == 'active':
         try:
             from app.services.subscription_service import SubscriptionService
@@ -560,7 +534,7 @@ async def _do_delete_subscription(
     await cancel_platega_recurring_for_subscription_safe(db, sub.id)
 
     # Deactivate in RemnaWave panel first
-    _sub_panel_user_id = sub.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
+    _sub_panel_user_id = user.remnawave_id
     if _sub_panel_user_id:
         try:
             from app.services.subscription_service import SubscriptionService
@@ -654,32 +628,18 @@ async def _do_grant_subscription(
     dry_run: bool,
 ) -> BulkUserResult:
     days = params.days  # already validated
-    is_multi_tariff = settings.is_multi_tariff_enabled()
     subs = user.subscriptions or []
 
     # Check for existing active subscription
-    if is_multi_tariff:
-        from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-        existing = await get_subscription_by_user_and_tariff(db, user.id, tariff.id)
-        if existing:
-            return BulkUserResult(
-                user_id=user.id,
-                success=False,
-                message='Already has subscription for this tariff',
-                username=user.username,
-                subscriptions=_build_subscription_info(subs),
-            )
-    else:
-        active_sub = next((s for s in subs if s.is_active), None)
-        if active_sub:
-            return BulkUserResult(
-                user_id=user.id,
-                success=False,
-                message='Already has an active subscription',
-                username=user.username,
-                subscriptions=_build_subscription_info(subs),
-            )
+    active_sub = next((s for s in subs if s.is_active), None)
+    if active_sub:
+        return BulkUserResult(
+            user_id=user.id,
+            success=False,
+            message='Already has an active subscription',
+            username=user.username,
+            subscriptions=_build_subscription_info(subs),
+        )
 
     if dry_run:
         return BulkUserResult(

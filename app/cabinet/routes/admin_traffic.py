@@ -177,7 +177,6 @@ async def _load_user_map(db: AsyncSession) -> dict[int, User]:
     In multi-tariff mode panel ids live on Subscription rows, not on User.
     Both sources are merged so the caller gets a complete panel id → User map.
     """
-    from app.config import settings
 
     # Build user map from both user-level and subscription-level panel ids
     user_map: dict[int, User] = {}
@@ -193,19 +192,6 @@ async def _load_user_map(db: AsyncSession) -> dict[int, User]:
     for u in users:
         if u.remnawave_id:
             user_map[u.remnawave_id] = u
-
-    # Multi-tariff: subscription-level panel ids
-    if settings.is_multi_tariff_enabled():
-        stmt_subs = (
-            select(Subscription)
-            .where(Subscription.remnawave_id.isnot(None))
-            .options(selectinload(Subscription.user).selectinload(User.subscriptions).selectinload(Subscription.tariff))
-        )
-        result_subs = await db.execute(stmt_subs)
-        subs = result_subs.scalars().all()
-        for sub in subs:
-            if sub.remnawave_id and sub.user and sub.remnawave_id not in user_map:
-                user_map[sub.remnawave_id] = sub.user
 
     return user_map
 

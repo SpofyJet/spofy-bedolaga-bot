@@ -368,11 +368,7 @@ async def purchase_traffic(
             else:
                 await subscription_service.update_remnawave_user(db, subscription)
                 if subscription.status == 'active':
-                    _enable_panel_user_id = (
-                        subscription.remnawave_id
-                        if settings.is_multi_tariff_enabled()
-                        else getattr(user, 'remnawave_id', None)
-                    )
+                    _enable_panel_user_id = getattr(user, 'remnawave_id', None)
                     if _enable_panel_user_id:
                         await subscription_service.enable_remnawave_user(_enable_panel_user_id)
     except Exception as e:
@@ -628,12 +624,8 @@ async def refresh_traffic(
         remnawave_service = RemnaWaveService()
 
         # Resolve panel user id for traffic lookup
-        _traffic_panel_user_id = (
-            subscription.remnawave_id
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_id
-            else user.remnawave_id
-        )
-        if user.telegram_id and not settings.is_multi_tariff_enabled():
+        _traffic_panel_user_id = user.remnawave_id
+        if user.telegram_id:
             traffic_stats = await remnawave_service.get_user_traffic_stats(user.telegram_id)
         elif _traffic_panel_user_id:
             traffic_stats = await remnawave_service.get_user_traffic_stats_by_panel_id(_traffic_panel_user_id)

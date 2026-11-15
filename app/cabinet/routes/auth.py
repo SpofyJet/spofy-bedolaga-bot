@@ -604,12 +604,11 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 logger.debug('No subscription found in panel for email', email=user.email)
                 return
 
-            # In multi-tariff mode, sync ALL panel users (each = one subscription)
-            # In single-tariff mode, process only the first
-            from app.database.crud.subscription import get_active_subscriptions_by_user_id, get_subscription_by_user_id
+            # Подписка у человека одна — синхронизируем только первый аккаунт панели
+            from app.database.crud.subscription import get_subscription_by_user_id
             from app.database.models import Subscription
 
-            panel_users_to_sync = panel_users if settings.is_multi_tariff_enabled() else panel_users[:1]
+            panel_users_to_sync = panel_users[:1]
 
             for panel_user in panel_users_to_sync:
                 logger.info('Syncing panel subscription for email', email=user.email, panel_user_id=panel_user.id)
@@ -617,9 +616,7 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 # Аккаунт уже закреплён за другим человеком — не забираем.
                 from app.services.panel_sync import find_foreign_panel_owner
 
-                owner = await find_foreign_panel_owner(
-                    db, user, None, panel_user.id, multi_tariff=settings.is_multi_tariff_enabled()
-                )
+                owner = await find_foreign_panel_owner(db, user, None, panel_user.id)
                 if owner is not None and owner.user_id != user.id:
                     logger.warning(
                         'Panel user already belongs to another bot user, skipping',
@@ -630,19 +627,11 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                     )
                     continue
 
-                # Link user to panel (only in single-tariff mode)
-                if not settings.is_multi_tariff_enabled():
-                    user.remnawave_id = panel_user.id
+                # Link user to panel
+                user.remnawave_id = panel_user.id
 
                 # Find existing subscription
-                if settings.is_multi_tariff_enabled():
-                    active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-                    existing_sub = next(
-                        (s for s in active_subs if s.remnawave_id == panel_user.id),
-                        None,
-                    )
-                else:
-                    existing_sub = await get_subscription_by_user_id(db, user.id)
+                existing_sub = await get_subscription_by_user_id(db, user.id)
 
                 snapshot = read_panel_user(panel_user)
                 current_time = datetime.now(UTC)

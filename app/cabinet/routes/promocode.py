@@ -72,14 +72,6 @@ async def activate_promocode(
         db=db, user_id=user.id, code=request.code.strip(), subscription_id=request.subscription_id
     )
 
-    if result.get('error') == 'select_subscription':
-        return {
-            'success': False,
-            'error': 'select_subscription',
-            'eligible_subscriptions': result.get('eligible_subscriptions', []),
-            'code': result.get('code', request.code.strip()),
-        }
-
     if result['success']:
         balance_before_rubles = result.get('balance_before_kopeks', 0) / 100
         balance_after_rubles = result.get('balance_after_kopeks', 0) / 100

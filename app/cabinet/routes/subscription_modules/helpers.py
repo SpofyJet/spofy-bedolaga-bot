@@ -33,38 +33,10 @@ async def resolve_subscription(
     user: User,
     subscription_id: int | None,
 ) -> Subscription | None:
-    """Resolve target subscription: by ID in multi-tariff mode, or legacy fallback.
+    """Подписка пользователя: одна на человека.
 
-    Args:
-        db: Database session.
-        user: Current user.
-        subscription_id: Optional subscription ID (from query param).
-
-    Returns:
-        Target Subscription or None if not found.
-
-    Raises:
-        HTTPException: If subscription_id provided but not found for this user.
+    ``subscription_id`` (query-параметр кабинета) на выбор не влияет.
     """
-    from fastapi import HTTPException
-
-    from app.database.crud.subscription import get_subscription_by_id_for_user
-
-    if subscription_id and settings.is_multi_tariff_enabled():
-        subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
-        if not subscription:
-            raise HTTPException(status_code=404, detail='Subscription not found')
-        return subscription
-
-    if settings.is_multi_tariff_enabled() and not subscription_id:
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-        if active_subs:
-            non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
-            pool = non_daily or active_subs
-            return max(pool, key=lambda s: s.days_left)
-        return None
 
     await db.refresh(user, ['subscriptions'])
     subscription = user.subscription

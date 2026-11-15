@@ -207,8 +207,6 @@ def _subscription_block(subscription: Subscription) -> str | None:
 
 async def tariff_offers(db: AsyncSession, user: User, subscription: Subscription) -> list[dict[str, Any]]:
     """Tariffs a trial (or tariff-less) user can buy; plain period tariffs only (v1)."""
-    if settings.is_multi_tariff_enabled():
-        return []
 
     promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
     tariffs = await get_tariffs_for_user(db, promo_group.id if promo_group else None)
@@ -306,8 +304,6 @@ async def save_tariff_cart(
     db: AsyncSession, user: User, subscription: Subscription, tariff_id: int, period_days: int
 ) -> int:
     """Mirror of POST /subscription/purchase-tariff on insufficient funds (plain period tariffs)."""
-    if settings.is_multi_tariff_enabled():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Use the cabinet for multi-tariff purchases')
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not tariff.is_active or getattr(tariff, 'is_daily', False):

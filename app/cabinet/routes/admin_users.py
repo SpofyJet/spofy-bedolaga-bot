@@ -398,7 +398,6 @@ async def _sync_subscription_to_panel(
         return {'skipped': True, 'reason': 'Selected subscription has no panel user id'}
 
     try:
-        from app.config import settings
         from app.services.panel_sync import push_subscription
         from app.services.panel_sync.adopt import adopt_or_create_panel_user
         from app.services.remnawave_service import RemnaWaveService
@@ -422,7 +421,7 @@ async def _sync_subscription_to_panel(
                 user,
                 subscription,
                 db=db,
-                multi_tariff=pinned_subscription_identity or settings.is_multi_tariff_enabled(),
+                multi_tariff=pinned_subscription_identity,
                 pinned=pinned_subscription_identity,
                 create_call=lambda **kwargs: adopt_or_create_panel_user(
                     api, subscription.remnawave_short_uuid, **kwargs
@@ -843,7 +842,7 @@ async def get_user_detail(
         campaign_id = campaign_reg.campaign.id
 
     return UserDetailResponse(
-        multi_tariff_enabled=settings.is_multi_tariff_enabled(),
+        multi_tariff_enabled=False,
         id=user.id,
         telegram_id=user.telegram_id,
         username=user.username,
@@ -878,11 +877,7 @@ async def get_user_detail(
         promo_offer_discount_source=user.promo_offer_discount_source,
         promo_offer_discount_expires_at=user.promo_offer_discount_expires_at,
         recent_transactions=recent_transactions,
-        remnawave_id=(
-            primary_sub.remnawave_id
-            if settings.is_multi_tariff_enabled() and primary_sub and primary_sub.remnawave_id
-            else user.remnawave_id
-        ),
+        remnawave_id=user.remnawave_id,
     )
 
 
@@ -943,18 +938,13 @@ async def get_user_panel_info(
                 panel_user = await api.get_user_by_id(user.remnawave_id)
 
             # Fallback: search by telegram_id (single-tariff only)
-            if (
-                not panel_user
-                and subscription_id is None
-                and not settings.is_multi_tariff_enabled()
-                and user.telegram_id
-            ):
+            if not panel_user and subscription_id is None and user.telegram_id:
                 panel_users = await api.find_users_by_telegram_id(user.telegram_id)
                 if panel_users:
                     panel_user = panel_users[0]
 
             # Fallback: search by email (single-tariff, OAuth users)
-            if not panel_user and subscription_id is None and not settings.is_multi_tariff_enabled() and user.email:
+            if not panel_user and subscription_id is None and user.email:
                 panel_users_by_email = await api.find_users_by_email(user.email)
                 if panel_users_by_email:
                     panel_user = panel_users_by_email[0]
@@ -1059,14 +1049,7 @@ async def get_user_node_usage(
 
     # Resolve panel user id
     _panel_user_id = None
-    if settings.is_multi_tariff_enabled() and subscription_id:
-        from app.database.crud.subscription import get_subscription_by_id_for_user
-
-        sub = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-        if sub:
-            _panel_user_id = sub.remnawave_id
-    else:
-        _panel_user_id = user.remnawave_id
+    _panel_user_id = user.remnawave_id
 
     if not _panel_user_id:
         return UserNodeUsageResponse(items=[])
@@ -1248,7 +1231,6 @@ async def update_user_subscription(
         )
 
     subs = user.subscriptions or []
-    is_multi_tariff = settings.is_multi_tariff_enabled()
 
     # Select target subscription
     if request.subscription_id is not None and request.action != 'create':
@@ -1257,23 +1239,11 @@ async def update_user_subscription(
         subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
 
     if request.action == 'create':
-        # In multi-tariff mode, allow creating additional subscriptions
-        if subscription and not is_multi_tariff:
+        if subscription:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='User already has a subscription. Enable multi-tariff mode to add more.',
             )
-
-        # Проверка: нельзя создать вторую активную подписку с тем же тарифом
-        if is_multi_tariff and request.tariff_id:
-            from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-            existing = await get_subscription_by_user_and_tariff(db, user.id, request.tariff_id)
-            if existing:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail='User already has an active subscription for this tariff. Extend it instead.',
-                )
 
         from app.database.crud.subscription import create_paid_subscription
 
@@ -1443,18 +1413,6 @@ async def update_user_subscription(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail='Tariff not found',
             )
-
-        # Проверка: нельзя сменить тариф, если у пользователя уже есть
-        # другая активная подписка с целевым тарифом
-        if is_multi_tariff and request.tariff_id != subscription.tariff_id:
-            from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-            existing = await get_subscription_by_user_and_tariff(db, user.id, request.tariff_id)
-            if existing and existing.id != subscription.id:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail='User already has an active subscription for the target tariff',
-                )
 
         # Preserve extra purchased devices above the old tariff's base limit
         from app.database.crud.subscription import calc_device_limit_on_admin_tariff_change
@@ -1666,18 +1624,6 @@ async def update_user_subscription(
         )
 
     if request.action == 'activate':
-        # Проверка: нельзя активировать, если у пользователя уже есть
-        # другая активная подписка с тем же тарифом
-        if is_multi_tariff and subscription.tariff_id:
-            from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-            existing = await get_subscription_by_user_and_tariff(db, user.id, subscription.tariff_id)
-            if existing and existing.id != subscription.id:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail='Cannot activate: user already has an active subscription for this tariff',
-                )
-
         subscription.status = SubscriptionStatus.ACTIVE.value
         if subscription.end_date and subscription.end_date <= datetime.now(UTC):
             # Extend by 30 days if expired
@@ -1718,7 +1664,7 @@ async def update_user_subscription(
         await _sync_subscription_to_panel(db, user, subscription)
 
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        _enable_panel_user_id = subscription.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
+        _enable_panel_user_id = user.remnawave_id
         if _enable_panel_user_id and subscription.status == 'active':
             from app.services.subscription_service import SubscriptionService
 
@@ -2712,14 +2658,7 @@ async def reset_user_devices(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
 
     _rst_panel_user_id = None
-    if settings.is_multi_tariff_enabled() and subscription_id:
-        from app.database.crud.subscription import get_subscription_by_id_for_user
-
-        sub = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-        if sub:
-            _rst_panel_user_id = sub.remnawave_id
-    else:
-        _rst_panel_user_id = user.remnawave_id
+    _rst_panel_user_id = user.remnawave_id
 
     if not _rst_panel_user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='User has no panel account')
@@ -2845,11 +2784,7 @@ async def reset_user_trial(
     if subs:
         from app.database.crud.subscription import is_active_paid_subscription
 
-        # In multi-tariff: only delete trial subscriptions, keep paid ones
-        trial_subs = [s for s in subs if s.is_trial]
-        non_trial_subs = [s for s in subs if not s.is_trial]
-
-        subs_to_delete = trial_subs if (settings.is_multi_tariff_enabled() and non_trial_subs) else subs
+        subs_to_delete = subs
 
         if not subs_to_delete:
             logger.info('No trial subscriptions to delete', user_id=user_id)
@@ -2951,19 +2886,7 @@ async def disable_user(
             from app.services.subscription_service import SubscriptionService
 
             subscription_service = SubscriptionService()
-            if settings.is_multi_tariff_enabled():
-                for sub in subs:
-                    if sub.remnawave_id:
-                        try:
-                            await subscription_service.disable_remnawave_user(sub.remnawave_id, db=db)
-                        except Exception as error:
-                            logger.warning(
-                                'Не удалось отключить пользователя панели при деактивации',
-                                remnawave_id=sub.remnawave_id,
-                                error=str(error),
-                            )
-                panel_deactivated = True
-            elif user.remnawave_id:
+            if user.remnawave_id:
                 panel_deactivated = await subscription_service.disable_remnawave_user(user.remnawave_id, db=db)
             if panel_deactivated:
                 logger.info('Disabled Remnawave user(s)', user_id=user_id)
@@ -3185,12 +3108,7 @@ async def get_user_sync_status(
         bot_device_limit = active_sub.device_limit or 0
         bot_squads = active_sub.connected_squads or []
 
-    # In multi-tariff mode, the panel identity lives on subscription, not user
-    effective_panel_user_id = (
-        active_sub.remnawave_id
-        if settings.is_multi_tariff_enabled() and active_sub and active_sub.remnawave_id
-        else user.remnawave_id
-    )
+    effective_panel_user_id = user.remnawave_id
 
     # Panel data
     panel_found = False
@@ -3389,50 +3307,7 @@ async def sync_user_from_panel(
             # Find user in panel: panel id → telegram_id → email
             panel_user = None
 
-            if settings.is_multi_tariff_enabled():
-                if selected_sub and selected_sub.remnawave_id:
-                    # Specific subscription requested — use its panel id directly
-                    panel_user = await api.get_user_by_id(selected_sub.remnawave_id)
-                elif selected_sub and not selected_sub.remnawave_id:
-                    # The subscription lost its panel id (e.g. a spurious user.deleted
-                    # webhook wiped it). Re-link it to its live panel user by
-                    # telegram_id/email — but only UNAMBIGUOUSLY: choose a panel user that
-                    # is NOT already linked to another of this user's subscriptions, so we
-                    # never bind two subs to the same panel user (telegram_id is one-to-many
-                    # in multi-tariff). This is what makes the panel->bot repair work after
-                    # the sibling-expiry corruption.
-                    linked_ids = {s.remnawave_id for s in from_subs if s.id != selected_sub.id and s.remnawave_id}
-                    candidates = []
-                    if user.telegram_id:
-                        candidates = list(await api.find_users_by_telegram_id(user.telegram_id) or [])
-                    if not candidates and user.email:
-                        candidates = list(await api.find_users_by_email(user.email) or [])
-                    orphans = [pu for pu in candidates if pu.id not in linked_ids]
-                    if len(orphans) == 1:
-                        panel_user = orphans[0]
-                        changes['remnawave_id'] = {'old': None, 'new': panel_user.id}
-                        selected_sub.remnawave_id = panel_user.id
-                    elif len(orphans) > 1:
-                        raise HTTPException(
-                            status_code=status.HTTP_409_CONFLICT,
-                            detail=(
-                                'Multiple panel users match this account; cannot safely re-link '
-                                'this subscription. Resolve manually.'
-                            ),
-                        )
-                    else:
-                        raise HTTPException(
-                            status_code=status.HTTP_400_BAD_REQUEST,
-                            detail='This subscription is not linked to the panel and no matching panel user was found.',
-                        )
-                else:
-                    # No specific subscription — iterate all subscription panel ids
-                    sub_panel_user_ids = [s.remnawave_id for s in from_subs if s.remnawave_id]
-                    for _panel_user_id in sub_panel_user_ids:
-                        panel_user = await api.get_user_by_id(_panel_user_id)
-                        if panel_user:
-                            break
-            elif user.remnawave_id:
+            if user.remnawave_id:
                 panel_user = await api.get_user_by_id(user.remnawave_id)
 
             if not panel_user and user.telegram_id:
@@ -3455,9 +3330,7 @@ async def sync_user_from_panel(
             # По почте/Telegram находится и аккаунт второй записи того же человека
             # (#3245): перенос сюда подарил бы этой записи чужую оплату, а запись
             # users.remnawave_id упала бы на уникальности.
-            owner = await find_foreign_panel_owner(
-                db, user, selected_sub, panel_user.id, multi_tariff=settings.is_multi_tariff_enabled()
-            )
+            owner = await find_foreign_panel_owner(db, user, selected_sub, panel_user.id)
             if owner is not None and owner.user_id != user.id:
                 logger.warning(
                     'Sync from panel refused: panel account belongs to another bot user',
@@ -3501,8 +3374,7 @@ async def sync_user_from_panel(
             )
 
             # Update remnawave_id if different
-            # In multi-tariff mode the panel identity belongs to the subscription, not the user
-            if not settings.is_multi_tariff_enabled() and user.remnawave_id != panel_user.id:
+            if user.remnawave_id != panel_user.id:
                 changes['remnawave_id'] = {'old': user.remnawave_id, 'new': panel_user.id}
                 user.remnawave_id = panel_user.id
 
@@ -3549,11 +3421,9 @@ async def sync_user_from_panel(
                     policy=ADMIN_PULL if request.update_subscription else ROUTINE,
                     trust_status=request.update_subscription,
                 )
-                # Одиночный режим: аккаунт найден по пользователю, строка подписки могла
-                # остаться без id после старого импорта. В мультитарифе привязка выше.
-                if not settings.is_multi_tariff_enabled() and await link_subscription_panel_identity(
-                    db, sync_sub, panel_user.id
-                ):
+                # Аккаунт найден по пользователю, строка подписки могла
+                # остаться без id после старого импорта.
+                if await link_subscription_panel_identity(db, sync_sub, panel_user.id):
                     changes['subscription_remnawave_id'] = {'old': None, 'new': panel_user.id}
                 for field in sorted(changed_fields):
                     old_value = before[field]

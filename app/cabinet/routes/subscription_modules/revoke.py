@@ -44,16 +44,6 @@ async def revoke_subscription(
     if not fresh_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
 
-    if settings.is_multi_tariff_enabled() and not subscription_id:
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-        subscriptions = await get_active_subscriptions_by_user_id(db, fresh_user.id)
-        if len(subscriptions) > 1:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={'code': 'subscription_selection_required', 'message': 'Select the subscription to reissue'},
-            )
-
     subscription = await resolve_subscription(db, fresh_user, subscription_id)
     if not subscription:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')

@@ -37,22 +37,9 @@ router = APIRouter()
 async def _resolve_switch_subscription(
     db: AsyncSession, user: User, subscription_id: int | None
 ) -> Subscription | None:
-    """Never guess which subscription a multi-subscription switch will charge."""
+    """Подписка для смены тарифа: одна на человека."""
     if subscription_id is not None and subscription_id <= 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
-    if settings.is_multi_tariff_enabled() and subscription_id is None:
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-        subscriptions = await get_active_subscriptions_by_user_id(db, user.id)
-        if len(subscriptions) > 1:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    'code': 'subscription_selection_required',
-                    'message': 'Select the subscription to switch',
-                },
-            )
-        return subscriptions[0] if subscriptions else None
     return await resolve_subscription(db, user, subscription_id)
 
 
@@ -247,17 +234,6 @@ async def switch_tariff(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='No active subscription with tariff',
         )
-
-    # Guard: prevent switching to a tariff the user already owns (multi-tariff)
-    if settings.is_multi_tariff_enabled() and request.tariff_id:
-        from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-        existing_target = await get_subscription_by_user_and_tariff(db, user.id, request.tariff_id)
-        if existing_target and existing_target.id != resolved.id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail='You already have an active subscription for the target tariff',
-            )
 
     from app.database.crud.user import lock_user_for_pricing
 
@@ -565,11 +541,7 @@ async def switch_tariff(
 
     try:
         subscription_service = SubscriptionService()
-        _has_panel = (
-            getattr(subscription, 'remnawave_id', None)
-            if settings.is_multi_tariff_enabled()
-            else getattr(user, 'remnawave_id', None)
-        )
+        _has_panel = getattr(user, 'remnawave_id', None)
         if _has_panel:
             await subscription_service.update_remnawave_user(
                 db,
@@ -597,11 +569,7 @@ async def switch_tariff(
 
     # Reset all devices on tariff switch
     devices_reset = False
-    _switch_panel_user_id = (
-        subscription.remnawave_id
-        if settings.is_multi_tariff_enabled() and subscription.remnawave_id
-        else user.remnawave_id
-    )
+    _switch_panel_user_id = user.remnawave_id
     if _switch_panel_user_id:
         try:
             service = RemnaWaveService()

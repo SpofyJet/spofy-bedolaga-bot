@@ -27,7 +27,6 @@ from app.database.crud.subscription import (
     create_trial_subscription,
     decrement_subscription_server_counts,
     extend_subscription,
-    get_subscription_by_id_for_user,
     get_subscription_by_user_id,
     should_carry_trial_remaining_days,
 )
@@ -122,22 +121,6 @@ async def _persist_failed_refund(user_id: int, amount_kopeks: int, reason: str, 
 # ============ Full Purchase Flow (like MiniApp) ============
 
 purchase_service = MiniAppSubscriptionPurchaseService()
-
-
-async def _ensure_tariff_not_already_active(db: AsyncSession, user_id: int, tariff_id: int) -> None:
-    """Отказ, если у человека уже есть живая подписка этого тарифа.
-
-    Нужен там, где покупка переводит на тариф другую строку (старую подписку без
-    тарифа): частичный уникальный индекс «одна живая подписка на тариф» иначе
-    сработал бы уже после списания денег.
-    """
-    from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-    if await get_subscription_by_user_and_tariff(db, user_id, tariff_id) is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='You already have an active subscription for this tariff',
-        )
 
 
 async def _build_tariff_response(
@@ -419,25 +402,7 @@ async def get_purchase_options(
         promo_group_id = promo_group.id if promo_group else None
         tariffs = await get_tariffs_for_user(db, promo_group_id)
 
-        if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-            active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-            purchased_tariff_ids = {s.tariff_id for s in active_subs if s.tariff_id and not s.is_trial}
-
-            if subscription_id:
-                from app.database.crud.subscription import get_subscription_by_id_for_user
-
-                subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
-            elif active_subs:
-                _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
-                _pool = _non_daily or active_subs
-                subscription = max(_pool, key=lambda s: s.days_left)
-            else:
-                subscription = None
-        else:
-            purchased_tariff_ids = set()
-            subscription = await get_subscription_by_user_id(db, user.id)
+        subscription = await get_subscription_by_user_id(db, user.id)
         current_tariff_id = subscription.tariff_id if subscription else None
         language = user.language or 'ru'
 
@@ -459,11 +424,7 @@ async def get_purchase_options(
         tariff_responses = []
         for tariff in tariffs:
             tariff_data = await _build_tariff_response(db, tariff, current_tariff_id, language, user, subscription)
-            # In multi-tariff mode: mark purchased tariffs so frontend can filter them
-            if settings.is_multi_tariff_enabled() and tariff.id in purchased_tariff_ids:
-                tariff_data['is_purchased'] = True
-            else:
-                tariff_data['is_purchased'] = False
+            tariff_data['is_purchased'] = False
             tariff_responses.append(tariff_data)
 
         return {
@@ -476,10 +437,6 @@ async def get_purchase_options(
             'subscription_is_expired': subscription_is_expired,
             'subscription_on_free_tariff': subscription_on_free_tariff,
             'has_subscription': subscription is not None,
-            # Multi-tariff: all tariffs purchased flag for frontend fallback
-            'all_tariffs_purchased': len(purchased_tariff_ids) >= len(tariffs)
-            if settings.is_multi_tariff_enabled()
-            else False,
             # Направления смены тарифа
             'tariff_switch_upgrade_enabled': settings.TARIFF_SWITCH_UPGRADE_ENABLED,
             'tariff_switch_downgrade_enabled': settings.TARIFF_SWITCH_DOWNGRADE_ENABLED,
@@ -626,63 +583,7 @@ async def purchase_tariff(
         # logging "Тариф уже активен" — the exact production scenario
         # the bot-side fix already closed (commit 5cd53e4c).
         existing_subscription = None
-        if settings.is_multi_tariff_enabled():
-            if request.subscription_id is not None:
-                existing_subscription = await get_subscription_by_id_for_user(db, request.subscription_id, user.id)
-                if existing_subscription is None:
-                    raise HTTPException(status_code=404, detail='Subscription not found')
-                if existing_subscription is not None and existing_subscription.tariff_id is None:
-                    # Старая подписка (куплена в классике, тариф не задан): тариф
-                    # надевается на неё же — та же строка и тот же аккаунт панели,
-                    # у человека остаётся прежняя ссылка. Живая подписка этого
-                    # тарифа уже есть → отказ до списания, а не падение на
-                    # частичном уникальном индексе после.
-                    await _ensure_tariff_not_already_active(db, user.id, tariff.id)
-                elif existing_subscription and existing_subscription.tariff_id != tariff.id:
-                    # A paid switch must use the switch endpoint and its quote.
-                    # Discarding the explicit source would charge for a new
-                    # subscription (or renew a different one) instead.
-                    if not existing_subscription.is_trial and existing_subscription.actual_status in (
-                        'active',
-                        'limited',
-                    ):
-                        source_tariff = await get_tariff_by_id(db, existing_subscription.tariff_id)
-                        purchase_fallback = (
-                            settings.TARIFF_SWITCH_RESET_FREE_DAYS
-                            and source_tariff is not None
-                            and source_tariff.is_free
-                        )
-                        if not purchase_fallback:
-                            raise HTTPException(
-                                status_code=status.HTTP_409_CONFLICT,
-                                detail={
-                                    'code': 'subscription_tariff_mismatch',
-                                    'message': 'Для выбранной подписки требуется смена тарифа. '
-                                    'Обновите страницу и выберите «Сменить тариф».',
-                                },
-                            )
-                    # Trial/expired/free-source purchases retain their existing
-                    # conversion policy; they have no paid switch quote.
-                    logger.warning(
-                        'Cabinet purchase: explicit subscription_id has divergent tariff_id; falling back',
-                        request_subscription_id=request.subscription_id,
-                        pinned_tariff_id=existing_subscription.tariff_id,
-                        request_tariff_id=tariff.id,
-                        user_id=user.id,
-                    )
-                    existing_subscription = None
-            if existing_subscription is None:
-                from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-                # include_inactive=True so an EXPIRED (or disabled) trial of THIS
-                # tariff is found and converted in place via the extend branch
-                # below (same Remnawave user → same link). Without it the expired
-                # trial is invisible → killed → re-created with a new link.
-                existing_subscription = await get_subscription_by_user_and_tariff(
-                    db, user.id, tariff.id, include_inactive=True
-                )
-        else:
-            existing_subscription = await get_subscription_by_user_id(db, user.id)
+        existing_subscription = await get_subscription_by_user_id(db, user.id)
         if (
             is_daily_tariff
             and existing_subscription is not None
@@ -968,27 +869,10 @@ async def purchase_tariff(
             # TARIFF_SWITCH_RESET_FREE_DAYS перебивает TRIAL_ADD_REMAINING_DAYS_TO_PAID).
             _bonus_seconds = 0
             _now_trial = datetime.now(UTC)
-            # В мульти-тарифе create-ветка ниже (нет живой подписки покупаемого
-            # тарифа) НЕ должна глушить живой триал здесь: create_paid_subscription
-            # конвертирует его на месте (та же строка, тот же Remnawave-юзер и
-            # ссылка) вместо вставки новой подписки. Убив его заранее, мы бы
-            # спрятали кандидата от конверсии и вернули старое поведение — новый
-            # панельный юзер + мёртвый триал, висящий в кабинете. Его остаток
-            # дней переносит extend_subscription внутри конверсии, поэтому в
-            # _bonus_seconds кандидат не попадает — двойного начисления нет.
-            # resolve_trial_conversion_candidate повторяет приоритеты
-            # create_paid_subscription (в т.ч. вернёт None, когда сработает
-            # revive-ветка #3004) — тогда триал глушится по-старому: с переносом
-            # остатка и отключением панельного юзера в цикле ниже.
-            _conversion_trial = None
-            if subscription is None and settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import resolve_trial_conversion_candidate
-
-                _conversion_trial = await resolve_trial_conversion_candidate(db, user.id, tariff.id)
             killed_trials = await deactivate_user_trial_subscriptions(
                 db,
                 user.id,
-                exclude_subscription_id=subscription.id if subscription else getattr(_conversion_trial, 'id', None),
+                exclude_subscription_id=subscription.id if subscription else None,
             )
             if should_carry_trial_remaining_days():
                 for _kt in killed_trials:
@@ -1027,7 +911,7 @@ async def purchase_tariff(
                     **({'commit': False} if is_daily_tariff else {}),
                 )
             else:
-                # Create new subscription (или конверсия исключённого выше триала)
+                # Create new subscription
                 try:
                     subscription = await create_paid_subscription(
                         db=db,
@@ -1037,7 +921,6 @@ async def purchase_tariff(
                         device_limit=tariff.device_limit,
                         connected_squads=squads,
                         tariff_id=tariff.id,
-                        conversion_trial=_conversion_trial,
                         **({'commit': False} if is_daily_tariff else {}),
                     )
                 except IntegrityError:
@@ -1123,9 +1006,7 @@ async def purchase_tariff(
             if trial_sub.id == (subscription.id if subscription else None):
                 continue  # This trial became the paid subscription, don't disable
             try:
-                _trial_panel_user_id = trial_sub.remnawave_id or (
-                    getattr(user, 'remnawave_id', None) if not settings.is_multi_tariff_enabled() else None
-                )
+                _trial_panel_user_id = trial_sub.remnawave_id or getattr(user, 'remnawave_id', None)
                 if _trial_panel_user_id:
                     await service.disable_remnawave_user(_trial_panel_user_id)
                 await decrement_subscription_server_counts(db, trial_sub)
