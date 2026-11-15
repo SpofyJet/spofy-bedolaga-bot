@@ -50,7 +50,7 @@ def _stats(**changes) -> _StartupStats:
         'panel_status': 'на связи',
         'panel_latency_ms': 142,
         'maintenance': False,
-        'sales_mode': 'multi_tariff',
+        'sales_mode': 'tariffs',
     }
     return _StartupStats(**(base | changes))
 
@@ -88,7 +88,7 @@ def test_healthy_start_shows_every_section_and_no_warnings():
     assert '3 450 ₽' in text
     assert '24 012 ₽' in text, 'баланс — рублями целиком, а не «24.0K RUB»'
     assert '142 мс' in text
-    assert 'Режим продаж: мультитариф' in text
+    assert 'Режим продаж: тарифы' in text
     assert 'Требует внимания' not in text
 
 

@@ -19,7 +19,6 @@ import pytest
 
 import app.database.crud.subscription as crud_sub_mod
 import app.services.panel_sync.lease as lease_mod
-from app.config import Settings
 from app.database.models import SubscriptionStatus
 from app.services.remnawave_service import RemnaWaveService
 
@@ -93,49 +92,12 @@ def harness(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_adopts_existing_panel_user_instead_of_creating_a_duplicate(monkeypatch, harness):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    adopted = SimpleNamespace(id=8812, short_uuid='aBcD12', subscription_url='https://s/aBcD12')
-    harness.api.get_user_by_short_uuid.return_value = adopted
-    harness.api.update_user.return_value = SimpleNamespace(
-        id=8812, short_uuid='aBcD12', subscription_url='https://s/aBcD12', happ_crypto_link=None
-    )
-
-    stats = await harness.service.sync_users_to_panel(_db())
-
-    harness.api.create_user.assert_not_awaited()
-    harness.api.get_user_by_short_uuid.assert_awaited_once_with('aBcD12')
-    assert stats['updated'] == 1 and stats['created'] == 0, 'адопт — это update, а не create'
-    # Идентичность обязана сохраниться, иначе СЛЕДУЮЩИЙ синк снова создаст дубль.
-    assert harness.subscription.remnawave_id == 8812
-    kwargs = harness.api.update_user.await_args.kwargs
-    assert kwargs['user_id'] == 8812
-    assert 'username' not in kwargs, 'username — create-only; PATCH переименовал бы аккаунт'
-
-
-@pytest.mark.asyncio
-async def test_creates_when_the_panel_does_not_know_the_short_uuid(monkeypatch, harness):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    harness.api.get_user_by_short_uuid.return_value = None
-    harness.api.create_user.return_value = SimpleNamespace(
-        id=9001, short_uuid='new', subscription_url='https://s/new', happ_crypto_link=None
-    )
-
-    stats = await harness.service.sync_users_to_panel(_db())
-
-    harness.api.create_user.assert_awaited_once()
-    assert stats['created'] == 1
-    assert harness.subscription.remnawave_id == 9001
-
-
-@pytest.mark.asyncio
 async def test_single_tariff_writes_identity_onto_the_user(monkeypatch, harness):
     """Мутация «поменять ветки местами» схлопывала все подписки юзера на один id.
 
     В single-tariff сначала работают фолбэки по telegram_id/email — гасим их,
     чтобы дойти именно до подхвата по shortUuid.
     """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     harness.api.find_users_by_telegram_id.return_value = []
     harness.api.find_users_by_email.return_value = []
     adopted = SimpleNamespace(id=8812, short_uuid='aBcD12', subscription_url='https://s/aBcD12')
@@ -152,70 +114,3 @@ async def test_single_tariff_writes_identity_onto_the_user(monkeypatch, harness)
     # link_subscription_panel_identity). Именно этот id читают админские экраны
     # по выбранной подписке; раньше массовый проход оставлял их без адреса.
     assert harness.subscription.remnawave_id == 8812
-
-
-@pytest.mark.asyncio
-async def test_update_branch_does_not_wipe_squads_when_the_local_list_is_empty(monkeypatch, harness):
-    """Сиблинг того же дефекта: ветка обновления по УЖЕ известному id.
-
-    `[]` в connected_squads — это дефолт колонки и результат «сброса подписки»,
-    а не решение админа. Отправив его в PATCH, синк снял бы у живого аккаунта
-    все инбаунды: он остался бы ACTIVE, но конфигов не отдавал бы.
-    """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    harness.subscription.remnawave_id = 8812
-    harness.subscription.connected_squads = []
-    harness.api.update_user.return_value = SimpleNamespace(
-        id=8812, short_uuid='aBcD12', subscription_url='https://s/x', happ_crypto_link=None
-    )
-
-    await harness.service.sync_users_to_panel(_db())
-
-    kwargs = harness.api.update_user.await_args.kwargs
-    assert 'active_internal_squads' not in kwargs
-
-
-@pytest.mark.asyncio
-async def test_update_branch_forwards_a_non_empty_squad_list(monkeypatch, harness):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    harness.subscription.remnawave_id = 8812
-    harness.subscription.connected_squads = ['squad-1']
-    harness.api.update_user.return_value = SimpleNamespace(
-        id=8812, short_uuid='aBcD12', subscription_url='https://s/x', happ_crypto_link=None
-    )
-
-    await harness.service.sync_users_to_panel(_db())
-
-    assert harness.api.update_user.await_args.kwargs['active_internal_squads'] == ['squad-1']
-
-
-@pytest.mark.asyncio
-async def test_identity_is_written_into_the_session_that_owns_the_locked_row(monkeypatch, harness):
-    """Связь пишется в сессию лизы, а не в общую сессию прохода.
-
-    Лиза грейса открывает СВОЮ сессию и отдаёт подписку, привязанную к ней:
-    так продление, закоммиченное пока проход ждал блокировку, побеждает. Если
-    писать связь в общую сессию прохода, изменения уезжают мимо транзакции,
-    которая их коммитит, а пять параллельных задач начинают одновременно ходить
-    в один объект сессии — SQLAlchemy этого не допускает.
-    """
-    lease_db = _db()
-    shared_db = _db()
-
-    @asynccontextmanager
-    async def fake_lease(subscription_id):
-        yield SimpleNamespace(allowed=True, subscription=harness.subscription, db=lease_db)
-
-    monkeypatch.setattr(lease_mod, 'subscription_update_lease', fake_lease)
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    harness.api.get_user_by_short_uuid.return_value = SimpleNamespace(
-        id=8812, short_uuid='aBcD12', subscription_url='https://s/aBcD12'
-    )
-    harness.api.update_user.return_value = SimpleNamespace(
-        id=8812, short_uuid='aBcD12', subscription_url='https://s/aBcD12', happ_crypto_link=None, expire_at=None
-    )
-
-    await harness.service.sync_users_to_panel(shared_db)
-
-    assert lease_db.execute.await_count, 'проверка занятости id ушла не в сессию лизы'
-    assert not shared_db.execute.await_count, 'общая сессия прохода не должна получать запросы из задач'

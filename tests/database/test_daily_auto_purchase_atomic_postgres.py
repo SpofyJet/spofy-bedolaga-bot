@@ -39,10 +39,8 @@ async def test_daily_auto_activation_is_atomic(
     failure,
     first_flow='auto',
     second_flow='auto',
-    multi=True,
     trial=False,
 ):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'MAX_DEVICES_LIMIT', 10)
     monkeypatch.setattr(settings, 'TARIFF_SWITCH_RESET_FREE_DAYS', True)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
@@ -311,9 +309,8 @@ async def test_daily_manual_failure_rolls_back_before_retry(
 
 
 @pytest.mark.parametrize('flow', ['telegram', 'cabinet'])
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('promo', [0, 17, 100])
-async def test_daily_trial_conversion_and_auto_overlap(postgres_database, monkeypatch, flow, multi, promo):
+async def test_daily_trial_conversion_and_auto_overlap(postgres_database, monkeypatch, flow, promo):
     await test_daily_auto_activation_is_atomic(
         postgres_database,
         monkeypatch,
@@ -322,7 +319,6 @@ async def test_daily_trial_conversion_and_auto_overlap(postgres_database, monkey
         None,
         first_flow=flow,
         second_flow='auto',
-        multi=multi,
         trial=True,
     )
 
@@ -339,5 +335,4 @@ async def test_daily_single_subscription_manual_and_auto_overlap(postgres_databa
         None,
         first_flow=flow,
         second_flow='auto',
-        multi=False,
     )

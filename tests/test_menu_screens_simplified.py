@@ -86,7 +86,6 @@ async def test_old_settings_back_button_lands_on_the_subscription_screen(monkeyp
 
     shown = AsyncMock()
     monkeypatch.setattr(purchase, 'show_subscription_info', shown)
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False, raising=False)
     monkeypatch.setattr(tariff_crud, 'get_tariff_by_id', AsyncMock(return_value=SimpleNamespace(id=2)))
     user = MagicMock(language='ru', subscription=SimpleNamespace(is_trial=False, tariff_id=2))
     callback = MagicMock(answer=AsyncMock(), message=MagicMock(edit_text=AsyncMock()))
@@ -149,6 +148,5 @@ def test_devices_screen_offers_link_reissue(monkeypatch):
     from app.utils.pagination import paginate_list
 
     monkeypatch.setattr(settings, 'SUBSCRIPTION_REVOKE_ENABLED', True, raising=False)
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False, raising=False)
     kb = inline.get_devices_management_keyboard([], paginate_list([], 1, 5), 'ru')
     assert 'subscription_revoke' in _flat(kb)

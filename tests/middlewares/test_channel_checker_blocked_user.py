@@ -166,7 +166,6 @@ async def _run_deactivation(monkeypatch, send_error):
     monkeypatch.setattr(mw, 'SubscriptionService', lambda: SimpleNamespace(disable_remnawave_user=AsyncMock()))
     monkeypatch.setattr(mw.channel_subscription_service, 'should_disable_subscription', lambda ch, is_trial: True)
     monkeypatch.setattr(type(settings), 'is_notifications_enabled', lambda self: True)
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
 
     bot = MagicMock()
     bot.send_message = AsyncMock(side_effect=send_error)

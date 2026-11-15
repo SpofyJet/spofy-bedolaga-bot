@@ -12,9 +12,7 @@ from app.config import settings
 from app.database.crud import transaction as transaction_crud, user as user_crud
 from app.database.models import (
     Base,
-    ServerSquad,
     Subscription,
-    SubscriptionServer,
     Transaction,
     User,
 )
@@ -41,7 +39,6 @@ TABLES = list(Base.metadata.sorted_tables)
 
 @pytest.fixture(autouse=True)
 def isolated_purchase(monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', False)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)
@@ -296,53 +293,3 @@ async def test_auxiliary_rollback_does_not_report_paid_purchase_as_failure(postg
         assert len(list(await db.scalars(select(Transaction)))) == 1
         if stage == 'servers':
             assert not list(await db.scalars(select(Subscription).where(Subscription.is_trial.is_(True))))
-
-
-@pytest.mark.parametrize('failure', ['exception', 'none'])
-async def test_panel_failure_keeps_server_counters_and_trial_decrements(
-    postgres_database, monkeypatch, isolated_purchase, failure
-):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    async with postgres_sessions(postgres_database, TABLES) as (db, observer):
-        context, pricing, old_end = await _prepare(db)
-        paid_server = ServerSquad(squad_uuid='paid-squad', display_name='Paid', current_users=0)
-        trial_server = ServerSquad(squad_uuid='trial-squad', display_name='Trial', current_users=1)
-        trial = Subscription(
-            user_id=context.user.id,
-            is_trial=True,
-            status='trial',
-            start_date=datetime.now(UTC),
-            end_date=datetime.now(UTC) + timedelta(days=2),
-            connected_squads=['trial-squad'],
-            remnawave_id=777,
-        )
-        db.add_all([paid_server, trial_server, trial])
-        await db.commit()
-        pricing.server_ids = [paid_server.id]
-        pricing.server_prices_for_period = [0]
-        pricing.selection.servers = ['paid-squad']
-        counters_at_panel = []
-
-        async def record_counters(*args, **kwargs):
-            counts = await observer.execute(select(ServerSquad.squad_uuid, ServerSquad.current_users))
-            counters_at_panel.append(dict(counts.all()))
-            await observer.rollback()
-
-        async def fail_panel(*args, **kwargs):
-            await record_counters()
-            # No internal rollback: checkout must itself preserve flushed counters.
-            if failure == 'exception':
-                raise TimeoutError('synthetic panel failure')
-
-        isolated_purchase.disable_remnawave_user.side_effect = record_counters
-        isolated_purchase.update_remnawave_user.side_effect = fail_panel
-        result = await purchase.MiniAppSubscriptionPurchaseService().submit_purchase(db, context, pricing)
-        await observer.rollback()
-        counts = dict((await observer.execute(select(ServerSquad.squad_uuid, ServerSquad.current_users))).all())
-        expected = {'paid-squad': 1, 'trial-squad': 0}
-        assert counts == expected
-        assert counters_at_panel == [expected, expected]
-        links = list(await observer.scalars(select(SubscriptionServer)))
-        assert len(links) == 1
-        assert links[0].subscription_id == result['subscription'].id
-        assert len(list(await observer.scalars(select(Transaction)))) == 1

@@ -5,7 +5,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-from app.config import Settings
 from app.handlers.subscription import tariff_purchase as m
 
 
@@ -79,7 +78,6 @@ async def test_show_tariffs_list_multiple_tariffs_shows_list(monkeypatch):
     monkeypatch.setattr(m, '_proceed_with_selected_tariff', proceed)
     monkeypatch.setattr(m, 'format_tariffs_list_text', MagicMock(return_value='LIST TEXT'))
     monkeypatch.setattr(m, 'get_tariffs_keyboard', MagicMock(return_value='LIST KB'))
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
 
     callback = _callback()
     await m.show_tariffs_list.__wrapped__(callback, _user(), AsyncMock(), _state())
@@ -111,7 +109,6 @@ async def test_proceed_skip_selection_uses_back_to_menu(monkeypatch):
     tariff = _period_tariff(42)
     periods_kb = MagicMock(name='periods_kb')
 
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr(m, 'get_tariff_by_id', AsyncMock(return_value=tariff))
     monkeypatch.setattr(m, 'get_subscription_by_user_id', AsyncMock(return_value=None))
     monkeypatch.setattr(m, 'format_tariff_info_for_user', MagicMock(return_value='INFO'))
@@ -131,7 +128,6 @@ async def test_proceed_normal_selection_uses_menu_buy_back(monkeypatch):
     tariff = _period_tariff(77)
     periods_kb = MagicMock(name='periods_kb')
 
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr(m, 'get_tariff_by_id', AsyncMock(return_value=tariff))
     monkeypatch.setattr(m, 'get_subscription_by_user_id', AsyncMock(return_value=None))
     monkeypatch.setattr(m, 'format_tariff_info_for_user', MagicMock(return_value='INFO'))
@@ -183,32 +179,3 @@ async def test_back_target_survives_a_redraw_of_the_custom_screen(monkeypatch):
     assert captured.get('back_callback') == 'back_to_menu', (
         'после перерисовки «Назад» снова ведёт на пропущенный экран — получится петля'
     )
-
-
-async def test_single_owned_tariff_shows_the_list_instead_of_a_dead_button(monkeypatch):
-    """Если покупать нечего, пропуск превращает «Купить» в мёртвую кнопку.
-
-    В мультитарифе `_proceed_with_selected_tariff` на уже активном тарифе только
-    показывает всплывающее уведомление и выходит, ничего не перерисовывая. При
-    пропуске списка пользователь жмёт «Купить подписку» и остаётся на прежнем
-    экране без объяснений. Список в этом случае нужен: тариф в нём помечен.
-    """
-    tariff = SimpleNamespace(id=42, name='Единственный')
-    proceed = AsyncMock()
-
-    monkeypatch.setattr(m, 'get_tariffs_for_user', AsyncMock(return_value=[tariff]))
-    monkeypatch.setattr(m, '_proceed_with_selected_tariff', proceed)
-    monkeypatch.setattr(m, 'format_tariffs_list_text', MagicMock(return_value='LIST TEXT'))
-    monkeypatch.setattr(m, 'get_tariffs_keyboard', MagicMock(return_value='LIST KB'))
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-
-    import app.database.crud.subscription as sub_crud
-
-    owned = SimpleNamespace(tariff_id=42, is_trial=False)
-    monkeypatch.setattr(sub_crud, 'get_active_subscriptions_by_user_id', AsyncMock(return_value=[owned]))
-
-    callback = _callback()
-    await m.show_tariffs_list.__wrapped__(callback, _user(), AsyncMock(), _state())
-
-    proceed.assert_not_awaited()
-    callback.message.edit_text.assert_awaited_once(), 'пользователю должен показаться список, а не пустой экран'

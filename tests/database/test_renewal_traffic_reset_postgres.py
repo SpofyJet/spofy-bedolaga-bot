@@ -17,14 +17,10 @@ pytestmark = pytest.mark.postgres
 
 @pytest.mark.parametrize('reset', [False, True])
 @pytest.mark.parametrize('expired', [False, True])
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('panel_exists', [False, True])
-async def test_paid_renewal_resets_bot_and_panel_together(
-    postgres_database, monkeypatch, reset, expired, multi, panel_exists
-):
+async def test_paid_renewal_resets_bot_and_panel_together(postgres_database, monkeypatch, reset, expired, panel_exists):
     monkeypatch.setattr(settings, 'TRAFFIC_SELECTION_MODE', 'fixed_with_topup')
     monkeypatch.setattr(settings, 'FIXED_TRAFFIC_LIMIT_GB', 100)
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', reset)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)
     monkeypatch.setattr(renewal, 'with_admin_notification_service', AsyncMock())

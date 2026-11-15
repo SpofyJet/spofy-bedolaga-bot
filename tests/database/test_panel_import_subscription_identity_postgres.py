@@ -19,7 +19,6 @@ from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext
 from sqlalchemy import select
 
-from app.config import Settings
 from app.database.models import Subscription, SubscriptionStatus, User
 from app.services.remnawave_service import RemnaWaveService
 from tests.fixtures.postgres_db import postgres_session
@@ -67,12 +66,6 @@ def _subscription(user: User, *, short_id: str, status: str = SubscriptionStatus
     )
 
 
-@pytest.fixture
-def single_tariff(monkeypatch):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
-
-
-@pytest.mark.usefixtures('single_tariff')
 async def test_created_from_panel_carries_panel_id(postgres_database):
     async with postgres_session(postgres_database, TABLES) as db:
         user = await _user(db, 777001, remnawave_id=2)
@@ -84,7 +77,6 @@ async def test_created_from_panel_carries_panel_id(postgres_database):
         assert subscription.remnawave_id == 2
 
 
-@pytest.mark.usefixtures('single_tariff')
 async def test_update_from_panel_binds_row_left_empty_by_old_import(postgres_database, monkeypatch):
     async with postgres_session(postgres_database, TABLES) as db:
         user = await _user(db, 777002, remnawave_id=5)

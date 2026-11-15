@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.config import settings
-from app.handlers.subscription import devices, my_subscriptions
+from app.handlers.subscription import devices
 
 
 @pytest.fixture
@@ -29,8 +29,6 @@ def link_env(monkeypatch):
         connected_squads=[],
         autopay_enabled=False,
     )
-    monkeypatch.setattr(my_subscriptions, 'get_subscription_by_id_for_user', AsyncMock(return_value=sub))
-    monkeypatch.setattr(my_subscriptions, '_build_subscription_detail_keyboard', lambda *a, **k: None)
     monkeypatch.setattr(devices, '_resolve_subscription', AsyncMock(return_value=(sub, 7)))
     monkeypatch.setattr(devices, 'get_device_management_help_keyboard', lambda *a: None)
     monkeypatch.setattr(type(settings), 'is_devices_selection_enabled', lambda self: False)
@@ -40,18 +38,13 @@ def link_env(monkeypatch):
 @pytest.mark.asyncio
 @pytest.mark.parametrize('mode', ['guide', 'happ_cryptolink'])
 @pytest.mark.parametrize('hidden', [False, True])
-@pytest.mark.parametrize('surface', ['multi-card', 'device-help'])
-async def test_text_surfaces_use_display_link_and_existing_hide_policy(monkeypatch, link_env, mode, hidden, surface):
+async def test_device_help_uses_display_link_and_existing_hide_policy(monkeypatch, link_env, mode, hidden):
     monkeypatch.setattr(settings, 'CONNECT_BUTTON_MODE', mode)
     monkeypatch.setattr(settings, 'HIDE_SUBSCRIPTION_LINK', hidden)
     user = SimpleNamespace(id=1, language='ru')
     callback = SimpleNamespace(data='sub_view:7', answer=AsyncMock(), message=SimpleNamespace(edit_text=AsyncMock()))
-    if surface == 'multi-card':
-        await my_subscriptions.show_subscription_detail(callback, user, AsyncMock(), AsyncMock())
-        text = callback.message.edit_text.await_args.args[0]
-    else:
-        await devices.show_device_connection_help(callback, user, AsyncMock(), AsyncMock())
-        text = callback.message.edit_text.await_args.args[0]
+    await devices.show_device_connection_help(callback, user, AsyncMock(), AsyncMock())
+    text = callback.message.edit_text.await_args.args[0]
     # Crypto links remain visible under the existing shared Happ policy, never raw URLs.
     if mode == 'happ_cryptolink':
         assert link_env.subscription_crypto_link in text

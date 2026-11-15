@@ -12,7 +12,6 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.config import settings
 from app.database.crud.user import get_user_by_id
 from app.database.models import Base, Subscription, Tariff, Transaction, User
 from app.handlers.subscription import tariff_purchase as telegram
@@ -25,13 +24,11 @@ pytestmark = pytest.mark.postgres
 
 
 @pytest.mark.parametrize('entry', ['auto_daily', 'restore_daily', 'restore_period'])
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('source_status', ['active', 'expired'])
 @pytest.mark.parametrize('target_exists', [False, True])
-async def test_saved_source_change_respects_multi_selection_and_single_switch_policy(
-    postgres_database, monkeypatch, entry, multi, source_status, target_exists
+async def test_saved_source_change_respects_single_switch_policy(
+    postgres_database, monkeypatch, entry, source_status, target_exists
 ):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     quote = AsyncMock(side_effect=AssertionError('stale source reached pricing'))
     monkeypatch.setattr(pricing_engine, 'calculate_tariff_purchase_price', quote)
     now = datetime.now(UTC)
@@ -90,8 +87,7 @@ async def test_saved_source_change_respects_multi_selection_and_single_switch_po
         async with maker() as db:
             user = await get_user_by_id(db, 1)
             # Single mode already supports switching the primary subscription.
-            # Preserve that contract; multi mode pins the saved source identity.
-            allowed_quote = not multi and (entry != 'auto_daily' or not target_exists)
+            allowed_quote = entry != 'auto_daily' or not target_exists
             if entry == 'auto_daily':
                 if allowed_quote:
                     with pytest.raises(AssertionError, match='stale source reached pricing'):

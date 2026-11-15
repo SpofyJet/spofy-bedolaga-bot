@@ -61,12 +61,6 @@ def _subscription(**overrides) -> SimpleNamespace:
 
 async def test_combo_applies_both_days_and_balance(monkeypatch):
     """Оба эффекта применяются: подписка продлена И баланс пополнен."""
-    monkeypatch.setattr(
-        type(__import__('app.config', fromlist=['settings']).settings),
-        'is_multi_tariff_enabled',
-        lambda self: False,
-        raising=False,
-    )
     service = _service(monkeypatch)
 
     sub = _subscription()
@@ -89,12 +83,6 @@ async def test_combo_applies_both_days_and_balance(monkeypatch):
 async def test_combo_days_failure_prevents_balance_credit(monkeypatch):
     """Нет подписки → блок дней падает ДО начисления баланса: add_user_balance
     не вызывается, activate откатит активацию целиком — без подарённых денег."""
-    monkeypatch.setattr(
-        type(__import__('app.config', fromlist=['settings']).settings),
-        'is_multi_tariff_enabled',
-        lambda self: False,
-        raising=False,
-    )
     service = _service(monkeypatch)
 
     monkeypatch.setattr('app.services.promocode_service.get_subscription_by_user_id', AsyncMock(return_value=None))
@@ -158,12 +146,6 @@ def test_cabinet_bonus_set_requires_at_least_one_component():
 
 async def test_combo_grants_traffic(monkeypatch):
     """Трафик из набора начисляется той же подписке, что и дни."""
-    monkeypatch.setattr(
-        type(__import__('app.config', fromlist=['settings']).settings),
-        'is_multi_tariff_enabled',
-        lambda self: False,
-        raising=False,
-    )
     service = _service(monkeypatch)
 
     sub = _subscription()
@@ -183,12 +165,6 @@ async def test_combo_grants_traffic(monkeypatch):
 
 async def test_combo_without_traffic_does_not_touch_it(monkeypatch):
     """traffic_gb=0 — начисления нет, старые коды ведут себя как прежде."""
-    monkeypatch.setattr(
-        type(__import__('app.config', fromlist=['settings']).settings),
-        'is_multi_tariff_enabled',
-        lambda self: False,
-        raising=False,
-    )
     service = _service(monkeypatch)
 
     sub = _subscription()
@@ -209,12 +185,6 @@ async def test_traffic_reactivates_limited_subscription(monkeypatch):
     Без реактивации гигабайты лягут в базу, а в панель уедет тот же LIMITED:
     человек получит бонус и останется без доступа.
     """
-    monkeypatch.setattr(
-        type(__import__('app.config', fromlist=['settings']).settings),
-        'is_multi_tariff_enabled',
-        lambda self: False,
-        raising=False,
-    )
     panel = SimpleNamespace(update_remnawave_user=AsyncMock(), enable_remnawave_user=AsyncMock())
     service = _service(monkeypatch, panel)
 
@@ -246,12 +216,6 @@ async def test_traffic_not_granted_on_unlimited_subscription(monkeypatch):
     Иначе код сгорает, а пользователю рапортуют о гигабайтах, которых он
     не получил.
     """
-    monkeypatch.setattr(
-        type(__import__('app.config', fromlist=['settings']).settings),
-        'is_multi_tariff_enabled',
-        lambda self: False,
-        raising=False,
-    )
     service = _service(monkeypatch)
 
     sub = _subscription(traffic_limit_gb=0)
@@ -273,12 +237,6 @@ async def test_target_subscription_picked_once_per_activation(monkeypatch):
     Второй независимый выбор в мультитарифе может вернуть другую строку, и
     один код разложится по разным подпискам.
     """
-    monkeypatch.setattr(
-        type(__import__('app.config', fromlist=['settings']).settings),
-        'is_multi_tariff_enabled',
-        lambda self: False,
-        raising=False,
-    )
     service = _service(monkeypatch)
 
     sub = _subscription()
@@ -308,12 +266,6 @@ async def test_traffic_only_applies_to_the_bonus_set_type(monkeypatch):
     Поле есть у всех строк промокодов, поэтому без проверки типа сюда попал бы
     и код «только дни», у которого трафик выставили по ошибке.
     """
-    monkeypatch.setattr(
-        type(__import__('app.config', fromlist=['settings']).settings),
-        'is_multi_tariff_enabled',
-        lambda self: False,
-        raising=False,
-    )
     service = _service(monkeypatch)
 
     sub = _subscription()
@@ -335,12 +287,6 @@ async def test_traffic_only_on_unlimited_does_not_burn_the_code(monkeypatch):
     откатываются только через исключение. Вернуть общий успех значит забрать у
     человека единственную попытку и не дать ничего.
     """
-    monkeypatch.setattr(
-        type(__import__('app.config', fromlist=['settings']).settings),
-        'is_multi_tariff_enabled',
-        lambda self: False,
-        raising=False,
-    )
     service = _service(monkeypatch)
 
     sub = _subscription(traffic_limit_gb=0)
@@ -355,12 +301,6 @@ async def test_traffic_only_on_unlimited_does_not_burn_the_code(monkeypatch):
 
 async def test_unlimited_subscription_keeps_other_bonuses(monkeypatch):
     """Если в наборе есть что-то ещё — оно начисляется, а код не откатывается."""
-    monkeypatch.setattr(
-        type(__import__('app.config', fromlist=['settings']).settings),
-        'is_multi_tariff_enabled',
-        lambda self: False,
-        raising=False,
-    )
     service = _service(monkeypatch)
 
     sub = _subscription(traffic_limit_gb=0)

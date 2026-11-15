@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.config import settings
 from app.database.models import SubscriptionStatus
 from app.services import monitoring_service as monitoring_module
 from app.services.monitoring_service import MonitoringService
@@ -87,7 +86,6 @@ def _subscription(user):
 
 @pytest.fixture(autouse=True)
 def _wiring(monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(
         NotificationSettingsService, 'are_notifications_globally_enabled', classmethod(lambda cls: True)
     )

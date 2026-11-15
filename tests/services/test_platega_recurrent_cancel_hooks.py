@@ -436,7 +436,6 @@ async def test_delete_user_account_cancels_platega_for_each_subscription(monkeyp
     ~400-line function's downstream DB operations — the cancels must already
     have happened by then.
     """
-    from app.config import Settings
     from app.services.user_service import UserService
 
     recorded: list[tuple[object, int]] = []
@@ -444,14 +443,14 @@ async def test_delete_user_account_cancels_platega_for_each_subscription(monkeyp
     async def fake_cancel(db, subscription_id):
         recorded.append((db, subscription_id))
 
-    def stop_after_cancel(self):
+    def stop_after_cancel(_subscription):
         raise RuntimeError('stop after cancel')
 
     monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', fake_cancel)
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', stop_after_cancel)
+    monkeypatch.setattr('app.database.crud.subscription.is_active_paid_subscription', stop_after_cancel)
 
     subs = [SimpleNamespace(id=11, remnawave_id=None), SimpleNamespace(id=12, remnawave_id=None)]
-    user = SimpleNamespace(id=5, telegram_id=555, email=None, subscriptions=subs, remnawave_id=None)
+    user = SimpleNamespace(id=5, telegram_id=555, email=None, subscriptions=subs, remnawave_id=77)
     monkeypatch.setattr('app.services.user_service.get_user_by_id', AsyncMock(return_value=user))
 
     db = AsyncMock()

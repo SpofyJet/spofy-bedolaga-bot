@@ -14,7 +14,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.config import settings
 from app.database.models import Base, Subscription, SubscriptionStatus, User
 from app.services.subscription_service import SubscriptionService
 from tests.fixtures.sqlite_memory import memory_session
@@ -60,23 +59,11 @@ def _spy(monkeypatch) -> tuple[AsyncMock, AsyncMock]:
     return create, update
 
 
-def _multi_tariff(monkeypatch, enabled: bool) -> None:
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', enabled)
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ('multi', 'user_panel_id', 'sub_panel_id', 'expected'),
-    [
-        (True, None, None, 'created'),
-        (True, 777, None, 'created'),  # в мультитарифе id пользователя не считается
-        (True, None, 555, 'updated'),
-        (False, None, None, 'created'),
-        (False, 777, None, 'updated'),  # вне мультитарифа панельный аккаунт один — у пользователя
-    ],
+    ('user_panel_id', 'sub_panel_id', 'expected'), [(None, None, 'created'), (777, None, 'updated')]
 )
-async def test_sync_picks_create_or_update_by_panel_id(monkeypatch, multi, user_panel_id, sub_panel_id, expected):
-    _multi_tariff(monkeypatch, multi)
+async def test_sync_picks_create_or_update_by_panel_id(monkeypatch, user_panel_id, sub_panel_id, expected):
     create, update = _spy(monkeypatch)
     async with memory_session(monkeypatch, TABLES) as db:
         db.add(_user(user_panel_id))
@@ -98,7 +85,6 @@ async def test_sync_picks_create_or_update_by_panel_id(monkeypatch, multi, user_
 @pytest.mark.asyncio
 async def test_missing_user_falls_to_create_which_reports_it(monkeypatch):
     """Пользователя нет в базе: не падаем, create сам залогирует и вернёт None."""
-    _multi_tariff(monkeypatch, False)
     create, update = _spy(monkeypatch)
     async with memory_session(monkeypatch, TABLES) as db:
         subscription = _subscription(None)

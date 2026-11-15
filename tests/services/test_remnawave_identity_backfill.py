@@ -333,35 +333,6 @@ async def test_sibling_rows_of_one_user_are_not_a_conflict(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_multi_tariff_never_fills_the_user_level_column(monkeypatch):
-    """В multi-tariff `users.remnawave_id` обязан остаться пустым.
-
-    Идентичность там живёт на подписке, а колонка на User исторически пуста —
-    именно поэтому около десятка фолбэков `sub.remnawave_id or
-    user.remnawave_id` безопасно пропускали панель. Заполнив её, бэкфил оживил
-    бы их, и подписка с неразрезолвленным id начала бы адресовать панельный
-    аккаунт СОСЕДНЕГО тарифа.
-
-    Гейта по `users.remnawave_uuid` мало: инсталляция, начинавшая в
-    single-tariff и переключённая на multi, несёт эту колонку заполненной.
-    """
-    from app.config import Settings
-
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    async with memory_session(
-        monkeypatch, [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
-    ) as db:
-        await _seed(db, subs=[(20, 'abc123', 'legacy-uuid')])
-        _patch_roster(monkeypatch, [panel_user(77, short_uuid='abc123', username='u', telegram_id=551)])
-
-        await backfill_remnawave_ids(db, dry_run=False)
-
-        db.expunge_all()
-        assert (await db.get(SubModel, 20)).remnawave_id == 77, 'подписка обязана быть привязана'
-        assert (await db.get(UserModel, 1)).remnawave_id is None, 'колонка на User должна остаться пустой'
-
-
-@pytest.mark.asyncio
 async def test_rerun_does_not_invent_a_conflict_for_a_sibling(monkeypatch):
     """Повторный прогон — штатный сценарий, а не исключение.
 
@@ -409,30 +380,6 @@ async def test_live_subscription_wins_the_panel_id_not_the_expired_one(monkeypat
         db.expunge_all()
         assert (await db.get(SubModel, 10)).remnawave_id == 77, 'живая подписка обязана получить id'
         assert (await db.get(SubModel, 20)).remnawave_id is None
-
-
-@pytest.mark.asyncio
-async def test_multi_tariff_shared_account_is_skipped_locally_not_aborted(monkeypatch):
-    """Общий аккаунт в multi-tariff ненормален, но не должен ронять весь прогон.
-
-    Инсталляция, переключённая из single-tariff в multi, штатно несёт такие
-    пары. Откат из-за одной пары заблокировал бы миграцию целиком, а строка и
-    так остаётся без id — записывать нечего.
-    """
-    from app.config import Settings
-
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
-    async with memory_session(monkeypatch, tables) as db:
-        await _seed(db, subs=[(10, 'dup', 'uuid-a'), (20, 'dup', 'uuid-b')])
-        _patch_roster(monkeypatch, [panel_user(77, short_uuid='dup', username='u', telegram_id=551)])
-
-        report = await backfill_remnawave_ids(db, dry_run=False)
-
-        assert report.conflicts == [], 'одна пара не должна ронять весь прогон'
-        db.expunge_all()
-        ids = {(await db.get(SubModel, 10)).remnawave_id, (await db.get(SubModel, 20)).remnawave_id}
-        assert ids == {77, None}, 'id достаётся одной строке, вторая остаётся в отчёте'
 
 
 @pytest.mark.asyncio
@@ -564,34 +511,6 @@ def _grace(session_id, subscription_id, remnawave_uuid, *, state='active'):
         grace_until=datetime(2026, 2, 1, tzinfo=UTC),
         updated_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
-
-
-@pytest.mark.asyncio
-async def test_multi_tariff_sibling_session_resolves_by_its_own_uuid(monkeypatch):
-    """Мультитариф: сессия на «сиблинге» тоже обязана получить идентичность.
-
-    Две подписки одного пользователя смотрят на один панельный аккаунт. Колонка
-    частично уникальна, поэтому id достаётся ровно одной строке, а вторая честно
-    отмечается `sibling_shares_panel_account` — и это единственная причина, при
-    которой инструкция разрешает продолжать. Но grace-сессия второй строки
-    раньше не имела ни одного источника: фолбэк по владельцу в мультитарифе
-    выключен намеренно. Пустая колонка делает сессию нечитаемой навсегда.
-    Её собственный uuid — точный ключ, и он у неё есть.
-    """
-    from app.config import Settings
-
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
-    async with memory_session(monkeypatch, tables) as db:
-        await _seed(db, subs=[(10, 'shared', 'uuid-shared'), (20, None, 'uuid-shared')])
-        db.add(_grace('g-sibling', 20, 'uuid-shared'))
-        await db.commit()
-        _patch_roster(monkeypatch, [panel_user(77, short_uuid='shared', username='u', telegram_id=551)])
-
-        await backfill_remnawave_ids(db, dry_run=False)
-
-        db.expunge_all()
-        assert (await db.get(GraceAccessSessionModel, 'g-sibling')).remnawave_id == 77
 
 
 @pytest.mark.asyncio

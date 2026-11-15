@@ -50,10 +50,8 @@ class Panel(RemnaWaveAPI):
         return {'response': self.accounts[data['id']]}
 
 
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('cap', [0, 1, 3])
-async def test_admin_trial_conversion_sends_selected_cap(postgres_database, monkeypatch, multi, cap, selected=10):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
+async def test_admin_trial_conversion_sends_selected_cap(postgres_database, monkeypatch, cap, selected=10):
     monkeypatch.setattr(settings, 'DEVICES_SELECTION_ENABLED', True)
     now = datetime.now(UTC)
     panel = Panel(now)
@@ -65,7 +63,7 @@ async def test_admin_trial_conversion_sends_selected_cap(postgres_database, monk
     monkeypatch.setattr(SubscriptionService, 'get_api_client', client)
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
         db.add_all([User(id=1, telegram_id=101, language='ru', remnawave_id=9001), User(id=2, telegram_id=202)])
-        for sub_id, owner, days in [(10, 1, 5), (20, 1 if multi and selected != 20 else 2, 30)]:
+        for sub_id, owner, days in [(10, 1, 5), (20, 2, 30)]:
             db.add(
                 Subscription(
                     id=sub_id,
@@ -80,7 +78,7 @@ async def test_admin_trial_conversion_sends_selected_cap(postgres_database, monk
             )
         await db.commit()
         callback = SimpleNamespace(
-            data=f'admin_sub_type_paid_1_s{selected}' if multi else 'admin_sub_type_paid_1',
+            data='admin_sub_type_paid_1',
             message=SimpleNamespace(edit_text=AsyncMock()),
             answer=AsyncMock(),
         )
@@ -102,14 +100,8 @@ async def test_admin_trial_conversion_sends_selected_cap(postgres_database, monk
             assert len(panel.patches) == 1
 
 
-@pytest.mark.parametrize('selected', [20, 999])
-async def test_explicit_foreign_or_missing_subscription_never_falls_back(postgres_database, monkeypatch, selected):
-    await test_admin_trial_conversion_sends_selected_cap(postgres_database, monkeypatch, True, 1, selected=selected)
-
-
 @pytest.mark.parametrize('subscription_id', [0, 10])
 async def test_explicit_multi_callback_after_mode_change_is_rejected(postgres_database, monkeypatch, subscription_id):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
         db.add(User(id=1, telegram_id=101))
         db.add(

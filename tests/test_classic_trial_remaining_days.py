@@ -40,7 +40,6 @@ async def test_classic_purchase_persists_expiry_balance_and_conversion(
 
     monkeypatch.setattr(settings, 'TRIAL_ADD_REMAINING_DAYS_TO_PAID', carry)
     monkeypatch.setattr(settings, 'TARIFF_SWITCH_RESET_FREE_DAYS', reset)
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(m, 'datetime', FrozenDateTime)
     panel = SimpleNamespace(create_remnawave_user=AsyncMock(), update_remnawave_user=AsyncMock())
     monkeypatch.setattr(m, 'SubscriptionService', lambda: panel)

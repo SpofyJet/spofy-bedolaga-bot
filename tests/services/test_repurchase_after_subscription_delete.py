@@ -1,4 +1,4 @@
-"""«Удалил подписку → купил заново» в мультитарифе не наследует удалённый аккаунт панели.
+"""«Удалил подписку → купил заново» не наследует удалённый аккаунт панели.
 
 Репорт: человек удаляет подписку в кабинете, бот удаляет его аккаунт в панели.
 Через минуту он покупает тариф — и новая строка получает ``remnawave_id``
@@ -49,8 +49,7 @@ def _quiet_side_effects(monkeypatch, api: AsyncMock) -> None:
 
 
 @pytest.fixture
-def multi_tariff(monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
+def delete_mode(monkeypatch):
     monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', 'delete')
 
 
@@ -105,36 +104,7 @@ async def _seed_user_with_subscription(db) -> tuple[User, Subscription]:
 
 
 @pytest.mark.asyncio
-async def test_deleting_the_subscription_forgets_the_deleted_panel_account(monkeypatch, multi_tariff):
-    api = _panel_without_the_old_account()
-    _quiet_side_effects(monkeypatch, api)
-    async with memory_session(monkeypatch, TABLES) as db:
-        user, sub = await _seed_user_with_subscription(db)
-
-        await deletion.delete_subscription_record(db, sub, deleted_by='owner')
-
-        await db.refresh(user)
-        assert user.remnawave_id is None
-
-
-@pytest.mark.asyncio
-async def test_repurchase_gets_a_fresh_panel_account(monkeypatch, multi_tariff):
-    api = _panel_without_the_old_account()
-    _quiet_side_effects(monkeypatch, api)
-    async with memory_session(monkeypatch, TABLES) as db:
-        user, old_sub = await _seed_user_with_subscription(db)
-        await deletion.delete_subscription_record(db, old_sub, deleted_by='owner')
-
-        new_sub = _subscription(user.id, panel_id=None, short_id='new')
-        db.add(new_sub)
-        await db.commit()
-
-        assert await should_create_panel_account(db, new_sub, user) is True
-        assert new_sub.remnawave_id is None
-
-
-@pytest.mark.asyncio
-async def test_stale_user_level_id_is_healed_by_the_update_path(monkeypatch, multi_tariff):
+async def test_stale_user_level_id_is_healed_by_the_update_path(monkeypatch, delete_mode):
     """База уже в битом состоянии (подписку удалили до фикса): покупка обязана сама выйти на новый аккаунт."""
     api = _panel_without_the_old_account()
     _quiet_side_effects(monkeypatch, api)

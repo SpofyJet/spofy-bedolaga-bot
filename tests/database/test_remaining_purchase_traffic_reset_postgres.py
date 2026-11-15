@@ -25,20 +25,9 @@ pytestmark = pytest.mark.postgres
 
 
 @pytest.mark.parametrize(
-    ('kind', 'multi', 'expired'),
-    [
-        ('new', False, False),
-        ('new', True, False),
-        ('switch', False, False),
-        ('switch', False, True),
-        ('gift', False, False),
-        ('gift', True, False),
-        ('gift', False, True),
-        ('gift', True, True),
-    ],
+    ('kind', 'expired'), [('new', False), ('switch', False), ('switch', True), ('gift', False), ('gift', True)]
 )
-async def test_guest_nonrenewal_keeps_existing_panel_reset_policy(postgres_database, monkeypatch, kind, multi, expired):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
+async def test_guest_nonrenewal_keeps_existing_panel_reset_policy(postgres_database, monkeypatch, kind, expired):
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', True)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_TARIFF_SWITCH', False)
     panel_call = AsyncMock(return_value=SimpleNamespace(id=123))
@@ -105,10 +94,9 @@ async def test_guest_nonrenewal_keeps_existing_panel_reset_policy(postgres_datab
     ('flow', 'expired'), [('admin', False), ('admin', True), ('activate', False), ('activate', True), ('fulfill', True)]
 )
 @pytest.mark.parametrize('reset', [False, True])
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('trial', [False, True])
 async def test_paid_existing_purchase_preserves_traffic_contract(
-    postgres_database, monkeypatch, flow, reset, expired, multi, trial
+    postgres_database, monkeypatch, flow, reset, expired, trial
 ):
     from app.services.registration_access_service import (
         RegistrationAccessDecision,
@@ -116,7 +104,6 @@ async def test_paid_existing_purchase_preserves_traffic_contract(
     )
     from app.utils.cache import cache
 
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', reset)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)

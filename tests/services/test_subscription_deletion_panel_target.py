@@ -20,7 +20,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import select
 
-from app.config import settings
 from app.database.models import (
     DiscountOffer,
     PlategaSubscription,
@@ -80,27 +79,12 @@ def _sub(sub_id: int, *, status: str, remnawave_id: int | None = None) -> Subscr
 
 
 @pytest.mark.asyncio
-async def test_multi_tariff_takes_the_subscriptions_own_account(monkeypatch):
-    """Мультитариф: у подписки свой аккаунт, его и удаляем."""
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-
-    async with memory_session(monkeypatch, TABLES) as db:
-        db.add(_user(remnawave_id=999))
-        target = _sub(1, status=SubscriptionStatus.EXPIRED.value, remnawave_id=PANEL_ID)
-        db.add(target)
-        await db.commit()
-
-        assert await deletion._resolve_panel_target(db, target) == (PANEL_ID, True)
-
-
-@pytest.mark.asyncio
 async def test_single_tariff_falls_back_to_the_user_account(monkeypatch):
     """Однотарифный: колонка подписки пуста, но аккаунт есть — и его надо снять.
 
     Без этого админ жмёт «удалить», строка исчезает, а VPN у человека
     продолжает работать до конца оплаченного периода.
     """
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
 
     async with memory_session(monkeypatch, TABLES) as db:
         db.add(_user(remnawave_id=PANEL_ID))
@@ -121,7 +105,6 @@ async def test_single_tariff_spares_account_of_a_live_sibling(monkeypatch):
 
     Иначе уборка отработавшей строки убивает действующий доступ.
     """
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
 
     async with memory_session(monkeypatch, TABLES) as db:
         db.add(_user(remnawave_id=PANEL_ID))
@@ -136,7 +119,6 @@ async def test_single_tariff_spares_account_of_a_live_sibling(monkeypatch):
 @pytest.mark.asyncio
 async def test_single_tariff_ignores_dead_sibling(monkeypatch):
     """Мёртвая соседка ничего не держит — аккаунт всё равно отключаем."""
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
 
     async with memory_session(monkeypatch, TABLES) as db:
         db.add(_user(remnawave_id=PANEL_ID))
@@ -151,7 +133,6 @@ async def test_single_tariff_ignores_dead_sibling(monkeypatch):
 @pytest.mark.asyncio
 async def test_single_tariff_uses_subscription_id_when_user_has_none(monkeypatch):
     """Историческая строка: id остался только на подписке — работаем по нему."""
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
 
     async with memory_session(monkeypatch, TABLES) as db:
         db.add(_user(remnawave_id=None))
@@ -213,7 +194,6 @@ class _PanelSpy:
 @pytest.mark.asyncio
 async def test_single_tariff_deletion_disables_shared_account(monkeypatch):
     """Однотарифный, соседок нет: доступ снят, аккаунт остался живым для новой покупки."""
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
     spy = _PanelSpy()
     spy.install(monkeypatch)
 
@@ -238,7 +218,6 @@ async def test_single_tariff_deletion_disables_shared_account(monkeypatch):
 @pytest.mark.asyncio
 async def test_single_tariff_deletion_leaves_live_sibling_alone(monkeypatch):
     """Уборка отработавшей строки не должна трогать аккаунт живой соседки."""
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
     spy = _PanelSpy()
     spy.install(monkeypatch)
 
@@ -253,71 +232,3 @@ async def test_single_tariff_deletion_leaves_live_sibling_alone(monkeypatch):
 
     assert spy.deleted == []
     assert spy.disabled == []
-
-
-@pytest.mark.asyncio
-async def test_multi_tariff_deletion_deletes_own_account(monkeypatch):
-    """Мультитариф: аккаунт подписки удаляется и помечается намеренным."""
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-    spy = _PanelSpy()
-    spy.install(monkeypatch)
-
-    async with memory_session(monkeypatch, TABLES) as db:
-        db.add(_user(remnawave_id=None))
-        target = _sub(1, status=SubscriptionStatus.EXPIRED.value, remnawave_id=PANEL_ID)
-        db.add(target)
-        await db.commit()
-
-        await deletion.delete_subscription_record(db, target, deleted_by='user')
-
-    assert spy.deleted == [PANEL_ID]
-    assert spy.disabled == []
-    # без пометки прилетевший user.deleted снёс бы соседние живые подписки
-    assert spy.marked == [PANEL_ID]
-
-
-@pytest.mark.asyncio
-async def test_step_order_is_pinned(monkeypatch):
-    """Порядок шагов удаления — не косметика, каждый стоит там не случайно.
-
-    Автоплатёж снимается до удаления в панели: строка Platega удаляется каскадом
-    вместе с подпиской, и после удаления отменять было бы уже нечего.
-    """
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-    spy = _PanelSpy()
-    spy.install(monkeypatch)
-
-    async with memory_session(monkeypatch, TABLES) as db:
-        db.add(_user(remnawave_id=None))
-        target = _sub(1, status=SubscriptionStatus.EXPIRED.value, remnawave_id=PANEL_ID)
-        db.add(target)
-        await db.commit()
-
-        await deletion.delete_subscription_record(db, target, deleted_by='user')
-
-    assert spy.order == ['platega', 'panel_delete', 'decrement']
-
-
-@pytest.mark.asyncio
-async def test_multi_tariff_deletion_honours_disable_mode(monkeypatch):
-    """REMNAWAVE_USER_DELETE_MODE=disable: аккаунт подписки отключается, а не удаляется.
-
-    Режим читался только при полном удалении пользователя; удаление подписки
-    (и сброс триала) сносили аккаунт из панели вопреки настройке.
-    """
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-    monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', 'disable')
-    spy = _PanelSpy()
-    spy.install(monkeypatch)
-    async with memory_session(monkeypatch, TABLES) as db:
-        db.add(_user(remnawave_id=None))
-        target = _sub(1, status=SubscriptionStatus.EXPIRED.value, remnawave_id=PANEL_ID)
-        db.add(target)
-        await db.commit()
-        await deletion.delete_subscription_record(db, target, deleted_by='user')
-        remaining = await db.scalar(select(Subscription.id).where(Subscription.id == 1))
-    assert spy.disabled == [PANEL_ID]
-    assert spy.deleted == []
-    # ничего не удаляется — и помечать намеренное удаление нечего
-    assert spy.marked == []
-    assert remaining is None

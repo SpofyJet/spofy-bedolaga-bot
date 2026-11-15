@@ -65,7 +65,6 @@ def _subscription(*, status: str = 'active', is_trial: bool = False, device_limi
 
 @pytest.fixture(autouse=True)
 def multi_tariff(monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'ALLOW_DEVICES_BELOW_TARIFF_LIMIT', False)
 
 

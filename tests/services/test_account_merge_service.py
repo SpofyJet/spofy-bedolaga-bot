@@ -1,13 +1,12 @@
 """Tests for app.services.account_merge_service."""
 
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.config import Settings, settings
+from app.config import settings
 from app.services import account_merge_service
 from app.services.account_merge_service import (
     _build_subscription_preview,
@@ -959,68 +958,6 @@ class TestExecuteMergeSubscriptionMultiTariff:
     подписки переносятся целиком, а панель синхронизируется по числовому
     ``subscriptions.remnawave_id`` (регресс на uuid дал бы 400 VALIDATION и
     описание в панели навсегда осталось бы от прежнего владельца)."""
-
-    async def test_transfers_all_subs_and_syncs_panel_by_numeric_id(self, monkeypatch):
-        db = _make_db()
-        sub_a = _make_subscription(id=201, user_id=2, tariff_id=10, remnawave_id=5001)
-        sub_b = _make_subscription(id=202, user_id=2, tariff_id=11, remnawave_id=5002)
-        primary = _make_user(id=1, telegram_id=111, remnawave_id=None)
-        primary.full_name = 'Primary User'  # читается при сборке описания для панели
-        secondary = _make_user(id=2, subscriptions=[sub_a, sub_b], remnawave_id=9002)
-        monkeypatch.setattr(
-            account_merge_service,
-            'get_user_by_id',
-            AsyncMock(side_effect=[primary, secondary]),
-        )
-        monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-
-        api = AsyncMock()
-
-        @asynccontextmanager
-        async def fake_api():
-            yield api
-
-        monkeypatch.setattr(account_merge_service, '_get_remnawave_api', fake_api)
-
-        with _patch_remnawave_delete() as mock_del:
-            await execute_merge(db, 1, 2)
-            mock_del.assert_not_awaited()  # подписки переехали, панельных юзеров не удаляем
-
-        assert [sub_a.user_id, sub_b.user_id] == [1, 1]
-        # Панель патчится по числовому id подписки, а не по какому-либо uuid
-        assert [call.kwargs['user_id'] for call in api.update_user.await_args_list] == [5001, 5002]
-        assert all(call.kwargs['telegram_id'] == 111 for call in api.update_user.await_args_list)
-        # Легаси-идентичность secondary снята, id самих подписок сохранены
-        assert secondary.remnawave_id is None
-        assert [sub_a.remnawave_id, sub_b.remnawave_id] == [5001, 5002]
-
-    async def test_subs_without_panel_id_are_not_pushed_to_panel(self, monkeypatch):
-        """Подписка без панельного id (панельный юзер ещё не заведён) не должна
-        уходить в панель: клиент отбил бы её RemnaWaveInvalidUserIdError."""
-        db = _make_db()
-        sub = _make_subscription(id=203, user_id=2, tariff_id=10, remnawave_id=None)
-        primary = _make_user(id=1, telegram_id=111)
-        secondary = _make_user(id=2, subscriptions=[sub], remnawave_id=None)
-        monkeypatch.setattr(
-            account_merge_service,
-            'get_user_by_id',
-            AsyncMock(side_effect=[primary, secondary]),
-        )
-        monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-
-        api = AsyncMock()
-
-        @asynccontextmanager
-        async def fake_api():
-            yield api
-
-        monkeypatch.setattr(account_merge_service, '_get_remnawave_api', fake_api)
-
-        with _patch_remnawave_delete():
-            await execute_merge(db, 1, 2)
-
-        assert sub.user_id == 1
-        api.update_user.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

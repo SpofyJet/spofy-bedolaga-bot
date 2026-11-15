@@ -137,7 +137,6 @@ async def test_wheel_daily_limit_credit_is_deposit_not_refund(monkeypatch):
     message = _message()
     with ExitStack() as stack:
         _settings_patches(stack)
-        stack.enter_context(patch.object(type(settings), 'is_multi_tariff_enabled', lambda self: False))
         stack.enter_context(
             patch(
                 'app.database.crud.wheel.get_or_create_wheel_config',

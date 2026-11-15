@@ -66,10 +66,8 @@ class Panel:
         }
 
 
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('state', ['missing_user', 'stale_both', 'stale_user', 'timeout', 'foreign'])
-async def test_identity_sync_repairs_only_proven_dead_links(postgres_database, monkeypatch, multi, state):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
+async def test_identity_sync_repairs_only_proven_dead_links(postgres_database, monkeypatch, state):
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)
     end = datetime.now(UTC) + timedelta(days=30)
     panel = Panel(state, end)
@@ -117,18 +115,17 @@ async def test_identity_sync_repairs_only_proven_dead_links(postgres_database, m
         if state in {'timeout', 'foreign'}:
             error = RemnaWaveTransientError if state == 'timeout' else PanelAccountOwnedByAnotherUser
             with pytest.raises(error):
-                await push_subscription(panel, user, sub, db=db, multi_tariff=multi)
+                await push_subscription(panel, user, sub, db=db)
             assert panel.updated == panel.created == []
             assert user.remnawave_id == profile_id and sub.remnawave_id == sub_id
         else:
-            result = await push_subscription(panel, user, sub, db=db, multi_tariff=multi)
+            result = await push_subscription(panel, user, sub, db=db)
             await db.commit()
             await db.refresh(user)
             await db.refresh(sub)
             assert result.action == 'updated' and panel.updated == [9001] and panel.created == []
             assert sub.remnawave_id == 9001
-            # Multi does not probe or overwrite the profile's different account.
-            assert user.remnawave_id == (999 if multi and state == 'stale_user' else 9001)
+            assert user.remnawave_id == 9001
             response = await devices.get_devices(10, user, db)
             assert response['total'] == 1 and response['devices'][0]['hwid'] == 'test-phone'
             assert _get_panel_user_id(sub, user) == 9001

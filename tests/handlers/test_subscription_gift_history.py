@@ -2,7 +2,7 @@
 
 Covers:
 - Menu visibility:
-  - Gift entry remains reachable in single- and multi-tariff subscription layouts.
+  - Gift entry remains reachable in the subscription layout.
   - Disabled sales render activation/history controls without offering a new purchase.
   - No eligible tariffs still allows activation and available history navigation.
 - History list & pagination:
@@ -38,7 +38,6 @@ from aiogram.types import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import Settings
 from app.database.models import GuestPurchaseStatus, User
 from app.handlers.subscription.gift import (
     handle_gift_catalog,
@@ -47,7 +46,6 @@ from app.handlers.subscription.gift import (
     handle_gift_my_open,
     handle_gift_my_page,
 )
-from app.handlers.subscription.my_subscriptions import show_my_subscriptions
 from app.handlers.subscription.purchase import show_subscription_info
 from app.services.gift_history_service import GiftHistoryItem
 from app.services.gift_notification_service import (
@@ -170,25 +168,11 @@ class TestGiftMenuVisibilityAndEmptyHistory:
     @pytest.mark.asyncio
     async def test_single_tariff_menu_always_shows_gift_entry(self, mock_callback, mock_db_user, mock_db, monkeypatch):
         mock_db_user.subscription = None
-        monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
         await show_subscription_info(mock_callback, mock_db_user, mock_db)
         assert mock_callback.message.edit_text.called
         _, kwargs = mock_callback.message.edit_text.call_args
         reply_markup = kwargs.get('reply_markup')
         assert 'subscription_gift' in _callbacks(reply_markup)
-
-    @pytest.mark.asyncio
-    async def test_multi_tariff_menu_always_shows_gift_entry(self, mock_callback, mock_db_user, mock_db, monkeypatch):
-        monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-        with patch(
-            'app.handlers.subscription.my_subscriptions.get_all_subscriptions_by_user_id',
-            AsyncMock(return_value=[]),
-        ):
-            await show_my_subscriptions(mock_callback, mock_db_user, mock_db)
-            assert mock_callback.message.edit_text.called
-            _, kwargs = mock_callback.message.edit_text.call_args
-            reply_markup = kwargs.get('reply_markup')
-            assert 'subscription_gift' in _callbacks(reply_markup)
 
     @pytest.mark.asyncio
     async def test_gift_catalog_disabled_sales_with_history_renders_history_only_view(

@@ -26,9 +26,8 @@ from tests.fixtures.postgres_db import postgres_session
 pytestmark = pytest.mark.postgres
 
 
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('lose_response', [False, True])
-async def test_real_panel_reset_ack_and_lost_response(postgres_database, monkeypatch, multi, lose_response):
+async def test_real_panel_reset_ack_and_lost_response(postgres_database, monkeypatch, lose_response):
     url = os.environ.get('TEST_REMNAWAVE_URL')
     token_file = os.environ.get('TEST_REMNAWAVE_TOKEN_FILE')
     if not url or not token_file:
@@ -37,7 +36,6 @@ async def test_real_panel_reset_ack_and_lost_response(postgres_database, monkeyp
     token = (await asyncio.to_thread(Path(token_file).read_text)).strip()
     monkeypatch.setattr(settings, 'REMNAWAVE_API_URL', url)
     monkeypatch.setattr(settings, 'REMNAWAVE_API_KEY', token)
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'HAPP_CRYPTOLINK_API_FALLBACK_ENABLED', False)
     now = datetime.now(UTC)
     reset_calls = 0

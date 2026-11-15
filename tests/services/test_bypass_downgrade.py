@@ -360,7 +360,6 @@ def test_deeplinks_answer_with_one_button(monkeypatch, action, callback):
 
     monkeypatch.setattr(subscription_deeplinks, 'get_subscription_by_user_id', AsyncMock(return_value=_sub()))
     monkeypatch.setattr(settings, 'MAIN_MENU_MODE', 'default')
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     message = MagicMock()
     message.answer = AsyncMock()
 

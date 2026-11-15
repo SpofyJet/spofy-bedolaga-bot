@@ -25,11 +25,9 @@ NEW_CRYPTO = 'happ://crypt5/new-test-payload'
 
 
 @pytest.mark.parametrize('flow', ['projection', 'writer', 'import', 'webhook'])
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('url', [None, OLD_URL, NEW_URL])
 @pytest.mark.parametrize('crypto', [None, '', NEW_CRYPTO])
-async def test_url_refresh_invalidates_only_its_stale_crypto(postgres_database, monkeypatch, flow, multi, url, crypto):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
+async def test_url_refresh_invalidates_only_its_stale_crypto(postgres_database, monkeypatch, flow, url, crypto):
     monkeypatch.setattr(settings, 'CONNECT_BUTTON_MODE', 'happ_cryptolink')
     now = datetime.now(UTC)
     end = now + timedelta(days=30)
@@ -93,7 +91,7 @@ async def test_url_refresh_invalidates_only_its_stale_crypto(postgres_database, 
                 project_onto_subscription(sub, read_panel_user(account), now=now)
                 await db.commit()
             elif flow == 'writer':
-                await _record_identity(db, user, sub, account, multi_tariff=multi)
+                await _record_identity(db, user, sub, account, multi_tariff=False)
                 await db.commit()
             elif flow == 'webhook':
                 await RemnaWaveWebhookService(AsyncMock())._handle_user_modified(
@@ -119,14 +117,10 @@ async def test_url_refresh_invalidates_only_its_stale_crypto(postgres_database, 
         assert sub.end_date == end
 
 
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('encryption_available', [False, True])
-async def test_cabinet_regenerates_crypto_for_the_changed_url(
-    postgres_database, monkeypatch, multi, encryption_available
-):
+async def test_cabinet_regenerates_crypto_for_the_changed_url(postgres_database, monkeypatch, encryption_available):
     from app.cabinet.routes.subscription_modules import status
 
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'CONNECT_BUTTON_MODE', 'happ_cryptolink')
     monkeypatch.setattr(status, '_load_app_config_async', AsyncMock(return_value={'platforms': {}}))
 

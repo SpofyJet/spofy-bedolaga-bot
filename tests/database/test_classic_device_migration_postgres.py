@@ -63,12 +63,10 @@ class Panel(RemnaWaveAPI):
 
 
 @pytest.mark.parametrize('flow', ['cabinet', 'telegram', 'auto'])
-@pytest.mark.parametrize('multi', [False, True])
 async def test_selected_classic_devices_are_priced_and_preserved(
     postgres_database,
     monkeypatch,
     flow,
-    multi,
     days=30,
     base=1,
     old=3,
@@ -81,7 +79,6 @@ async def test_selected_classic_devices_are_priced_and_preserved(
     custom_traffic=None,
     custom_enabled=False,
 ):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'MAX_DEVICES_LIMIT', global_max)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
@@ -115,7 +112,7 @@ async def test_selected_classic_devices_are_priced_and_preserved(
                     language='ru',
                     status='active',
                     balance_kopeks=10000,
-                    remnawave_id=9002 if multi else 9001,
+                    remnawave_id=9001,
                 ),
                 User(id=2, telegram_id=202),
             ]
@@ -140,7 +137,7 @@ async def test_selected_classic_devices_are_priced_and_preserved(
             allowed_squads=['test-squad'],
         )
         db.add(tariff)
-        for sub_id, owner, panel_id in [(10, 1, 9001), (20, 1 if multi else 2, 9002)]:
+        for sub_id, owner, panel_id in [(10, 1, 9001), (20, 2, 9002)]:
             db.add(
                 Subscription(
                     id=sub_id,
@@ -175,7 +172,7 @@ async def test_selected_classic_devices_are_priced_and_preserved(
             with pytest.raises(HTTPException) as error:
                 await cabinet.purchase_tariff(
                     cabinet.TariffPurchaseRequest(
-                        tariff_id=1, period_days=days, traffic_gb=custom_traffic, subscription_id=10 if multi else None
+                        tariff_id=1, period_days=days, traffic_gb=custom_traffic, subscription_id=None
                     ),
                     user,
                     db,
@@ -196,7 +193,7 @@ async def test_selected_classic_devices_are_priced_and_preserved(
                 assert period['price_kopeks'] == expected_price - (custom_traffic or 0) * 2
             response = await cabinet.purchase_tariff(
                 cabinet.TariffPurchaseRequest(
-                    tariff_id=1, period_days=days, traffic_gb=custom_traffic, subscription_id=10 if multi else None
+                    tariff_id=1, period_days=days, traffic_gb=custom_traffic, subscription_id=None
                 ),
                 user,
                 db,
@@ -291,8 +288,6 @@ async def test_selected_classic_devices_are_priced_and_preserved(
                 await inspect.unwrap(telegram.select_tariff_period)(callback, user, db, state)
                 preview_state = await state.get_data()
                 assert preview_state['final_price'] == expected_price
-                if multi:
-                    assert preview_state['target_subscription_id'] == 10
                 callback.data = (
                     callback.message.edit_text.await_args.kwargs['reply_markup'].inline_keyboard[0][0].callback_data
                 )
@@ -347,14 +342,6 @@ async def test_classic_migration_limits(postgres_database, monkeypatch, base, ol
     )
 
 
-@pytest.mark.parametrize('days', [45, 75])
-async def test_classic_migration_non_month_period_price(postgres_database, monkeypatch, days):
-    await test_selected_classic_devices_are_priced_and_preserved(
-        postgres_database, monkeypatch, 'cabinet', True, days=days
-    )
-
-
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize(
     ('base', 'old', 'tariff_max', 'expected'),
     [(1, 3, None, 3), (1, 10, 5, 5), (2, 10, 5, 5), (0, 3, None, 0), (5, 3, None, 5)],
@@ -362,7 +349,6 @@ async def test_classic_migration_non_month_period_price(postgres_database, monke
 async def test_classic_custom_telegram_selected_purchase(
     postgres_database,
     monkeypatch,
-    multi,
     base,
     old,
     tariff_max,
@@ -372,7 +358,6 @@ async def test_classic_custom_telegram_selected_purchase(
         postgres_database,
         monkeypatch,
         'telegram_custom',
-        multi,
         days=75,
         base=base,
         old=old,
@@ -381,27 +366,22 @@ async def test_classic_custom_telegram_selected_purchase(
     )
 
 
-@pytest.mark.parametrize('multi', [False, True])
-async def test_cabinet_daily_classic_price_matches_charge(postgres_database, monkeypatch, multi):
+async def test_cabinet_daily_classic_price_matches_charge(postgres_database, monkeypatch):
     await test_selected_classic_devices_are_priced_and_preserved(
-        postgres_database, monkeypatch, 'cabinet', multi, days=1, daily=True
+        postgres_database, monkeypatch, 'cabinet', days=1, daily=True
     )
 
 
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('flow', ['telegram_daily', 'auto_daily'])
 @pytest.mark.parametrize(
     ('base', 'old', 'tariff_max', 'expected'),
     [(1, 3, None, 3), (1, 10, 5, 5), (2, 10, 5, 5), (0, 3, None, 0), (5, 3, None, 5)],
 )
-async def test_daily_selected_classic_devices(
-    postgres_database, monkeypatch, multi, flow, base, old, tariff_max, expected
-):
+async def test_daily_selected_classic_devices(postgres_database, monkeypatch, flow, base, old, tariff_max, expected):
     await test_selected_classic_devices_are_priced_and_preserved(
         postgres_database,
         monkeypatch,
         flow,
-        multi,
         days=1,
         daily=True,
         base=base,
@@ -411,244 +391,23 @@ async def test_daily_selected_classic_devices(
     )
 
 
-@pytest.mark.parametrize('flow', ['cabinet', 'telegram', 'auto', 'telegram_custom', 'telegram_daily', 'auto_daily'])
-@pytest.mark.parametrize('selected', [21, 999])
-async def test_invalid_selected_classic_subscription_is_rejected_before_pricing(
-    postgres_database, monkeypatch, flow, selected
-):
-    from fastapi import HTTPException
-
-    from app.services.pricing_engine import pricing_engine
-
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    pricing = AsyncMock(side_effect=AssertionError('Invalid selected source reached pricing'))
-    monkeypatch.setattr(pricing_engine, 'calculate_tariff_purchase_price', pricing)
-    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
-        db.add_all(
-            [
-                User(id=1, telegram_id=101, balance_kopeks=10000, language='ru'),
-                User(id=2, telegram_id=202),
-                Tariff(
-                    id=1,
-                    name='Test',
-                    is_active=True,
-                    device_limit=1,
-                    period_prices={'30': 300},
-                    is_daily=flow.endswith('daily'),
-                    daily_price_kopeks=100,
-                ),
-            ]
-        )
-        for sub_id, owner in [(10, 1), (21, 2)]:
-            db.add(
-                Subscription(
-                    id=sub_id,
-                    user_id=owner,
-                    tariff_id=None,
-                    status='active',
-                    is_trial=False,
-                    device_limit=3,
-                    end_date=datetime.now(UTC) + timedelta(days=10),
-                    remnawave_short_id=f'test-{sub_id}',
-                )
-            )
-        await db.commit()
-        user = await get_user_by_id(db, 1)
-        if flow == 'cabinet':
-            with pytest.raises(HTTPException) as error:
-                await cabinet.purchase_tariff(
-                    cabinet.TariffPurchaseRequest(tariff_id=1, period_days=30, subscription_id=selected), user, db
-                )
-            assert error.value.status_code == 404
-        elif flow in ('auto', 'auto_daily'):
-            auto_handler = auto._auto_purchase_daily_tariff if flow == 'auto_daily' else auto._auto_purchase_tariff
-            assert not await auto_handler(db, user, {'tariff_id': 1, 'period_days': 30, 'subscription_id': selected})
-        else:
-            state = FSMContext(storage=MemoryStorage(), key=StorageKey(bot_id=1, chat_id=101, user_id=101))
-            await state.update_data(target_subscription_id=selected)
-            callback = SimpleNamespace(
-                data='tariff_confirm:1:30', answer=AsyncMock(), message=SimpleNamespace(edit_text=AsyncMock())
-            )
-            handler = telegram.handle_custom_confirm if flow == 'telegram_custom' else telegram.confirm_tariff_purchase
-            if flow == 'telegram_daily':
-                callback.data = 'daily_tariff_confirm:1'
-                handler = telegram.confirm_daily_tariff_purchase
-            await inspect.unwrap(handler)(callback, user, db, state)
-            assert callback.answer.await_count == 1
-        pricing.assert_not_awaited()
-        await db.refresh(user)
-        assert user.balance_kopeks == 10000
-        assert (await db.scalars(select(Transaction))).all() == []
-        assert (await db.get(Subscription, 10)).device_limit == 3
-
-
-async def test_divergent_paid_pin_falls_back_to_requested_tariff_before_pricing(postgres_database, monkeypatch):
-    from app.services.pricing_engine import pricing_engine
-
-    class PricingBoundary(BaseException):
-        pass
-
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    pricing = AsyncMock(side_effect=PricingBoundary)
-    monkeypatch.setattr(pricing_engine, 'calculate_tariff_purchase_price', pricing)
-    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
-        db.add(User(id=1, telegram_id=101, balance_kopeks=10000, language='ru'))
-        for tariff_id in [1, 2]:
-            db.add(
-                Tariff(
-                    id=tariff_id, name=f'Test {tariff_id}', is_active=True, device_limit=1, period_prices={'30': 300}
-                )
-            )
-        for sub_id, tariff_id, devices in [(10, 2, 3), (20, 1, 7)]:
-            db.add(
-                Subscription(
-                    id=sub_id,
-                    user_id=1,
-                    tariff_id=tariff_id,
-                    status='active',
-                    is_trial=False,
-                    device_limit=devices,
-                    end_date=datetime.now(UTC) + timedelta(days=10),
-                    remnawave_short_id=f'test-{sub_id}',
-                )
-            )
-        await db.commit()
-        user = await get_user_by_id(db, 1)
-        state = FSMContext(storage=MemoryStorage(), key=StorageKey(bot_id=1, chat_id=101, user_id=101))
-        await state.update_data(target_subscription_id=10)
-        callback = SimpleNamespace(
-            data='tariff_period:1:30', answer=AsyncMock(), message=SimpleNamespace(edit_text=AsyncMock())
-        )
-        with pytest.raises(PricingBoundary):
-            await inspect.unwrap(telegram.select_tariff_period)(callback, user, db, state)
-        assert pricing.await_args.kwargs['device_limit'] == 7
-        assert (await db.get(Subscription, 10)).tariff_id == 2
-        await db.refresh(user)
-        assert user.balance_kopeks == 10000
-        assert (await db.scalars(select(Transaction))).all() == []
-
-
-async def test_custom_fallback_prefers_active_tariff_over_later_disabled_record(postgres_database, monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
-        db.add(User(id=1, telegram_id=101))
-        db.add(Tariff(id=1, name='Test', device_limit=1, is_active=True))
-        now = datetime.now(UTC)
-        for sub_id, status, days in [(10, 'active', 5), (20, 'disabled', 50)]:
-            db.add(
-                Subscription(
-                    id=sub_id,
-                    user_id=1,
-                    tariff_id=1,
-                    is_trial=False,
-                    status=status,
-                    end_date=now + timedelta(days=days),
-                    device_limit=3,
-                    remnawave_short_id=f'test-{sub_id}',
-                )
-            )
-        await db.commit()
-        selected = await telegram._resolve_purchase_subscription(
-            db,
-            await get_user_by_id(db, 1),
-            await db.get(Tariff, 1),
-        )
-        assert selected.id == 10
-
-
-async def test_daily_insufficient_balance_cart_replays_selected_classic(postgres_database, monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    monkeypatch.setattr(settings, 'MAX_DEVICES_LIMIT', 10)
-    monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)
-    monkeypatch.setattr('app.services.subscription_renewal_service.with_admin_notification_service', AsyncMock())
-    monkeypatch.setattr(auto, '_delete_cart_for_subscription', AsyncMock())
-    saved_cart = AsyncMock()
-    monkeypatch.setattr(telegram.user_cart_service, 'save_user_cart', saved_cart)
-    now = datetime.now(UTC)
-    panel = Panel(now)
-
-    @asynccontextmanager
-    async def client(self):
-        yield panel
-
-    monkeypatch.setattr(SubscriptionService, 'get_api_client', client)
-    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
-        db.add(User(id=1, telegram_id=101, language='ru', status='active', balance_kopeks=150, remnawave_id=9002))
-        db.add(
-            Tariff(
-                id=1,
-                name='Test',
-                is_active=True,
-                is_daily=True,
-                daily_price_kopeks=100,
-                device_limit=1,
-                device_price_kopeks=100,
-                traffic_limit_gb=100,
-                allowed_squads=['test-squad'],
-            )
-        )
-        for sub_id, panel_id, cap in [(10, 9001, 3), (20, 9002, 7)]:
-            db.add(
-                Subscription(
-                    id=sub_id,
-                    user_id=1,
-                    tariff_id=None,
-                    is_trial=False,
-                    status='active',
-                    remnawave_id=panel_id,
-                    remnawave_short_id=f'test-{sub_id}',
-                    subscription_url='https://vpn.example/sub/test',
-                    device_limit=cap,
-                    end_date=now + timedelta(days=10),
-                )
-            )
-        await db.commit()
-        user = await get_user_by_id(db, 1)
-        state = FSMContext(storage=MemoryStorage(), key=StorageKey(bot_id=1, chat_id=101, user_id=101))
-        await state.update_data(active_subscription_id=10)
-        callback = SimpleNamespace(answer=AsyncMock(), message=SimpleNamespace(edit_text=AsyncMock()))
-        await telegram._proceed_with_selected_tariff(callback, user, db, state, 1)
-        saved_cart.assert_awaited_once()
-        cart = saved_cart.await_args.args[1]
-        assert cart['subscription_id'] == 10 and cart['device_limit'] == 3
-        assert cart['total_price'] == cart['daily_price_kopeks'] == 300
-        assert cart['missing_amount'] == 150
-        assert (await db.scalars(select(Transaction))).all() == []
-        assert user.balance_kopeks == 150
-        user.balance_kopeks = 10000
-        await db.commit()
-        assert await auto._auto_purchase_daily_tariff(db, user, cart)
-        await db.refresh(user)
-        assert user.balance_kopeks == 9700
-        selected = await db.get(Subscription, 10)
-        assert selected.tariff_id == 1 and selected.device_limit == 3 and selected.remnawave_id == 9001
-        assert (await db.get(Subscription, 20)).device_limit == 7
-        transactions = (await db.scalars(select(Transaction))).all()
-        assert len(transactions) == 1 and transactions[0].amount_kopeks == -300
-        assert panel.patches[-1]['hwidDeviceLimit'] == 3
-
-
 @pytest.mark.parametrize('flow', ['telegram_daily', 'auto_daily'])
-@pytest.mark.parametrize('multi', [False, True])
-async def test_repeated_daily_purchase_does_not_charge_twice(postgres_database, monkeypatch, flow, multi):
+async def test_repeated_daily_purchase_does_not_charge_twice(postgres_database, monkeypatch, flow):
     await test_selected_classic_devices_are_priced_and_preserved(
         postgres_database,
         monkeypatch,
         flow,
-        multi,
         days=1,
         daily=True,
         repeat=True,
     )
 
 
-@pytest.mark.parametrize('multi', [False, True])
-async def test_daily_selected_trial_keeps_conversion_marker(postgres_database, monkeypatch, multi):
+async def test_daily_selected_trial_keeps_conversion_marker(postgres_database, monkeypatch):
     await test_selected_classic_devices_are_priced_and_preserved(
         postgres_database,
         monkeypatch,
         'telegram_daily',
-        multi,
         days=1,
         daily=True,
         trial=True,
@@ -656,7 +415,6 @@ async def test_daily_selected_trial_keeps_conversion_marker(postgres_database, m
     )
 
 
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize(
     ('flow', 'days', 'daily'),
     [
@@ -665,28 +423,23 @@ async def test_daily_selected_trial_keeps_conversion_marker(postgres_database, m
         ('telegram_cart_period', 75, False),
     ],
 )
-async def test_saved_cart_return_keeps_selected_classic_and_requotes(
-    postgres_database, monkeypatch, multi, flow, days, daily
-):
+async def test_saved_cart_return_keeps_selected_classic_and_requotes(postgres_database, monkeypatch, flow, days, daily):
     await test_selected_classic_devices_are_priced_and_preserved(
         postgres_database,
         monkeypatch,
         flow,
-        multi,
         days=days,
         daily=daily,
     )
 
 
 @pytest.mark.parametrize('flow', ['cabinet', 'auto_cabinet_cart', 'telegram_cabinet_cart'])
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('days', [30, 75])
-async def test_custom_traffic_survives_saved_checkout(postgres_database, monkeypatch, flow, multi, days):
+async def test_custom_traffic_survives_saved_checkout(postgres_database, monkeypatch, flow, days):
     await test_selected_classic_devices_are_priced_and_preserved(
         postgres_database,
         monkeypatch,
         flow,
-        multi,
         days=days,
         custom_traffic=250,
     )

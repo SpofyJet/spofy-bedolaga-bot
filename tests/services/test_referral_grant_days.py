@@ -14,7 +14,6 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.config import settings
 from app.database.models import Base, Subscription, SubscriptionStatus, Tariff, User
 from app.services import referral_reward_service as engine
 from tests.fixtures.sqlite_memory import memory_session
@@ -301,38 +300,8 @@ class TestSubscriptionOnAnotherTariff:
     """
 
     @pytest.mark.asyncio
-    async def test_paid_subscription_elsewhere_does_not_block_the_reward(self, monkeypatch):
-        monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-
-        async with memory_session(monkeypatch, TABLES) as db:
-            other = _subscription(1, tariff_id=OTHER_TARIFF_ID)
-            await _seed(db, [other])
-
-            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
-
-            assert grant.days == 7, 'дни настроенного тарифа не должны теряться'
-            created = await _reload(db, grant.subscription_id)
-            assert created.tariff_id == PRO_TARIFF_ID
-            assert created.id != other.id
-            assert created.is_trial is False
-
-    @pytest.mark.asyncio
-    async def test_alive_trial_elsewhere_still_blocks_creation(self, monkeypatch):
-        monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-
-        async with memory_session(monkeypatch, TABLES) as db:
-            trial = _subscription(1, tariff_id=OTHER_TARIFF_ID, is_trial=True)
-            await _seed(db, [trial])
-
-            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
-
-            assert grant.days == 0
-            assert (await _reload(db, trial.id)).is_trial is True
-
-    @pytest.mark.asyncio
     async def test_classic_mode_does_not_create_a_second_subscription(self, monkeypatch):
         """Вне мультитарифа подписка одна — вторая сломала бы инварианты режима."""
-        monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
 
         async with memory_session(monkeypatch, TABLES) as db:
             other = _subscription(1, tariff_id=OTHER_TARIFF_ID)
@@ -365,24 +334,6 @@ class TestStatesWhereDaysMustNotLand:
             assert grant.days == 0
             assert grant.failure == 'pending_draft'
             assert (await _reload(db, draft.id)).end_date == before
-
-    @pytest.mark.asyncio
-    async def test_pending_draft_of_the_tariff_blocks_creating_a_duplicate(self, monkeypatch):
-        """Вторая подписка того же тарифа сломает пользователю оплату черновика."""
-        monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-
-        async with memory_session(monkeypatch, TABLES) as db:
-            draft = _subscription(1, tariff_id=PRO_TARIFF_ID)
-            draft.status = SubscriptionStatus.PENDING.value
-            await _seed(db, [draft])
-
-            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
-
-            assert grant.days == 0
-            from sqlalchemy import func, select
-
-            count = await db.execute(select(func.count(Subscription.id)).where(Subscription.tariff_id == PRO_TARIFF_ID))
-            assert count.scalar() == 1, 'дубликат подписки того же тарифа создавать нельзя'
 
     @pytest.mark.asyncio
     async def test_disabled_subscription_is_not_resurrected(self, monkeypatch):
@@ -419,90 +370,8 @@ class TestStatesWhereDaysMustNotLand:
             assert (await _reload(db, expired.id)).status == SubscriptionStatus.ACTIVE.value
 
 
-class TestManySubscriptionsInMultiTariff:
-    """Мультитариф: у человека несколько подписок и тариф в правиле не задан.
-
-    Штатная выборка основной подписки сортирует по СТАТУСУ и не смотрит на
-    ``is_trial``, поэтому награда могла уйти в триал при живой оплаченной
-    подписке. Здесь закреплён явный выбор.
-    """
-
-    @pytest.fixture(autouse=True)
-    def multi_tariff(self, monkeypatch):
-        monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-
-    @pytest.mark.asyncio
-    async def test_paid_wins_over_trial(self, monkeypatch):
-        async with memory_session(monkeypatch, TABLES) as db:
-            # Триал заканчивается позже — по сроку он «выиграл бы» у платной.
-            trial = _subscription(1, tariff_id=OTHER_TARIFF_ID, is_trial=True, days_left=90)
-            paid = _subscription(1, tariff_id=PRO_TARIFF_ID, days_left=10)
-            await _seed(db, [trial, paid])
-            paid_before = paid.end_date
-            trial_before = trial.end_date
-
-            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, None)
-
-            assert grant.days == 7
-            assert grant.subscription_id == paid.id, 'дни обязаны идти в оплаченную подписку'
-            assert (await _reload(db, paid.id)).end_date == paid_before + timedelta(days=7)
-            assert (await _reload(db, trial.id)).end_date == trial_before
-
-    @pytest.mark.asyncio
-    async def test_choice_among_many_paid_is_deterministic(self, monkeypatch):
-        """При нескольких платных выбирается одна и та же — иначе дни не найти."""
-        async with memory_session(monkeypatch, TABLES) as db:
-            subs = [
-                _subscription(1, tariff_id=PRO_TARIFF_ID, days_left=5),
-                _subscription(1, tariff_id=OTHER_TARIFF_ID, days_left=40),
-                _subscription(1, tariff_id=None, days_left=20),
-            ]
-            await _seed(db, subs)
-            longest = subs[1]
-
-            first = await engine.grant_reward_days(db, await db.get(User, 1), 3, None)
-            second = await engine.grant_reward_days(db, await db.get(User, 1), 3, None)
-
-            assert first.subscription_id == longest.id, 'выбирается подписка с самым поздним сроком'
-            assert second.subscription_id == first.subscription_id, 'выбор обязан быть повторяемым'
-
-    @pytest.mark.asyncio
-    async def test_trial_only_user_still_gets_the_reward(self, monkeypatch):
-        """Владелец одного лишь триала не должен остаться без награды."""
-        async with memory_session(monkeypatch, TABLES) as db:
-            trial = _subscription(1, tariff_id=PRO_TARIFF_ID, is_trial=True)
-            await _seed(db, [trial])
-            before = trial.end_date
-
-            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, None)
-
-            assert grant.days == 7
-            reloaded = await _reload(db, trial.id)
-            assert reloaded.end_date == before + timedelta(days=7)
-            assert reloaded.is_trial is True
-
-    @pytest.mark.asyncio
-    async def test_blocked_subscriptions_are_not_candidates(self, monkeypatch):
-        """Отключённая и неоплаченный черновик не должны перехватывать награду."""
-        async with memory_session(monkeypatch, TABLES) as db:
-            disabled = _subscription(1, tariff_id=OTHER_TARIFF_ID, days_left=90)
-            disabled.status = SubscriptionStatus.DISABLED.value
-            draft = _subscription(1, tariff_id=None, days_left=60)
-            draft.status = SubscriptionStatus.PENDING.value
-            paid = _subscription(1, tariff_id=PRO_TARIFF_ID, days_left=10)
-            await _seed(db, [disabled, draft, paid])
-
-            grant = await engine.grant_reward_days(db, await db.get(User, 1), 7, None)
-
-            assert grant.subscription_id == paid.id
-
-
 class TestClassicMode:
     """Классический режим: подписка одна, тарифов у неё нет."""
-
-    @pytest.fixture(autouse=True)
-    def classic(self, monkeypatch):
-        monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
 
     @pytest.mark.asyncio
     async def test_days_extend_the_single_subscription(self, monkeypatch):
@@ -555,20 +424,6 @@ class TestPanelSync:
             create.assert_awaited_once()
             update.assert_not_awaited()
             assert create.await_args.args[1].id == grant.subscription_id
-
-    @pytest.mark.asyncio
-    async def test_extended_subscription_known_to_panel_calls_update(self, monkeypatch):
-        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-        create, update = _panel_spy(monkeypatch)
-        async with memory_session(monkeypatch, TABLES) as db:
-            target = _subscription(1, tariff_id=PRO_TARIFF_ID)
-            target.remnawave_id = 555
-            await _seed(db, [target])
-
-            await engine.grant_reward_days(db, await db.get(User, 1), 7, PRO_TARIFF_ID)
-
-            update.assert_awaited_once()
-            create.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_extended_subscription_unknown_to_panel_is_created_there(self, monkeypatch):

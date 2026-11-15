@@ -22,15 +22,14 @@ from tests.services.test_cart_cleanup_redis import carts  # noqa: F401
 pytestmark = [pytest.mark.postgres, pytest.mark.asyncio]
 
 
-@pytest.mark.parametrize('multi,fresh', [(False, False), (True, False), (True, True)])
+@pytest.mark.parametrize('fresh', [False])
 @pytest.mark.parametrize('replacement', ['none', 'state', 'data', 'both', 'same_cart', 'other_cart'])
 async def test_daily_completion_preserves_new_checkout(
-    postgres_database, monkeypatch, carts, multi, fresh, replacement, cart_kind='daily'
+    postgres_database, monkeypatch, carts, fresh, replacement, cart_kind='daily'
 ):
     from aiogram.fsm.storage.redis import RedisStorage
 
     service, uid, client = carts
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     monkeypatch.setattr(telegram, 'user_cart_service', service)
     monkeypatch.setattr(telegram, 'should_create_panel_account', AsyncMock(return_value=True))

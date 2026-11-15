@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock, MagicMock
 # импорт тех же имён через `from` разошёлся бы с подменой — CodeQL ровно об этом
 # и предупреждает (py/import-and-import-from).
 import app.services.subscription_service as subscription_service_mod
-from app.config import Settings
 from app.database.models import SubscriptionStatus
 
 
@@ -68,7 +67,6 @@ def _db(*, holder) -> AsyncMock:
 
 
 def _service(monkeypatch, api, user) -> subscription_service_mod.SubscriptionService:
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     service = subscription_service_mod.SubscriptionService()
     monkeypatch.setattr(subscription_service_mod, 'get_user_by_id', AsyncMock(return_value=user))
     monkeypatch.setattr(subscription_service_mod, 'resolve_hwid_device_limit_for_payload', lambda s: None)

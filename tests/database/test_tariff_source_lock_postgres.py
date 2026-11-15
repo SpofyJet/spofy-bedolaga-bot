@@ -7,7 +7,6 @@ import pytest
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.config import settings
 from app.database.crud import user as users
 from app.database.models import Base, Subscription, Tariff, Transaction, User
 from app.services import subscription_auto_purchase_service as auto
@@ -19,11 +18,9 @@ pytestmark = pytest.mark.postgres
 
 
 @pytest.mark.parametrize('daily', [False, True])
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('trial', [False, True])
 @pytest.mark.parametrize('change', ['delete', 'reassign', 'device_limit'])
-async def test_source_is_resolved_after_wallet_lock(postgres_database, monkeypatch, daily, multi, trial, change):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
+async def test_source_is_resolved_after_wallet_lock(postgres_database, monkeypatch, daily, trial, change):
     quote = AsyncMock(side_effect=AssertionError('quote boundary'))
     monkeypatch.setattr(pricing_engine, 'calculate_tariff_purchase_price', quote)
     now = datetime.now(UTC)
@@ -92,8 +89,8 @@ async def test_source_is_resolved_after_wallet_lock(postgres_database, monkeypat
             purchase = auto._auto_purchase_daily_tariff if daily else auto._auto_purchase_tariff
             cart = {'tariff_id': 1, 'period_days': 30, 'subscription_id': 10}
             # Period single mode selects the current primary row; daily carts
-            # already pin explicit owned IDs even with multi mode disabled.
-            allowed = change == 'device_limit' or (not daily and not multi)
+            # pin explicit owned IDs.
+            allowed = change == 'device_limit' or not daily
             if allowed:
                 with pytest.raises(AssertionError, match='quote boundary'):
                     await purchase(db, user, cart)

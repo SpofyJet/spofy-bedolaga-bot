@@ -57,13 +57,11 @@ class Panel(RemnaWaveAPI):
 
 
 @pytest.mark.parametrize(('flow', 'reset_devices'), [('auto', False), ('cabinet', False), ('auto', True)])
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('expired', [False, True])
 @pytest.mark.parametrize('trial', [False, True])
 async def test_same_tariff_90_day_purchase_preserves_hwid(
-    postgres_database, monkeypatch, flow, reset_devices, multi, expired, trial
+    postgres_database, monkeypatch, flow, reset_devices, expired, trial
 ):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', reset_devices)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', True)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
@@ -87,7 +85,7 @@ async def test_same_tariff_90_day_purchase_preserves_hwid(
                     language='ru',
                     status='active',
                     balance_kopeks=10000,
-                    remnawave_id=9002 if multi else 9001,
+                    remnawave_id=9001,
                 ),
                 User(id=2, telegram_id=202, language='ru', status='active'),
                 Tariff(
@@ -102,7 +100,7 @@ async def test_same_tariff_90_day_purchase_preserves_hwid(
             ]
         )
         await db.commit()
-        for sub_id, owner, panel_id in [(10, 1, 9001), (20, 1 if multi else 2, 9002)]:
+        for sub_id, owner, panel_id in [(10, 1, 9001), (20, 2, 9002)]:
             db.add(
                 Subscription(
                     id=sub_id,

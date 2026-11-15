@@ -19,7 +19,6 @@ import pytest
 
 from app.cabinet.routes import admin_users
 from app.cabinet.schemas.users import SyncToPanelRequest
-from app.config import Settings
 
 
 PANEL_ID = 7001
@@ -91,7 +90,6 @@ def _panel_double(monkeypatch, *, panel_expire_at: datetime) -> list[dict]:
             context.__aexit__ = AsyncMock(return_value=None)
             return context
 
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr('app.services.remnawave_service.RemnaWaveService', Service)
     monkeypatch.setattr('app.services.panel_sync.adopt.adopt_or_create_panel_user', create_panel_user)
     monkeypatch.setattr('app.services.panel_sync.payload.get_traffic_reset_strategy', lambda _tariff: 'NO_RESET')

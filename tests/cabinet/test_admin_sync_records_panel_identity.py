@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 from app.cabinet.routes import admin_users
 from app.cabinet.schemas.users import SyncToPanelRequest
-from app.config import Settings
 
 
 USER_PANEL_ID = 7001
@@ -77,7 +76,7 @@ class _Api:
         return []
 
 
-def _panel_double(monkeypatch, api, *, multi_tariff: bool) -> tuple[list, list]:
+def _panel_double(monkeypatch, api) -> tuple[list, list]:
     updated: list = []
     created: list = []
 
@@ -100,7 +99,6 @@ def _panel_double(monkeypatch, api, *, multi_tariff: bool) -> tuple[list, list]:
             context.__aexit__ = AsyncMock(return_value=None)
             return context
 
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: multi_tariff)
     monkeypatch.setattr('app.services.remnawave_service.RemnaWaveService', Service)
 
     async def update_user(**kwargs):
@@ -122,7 +120,7 @@ def _db(*, panel_id_taken: bool) -> AsyncMock:
 
 
 async def test_single_mode_update_records_user_panel_id_on_new_subscription(monkeypatch):
-    updated, created = _panel_double(monkeypatch, _Api({USER_PANEL_ID}), multi_tariff=False)
+    updated, created = _panel_double(monkeypatch, _Api({USER_PANEL_ID}))
     user, subscription = _user(), _subscription()
     db = _db(panel_id_taken=False)
 
@@ -138,7 +136,7 @@ async def test_single_mode_update_records_user_panel_id_on_new_subscription(monk
 
 async def test_single_mode_leaves_row_unlinked_when_another_row_holds_the_id(monkeypatch):
     """Колонка частично уникальна: id у соседней строки — не пишем и не падаем."""
-    _panel_double(monkeypatch, _Api({USER_PANEL_ID}), multi_tariff=False)
+    _panel_double(monkeypatch, _Api({USER_PANEL_ID}))
     user, subscription = _user(), _subscription()
 
     changes = await admin_users._sync_subscription_to_panel(_db(panel_id_taken=True), user, subscription)
@@ -148,21 +146,8 @@ async def test_single_mode_leaves_row_unlinked_when_another_row_holds_the_id(mon
     assert user.remnawave_id == USER_PANEL_ID
 
 
-async def test_multi_mode_new_subscription_gets_its_own_panel_user(monkeypatch):
-    updated, created = _panel_double(monkeypatch, _Api({USER_PANEL_ID}), multi_tariff=True)
-    user, subscription = _user(), _subscription()
-
-    changes = await admin_users._sync_subscription_to_panel(_db(panel_id_taken=False), user, subscription)
-
-    assert changes['action'] == 'created'
-    assert created
-    assert updated == []
-    assert subscription.remnawave_id == NEW_PANEL_ID
-    assert user.remnawave_id == USER_PANEL_ID
-
-
 async def test_sync_to_panel_endpoint_records_panel_id_on_selected_subscription(monkeypatch):
-    updated, _created = _panel_double(monkeypatch, _Api({USER_PANEL_ID}), multi_tariff=False)
+    updated, _created = _panel_double(monkeypatch, _Api({USER_PANEL_ID}))
     subscription = _subscription()
     user = _user(subscriptions=[subscription])
     monkeypatch.setattr(admin_users, 'get_user_by_id', AsyncMock(return_value=user))

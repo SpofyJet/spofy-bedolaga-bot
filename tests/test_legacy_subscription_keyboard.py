@@ -41,10 +41,7 @@ def _patch_setting(monkeypatch, name: str, value: bool) -> None:
     monkeypatch.setattr(Settings, name, lambda self: value)
 
 
-def _patch_mode(monkeypatch, *, tariffs: bool) -> None:
-    from app.config import Settings
-
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: tariffs)
+def _patch_mode(monkeypatch) -> None:
     monkeypatch.setattr(kb, 'get_display_subscription_link', lambda sub: None)
 
 
@@ -53,7 +50,7 @@ def _keyboard(sub) -> list[str]:
 
 
 def test_legacy_subscription_offers_only_move_to_tariff(monkeypatch):
-    _patch_mode(monkeypatch, tariffs=True)
+    _patch_mode(monkeypatch)
 
     cbs = _keyboard(_sub(tariff_id=None))
 
@@ -65,7 +62,7 @@ def test_legacy_subscription_offers_only_move_to_tariff(monkeypatch):
 
 def test_expired_legacy_subscription_still_moves_to_tariff(monkeypatch):
     """Истёкшая старая подписка тоже переводится на тариф той же строкой, а не покупкой с нуля."""
-    _patch_mode(monkeypatch, tariffs=True)
+    _patch_mode(monkeypatch)
 
     cbs = _keyboard(_sub(tariff_id=None, actual_status='expired'))
 
@@ -75,7 +72,7 @@ def test_expired_legacy_subscription_still_moves_to_tariff(monkeypatch):
 
 
 def test_subscription_with_tariff_keeps_renew_and_autopay(monkeypatch):
-    _patch_mode(monkeypatch, tariffs=True)
+    _patch_mode(monkeypatch)
 
     cbs = _keyboard(_sub(tariff_id=7))
 
@@ -86,7 +83,7 @@ def test_subscription_with_tariff_keeps_renew_and_autopay(monkeypatch):
 
 def test_legacy_subscription_has_no_traffic_topup_even_if_classic_topup_is_on(monkeypatch):
     """Классические настройки докупки трафика к старой подписке не применяются."""
-    _patch_mode(monkeypatch, tariffs=True)
+    _patch_mode(monkeypatch)
     _patch_setting(monkeypatch, 'is_traffic_topup_enabled', True)
     _patch_setting(monkeypatch, 'is_traffic_topup_blocked', False)
     sub = _sub(tariff_id=None)
@@ -107,7 +104,7 @@ def _settings_callbacks(sub, *, is_legacy: bool) -> list[str]:
 
 def test_legacy_subscription_settings_offer_no_classic_addons(monkeypatch):
     """В «Настройках» старой подписки нет трафика и устройств по классическим ценам."""
-    _patch_mode(monkeypatch, tariffs=True)
+    _patch_mode(monkeypatch)
     _patch_setting(monkeypatch, 'is_traffic_selectable', True)
     _patch_setting(monkeypatch, 'is_devices_selection_enabled', True)
 
@@ -121,7 +118,7 @@ def test_legacy_subscription_settings_offer_no_classic_addons(monkeypatch):
 
 def test_classic_subscription_settings_keep_classic_addons(monkeypatch):
     """В классическом режиме подписка без тарифа — обычная, её настройки не трогаем."""
-    _patch_mode(monkeypatch, tariffs=False)
+    _patch_mode(monkeypatch)
     _patch_setting(monkeypatch, 'is_traffic_selectable', True)
     _patch_setting(monkeypatch, 'is_devices_selection_enabled', True)
 
@@ -129,20 +126,3 @@ def test_classic_subscription_settings_keep_classic_addons(monkeypatch):
 
     assert 'subscription_switch_traffic' in cbs
     assert 'subscription_change_devices' in cbs
-
-
-def _list_callbacks(subs) -> list[str]:
-    from app.handlers.subscription.my_subscriptions import _build_subscriptions_keyboard
-
-    return _callbacks(_build_subscriptions_keyboard(subs, 'ru'))
-
-
-def test_subscriptions_list_hides_buy_another_while_a_legacy_subscription_exists(monkeypatch):
-    """Пока у человека есть старая подписка, «Купить ещё тариф» не предлагаем: сперва переход на тариф."""
-    _patch_mode(monkeypatch, tariffs=True)
-    legacy = SimpleNamespace(id=1, tariff=None, tariff_id=None, is_trial=False)
-    on_tariff = SimpleNamespace(id=2, tariff=SimpleNamespace(name='Базовый'), tariff_id=2, is_trial=False)
-
-    assert 'menu_buy' not in _list_callbacks([legacy])
-    assert 'menu_buy' not in _list_callbacks([legacy, on_tariff])
-    assert 'menu_buy' in _list_callbacks([on_tariff])

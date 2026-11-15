@@ -1,6 +1,5 @@
 """Deleting a duplicate must preserve the panel account its neighbour uses."""
 
-import asyncio
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -13,13 +12,10 @@ from sqlalchemy import select
 from app.cabinet.routes.subscription_modules.multi_tariff import delete_subscription
 from app.config import settings
 from app.database.models import Base, Subscription, User
-from app.services import subscription_deletion_service as deletion
 from app.services.remnawave_webhook_service import RemnaWaveWebhookService
 from app.services.subscription_service import SubscriptionService
 from tests.fixtures.postgres_db import (
     postgres_session,
-    postgres_sessions,
-    wait_for_lock_waiter,
 )
 
 
@@ -30,7 +26,6 @@ PANEL_ID = 9001
 
 @pytest.fixture
 def panel(monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', 'delete')
     monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_id', {})
     monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_telegram_id', {})
@@ -82,14 +77,10 @@ async def seed(db, *, target_short='shared-short'):
     return user, target
 
 
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('mode', ['delete', 'disable'])
 @pytest.mark.parametrize('alias', ['local', 'remote', 'distinct', 'remote-distinct'])
 @pytest.mark.parametrize('sibling_status', ['active', 'trial', 'limited', 'expired'])
-async def test_deletion_spares_referenced_identity(
-    postgres_database, monkeypatch, panel, multi, mode, alias, sibling_status
-):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
+async def test_deletion_spares_referenced_identity(postgres_database, monkeypatch, panel, mode, alias, sibling_status):
     monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', mode)
     async with postgres_session(postgres_database, TABLES) as db:
         user, target = await seed(db, target_short=None if alias.startswith('remote') else 'shared-short')
@@ -103,9 +94,9 @@ async def test_deletion_spares_referenced_identity(
         assert await db.scalar(select(Subscription.id).where(Subscription.id == 10)) is None
         await db.refresh(sibling)
         assert (sibling.status, sibling.end_date, sibling.subscription_url) == before
-        protect = (multi and 'distinct' not in alias) or (not multi and sibling_status != 'expired')
-        assert panel.deleted == ([] if protect or not multi or mode == 'disable' else [PANEL_ID])
-        assert panel.disabled == ([] if protect or (multi and mode == 'delete') else [PANEL_ID])
+        protect = sibling_status != 'expired'
+        assert panel.deleted == []
+        assert panel.disabled == ([] if protect else [PANEL_ID])
         await db.refresh(user)
         assert user.remnawave_id == (None if panel.deleted else PANEL_ID)
         assert RemnaWaveWebhookService._is_intentional_panel_deletion_event({'id': PANEL_ID}) is bool(panel.deleted)
@@ -118,7 +109,6 @@ async def test_shared_short_identity_survives_legacy_or_foreign_reference(
     async with postgres_session(postgres_database, TABLES) as db:
         user, target = await seed(db)
         if missing_user_id:
-            monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
             user.remnawave_id = None
             owner = 1
         else:
@@ -161,7 +151,6 @@ async def test_foreign_owner_numeric_identity_is_not_deleted(postgres_database, 
 async def test_single_tariff_checks_short_uuid_of_actual_panel_target(
     postgres_database, monkeypatch, panel, historical_id
 ):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     async with postgres_session(postgres_database, TABLES) as db:
         user, target = await seed(db, target_short='different-account')
         target.remnawave_id = historical_id
@@ -220,37 +209,3 @@ async def test_cabinet_rejects_unowned_or_live_subscription(postgres_database, p
         assert error.value.status_code == code
         assert await db.get(Subscription, 10) is not None
         assert panel.deleted == panel.disabled == []
-
-
-async def test_concurrent_delete_reaches_panel_once(postgres_database, monkeypatch, panel):
-    async with postgres_sessions(postgres_database, TABLES, count=3) as (left, right, observer):
-        _, target = await seed(left)
-        stale_target = await right.get(Subscription, 10)
-        entered = asyncio.Event()
-        release = asyncio.Event()
-
-        async def paused_delete(self, panel_user_id):
-            panel.deleted.append(panel_user_id)
-            entered.set()
-            await asyncio.wait_for(release.wait(), 10)
-            return True
-
-        monkeypatch.setattr(SubscriptionService, 'delete_remnawave_user', paused_delete)
-
-        async def callback(db, sub):
-            try:
-                await deletion.delete_subscription_record(db, sub, deleted_by='user')
-            finally:
-                await db.rollback()
-
-        first = asyncio.create_task(callback(left, target))
-        await asyncio.wait_for(entered.wait(), 10)
-        second = asyncio.create_task(callback(right, stale_target))
-        try:
-            await wait_for_lock_waiter(observer)
-        finally:
-            release.set()
-        await asyncio.wait_for(asyncio.gather(first, second), 10)
-        assert panel.deleted == [PANEL_ID]
-        await observer.rollback()
-        assert await observer.get(Subscription, 10) is None

@@ -905,135 +905,8 @@ def _purchase_tariff(**overrides):
     return SimpleNamespace(**base)
 
 
-async def test_sbp_purchase_creates_expired_stub_for_new_tariff(monkeypatch):
-    """Нет подписки этого тарифа → создаётся EXPIRED-заготовка (без доступа),
-    привязка вешается на неё; ответ несёт subscription_id для поллинга."""
-    from types import SimpleNamespace
-    from unittest.mock import AsyncMock
-
-    from app.config import settings
-    from app.database.models import SubscriptionStatus
-    from app.services.payment import platega as platega_module
-
-    for key, value in {
-        'PLATEGA_ENABLED': True,
-        'PLATEGA_MERCHANT_ID': 'm',
-        'PLATEGA_SECRET': 's',
-        'PLATEGA_RECURRENT_ENABLED': True,
-    }.items():
-        monkeypatch.setattr(settings, key, value, raising=False)
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-
-    tariff = _purchase_tariff()
-    user = SimpleNamespace(id=777)
-
-    created = {}
-
-    async def fake_create_stub(db, user_id, t):
-        from app.database.models import Subscription
-
-        stub = Subscription(
-            id=91,
-            user_id=user_id,
-            tariff_id=t.id,
-            status=SubscriptionStatus.EXPIRED.value,
-            is_trial=False,
-        )
-        created['stub'] = stub
-        return stub
-
-    mock_enable = AsyncMock(return_value={'status': 'PENDING', 'redirect_url': 'https://pay/x', 'local_id': 1})
-    monkeypatch.setattr('app.database.crud.subscription.create_sbp_pending_subscription', fake_create_stub)
-    monkeypatch.setattr(
-        'app.database.crud.subscription.get_subscription_by_user_and_tariff', AsyncMock(return_value=None)
-    )
-    monkeypatch.setattr(platega_module, 'enable_platega_sbp_recurring', mock_enable)
-
-    async with _memory_session(monkeypatch) as db:
-        result = await platega_module.purchase_tariff_with_sbp_recurring(db, user=user, tariff=tariff)
-
-    assert result['subscription_id'] == 91
-    assert result['redirect_url'] == 'https://pay/x'
-    mock_enable.assert_awaited_once_with(db, user_id=777, subscription=created['stub'], tariff=tariff, period_days=None)
-
-
-async def test_sbp_purchase_binds_to_existing_expired_subscription(monkeypatch):
-    """Есть истёкшая подписка тарифа → привязка на неё, заготовка не создаётся."""
-    from types import SimpleNamespace
-    from unittest.mock import AsyncMock
-
-    from app.config import settings
-    from app.services.payment import platega as platega_module
-
-    for key, value in {
-        'PLATEGA_ENABLED': True,
-        'PLATEGA_MERCHANT_ID': 'm',
-        'PLATEGA_SECRET': 's',
-        'PLATEGA_RECURRENT_ENABLED': True,
-    }.items():
-        monkeypatch.setattr(settings, key, value, raising=False)
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-
-    tariff = _purchase_tariff()
-    user = SimpleNamespace(id=777)
-    existing = SimpleNamespace(id=55, is_trial=False, status='expired', tariff_id=5)
-
-    mock_enable = AsyncMock(return_value={'status': 'PENDING', 'redirect_url': 'https://pay/y', 'local_id': 2})
-    mock_create_stub = AsyncMock()
-    monkeypatch.setattr(
-        'app.database.crud.subscription.get_subscription_by_user_and_tariff', AsyncMock(return_value=existing)
-    )
-    monkeypatch.setattr('app.database.crud.subscription.create_sbp_pending_subscription', mock_create_stub)
-    monkeypatch.setattr(platega_module, 'enable_platega_sbp_recurring', mock_enable)
-
-    async with _memory_session(monkeypatch) as db:
-        result = await platega_module.purchase_tariff_with_sbp_recurring(db, user=user, tariff=tariff)
-
-    assert result['subscription_id'] == 55
-    mock_create_stub.assert_not_awaited()
-
-
-async def test_sbp_purchase_refuses_disabled_and_pending(monkeypatch):
-    """Отказы: disabled/pending (чардж не активирует — деньги ушли бы без доступа).
-
-    Spofy: триал и подписка другого тарифа НЕ отказ — привязка встаёт на эту же
-    строку, а первое успешное списание конвертирует триал и переключает тариф.
-    """
-    from types import SimpleNamespace
-    from unittest.mock import AsyncMock
-
-    import pytest
-
-    from app.config import settings
-    from app.services.payment import platega as platega_module
-
-    for key, value in {
-        'PLATEGA_ENABLED': True,
-        'PLATEGA_MERCHANT_ID': 'm',
-        'PLATEGA_SECRET': 's',
-        'PLATEGA_RECURRENT_ENABLED': True,
-    }.items():
-        monkeypatch.setattr(settings, key, value, raising=False)
-
-    tariff = _purchase_tariff()
-    user = SimpleNamespace(id=777)
-
-    cases = [
-        SimpleNamespace(id=2, is_trial=False, status='disabled', tariff_id=5),
-        SimpleNamespace(id=3, is_trial=False, status='pending', tariff_id=5),
-    ]
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-    for sub in cases:
-        monkeypatch.setattr(
-            'app.database.crud.subscription.get_subscription_by_user_and_tariff', AsyncMock(return_value=sub)
-        )
-        async with _memory_session(monkeypatch) as db:
-            with pytest.raises(ValueError):
-                await platega_module.purchase_tariff_with_sbp_recurring(db, user=user, tariff=tariff)
-
-
-async def test_sbp_purchase_binds_trial_and_foreign_tariff_to_same_row(monkeypatch):
-    """Spofy: триал и подписка другого тарифа получают привязку на свою же строку."""
+async def test_sbp_purchase_binds_foreign_tariff_to_same_row(monkeypatch):
+    """Spofy: подписка другого тарифа получает привязку на свою же строку."""
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
 
@@ -1053,17 +926,7 @@ async def test_sbp_purchase_binds_trial_and_foreign_tariff_to_same_row(monkeypat
     mock_enable = AsyncMock(return_value={'status': 'PENDING', 'redirect_url': 'https://pay/t', 'local_id': 3})
     monkeypatch.setattr(platega_module, 'enable_platega_sbp_recurring', mock_enable)
 
-    trial = SimpleNamespace(id=1, is_trial=True, status='active', tariff_id=5)
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-    monkeypatch.setattr(
-        'app.database.crud.subscription.get_subscription_by_user_and_tariff', AsyncMock(return_value=trial)
-    )
-    async with _memory_session(monkeypatch) as db:
-        result = await platega_module.purchase_tariff_with_sbp_recurring(db, user=user, tariff=tariff)
-    assert result['subscription_id'] == 1
-
     foreign = SimpleNamespace(id=4, is_trial=False, status='active', tariff_id=99)
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr('app.database.crud.subscription.get_subscription_by_user_id', AsyncMock(return_value=foreign))
     async with _memory_session(monkeypatch) as db:
         result = await platega_module.purchase_tariff_with_sbp_recurring(db, user=user, tariff=tariff)

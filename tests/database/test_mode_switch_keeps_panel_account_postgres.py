@@ -1,10 +1,8 @@
-"""Переключение режима продаж не теряет аккаунт панели — на PostgreSQL, боевой сервис.
+"""Аккаунт панели находят оба резолвера адреса — на PostgreSQL, боевой сервис.
 
-Вопрос владельца (18.09): «если не было мультитарифа, а были тарифы — нулей по
-устройствам не будет? и наоборот?». Аккаунт создаёт боевой ``create_remnawave_user``
-(панель — фейк, только API-вызовы), потом режим переключается, и оба резолвера
-адреса панели (кабинет и бот) обязаны найти тот же аккаунт: без аккаунта экран
-устройств показывает «0 устройств».
+Аккаунт создаёт боевой ``create_remnawave_user`` (панель — фейк, только
+API-вызовы), и оба резолвера адреса панели (кабинет и бот) обязаны найти тот же
+аккаунт: без аккаунта экран устройств показывает «0 устройств».
 """
 
 from __future__ import annotations
@@ -19,7 +17,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.cabinet.routes.subscription_modules.devices import _resolve_panel_user_id
-from app.config import Settings
 from app.database.models import Base, Subscription, SubscriptionStatus, User
 from app.handlers.subscription.devices import _get_panel_user_id
 from app.services.subscription_service import SubscriptionService
@@ -65,10 +62,6 @@ class _PanelApi:
 
     async def reset_user_devices(self, *_args, **_kwargs):
         return True
-
-
-def _multi(monkeypatch, value: bool) -> None:
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: value)
 
 
 @pytest.fixture
@@ -128,11 +121,9 @@ def _both_resolvers_find(sub, user) -> None:
 
 
 @pytest.mark.asyncio
-async def test_account_created_in_single_mode_survives_switch_to_multi(postgres_database, panel, monkeypatch):
+async def test_account_created_in_single_mode_is_found_by_both_resolvers(postgres_database, panel):
     async with postgres_session(postgres_database, TABLES) as db:
         sub = await _seed(db)
-        _multi(monkeypatch, False)
-
         await SubscriptionService().create_remnawave_user(db, sub)
 
         sub, user = await _reload(db)
@@ -140,30 +131,9 @@ async def test_account_created_in_single_mode_survives_switch_to_multi(postgres_
         assert (user.remnawave_id, sub.remnawave_id) == (NEW_PANEL_ID, NEW_PANEL_ID)
         _both_resolvers_find(sub, user)
 
-        _multi(monkeypatch, True)
-        _both_resolvers_find(sub, user)
-
 
 @pytest.mark.asyncio
-async def test_account_created_in_multi_mode_survives_switch_to_single(postgres_database, panel, monkeypatch):
-    async with postgres_session(postgres_database, TABLES) as db:
-        sub = await _seed(db)
-        _multi(monkeypatch, True)
-
-        await SubscriptionService().create_remnawave_user(db, sub)
-
-        sub, user = await _reload(db)
-        assert len(panel.created) == 1
-        assert sub.remnawave_id == NEW_PANEL_ID
-        assert user.remnawave_id == NEW_PANEL_ID, 'аккаунт из мультитарифа должен быть записан и человеку'
-        _both_resolvers_find(sub, user)
-
-        _multi(monkeypatch, False)
-        _both_resolvers_find(sub, user)
-
-
-@pytest.mark.asyncio
-async def test_old_multi_rows_without_user_account_still_resolve_in_single_mode(postgres_database, monkeypatch):
+async def test_old_multi_rows_without_user_account_still_resolve_in_single_mode(postgres_database):
     """Строки, созданные ДО правки: аккаунт только у подписки. Одиночный режим всё равно находит его."""
     async with postgres_session(postgres_database, TABLES) as db:
         sub = await _seed(db)
@@ -172,5 +142,4 @@ async def test_old_multi_rows_without_user_account_still_resolve_in_single_mode(
         sub, user = await _reload(db)
         assert user.remnawave_id is None
 
-        _multi(monkeypatch, False)
         _both_resolvers_find(sub, user)

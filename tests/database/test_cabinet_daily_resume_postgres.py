@@ -7,7 +7,6 @@ import pytest
 from sqlalchemy import select
 
 from app.cabinet.routes.subscription_modules import daily
-from app.config import settings
 from app.database.models import Base, Subscription, Transaction, User
 from tests.fixtures.postgres_db import postgres_session
 from tests.services.test_daily_resume_traffic_reset import _FakePanelSync, _rows
@@ -16,12 +15,10 @@ from tests.services.test_daily_resume_traffic_reset import _FakePanelSync, _rows
 pytestmark = pytest.mark.postgres
 
 
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('raw_status', ['trial', 'active', 'expired'])
-async def test_trial_cannot_be_paid_through_resume(postgres_database, monkeypatch, multi, raw_status):
+async def test_trial_cannot_be_paid_through_resume(postgres_database, monkeypatch, raw_status):
     from fastapi import HTTPException
 
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     panel = _FakePanelSync()
     monkeypatch.setattr(daily, 'SubscriptionService', lambda: panel)
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
@@ -46,11 +43,9 @@ async def test_trial_cannot_be_paid_through_resume(postgres_database, monkeypatc
         assert not panel.calls
 
 
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('raw_status', ['active', 'expired', 'disabled', 'limited'])
 @pytest.mark.parametrize('grace', [False, True])
-async def test_expired_daily_resume_and_retry(postgres_database, monkeypatch, raw_status, grace, multi):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
+async def test_expired_daily_resume_and_retry(postgres_database, monkeypatch, raw_status, grace):
     monkeypatch.setattr(daily, 'SubscriptionService', lambda: _FakePanelSync())
     monkeypatch.setattr('app.database.crud.transaction.emit_transaction_side_effects', AsyncMock())
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
@@ -99,80 +94,3 @@ async def test_restricted_account_cannot_resume_but_can_pause(postgres_database,
         assert (await db.get(User, 1, populate_existing=True)).balance_kopeks == balance
         assert not (await db.scalars(select(Transaction))).all()
         assert not panel.calls
-
-
-async def test_failure_does_not_take_money(postgres_database, monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    monkeypatch.setattr(
-        'app.database.crud.transaction.create_transaction', AsyncMock(side_effect=RuntimeError('ledger unavailable'))
-    )
-    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
-        db.add_all(_rows('NO_RESET', status='expired'))
-        await db.commit()
-        user = await db.get(User, 1)
-        balance = user.balance_kopeks
-        with pytest.raises(RuntimeError):
-            await daily.toggle_subscription_pause(user=user, db=db, subscription_id=10, paused=False)
-        await db.rollback()
-        assert (await db.get(User, 1, populate_existing=True)).balance_kopeks == balance
-        assert (await db.get(Subscription, 10, populate_existing=True)).actual_status == 'expired'
-
-
-async def test_concurrent_resume_charges_once(postgres_database, monkeypatch):
-    import asyncio
-
-    from sqlalchemy.ext.asyncio import async_sessionmaker
-
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    monkeypatch.setattr(daily, 'SubscriptionService', lambda: _FakePanelSync())
-    monkeypatch.setattr('app.database.crud.transaction.emit_transaction_side_effects', AsyncMock())
-    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
-        db.add_all(_rows('NO_RESET', status='expired'))
-        await db.commit()
-        factory = async_sessionmaker(db.bind, expire_on_commit=False)
-
-        async def resume():
-            async with factory() as session:
-                user = await session.get(User, 1)
-                return await daily.toggle_subscription_pause(user=user, db=session, subscription_id=10, paused=False)
-
-        results = await asyncio.gather(resume(), resume())
-        assert all(result['is_paused'] is False for result in results)
-        assert (await db.get(User, 1, populate_existing=True)).balance_kopeks == 99000
-        assert len((await db.scalars(select(Transaction))).all()) == 1
-        assert (await db.get(Subscription, 10, populate_existing=True)).is_daily_paused is False
-
-
-@pytest.mark.parametrize('case', ['insufficient', 'free', 'paid_pause'])
-async def test_daily_resume_balance_cases(postgres_database, monkeypatch, case):
-    from fastapi import HTTPException
-
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    monkeypatch.setattr(daily, 'SubscriptionService', lambda: _FakePanelSync())
-    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
-        rows = _rows('NO_RESET', status='expired')
-        rows[0].balance_kopeks = 0
-        if case == 'free':
-            rows[1].daily_price_kopeks = 0
-        if case == 'paid_pause':
-            rows[2].status = 'active'
-            rows[2].end_date = datetime.now(UTC) + timedelta(days=2)
-            rows[2].is_daily_paused = True
-        before = rows[2].end_date
-        db.add_all(rows)
-        await db.commit()
-        user = await db.get(User, 1)
-        if case == 'insufficient':
-            with pytest.raises(HTTPException) as error:
-                await daily.toggle_subscription_pause(user=user, db=db, subscription_id=10, paused=False)
-            assert error.value.status_code == 402
-            await db.rollback()
-        else:
-            await daily.toggle_subscription_pause(user=user, db=db, subscription_id=10, paused=False)
-        sub = await db.get(Subscription, 10, populate_existing=True)
-        if case in {'insufficient', 'paid_pause'}:
-            assert sub.end_date == before
-        else:
-            assert sub.actual_status == 'active'
-        assert (await db.get(User, 1, populate_existing=True)).balance_kopeks == 0
-        assert not (await db.scalars(select(Transaction))).all()

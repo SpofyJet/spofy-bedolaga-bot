@@ -30,7 +30,6 @@ class QuickRenewalPanel(Panel):
 async def checkout(postgres_database, monkeypatch):
     for name, value in {
         'SALES_MODE': 'tariffs',
-        'MULTI_TARIFF_ENABLED': False,
         'DEFAULT_DEVICE_LIMIT': 1,
         'PRICE_30_DAYS': 45000,
         'PRICE_PER_DEVICE': 10000,

@@ -24,7 +24,6 @@ from aiogram.types import CallbackQuery, Chat, Message, User as TgUser
 from sqlalchemy import select
 
 import app.handlers.gift_activation as gift_act_mod
-from app.config import settings
 from app.database.crud.landing import generate_purchase_token
 from app.database.models import (
     AdvertisingCampaign,
@@ -504,174 +503,6 @@ class TestGiftDeeplinkActivation:
 class TestGiftSubscriptionActivationMultiTariff:
     """Pins multi-tariff subscription activation semantics."""
 
-    @pytest.mark.asyncio
-    async def test_active_same_tariff_extends_preserving_remaining_time(self, monkeypatch):
-        """In multi-tariff mode, claiming a gift for the SAME active tariff extends remaining time."""
-        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-
-        async with memory_session(monkeypatch, _TABLES) as db:
-            t1, _ = await _seed_tariffs_and_settings(db)
-
-            recipient = User(telegram_id=22222, username='rec', balance_kopeks=0)
-            db.add(recipient)
-            await db.commit()
-            await db.refresh(recipient)
-
-            # Active subscription with 10 days remaining
-            now = datetime.now(UTC)
-            initial_end = now + timedelta(days=10)
-            sub = Subscription(
-                user_id=recipient.id,
-                tariff_id=t1.id,
-                status=SubscriptionStatus.ACTIVE.value,
-                is_trial=False,
-                start_date=now - timedelta(days=20),
-                end_date=initial_end,
-                traffic_limit_gb=50,
-                device_limit=2,
-            )
-            db.add(sub)
-            await db.commit()
-
-            # Create gift for Tariff 1 for 30 days
-            token = generate_purchase_token()
-            purchase = GuestPurchase(
-                token=token,
-                contact_type='telegram',
-                contact_value=str(recipient.telegram_id),
-                is_gift=True,
-                status=GuestPurchaseStatus.PENDING_ACTIVATION.value,
-                tariff_id=t1.id,
-                period_days=30,
-                amount_kopeks=30000,
-                user_id=recipient.id,
-            )
-            db.add(purchase)
-            await db.commit()
-
-            with patch('app.services.subscription_service.SubscriptionService.create_remnawave_user', AsyncMock()):
-                activated = await activate_purchase(db, token, skip_notification=True)
-
-            assert activated.status == GuestPurchaseStatus.DELIVERED.value
-
-            # Subscription was extended: new end_date is approx initial_end + 30 days
-            await db.refresh(sub)
-            expected_min_end = initial_end + timedelta(days=29)
-            assert sub.end_date > expected_min_end
-            assert sub.status == SubscriptionStatus.ACTIVE.value
-
-    @pytest.mark.asyncio
-    async def test_expired_same_tariff_refreshes_from_current_time(self, monkeypatch):
-        """In multi-tariff mode, claiming a gift for an EXPIRED same-tariff resets end date from now."""
-        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-
-        async with memory_session(monkeypatch, _TABLES) as db:
-            t1, _ = await _seed_tariffs_and_settings(db)
-
-            recipient = User(telegram_id=22222, username='rec', balance_kopeks=0)
-            db.add(recipient)
-            await db.commit()
-            await db.refresh(recipient)
-
-            # Expired subscription (ended 5 days ago)
-            now = datetime.now(UTC)
-            expired_end = now - timedelta(days=5)
-            sub = Subscription(
-                user_id=recipient.id,
-                tariff_id=t1.id,
-                status=SubscriptionStatus.ACTIVE.value,
-                is_trial=False,
-                start_date=now - timedelta(days=35),
-                end_date=expired_end,
-                traffic_limit_gb=50,
-                device_limit=2,
-            )
-            db.add(sub)
-            await db.commit()
-
-            token = generate_purchase_token()
-            purchase = GuestPurchase(
-                token=token,
-                contact_type='telegram',
-                contact_value=str(recipient.telegram_id),
-                is_gift=True,
-                status=GuestPurchaseStatus.PENDING_ACTIVATION.value,
-                tariff_id=t1.id,
-                period_days=30,
-                amount_kopeks=30000,
-                user_id=recipient.id,
-            )
-            db.add(purchase)
-            await db.commit()
-
-            with patch('app.services.subscription_service.SubscriptionService.create_remnawave_user', AsyncMock()):
-                activated = await activate_purchase(db, token, skip_notification=True)
-
-            assert activated.status == GuestPurchaseStatus.DELIVERED.value
-
-            # Subscription refreshed: end_date is now + 30 days
-            await db.refresh(sub)
-            assert sub.end_date > now + timedelta(days=29)
-            assert sub.end_date < now + timedelta(days=31)
-
-    @pytest.mark.asyncio
-    async def test_different_tariff_creates_new_subscription(self, monkeypatch):
-        """In multi-tariff mode, claiming a gift for a DIFFERENT tariff creates a new subscription row."""
-        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-
-        async with memory_session(monkeypatch, _TABLES) as db:
-            t1, t2 = await _seed_tariffs_and_settings(db)
-
-            recipient = User(telegram_id=22222, username='rec', balance_kopeks=0)
-            db.add(recipient)
-            await db.commit()
-            await db.refresh(recipient)
-
-            # Existing active sub on Tariff 1
-            now = datetime.now(UTC)
-            sub1 = Subscription(
-                user_id=recipient.id,
-                tariff_id=t1.id,
-                status=SubscriptionStatus.ACTIVE.value,
-                is_trial=False,
-                start_date=now,
-                end_date=now + timedelta(days=30),
-                traffic_limit_gb=50,
-                device_limit=2,
-            )
-            db.add(sub1)
-            await db.commit()
-
-            # Gift for Tariff 2
-            token = generate_purchase_token()
-            purchase = GuestPurchase(
-                token=token,
-                contact_type='telegram',
-                contact_value=str(recipient.telegram_id),
-                is_gift=True,
-                status=GuestPurchaseStatus.PENDING_ACTIVATION.value,
-                tariff_id=t2.id,
-                period_days=30,
-                amount_kopeks=60000,
-                user_id=recipient.id,
-            )
-            db.add(purchase)
-            await db.commit()
-
-            with patch('app.services.subscription_service.SubscriptionService.create_remnawave_user', AsyncMock()):
-                activated = await activate_purchase(db, token, skip_notification=True)
-
-            assert activated.status == GuestPurchaseStatus.DELIVERED.value
-
-            # User now has two distinct subscriptions
-            subs_res = await db.execute(
-                select(Subscription).where(Subscription.user_id == recipient.id).order_by(Subscription.id)
-            )
-            all_subs = subs_res.scalars().all()
-            assert len(all_subs) == 2
-            tariff_ids = {s.tariff_id for s in all_subs}
-            assert tariff_ids == {t1.id, t2.id}
-
 
 # ── Step 2: Single-Tariff Subscription Activation Semantics ─────────────────
 
@@ -682,7 +513,6 @@ class TestGiftSubscriptionActivationSingleTariff:
     @pytest.mark.asyncio
     async def test_active_subscription_extends_with_gifted_tariff_and_limits(self, monkeypatch):
         """In single-tariff mode, claiming a gift extends active sub and adopts gifted tariff/limits."""
-        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
 
         async with memory_session(monkeypatch, _TABLES) as db:
             t1, t2 = await _seed_tariffs_and_settings(db)
@@ -741,7 +571,6 @@ class TestGiftSubscriptionActivationSingleTariff:
     @pytest.mark.asyncio
     async def test_expired_subscription_replaced_with_gifted_tariff(self, monkeypatch):
         """In single-tariff mode, claiming a gift on expired subscription replaces it with fresh dates."""
-        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
 
         async with memory_session(monkeypatch, _TABLES) as db:
             t1, t2 = await _seed_tariffs_and_settings(db)
@@ -792,7 +621,6 @@ class TestGiftSubscriptionActivationSingleTariff:
     @pytest.mark.asyncio
     async def test_first_subscription_created_when_user_has_no_subs(self, monkeypatch):
         """In single-tariff mode, first gift claim creates initial paid subscription."""
-        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
 
         async with memory_session(monkeypatch, _TABLES) as db:
             t1, _ = await _seed_tariffs_and_settings(db)
@@ -943,7 +771,6 @@ class TestGiftOverAnotherSubscription:
         from app.services.guest_purchase_service import GiftLifetimeHolderError
         from app.utils.lifetime import LIFETIME_END
 
-        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
         async with memory_session(monkeypatch, _TABLES) as db:
             t1, t2 = await _seed_tariffs_and_settings(db)
             _, sub, token = await _gift_over(db, held_tariff=t1, gift_tariff=t2, end_date=LIFETIME_END)
@@ -962,7 +789,6 @@ class TestGiftOverAnotherSubscription:
 
     @pytest.mark.asyncio
     async def test_trial_holder_gets_the_gift(self, monkeypatch):
-        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
         async with memory_session(monkeypatch, _TABLES) as db:
             t1, t2 = await _seed_tariffs_and_settings(db)
             now = datetime.now(UTC)
@@ -984,7 +810,6 @@ class TestGiftOverAnotherSubscription:
     async def test_activation_passes_the_gift_carry_rule(self, monkeypatch):
         import app.services.guest_purchase_service as service
 
-        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
         seen = {}
         real_extend = service.extend_subscription
 
@@ -1009,7 +834,6 @@ class TestGiftOverAnotherSubscription:
         from app.utils.gift_result import gift_valid_until_line, subscription_end_fields
         from app.utils.lifetime import LIFETIME_END
 
-        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
         async with memory_session(monkeypatch, _TABLES) as db:
             t1, t2 = await _seed_tariffs_and_settings(db)
             end = datetime(2027, 3, 14, 9, tzinfo=UTC)

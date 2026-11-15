@@ -145,7 +145,6 @@ async def test_free_spin_rechecked_under_lock():
         patch('app.services.wheel_service.get_wheel_prizes', AsyncMock(return_value=[SimpleNamespace(id=1)])),
         patch('app.database.crud.user.lock_user_for_update', AsyncMock(return_value=user)),
         patch('app.services.wheel_service.get_subscription_by_user_id', AsyncMock(return_value=None)),
-        patch.object(type(settings), 'is_multi_tariff_enabled', lambda self: False),
         patch.object(svc, 'get_free_spin_state', AsyncMock(return_value=FreeSpinState(True, 0, 15000, 0))),
         select_prize as selected,
     ):

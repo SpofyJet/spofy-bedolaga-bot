@@ -87,7 +87,6 @@ async def test_change_tariff_preserves_remaining_period(db: AsyncMock) -> None:
     new_tariff = _tariff(tariff_id=2, name='Tariff 2', traffic_limit_gb=200, device_limit=5)
 
     fake_settings = MagicMock()
-    fake_settings.is_multi_tariff_enabled.return_value = False
     fake_settings.RESET_TRAFFIC_ON_TARIFF_SWITCH = False
 
     with (
@@ -123,7 +122,6 @@ async def test_change_tariff_does_not_extend_almost_expired_sub(db: AsyncMock) -
     new_tariff = _tariff(tariff_id=2, name='Tariff 2')
 
     fake_settings = MagicMock()
-    fake_settings.is_multi_tariff_enabled.return_value = False
     fake_settings.RESET_TRAFFIC_ON_TARIFF_SWITCH = False
 
     with (
@@ -156,7 +154,6 @@ async def test_change_tariff_keeps_trial_a_trial(db: AsyncMock) -> None:
     new_tariff = _tariff(tariff_id=2, name='Paid 30d', traffic_limit_gb=200, is_trial_available=False)
 
     fake_settings = MagicMock()
-    fake_settings.is_multi_tariff_enabled.return_value = False
     fake_settings.RESET_TRAFFIC_ON_TARIFF_SWITCH = False
 
     with (

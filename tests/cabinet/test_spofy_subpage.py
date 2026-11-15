@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from app.cabinet.routes import spofy_subpage as bridge
-from app.config import Settings, settings
+from app.config import settings
 from app.services.user_cart_service import UserCartService
 
 
@@ -221,7 +221,6 @@ async def test_renewal_cart_rejects_trial_and_unknown_period(monkeypatch):
 async def test_tariff_cart_for_trial_user(monkeypatch):
     user, sub = _user(), _subscription(is_trial=True, tariff=None, device_limit=1)
     tariff = _tariff()
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr(bridge, 'get_tariff_by_id', AsyncMock(return_value=tariff))
     monkeypatch.setattr(
         bridge.pricing_engine, 'calculate_tariff_purchase_price', AsyncMock(return_value=_pricing(19900))
@@ -235,11 +234,7 @@ async def test_tariff_cart_for_trial_user(monkeypatch):
     assert cart['return_to_cart'] is True and cart['device_limit'] == 3
 
 
-async def test_tariff_cart_refuses_daily_and_multi_tariff(monkeypatch):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    with pytest.raises(HTTPException):
-        await bridge.save_tariff_cart(None, _user(), _subscription(), 7, 30)
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+async def test_tariff_cart_refuses_daily(monkeypatch):
     monkeypatch.setattr(bridge, 'get_tariff_by_id', AsyncMock(return_value=_tariff(is_daily=True)))
     with pytest.raises(HTTPException):
         await bridge.save_tariff_cart(None, _user(), _subscription(), 7, 30)

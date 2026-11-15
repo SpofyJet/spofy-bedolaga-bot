@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from sqlalchemy import select
 
-from app.config import Settings, settings
+from app.config import settings
 from app.database.models import (
     Base,
     PaymentMethod,
@@ -47,8 +47,6 @@ PANEL_ID = 555
 
 @pytest.fixture(autouse=True)
 def single_tariff_mode_quiet(monkeypatch):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', False)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)

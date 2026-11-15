@@ -261,7 +261,6 @@ def test_no_add_slot_button_by_default():
 def test_all_slots_taken(monkeypatch, limit, connected, trial, expected):
     from app.handlers.subscription import devices
 
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'DEVICES_SELECTION_ENABLED', True)
     user = SimpleNamespace(subscription=SimpleNamespace(id=1, device_limit=limit, is_trial=trial))
 

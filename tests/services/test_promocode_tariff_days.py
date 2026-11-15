@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.config import settings
 from app.database.crud import server_squad, subscription as sub_crud, tariff as tariff_crud
 from app.database.models import PromoCodeType
 from app.services import promocode_service as module
@@ -37,7 +36,6 @@ def env(monkeypatch):
         extend=AsyncMock(),
         current=None,
     )
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False, raising=False)
     monkeypatch.setattr(tariff_crud, 'get_tariff_by_id', AsyncMock(side_effect=lambda _db, tid: tariffs.get(tid)))
     monkeypatch.setattr(server_squad, 'get_effective_tariff_squad_uuids', AsyncMock(return_value=['b']))
     monkeypatch.setattr(sub_crud, 'create_paid_subscription', calls.create)

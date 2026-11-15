@@ -49,7 +49,6 @@ def panel(monkeypatch):
 async def test_late_deleted_event_after_email_telegram_merge_preserves_paid_subscription(
     postgres_database, monkeypatch, panel, secondary_balance, keep, legacy, trial, mode
 ):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', mode)
     monkeypatch.setattr(merge, '_sync_transferred_subscriptions_to_panel', AsyncMock())
     monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_id', {})
@@ -158,10 +157,8 @@ async def test_late_deleted_event_after_email_telegram_merge_preserves_paid_subs
             assert list(await db.scalars(select(Transaction))) == []
 
 
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('identity', ['numeric', 'short', 'legacy', 'unknown', 'conflicting', 'legacy-conflicting'])
-async def test_deleted_event_targets_only_current_identity(postgres_database, monkeypatch, multi, identity):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
+async def test_deleted_event_targets_only_current_identity(postgres_database, monkeypatch, identity):
     monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_id', {})
     monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_telegram_id', {})
     monkeypatch.setattr(RemnaWaveWebhookService, '_recent_recreations', {})
@@ -194,19 +191,15 @@ async def test_deleted_event_targets_only_current_identity(postgres_database, mo
         await service._process_user_event(db, 'user.deleted', payload, service._handle_user_deleted)
         await db.refresh(sub)
         await db.refresh(user)
-        # Multi mode cannot address an individual subscription by User alone.
-        deleted = identity in ('numeric', 'short') or (identity == 'legacy' and not multi)
-        # In multi mode shortUuid identifies its own account independently of User.
-        deleted = deleted or (identity == 'legacy-conflicting' and multi)
+        deleted = identity in ('numeric', 'short', 'legacy')
         assert sub.status == ('expired' if deleted else 'active')
         assert sub.subscription_url == (None if deleted else 'https://subscription.example/masked-current')
-        if identity in ('unknown', 'conflicting') or (identity == 'legacy-conflicting' and not multi):
+        if identity in ('unknown', 'conflicting', 'legacy-conflicting'):
             assert user.remnawave_id == 9001
         assert user.balance_kopeks == 1200
 
 
 async def test_rotated_short_id_keeps_legacy_numeric_identity(postgres_database, monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     now = datetime.now(UTC)
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
         db.add(User(id=1, telegram_id=101, status='active', language='ru', remnawave_id=9001))
@@ -242,7 +235,6 @@ async def test_rotated_short_id_keeps_legacy_numeric_identity(postgres_database,
 async def test_deleted_event_resolved_before_merge_commit_cannot_clear_survivor_identity(
     postgres_database, monkeypatch
 ):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_id', {})
     monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_telegram_id', {})
     monkeypatch.setattr(RemnaWaveWebhookService, '_recent_recreations', {})
@@ -307,60 +299,3 @@ async def test_deleted_event_resolved_before_merge_commit_cannot_clear_survivor_
             if not task.done():
                 task.cancel()
             await asyncio.gather(task, return_exceptions=True)
-
-
-async def test_multi_merge_keeps_both_identities_independent(postgres_database, monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    monkeypatch.setattr(merge, '_sync_transferred_subscriptions_to_panel', AsyncMock())
-    monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_id', {})
-    monkeypatch.setattr(RemnaWaveWebhookService, '_intentional_panel_deletions_by_telegram_id', {})
-    monkeypatch.setattr(RemnaWaveWebhookService, '_recent_recreations', {})
-    now = datetime.now(UTC)
-    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
-        db.add_all(
-            [
-                User(id=1, email='primary@example.com', status='active', language='ru', remnawave_id=9001),
-                User(id=2, telegram_id=102, status='active', language='ru', remnawave_id=9002, balance_kopeks=800),
-            ]
-        )
-        for ident in (1, 2):
-            db.add(
-                Subscription(
-                    id=ident,
-                    user_id=ident,
-                    status='active',
-                    is_trial=False,
-                    start_date=now,
-                    end_date=now + timedelta(days=ident * 30),
-                    remnawave_id=9000 + ident,
-                    remnawave_short_uuid=f'masked-{ident}',
-                    remnawave_short_id=f'local-{ident}',
-                    subscription_url=f'https://subscription.example/{ident}',
-                    connected_squads=['masked-squad'],
-                )
-            )
-        await db.commit()
-        pending = []
-        user = await merge.execute_merge(db, 1, 2, deferred_remnawave_deletions=pending)
-        await db.commit()
-        assert pending == []
-        rows = list(await db.scalars(select(Subscription).order_by(Subscription.id)))
-        assert [row.user_id for row in rows] == [1, 1]
-        assert [row.remnawave_id for row in rows] == [9001, 9002]
-        service = RemnaWaveWebhookService(AsyncMock())
-        monkeypatch.setattr(service, '_notify_user', AsyncMock())
-        for panel_id in (9003, 9002, 9002):
-            service._recent_recreations.clear()
-            await service._process_user_event(
-                db, 'user.deleted', {'id': panel_id, 'telegramId': 102}, service._handle_user_deleted
-            )
-            for row in rows:
-                await db.refresh(row)
-            assert rows[0].status == 'active'
-            assert rows[0].remnawave_id == 9001
-            assert rows[0].subscription_url == 'https://subscription.example/1'
-            assert rows[0].end_date == now + timedelta(days=30)
-            assert rows[1].status == ('active' if panel_id == 9003 else 'expired')
-            await db.refresh(user)
-            assert user.balance_kopeks == 800
-            assert user.telegram_id == 102

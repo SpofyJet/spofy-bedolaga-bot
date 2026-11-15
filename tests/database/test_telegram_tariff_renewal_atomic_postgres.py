@@ -68,18 +68,15 @@ async def test_tariff_renewal_failure_does_not_leave_a_debit(postgres_database, 
         assert list(await c.db.scalars(select(Transaction))) == []
 
 
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('trial', [False, True])
-async def test_tariff_renewal_commits_paid_days_even_when_panel_fails(postgres_database, monkeypatch, multi, trial):
+async def test_tariff_renewal_commits_paid_days_even_when_panel_fails(postgres_database, monkeypatch, trial):
     from datetime import timedelta
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
 
-    from app.config import settings
     from app.services.remnawave_retry_queue import remnawave_retry_queue
 
     async with checkout(postgres_database, monkeypatch) as c:
-        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
         c.sub.is_trial = trial
         await c.db.commit()
         c.callback.data = 'tariff_ext_confirm:10:1:30'
@@ -194,8 +191,7 @@ async def test_tariff_renewal_rechecks_stale_subscription_before_charge(postgres
             assert transactions == []
 
 
-@pytest.mark.parametrize('multi', [False, True])
-async def test_tariff_switch_commits_target_and_payment_despite_panel_failure(postgres_database, monkeypatch, multi):
+async def test_tariff_switch_commits_target_and_payment_despite_panel_failure(postgres_database, monkeypatch):
     from datetime import timedelta
     from types import SimpleNamespace
     from unittest.mock import AsyncMock, Mock
@@ -205,7 +201,6 @@ async def test_tariff_switch_commits_target_and_payment_despite_panel_failure(po
     from app.services.remnawave_retry_queue import remnawave_retry_queue
 
     async with checkout(postgres_database, monkeypatch) as c:
-        monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
         monkeypatch.setattr(settings, 'TARIFF_SWITCH_UPGRADE_ENABLED', True)
         monkeypatch.setattr(settings, 'TARIFF_SWITCH_DOWNGRADE_ENABLED', True)
         c.db.add(

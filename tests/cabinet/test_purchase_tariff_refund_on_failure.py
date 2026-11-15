@@ -171,8 +171,7 @@ def test_refund_helper_uses_fresh_user_and_refund_transaction() -> None:
         'refund must be recorded as TransactionType.REFUND'
     )
     # Keyed checkouts stage the refund ledger explicitly in the same transaction
-    # as releasing their reservation. Its persistence (including failed refunds)
-    # is exercised against PostgreSQL in test_saved_tariff_cart_idempotency_postgres.
+    # as releasing their reservation.
 
 
 def test_refund_helper_records_failed_refund_when_credit_fails() -> None:

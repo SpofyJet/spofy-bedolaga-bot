@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -79,12 +79,6 @@ async def test_spin_under_limit_proceeds_to_payment() -> None:
         )
         s.enter_context(patch('app.database.crud.user.lock_user_for_update', AsyncMock(return_value=user)))
         s.enter_context(patch('app.services.wheel_service.get_user_spins_today', AsyncMock(return_value=2)))
-        s.enter_context(
-            patch(
-                'app.services.wheel_service.settings',
-                MagicMock(is_multi_tariff_enabled=MagicMock(return_value=False)),
-            )
-        )
         s.enter_context(patch('app.services.wheel_service.get_subscription_by_user_id', AsyncMock(return_value=None)))
         s.enter_context(patch.object(svc, '_process_stars_payment', process_stars))
 

@@ -18,7 +18,6 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy.exc import DBAPIError
 
-from app.config import Settings
 from app.services.remnawave_service import RemnaWaveService
 
 
@@ -79,9 +78,7 @@ def service(monkeypatch, events) -> RemnaWaveService:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('multi_tariff', [True, False], ids=['multi', 'single'])
-async def test_import_releases_callers_transaction_before_loading_panel(monkeypatch, service, db, events, multi_tariff):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: multi_tariff)
+async def test_import_releases_callers_transaction_before_loading_panel(monkeypatch, service, db, events):
 
     await service.sync_users_from_panel(db, 'all')
 
@@ -91,9 +88,7 @@ async def test_import_releases_callers_transaction_before_loading_panel(monkeypa
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('multi_tariff', [True, False], ids=['multi', 'single'])
-async def test_import_rolls_back_after_failure_so_session_stays_usable(monkeypatch, service, db, events, multi_tariff):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: multi_tariff)
+async def test_import_rolls_back_after_failure_so_session_stays_usable(monkeypatch, service, db, events):
     db.execute = AsyncMock(side_effect=_connection_lost())
 
     stats = await service.sync_users_from_panel(db, 'all')

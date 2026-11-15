@@ -22,15 +22,11 @@ pytestmark = pytest.mark.postgres
 
 
 @pytest.mark.parametrize('flow', ['service', 'cabinet'])
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('expired', [False, True])
 @pytest.mark.parametrize('balance', [0, 10000])
-async def test_daily_promo_days_defer_charge_and_keep_access(
-    postgres_database, monkeypatch, flow, multi, expired, balance
-):
+async def test_daily_promo_days_defer_charge_and_keep_access(postgres_database, monkeypatch, flow, expired, balance):
     import app.database.crud.subscription as subscription_crud
 
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     panel_updates = []
 
     async def update_panel(self, db, subscription, **kwargs):

@@ -95,7 +95,6 @@ def _panel_service(panel_user=None, error: Exception | None = None):
 async def _drive(svc, user, deleted, panel_user=None, error=None):
     sub_patch, api = _panel_service(panel_user=panel_user, error=error)
     with (
-        patch.object(type(rw.settings), 'is_multi_tariff_enabled', MagicMock(return_value=True)),
         sub_patch,
         patch.object(rw, 'decrement_subscription_server_counts', AsyncMock()),
     ):
@@ -117,21 +116,6 @@ async def test_pre_multitariff_sibling_with_future_end_date_not_expired():
     assert sibling.status == SubscriptionStatus.ACTIVE.value  # the reported bug — must stay active
     assert sibling.connected_squads == ['sq1', 'sq2']
     api.get_user_by_id.assert_not_awaited()  # future end_date short-circuits before any panel call
-
-
-@pytest.mark.asyncio
-async def test_sibling_alive_in_panel_via_user_panel_id_fallback_not_expired():
-    deleted = _sub(1, SubscriptionStatus.EXPIRED.value, end_days=-10, remnawave_id=101, squads=[])
-    sibling = _sub(2, SubscriptionStatus.ACTIVE.value, end_days=-1, remnawave_id=None, squads=['sq1'])
-    user = SimpleNamespace(id=7, telegram_id=123, language='ru', remnawave_id=555, subscriptions=[deleted, sibling])
-
-    svc = _service()
-    async with _drive(svc, user, deleted, panel_user=MagicMock()) as api:
-        pass
-
-    assert sibling.status == SubscriptionStatus.ACTIVE.value
-    assert sibling.connected_squads == ['sq1']
-    api.get_user_by_id.assert_awaited_with(555)  # fell back to user.remnawave_id
 
 
 @pytest.mark.asyncio
@@ -271,7 +255,6 @@ async def _drive_single(svc, user, deleted, *, by_id=None, by_short_uuid=None):
     inst.get_api_client = _client
 
     with (
-        patch.object(type(rw.settings), 'is_multi_tariff_enabled', MagicMock(return_value=False)),
         patch('app.services.subscription_service.SubscriptionService', return_value=inst),
         patch.object(rw, 'decrement_subscription_server_counts', AsyncMock()),
     ):

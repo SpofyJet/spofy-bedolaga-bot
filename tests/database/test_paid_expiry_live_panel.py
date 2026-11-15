@@ -34,8 +34,7 @@ pytestmark = pytest.mark.postgres
 
 
 @pytest.mark.parametrize('timeout_after_write', [False, True], ids=['before-write', 'lost-response'])
-@pytest.mark.parametrize('multi', [False, True], ids=['single', 'multi'])
-async def test_paid_expiry_recovers_against_real_panel(postgres_database, monkeypatch, timeout_after_write, multi):
+async def test_paid_expiry_recovers_against_real_panel(postgres_database, monkeypatch, timeout_after_write):
     url, token_file = os.environ.get('TEST_REMNAWAVE_URL'), os.environ.get('TEST_REMNAWAVE_TOKEN_FILE')
     if not url or not token_file:
         pytest.skip('Explicit disposable loopback Remnawave URL/token required')
@@ -43,7 +42,6 @@ async def test_paid_expiry_recovers_against_real_panel(postgres_database, monkey
     token = (await asyncio.to_thread(Path(token_file).read_text)).strip()
     for key, value in {
         'SALES_MODE': 'tariffs',
-        'MULTI_TARIFF_ENABLED': multi,
         'ADMIN_NOTIFICATIONS_ENABLED': False,
         'RESET_TRAFFIC_ON_PAYMENT': False,
         'RESET_DEVICES_ON_RENEWAL': False,

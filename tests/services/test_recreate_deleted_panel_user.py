@@ -10,7 +10,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.config import Settings
 from app.database.models import SubscriptionStatus
 from app.external.remnawave_api import (
     RemnaWaveAPIError,
@@ -195,7 +194,6 @@ async def test_recreate_skips_active_status_with_past_end_date():
 
 
 def _setup_subscription_service(monkeypatch, api):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     service = SubscriptionService()
     monkeypatch.setattr('app.services.subscription_service.get_user_by_id', AsyncMock(return_value=_make_user()))
     monkeypatch.setattr('app.services.subscription_service.resolve_hwid_device_limit_for_payload', lambda s: None)
@@ -348,8 +346,8 @@ async def test_update_does_not_recreate_for_expired_subscription(monkeypatch):
 
 # ---- Гейт «обновлять или создавать»: дубль панельного юзера ----
 #
-# Самый дорогой промах миграции. `_create_or_update_remnawave_user_multi/_single`
-# решают, PATCH-ить существующего панельного юзера или создать нового, по
+# Самый дорогой промах миграции. `_create_or_update_remnawave_user_single`
+# решает, PATCH-ить существующего панельного юзера или создать нового, по
 # truthiness колонки идентичности. Если гейт остался на мёртвой `remnawave_uuid`
 # (после 0104 она NULL для всех новых строк), ветка «создать» открывается на
 # КАЖДОМ синке живой подписки — панель наполняется дублями, а HWID-лимиты и
@@ -392,83 +390,11 @@ def _gate_kwargs():
     return dict(user_tag=None, hwid_limit=None, ext_squad_uuid=None, reset_traffic=False, reset_reason=None)
 
 
-async def test_multi_tariff_gate_updates_existing_panel_user_instead_of_creating_a_duplicate(monkeypatch):
-    """Multi-tariff: у подписки есть числовой ``remnawave_id`` → PATCH этого юзера.
-
-    ``remnawave_uuid`` намеренно None: гейт, читающий легаси-колонку, ушёл бы в
-    ветку создания и завёл второго панельного юзера поверх живого.
-    """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    existing = SimpleNamespace(id=5001)
-    api = AsyncMock()
-    api.get_user_by_id.return_value = existing
-    api.update_user.return_value = SimpleNamespace(id=5001)
-
-    result = await SubscriptionService()._create_or_update_remnawave_user_multi(
-        api,
-        _gate_user(),
-        _gate_subscription(remnawave_id=5001, legacy_uuid=None),
-        **_gate_kwargs(),
-    )
-
-    assert result.id == 5001
-    api.get_user_by_id.assert_awaited_once_with(5001)
-    assert api.update_user.await_args.kwargs['user_id'] == 5001
-    api.create_user.assert_not_awaited()
-
-
-async def test_multi_tariff_gate_ignores_the_legacy_uuid_and_creates_when_no_numeric_id(monkeypatch):
-    """Обратное направление: сама по себе легаси-колонка НЕ является привязкой.
-
-    Строка с одним лишь историческим uuid панельного юзера не адресует — её надо
-    заводить заново (панельную идентичность восстанавливает бэкфилл, не этот путь).
-    """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    api = AsyncMock()
-    api.create_user.return_value = SimpleNamespace(id=6001)
-
-    result = await SubscriptionService()._create_or_update_remnawave_user_multi(
-        api,
-        _gate_user(),
-        _gate_subscription(remnawave_id=None, legacy_uuid='3fa85f64-5717-4562-b3fc-2c963f66afa6'),
-        **_gate_kwargs(),
-    )
-
-    assert result.id == 6001
-    api.get_user_by_id.assert_not_awaited()  # легаси-uuid не отправляем в панель — это 400 VALIDATION
-    api.create_user.assert_awaited_once()
-    api.update_user.assert_not_awaited()
-
-
-async def test_multi_tariff_gate_does_not_create_on_invalid_local_panel_id(monkeypatch):
-    """Битый локальный id (клиент отбил его до сети) обязан пробросить исключение.
-
-    Проглотить его общим ``except`` — значит уйти в ветку создания и получить
-    дубль на каждом проходе синка, ровно то, что запрещает контракт 3.0.0.
-    """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    api = AsyncMock()
-    api.get_user_by_id.side_effect = RemnaWaveInvalidUserIdError('Invalid panel user id: dead-uuid')
-
-    service = SubscriptionService()
-    try:
-        await service._create_or_update_remnawave_user_multi(
-            api, _gate_user(), _gate_subscription(remnawave_id=5001), **_gate_kwargs()
-        )
-    except RemnaWaveInvalidUserIdError:
-        pass
-    else:
-        raise AssertionError('RemnaWaveInvalidUserIdError должна пробрасываться, а не открывать ветку создания')
-
-    api.create_user.assert_not_awaited()
-
-
 async def test_single_tariff_gate_updates_by_user_panel_id_without_searching(monkeypatch):
     """Single-tariff: привязка живёт в ``users.remnawave_id``.
 
     При живой привязке поиск по стрим-фильтрам не нужен, а create — тем более.
     """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     api = AsyncMock()
     api.get_user_by_id.return_value = SimpleNamespace(id=777)
     api.update_user.return_value = SimpleNamespace(id=777)
@@ -490,7 +416,6 @@ async def test_single_tariff_gate_falls_back_to_stream_search_before_creating(mo
     Маршруты by-telegram-id/by-email в 3.0.0 удалены; их роль играют стрим-фильтры.
     Пропуск этого шага = дубль для каждого юзера, потерявшего локальную привязку.
     """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     user = _gate_user(remnawave_id=None)
     api = AsyncMock()
     api.find_users_by_telegram_id.return_value = [SimpleNamespace(id=888)]
@@ -584,7 +509,6 @@ def test_legacy_panel_uuid_column_is_read_only_by_the_two_modules_that_own_it():
 
 
 def _setup_monitoring_service(monkeypatch, api):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     service = MonitoringService()
     service.subscription_service._config_error = None  # is_configured → True
 
@@ -684,127 +608,6 @@ async def test_monitoring_update_does_not_recreate_on_a018_create_failure(monkey
     service.subscription_service.recreate_deleted_panel_user.assert_not_awaited()
 
 
-# ---- Апгрейд на 3.0.0: строка ещё без числового id, но с живым shortUuid ----
-#
-# Между `alembic upgrade head` и прогоном бэкфила у КАЖДОЙ старой строки
-# remnawave_id IS NULL, а remnawave_short_uuid заполнен. Все три места ниже
-# раньше трактовали это как «панельного юзера нет» — и заводили дубль либо
-# уничтожали ключ восстановления.
-
-
-def _user_for_multi():
-    """`_make_user` не несёт status — мульти-ветка его читает."""
-    user = _make_user()
-    user.status = 'active'
-    return user
-
-
-def _sub_for_multi(sub=None):
-    """Мульти-ветка читает actual_status (в модели это property)."""
-    sub = sub or _make_subscription()
-    sub.actual_status = sub.status
-    return sub
-
-
-def _sub_awaiting_backfill():
-    sub = _sub_for_multi()
-    sub.remnawave_id = None
-    sub.remnawave_short_uuid = 'aBcD12'
-    sub.remnawave_short_id = 'sid11'
-    sub.subscription_url = 'https://sub.example/aBcD12'
-    sub.subscription_crypto_link = ''
-    return sub
-
-
-async def test_multi_tariff_adopts_panel_user_by_short_uuid_instead_of_duplicating(monkeypatch):
-    """Гейт создания читает только remnawave_id; до бэкфила он пуст у всех строк.
-
-    Без подхвата по shortUuid каждое продление заводило бы ВТОРОЙ панельный
-    аккаунт, а оплаченный оригинал осиротел бы, продолжая занимать лицензию.
-    """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    existing = SimpleNamespace(id=8812, subscription_url='https://sub.example/aBcD12', happ_crypto_link=None)
-    api = AsyncMock()
-    api.get_user_by_short_uuid.return_value = existing
-    api.update_user.return_value = existing
-
-    service = SubscriptionService()
-    sub = _sub_awaiting_backfill()
-
-    result = await service._create_or_update_remnawave_user_multi(
-        api,
-        _user_for_multi(),
-        sub,
-        user_tag=None,
-        hwid_limit=None,
-        ext_squad_uuid=None,
-        reset_traffic=False,
-        reset_reason=None,
-    )
-
-    api.create_user.assert_not_awaited()
-    api.get_user_by_short_uuid.assert_awaited_once_with('aBcD12')
-    assert api.update_user.await_args.kwargs['user_id'] == 8812
-    assert sub.remnawave_id == 8812
-    assert result is existing
-
-
-async def test_multi_tariff_still_creates_when_panel_does_not_know_the_short_uuid(monkeypatch):
-    """Обратная сторона: подхват не должен блокировать законное создание."""
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    created = SimpleNamespace(id=9001, subscription_url='https://sub.example/new', happ_crypto_link=None)
-    api = AsyncMock()
-    api.get_user_by_short_uuid.return_value = None
-    api.create_user.return_value = created
-
-    service = SubscriptionService()
-    result = await service._create_or_update_remnawave_user_multi(
-        api,
-        _user_for_multi(),
-        _sub_awaiting_backfill(),
-        user_tag=None,
-        hwid_limit=None,
-        ext_squad_uuid=None,
-        reset_traffic=False,
-        reset_reason=None,
-    )
-
-    api.create_user.assert_awaited_once()
-    assert result is created
-
-
-async def test_transient_panel_failure_never_creates_a_duplicate(monkeypatch):
-    """Таймаут панели — это не «юзера нет».
-
-    Раньше `except Exception` уводил транзиентную ошибку в ветку создания:
-    панель моргнула, POST прошёл на ретрае — и рядом с живым аккаунтом появился
-    второй.
-    """
-    from app.external.remnawave_api import RemnaWaveTransientError
-
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    api = AsyncMock()
-    api.get_user_by_id.side_effect = RemnaWaveTransientError('Request timed out')
-
-    sub = _sub_for_multi()
-    sub.remnawave_id = 8812
-
-    service = SubscriptionService()
-    with pytest.raises(RemnaWaveTransientError):
-        await service._create_or_update_remnawave_user_multi(
-            api,
-            _user_for_multi(),
-            sub,
-            user_tag=None,
-            hwid_limit=None,
-            ext_squad_uuid=None,
-            reset_traffic=False,
-            reset_reason=None,
-        )
-
-    api.create_user.assert_not_awaited()
-
-
 # ---- validate_and_clean_subscription: сохранить или уничтожить ключ восстановления ----
 #
 # Самое разрушительное решение во всей миграции. `remnawave_short_uuid` —
@@ -827,7 +630,6 @@ def _validation_subject():
 
 
 async def test_validation_adopts_panel_id_and_keeps_the_recovery_key(monkeypatch):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     api = AsyncMock()
     api.get_user_by_short_uuid.return_value = SimpleNamespace(id=8812)
     service = SubscriptionService()
@@ -850,7 +652,6 @@ async def test_validation_adopts_panel_id_and_keeps_the_recovery_key(monkeypatch
 
 
 async def test_validation_cleans_only_when_the_panel_denies_the_short_uuid(monkeypatch):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     api = AsyncMock()
     api.get_user_by_short_uuid.return_value = None  # 404 — аккаунта действительно нет
     service = SubscriptionService()
@@ -870,7 +671,6 @@ async def test_validation_never_cleans_on_a_panel_error(monkeypatch):
     Очистка здесь означала бы массовую безвозвратную расстыковку всех
     непробэкфиленных строк, которых коснулось создание, пока панель деградирует.
     """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     api = AsyncMock()
     api.get_user_by_short_uuid.side_effect = RemnaWaveAPIError('boom', 503, {})
     service = SubscriptionService()
@@ -884,105 +684,7 @@ async def test_validation_never_cleans_on_a_panel_error(monkeypatch):
     assert sub.subscription_url == 'https://sub.example/aBcD12'
 
 
-async def test_adoption_does_not_swallow_a_non_404_panel_error(monkeypatch):
-    """Только 404 доказывает, что аккаунта нет.
-
-    Проглотить 503/429/таймаут и вернуть None здесь значит уйти в ветку
-    создания: панель через несколько секунд уже поднялась, POST проходит — и
-    рядом с живым оплаченным аккаунтом появляется дубль, а shortUuid оригинала
-    затирается новым.
-    """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    api = AsyncMock()
-    api.get_user_by_short_uuid.side_effect = RemnaWaveAPIError('Service Unavailable', 503, {})
-
-    service = SubscriptionService()
-    with pytest.raises(RemnaWaveAPIError):
-        await service._create_or_update_remnawave_user_multi(
-            api,
-            _user_for_multi(),
-            _sub_awaiting_backfill(),
-            user_tag=None,
-            hwid_limit=None,
-            ext_squad_uuid=None,
-            reset_traffic=False,
-            reset_reason=None,
-        )
-
-    api.create_user.assert_not_awaited()
-
-
 # ---- update_remnawave_user: платный апдейт не должен исчезать в окне бэкфила ----
-
-
-async def test_update_adopts_panel_id_by_short_uuid_instead_of_giving_up(monkeypatch):
-    """Между 0104 и бэкфилом `remnawave_id` пуст у всех доапгрейдных строк.
-
-    Вызывающие `update_remnawave_user` (докупка трафика и устройств, смена
-    сквадов) результат НЕ проверяют: раньше метод возвращал None, деньги уже
-    были списаны и закоммичены, а в панель не уезжало ничего.
-    """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    updated = SimpleNamespace(subscription_url='https://s/x', happ_crypto_link=None)
-    api = AsyncMock()
-    api.get_user_by_short_uuid.return_value = SimpleNamespace(id=8812)
-    api.update_user.return_value = updated
-
-    service = SubscriptionService()
-    _patch_api_client(monkeypatch, service, api)
-    monkeypatch.setattr('app.services.subscription_service.get_user_by_id', AsyncMock(return_value=_make_user()))
-
-    sub = _sub_for_multi()
-    sub.remnawave_id = None
-    sub.remnawave_short_uuid = 'aBcD12'
-
-    db = AsyncMock()
-    # Аккаунт свободен — защита частично-уникального индекса пропускает запись.
-    db.execute.return_value = MagicMock(
-        scalar_one_or_none=MagicMock(return_value=None), first=MagicMock(return_value=None)
-    )
-    result = await service.update_remnawave_user(db, sub)
-
-    assert result is updated
-    api.get_user_by_short_uuid.assert_awaited_once_with('aBcD12')
-    assert sub.remnawave_id == 8812, 'подхваченный id обязан сохраниться на строке'
-    assert api.update_user.await_args.kwargs['user_id'] == 8812
-
-
-async def test_update_still_gives_up_when_the_panel_does_not_know_the_short_uuid(monkeypatch):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    api = AsyncMock()
-    api.get_user_by_short_uuid.return_value = None
-
-    service = SubscriptionService()
-    _patch_api_client(monkeypatch, service, api)
-    monkeypatch.setattr('app.services.subscription_service.get_user_by_id', AsyncMock(return_value=_make_user()))
-
-    sub = _sub_for_multi()
-    sub.remnawave_id = None
-    sub.remnawave_short_uuid = 'gone'
-
-    assert await service.update_remnawave_user(_session(), sub) is None
-    api.update_user.assert_not_awaited()
-
-
-async def test_update_gives_up_when_the_panel_is_unreachable(monkeypatch):
-    """Транзиент — не повод выдумать идентичность и записать её на строку."""
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    api = AsyncMock()
-    api.get_user_by_short_uuid.side_effect = RemnaWaveAPIError('Bad Gateway', 502, {})
-
-    service = SubscriptionService()
-    _patch_api_client(monkeypatch, service, api)
-    monkeypatch.setattr('app.services.subscription_service.get_user_by_id', AsyncMock(return_value=_make_user()))
-
-    sub = _sub_for_multi()
-    sub.remnawave_id = None
-    sub.remnawave_short_uuid = 'aBcD12'
-
-    assert await service.update_remnawave_user(_session(), sub) is None
-    api.update_user.assert_not_awaited()
-    assert sub.remnawave_id is None, 'битую идентичность записывать нельзя'
 
 
 async def test_single_mode_prefers_exact_keys_over_ambiguous_telegram_search(monkeypatch):
@@ -1013,7 +715,6 @@ async def test_single_mode_prefers_exact_keys_over_ambiguous_telegram_search(mon
     api.find_users_by_telegram_id.return_value = [wrong_a, wrong_b]
     api.update_user.return_value = right
 
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     service = SubscriptionService()
     monkeypatch.setattr('app.services.subscription_service.get_user_by_id', AsyncMock(return_value=user))
     monkeypatch.setattr('app.services.subscription_service.resolve_hwid_device_limit_for_payload', lambda s: None)
@@ -1064,7 +765,6 @@ async def test_single_mode_uses_the_subscription_own_panel_id(monkeypatch):
     ]
     api.update_user.return_value = right
 
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     service = SubscriptionService()
     monkeypatch.setattr('app.services.subscription_service.get_user_by_id', AsyncMock(return_value=user))
     monkeypatch.setattr('app.services.subscription_service.resolve_hwid_device_limit_for_payload', lambda s: None)
@@ -1097,8 +797,6 @@ async def test_create_does_not_break_on_the_partial_unique_index(monkeypatch):
     """
     from app.database.models import Subscription as SubModel, User as UserModel
     from tests.fixtures.sqlite_memory import memory_session
-
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
 
     async with memory_session(monkeypatch, [UserModel.__table__, SubModel.__table__]) as db:
         db.add(UserModel(id=1, telegram_id=100, status='active'))
@@ -1134,7 +832,6 @@ async def test_create_does_not_break_on_the_partial_unique_index(monkeypatch):
         monkeypatch.setattr('app.services.subscription_service.resolve_hwid_device_limit_for_payload', lambda s: None)
         monkeypatch.setattr(service, 'validate_and_clean_subscription', AsyncMock(return_value=True))
         monkeypatch.setattr(service, '_create_or_update_remnawave_user_single', AsyncMock(return_value=updated))
-        monkeypatch.setattr(service, '_create_or_update_remnawave_user_multi', AsyncMock(return_value=updated))
         _patch_api_client(monkeypatch, service, AsyncMock())
 
         result = await service.create_remnawave_user(db, target)
@@ -1155,7 +852,6 @@ async def test_stale_panel_id_still_gets_rescued_by_short_uuid(monkeypatch):
     `remnawave_short_uuid` — единственный точный ключ восстановления связи, —
     хотя панель по нему аккаунт прекрасно находит.
     """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     api = AsyncMock()
     api.get_user_by_id.return_value = None  # id протух: панель его не знает
     api.get_user_by_short_uuid.return_value = SimpleNamespace(id=8812)
@@ -1185,7 +881,6 @@ async def test_short_uuid_adoption_respects_the_partial_unique_index(monkeypatch
     тот же аккаунт» штатно: в single-tariff все подписки человека адресуют один
     панельный аккаунт. Безусловная запись падала бы на IntegrityError.
     """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     api = AsyncMock()
     api.get_user_by_short_uuid.return_value = SimpleNamespace(id=8812)
     service = SubscriptionService()
@@ -1230,7 +925,6 @@ async def test_degraded_short_uuid_endpoint_does_not_abort_a_resolvable_sync(mon
     api.find_users_by_telegram_id.return_value = [only]
     api.update_user.return_value = only
 
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     service = SubscriptionService()
     monkeypatch.setattr('app.services.subscription_service.get_user_by_id', AsyncMock(return_value=user))
     monkeypatch.setattr('app.services.subscription_service.resolve_hwid_device_limit_for_payload', lambda s: None)
@@ -1269,7 +963,6 @@ async def test_degraded_short_uuid_endpoint_still_refuses_to_create_a_duplicate(
     api = AsyncMock()
     api.get_user_by_short_uuid.side_effect = RemnaWaveAPIError('panel restarting', 503, {})
 
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     service = SubscriptionService()
     monkeypatch.setattr('app.services.subscription_service.get_user_by_id', AsyncMock(return_value=user))
     monkeypatch.setattr('app.services.subscription_service.resolve_hwid_device_limit_for_payload', lambda s: None)
@@ -1299,7 +992,6 @@ async def test_foreign_account_is_cleaned_not_re_anchored(monkeypatch):
     общий флаг, как второй случай начал уходить в перепривязку: панель знает
     shortUuid — значит «нашли», — и бот оставлял себе ЧУЖОЙ аккаунт.
     """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     foreign = SimpleNamespace(id=777, telegram_id=999)
     api = AsyncMock()
     api.get_user_by_id.return_value = foreign  # панель id знает...
@@ -1329,7 +1021,6 @@ async def test_short_uuid_rescue_refuses_a_foreign_account(monkeypatch):
     shortUuid аккаунт может принадлежать другому человеку — привязывать его
     нельзя, иначе проверка владельца обходится с другой стороны.
     """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     api = AsyncMock()
     api.get_user_by_id.return_value = None  # id протух
     api.get_user_by_short_uuid.return_value = SimpleNamespace(id=8812, telegram_id=999)
@@ -1359,7 +1050,6 @@ async def test_ownership_mismatch_is_not_rescued_by_a_telegram_less_account(monk
     панель ЗАБЫЛА id, а не когда она вернула чужой аккаунт. Иначе строка с
     доказанным несовпадением остаётся привязанной.
     """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     api = AsyncMock()
     api.get_user_by_id.return_value = SimpleNamespace(id=777, telegram_id=999)  # чужой
     api.get_user_by_short_uuid.return_value = SimpleNamespace(id=8812, telegram_id=None)
@@ -1380,31 +1070,3 @@ async def test_ownership_mismatch_is_not_rescued_by_a_telegram_less_account(monk
     api.get_user_by_short_uuid.assert_not_awaited()
     assert sub.remnawave_id is None
     assert sub.remnawave_short_uuid is None
-
-
-async def test_adoption_refuses_when_a_sibling_owns_the_account(monkeypatch):
-    """Занятый аккаунт — повод отменить операцию, а не только пропустить запись.
-
-    Возвращённый id вызывающий тут же отправляет в панель PATCH-ом. Если
-    аккаунт держит соседняя подписка, такой PATCH перепишет ЕЁ срок, лимиты и
-    сквады — и это необратимо, в отличие от отката транзакции. Поэтому
-    `_adopt_panel_id_for_update` обязан вернуть None.
-    """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    api = AsyncMock()
-    api.get_user_by_short_uuid.return_value = SimpleNamespace(id=8812)
-    service = SubscriptionService()
-    _patch_api_client(monkeypatch, service, api)
-
-    sub, user = _validation_subject()
-    db = AsyncMock()
-    # Аккаунт 8812 уже держит подписка #99 того же человека.
-    db.execute.return_value = MagicMock(
-        scalar_one_or_none=MagicMock(return_value=99), first=MagicMock(return_value=None)
-    )
-
-    result = await service._adopt_panel_id_for_update(db, sub, user, True)
-
-    assert result is None, 'операция должна быть отменена целиком'
-    assert sub.remnawave_id is None
-    api.update_user.assert_not_awaited()

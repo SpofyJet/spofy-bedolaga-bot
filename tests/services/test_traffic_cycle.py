@@ -103,7 +103,6 @@ def _cycle_env(monkeypatch, events):
     monkeypatch.setattr(subscription_service, 'SubscriptionService', _Service)
     monkeypatch.setattr(traffic_cycle_service, 'update_subscription_usage', _usage)
     monkeypatch.setattr(bypass_module.bypass_downgrade_service, 'restore', _restore)
-    monkeypatch.setattr(type(traffic_cycle_service.settings), 'is_multi_tariff_enabled', lambda self: False)
     return traffic_cycle_service.TrafficCycleService()
 
 

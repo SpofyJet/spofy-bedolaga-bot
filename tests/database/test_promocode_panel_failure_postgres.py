@@ -30,12 +30,10 @@ pytestmark = pytest.mark.postgres
 
 
 @pytest.mark.parametrize('failure', ['none', 'rollback', 'paid_during_sync', 'bound_trial'])
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('entry', ['service', 'cabinet'])
 async def test_trial_provisioning_failure_releases_usage_and_allows_retry(
-    postgres_database, monkeypatch, failure, multi, entry
+    postgres_database, monkeypatch, failure, entry
 ):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
 
     async def failed_panel(self, db, subscription, **kwargs):
@@ -123,9 +121,7 @@ async def test_trial_provisioning_failure_releases_usage_and_allows_retry(
 
 
 @pytest.mark.parametrize('kind', ['subscription_days', 'balance_and_days', 'trial_subscription', 'traffic_only'])
-@pytest.mark.parametrize('multi', [False, True])
-async def test_existing_subscription_promo_survives_panel_rollback(postgres_database, monkeypatch, kind, multi):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
+async def test_existing_subscription_promo_survives_panel_rollback(postgres_database, monkeypatch, kind):
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     queue = RemnaWaveRetryQueue()
     monkeypatch.setattr('app.services.remnawave_retry_queue.remnawave_retry_queue', queue)
@@ -202,7 +198,6 @@ async def test_existing_subscription_promo_survives_panel_rollback(postgres_data
 async def test_failed_trial_cleanup_waits_for_concurrent_paid_conversion(postgres_database, monkeypatch):
     from app.database.crud.user import lock_user_for_pricing
 
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     ready, release = asyncio.Event(), asyncio.Event()
     tasks = []
@@ -256,7 +251,6 @@ async def test_failed_trial_cleanup_waits_for_concurrent_paid_conversion(postgre
 
 
 async def test_trial_compensation_preserves_another_users_committed_activation(postgres_database, monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
 
     async def panel(self, db, subscription, **kwargs):

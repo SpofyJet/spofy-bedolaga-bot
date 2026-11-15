@@ -10,10 +10,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.config import settings
 from app.database.models import Base, Subscription, Transaction, User
+from app.external.remnawave_api import RemnaWaveAPI, RemnaWaveAPIError
 from app.services import remnawave_retry_queue as retry
 from app.services.remnawave_webhook_service import RemnaWaveWebhookService
 from app.services.subscription_service import SubscriptionService
-from tests.database.test_expired_trial_conversion_postgres import Panel
 from tests.database.test_renewal_survives_stale_panel_snapshot_postgres import (
     BALANCE,
     PRICE,
@@ -27,9 +27,85 @@ from tests.fixtures.postgres_db import postgres_session
 pytestmark = pytest.mark.postgres
 
 
+class Panel(RemnaWaveAPI):
+    def __init__(self, now, missing=False):
+        super().__init__(base_url='https://panel.example', api_key='test')
+        self.missing = missing
+        self.patches = []
+        self.device_reads = []
+        self.creates = 0
+        self.traffic_used = 17
+        self.traffic_resets = 0
+        self.hwid_failures = 0
+        self.account = dict(
+            id=9001,
+            shortUuid='test-short',
+            username='test-user',
+            status='EXPIRED',
+            expireAt=(now - timedelta(days=1)).isoformat(),
+            createdAt=now.isoformat(),
+            updatedAt=now.isoformat(),
+            telegramId=101,
+            subscriptionUrl='https://vpn.example/sub/test',
+            hwidDeviceLimit=1,
+        )
+
+    async def get_user_by_id(self, user_id):
+        if user_id == 9003:
+            return self._parse_user(self.new_account)
+        assert user_id == 9001
+        return None if self.missing else self._parse_user(self.account)
+
+    async def create_user(self, **kwargs):
+        self.creates += 1
+        self.create_kwargs = kwargs.copy()
+        self.new_account = dict(
+            self.account,
+            id=9003,
+            expireAt=kwargs['expire_at'].isoformat(),
+            subscriptionUrl='https://vpn.example/sub/recreated',
+            status='ACTIVE',
+        )
+        return self._parse_user(self.new_account)
+
+    async def get_user_by_short_uuid(self, short_uuid):
+        return None
+
+    async def find_users_by_telegram_id(self, telegram_id):
+        return []
+
+    async def get_user_by_username(self, username):
+        return None
+
+    async def enrich_user_with_happ_link(self, user):
+        return user
+
+    async def _make_request(self, method, path, data=None, **kwargs):
+        if (method, path) == ('GET', '/api/hwid/devices/9001'):
+            assert not self.missing
+            self.device_reads.append(9001)
+            if self.hwid_failures:
+                self.hwid_failures -= 1
+                raise RemnaWaveAPIError('test HWID service unavailable', 503)
+            return {'response': {'total': 1, 'devices': [{'userId': 9001, 'hwid': 'test-phone'}]}}
+        if (method, path) == ('PATCH', '/api/users'):
+            assert data['id'] == 9001
+            if self.missing:
+                raise RemnaWaveAPIError('User not found', 404, {'errorCode': 'A025'})
+            self.patches.append(data.copy())
+            self.account.update(data)
+            return {'response': self.account}
+        assert method == 'POST' and path in [
+            '/api/users/9001/actions/reset-traffic',
+            '/api/users/9003/actions/reset-traffic',
+        ]
+        self.traffic_used = 0
+        self.traffic_resets += 1
+        return {'response': self.account if '9001' in path else self.new_account}
+
+
 @pytest.fixture(autouse=True)
 def isolated_renewal(monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', False)
     monkeypatch.setattr(settings, 'RESET_DEVICES_ON_RENEWAL', False)
@@ -229,65 +305,6 @@ async def test_pending_intent_does_not_prevent_actual_expiry(postgres_database, 
         assert subscription.status == 'expired'
 
 
-@pytest.mark.parametrize('flow', ['cabinet', 'miniapp'])
-async def test_trial_bonus_keeps_complete_expiry_pending(postgres_database, monkeypatch, flow):
-    from types import SimpleNamespace
-
-    from app.cabinet.routes.subscription_modules import purchase as cabinet
-    from app.services import subscription_purchase_service as miniapp
-
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    monkeypatch.setattr(settings, 'TRIAL_ADD_REMAINING_DAYS_TO_PAID', True)
-    monkeypatch.setattr(settings, 'TARIFF_SWITCH_RESET_FREE_DAYS', False)
-    panel = SimpleNamespace(
-        create_remnawave_user=AsyncMock(side_effect=TimeoutError('test panel offline')),
-        update_remnawave_user=AsyncMock(side_effect=TimeoutError('test panel offline')),
-        disable_remnawave_user=AsyncMock(),
-    )
-    monkeypatch.setattr(cabinet, 'SubscriptionService', lambda: panel)
-    monkeypatch.setattr(miniapp, 'SubscriptionService', lambda: panel)
-    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
-        now = datetime.now(UTC)
-        user, subscription, original = await _seed(db, now)
-        trial = Subscription(
-            user_id=user.id,
-            status='trial',
-            is_trial=True,
-            start_date=now - timedelta(days=1),
-            end_date=now + timedelta(days=5),
-        )
-        db.add(trial)
-        await db.commit()
-        if flow == 'cabinet':
-            await cabinet.purchase_tariff(
-                cabinet.TariffPurchaseRequest(
-                    tariff_id=subscription.tariff_id,
-                    period_days=30,
-                    subscription_id=subscription.id,
-                ),
-                user,
-                db,
-            )
-        else:
-            pricing = SimpleNamespace(
-                final_total=PRICE,
-                base_original_total=PRICE,
-                promo_discount_value=0,
-                server_ids=[],
-                months=1,
-                selection=SimpleNamespace(period=SimpleNamespace(days=30), traffic_value=150, devices=3, servers=[]),
-            )
-            await miniapp.MiniAppSubscriptionPurchaseService().submit_purchase(
-                db,
-                SimpleNamespace(user=user, subscription=subscription),
-                pricing,
-            )
-        await db.refresh(subscription)
-        assert abs((subscription.end_date - original - timedelta(days=35)).total_seconds()) < 10
-        assert subscription.pending_panel_expire_at == subscription.end_date
-        assert len(list(await db.scalars(select(Transaction).where(Transaction.type == 'subscription_payment')))) == 1
-
-
 async def test_daily_charge_persists_recoverable_expiry(postgres_database):
     from app.database.crud.subscription import update_daily_charge_time
 
@@ -301,24 +318,3 @@ async def test_daily_charge_persists_recoverable_expiry(postgres_database):
         await db.refresh(subscription)
         assert subscription.pending_panel_expire_at == subscription.end_date
         assert subscription.end_date > datetime.now(UTC)
-
-
-@pytest.mark.parametrize('from_daily', [False, True])
-async def test_daily_period_switch_keeps_new_expiry_recoverable(postgres_database, monkeypatch, from_daily):
-    from app.cabinet.routes.subscription_modules import tariff_switch
-    from app.cabinet.schemas.subscription import TariffPurchaseRequest
-    from app.database.models import Tariff
-    from tests.database.test_multi_tariff_switch_postgres import switch_data
-
-    async with switch_data(postgres_database, monkeypatch) as (db, user):
-        source, target = await db.get(Tariff, 1), await db.get(Tariff, 3)
-        source.is_daily, target.is_daily = from_daily, not from_daily
-        source.daily_price_kopeks = target.daily_price_kopeks = 100
-        await db.commit()
-        await tariff_switch.switch_tariff(TariffPurchaseRequest(tariff_id=3, period_days=30), user, db, 11)
-        subscription = await db.get(Subscription, 11)
-        await db.refresh(subscription)
-        assert subscription.pending_panel_expire_at == subscription.end_date
-        days = 30 if from_daily else 1
-        assert abs((subscription.end_date - datetime.now(UTC) - timedelta(days=days)).total_seconds()) < 10
-        assert (await db.get(Subscription, 12)).tariff_id == 2

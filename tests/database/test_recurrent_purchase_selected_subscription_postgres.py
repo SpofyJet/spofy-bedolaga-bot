@@ -26,14 +26,12 @@ PROVIDERS = [
     'case', ['selected', 'foreign', 'missing', 'legacy', 'other_tariff', 'trial', 'disabled', 'active_collision']
 )
 @pytest.mark.parametrize('entry', ['service', 'route'])
-@pytest.mark.parametrize('multi', [False, True])
 async def test_selected_row_validated_before_provider(
-    postgres_database, monkeypatch, provider, purchase_name, enable_name, case, entry, multi
+    postgres_database, monkeypatch, provider, purchase_name, enable_name, case, entry
 ):
     module = import_module(f'app.services.payment.{provider}')
     purchase = getattr(module, f'purchase_tariff_with_{purchase_name}_recurring')
     monkeypatch.setattr(type(settings), f'is_{provider}_recurrent_enabled', lambda self: True)
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     enable = AsyncMock(return_value={'status': 'pending', 'redirect_url': 'https://payments.example/test'})
     monkeypatch.setattr(module, enable_name, enable)
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:

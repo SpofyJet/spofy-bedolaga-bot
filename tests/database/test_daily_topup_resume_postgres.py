@@ -28,7 +28,6 @@ TABLES = list(Base.metadata.sorted_tables)
 
 @pytest.fixture
 def panel(monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
     monkeypatch.setattr(settings, 'DAILY_SUBSCRIPTIONS_ENABLED', True)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', True)
@@ -54,13 +53,11 @@ async def payments(db):
 @pytest.mark.parametrize('auto_enabled', [False, True])
 @pytest.mark.parametrize('daily_enabled', [False, True])
 @pytest.mark.parametrize('status', ['disabled', 'expired', 'limited'])
-@pytest.mark.parametrize('multi', [False, True])
 async def test_daily_topup_obeys_settings_and_repeat(
-    postgres_database, monkeypatch, panel, auto_enabled, daily_enabled, status, multi
+    postgres_database, monkeypatch, panel, auto_enabled, daily_enabled, status
 ):
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', auto_enabled)
     monkeypatch.setattr(settings, 'DAILY_SUBSCRIPTIONS_ENABLED', daily_enabled)
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     async with postgres_session(postgres_database, TABLES) as db:
         user, sub = await seed(db, status)
         before = (sub.status, sub.end_date, sub.last_daily_charge_at, sub.updated_at)
@@ -116,9 +113,8 @@ async def test_daily_topup_preserves_eligibility_guards(postgres_database, monke
 
 @pytest.mark.parametrize(('auto_enabled', 'daily_enabled'), [(False, True), (True, False)])
 @pytest.mark.parametrize('status', ['disabled', 'expired', 'limited'])
-@pytest.mark.parametrize('multi', [False, True])
 async def test_payment_hook_keeps_topup_and_notification_when_daily_disabled(
-    postgres_database, monkeypatch, panel, auto_enabled, daily_enabled, status, multi
+    postgres_database, monkeypatch, panel, auto_enabled, daily_enabled, status
 ):
     from datetime import UTC, datetime, timedelta
 
@@ -127,7 +123,6 @@ async def test_payment_hook_keeps_topup_and_notification_when_daily_disabled(
 
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', auto_enabled)
     monkeypatch.setattr(settings, 'DAILY_SUBSCRIPTIONS_ENABLED', daily_enabled)
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     notification = AsyncMock()
     monkeypatch.setattr(common, 'notify_email_user_topup', notification)
     monkeypatch.setattr(common.user_cart_service, 'get_user_cart', AsyncMock(return_value=None))

@@ -51,7 +51,6 @@ def _subscription() -> SimpleNamespace:
 def _service(monkeypatch) -> tuple[MonitoringService, MagicMock]:
     monkeypatch.setattr(settings, 'ENABLE_LOGO_MODE', False)
     monkeypatch.setattr(settings, 'ENABLE_AUTOPAY', True)
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr('app.services.monitoring_service.get_texts', lambda _lang: _Texts())
     bot = MagicMock()
     bot.send_message = AsyncMock()

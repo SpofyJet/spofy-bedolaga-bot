@@ -20,7 +20,6 @@ import pytest
 import app.database.crud.subscription as crud_sub_mod
 import app.services.panel_sync.lease as lease_mod
 from app.cabinet.routes import admin_users
-from app.config import Settings
 from app.database.models import SubscriptionStatus
 from app.external.remnawave_api import UserStatus
 from app.services.remnawave_service import RemnaWaveService
@@ -86,7 +85,6 @@ async def test_bulk_sync_does_not_reactivate_a_blocked_user(monkeypatch):
 
     monkeypatch.setattr(crud_sub_mod, 'get_subscriptions_batch', fake_batch)
     monkeypatch.setattr(lease_mod, 'subscription_update_lease', fake_lease)
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
 
     service = RemnaWaveService()
     service._config_error = None
@@ -132,7 +130,6 @@ async def test_cabinet_sync_does_not_reactivate_a_blocked_user(monkeypatch):
             context.__aexit__ = AsyncMock(return_value=None)
             return context
 
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr('app.services.remnawave_service.RemnaWaveService', Service)
     monkeypatch.setattr('app.services.panel_sync.adopt.adopt_or_create_panel_user', create_panel_user)
     monkeypatch.setattr('app.services.panel_sync.payload.get_traffic_reset_strategy', lambda _tariff: 'NO_RESET')

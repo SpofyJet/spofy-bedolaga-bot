@@ -22,7 +22,6 @@ TABLES = list(Base.metadata.sorted_tables)
 
 @pytest.fixture(autouse=True)
 def tariffs_mode(monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0)
     monkeypatch.setattr(NotificationSettingsService, 'are_notifications_globally_enabled', staticmethod(lambda: True))
 
@@ -116,7 +115,7 @@ async def test_inactive_tariff_tells_user_once(monkeypatch):
     text = service._send_message_with_logo.await_args.kwargs['text']
     assert 'Не получилось продлить подписку' in text
     assert 'автоматически' in text
-    assert _extend_callbacks(service) in (['se:10'], ['subscription_extend'])
+    assert _extend_callbacks(service) == ['subscription_extend']
 
 
 @pytest.mark.asyncio

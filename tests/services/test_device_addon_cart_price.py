@@ -98,7 +98,6 @@ def cart_service(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _tariff_mode(monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'DEFAULT_DEVICE_LIMIT', 1)
     monkeypatch.setattr(auto_service, 'SubscriptionService', _PanelStub)
     monkeypatch.setattr(auto_service, 'AdminNotificationService', _AdminNotifyStub)

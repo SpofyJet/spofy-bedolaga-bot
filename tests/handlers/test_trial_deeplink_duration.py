@@ -15,7 +15,6 @@ def free_trial(monkeypatch):
     monkeypatch.setattr(settings, 'TRIAL_DURATION_DAYS', 3)
     monkeypatch.setattr(settings, 'TRIAL_DISABLED_FOR', 'none')
     monkeypatch.setattr(settings, 'TRIAL_TARIFF_ID', 0)
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(start, 'SubscriptionService', lambda: SimpleNamespace(is_configured=False))
 
 

@@ -80,7 +80,6 @@ def cart_service(monkeypatch):
 @pytest.fixture(autouse=True)
 def _spofy_mode(monkeypatch):
     """Как на проде: один тариф на человека, автопокупки нет, СБП-автопродление выключено."""
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
     monkeypatch.setattr(settings, 'MAIN_MENU_MODE', 'default')
     monkeypatch.setattr(type(settings), 'is_platega_recurrent_enabled', lambda self: False)

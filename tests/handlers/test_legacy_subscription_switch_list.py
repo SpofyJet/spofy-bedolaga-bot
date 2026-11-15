@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 import app.handlers.subscription.tariff_purchase as tp
-from app.config import Settings
 from app.database.models import Tariff, User
 
 
@@ -73,7 +72,6 @@ def _state() -> AsyncMock:
 
 
 def _patch(monkeypatch, sub, *, switch_enabled: bool) -> None:
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
     monkeypatch.setattr(tp.settings, 'TARIFF_SWITCH_UPGRADE_ENABLED', switch_enabled)
     monkeypatch.setattr(tp.settings, 'TARIFF_SWITCH_DOWNGRADE_ENABLED', switch_enabled)
     monkeypatch.setattr(tp, '_resolve_switch_subscription', AsyncMock(return_value=(sub, sub.id)))

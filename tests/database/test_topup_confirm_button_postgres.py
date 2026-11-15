@@ -51,7 +51,6 @@ def _state() -> SimpleNamespace:
 async def _renewal_checkout(postgres_database, monkeypatch, *, balance: int):
     """Человек с подпиской, корзина продления на 180 дней и кнопка, которую бот поставил бы под «Зачислено»."""
     for name, value in {
-        'MULTI_TARIFF_ENABLED': False,
         'AUTO_PURCHASE_AFTER_TOPUP_ENABLED': False,
         'RESET_TRAFFIC_ON_PAYMENT': False,
         'ADMIN_NOTIFICATIONS_ENABLED': False,

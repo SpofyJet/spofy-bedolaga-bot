@@ -92,56 +92,10 @@ class _Panel:
 async def test_lift_uses_owner_account_in_single_tariff(monkeypatch):
     """В одиночном режиме аккаунт панели — у пользователя, не у подписки."""
     import app.services.traffic_reset_policy as policy
-    from app.config import Settings
 
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr(policy, 'get_user_by_id', AsyncMock(return_value=SimpleNamespace(remnawave_id=9001)))
     panel = _Panel()
 
     await policy.lift_panel_traffic_limit(object(), SimpleNamespace(id=10, user_id=1, remnawave_id=None), service=panel)
 
     assert panel.enabled == [9001]
-
-
-@pytest.mark.asyncio
-async def test_lift_uses_subscription_account_in_multi_tariff(monkeypatch):
-    """В мультитарифе у каждой подписки свой аккаунт — владельца не спрашиваем."""
-    import app.services.traffic_reset_policy as policy
-    from app.config import Settings
-
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    owner_lookup = AsyncMock(return_value=SimpleNamespace(remnawave_id=9001))
-    monkeypatch.setattr(policy, 'get_user_by_id', owner_lookup)
-    panel = _Panel()
-
-    await policy.lift_panel_traffic_limit(object(), SimpleNamespace(id=10, user_id=1, remnawave_id=42), service=panel)
-
-    assert panel.enabled == [42]
-    owner_lookup.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_lift_survives_panel_error(monkeypatch):
-    """Деньги уже взяты, подписка активна — ошибка панели не должна ронять оплату."""
-    import app.services.traffic_reset_policy as policy
-    from app.config import Settings
-
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    panel = _Panel(fail=True)
-
-    await policy.lift_panel_traffic_limit(object(), SimpleNamespace(id=10, user_id=1, remnawave_id=42), service=panel)
-
-    assert panel.enabled == []
-
-
-@pytest.mark.asyncio
-async def test_lift_does_nothing_without_panel_account(monkeypatch):
-    import app.services.traffic_reset_policy as policy
-    from app.config import Settings
-
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    panel = _Panel()
-
-    await policy.lift_panel_traffic_limit(object(), SimpleNamespace(id=10, user_id=1, remnawave_id=None), service=panel)
-
-    assert panel.enabled == []

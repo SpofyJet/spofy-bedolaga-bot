@@ -17,7 +17,6 @@ from fastapi import HTTPException
 
 from app.cabinet.routes import admin_users
 from app.cabinet.schemas.users import UpdateSubscriptionRequest
-from app.config import Settings
 
 
 OWNER_ID = 10
@@ -193,12 +192,10 @@ async def test_authoritative_subscription_lookup_constrains_id_and_user_id(owned
     ],
     ids=['panel-info', 'devices', 'request-history', 'delete-device'],
 )
-@pytest.mark.parametrize('multi_tariff', [True, False], ids=['multi-tariff', 'single-tariff'])
 async def test_subscription_reads_and_device_delete_accept_owned_subscription(
-    monkeypatch, ownership_boundary, panel_service, route_name, kwargs, foreign_marker, multi_tariff
+    monkeypatch, ownership_boundary, panel_service, route_name, kwargs, foreign_marker
 ):
     """Every BP-S route uses the selected owned subscription in either mode."""
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: multi_tariff)
     route = getattr(admin_users, route_name)
     db = AsyncMock()
     admin = SimpleNamespace(id=1)
@@ -219,12 +216,10 @@ async def test_subscription_reads_and_device_delete_accept_owned_subscription(
     ],
     ids=['panel-info', 'devices', 'request-history', 'delete-device'],
 )
-@pytest.mark.parametrize('multi_tariff', [True, False], ids=['multi-tariff', 'single-tariff'])
 async def test_subscription_reads_and_device_delete_reject_foreign_and_absent_without_panel_access(
-    monkeypatch, ownership_boundary, panel_service, route_name, kwargs, multi_tariff
+    monkeypatch, ownership_boundary, panel_service, route_name, kwargs
 ):
     """No rejected BP-S request may construct or call the panel client in either mode."""
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: multi_tariff)
     route = getattr(admin_users, route_name)
     db = AsyncMock()
     admin = SimpleNamespace(id=1)
@@ -245,13 +240,11 @@ async def test_subscription_reads_and_device_delete_reject_foreign_and_absent_wi
         }
 
 
-@pytest.mark.parametrize('multi_tariff', [True, False], ids=['multi-tariff', 'single-tariff'])
 @pytest.mark.parametrize('subscription_id', [FOREIGN_ID, MISSING_ID], ids=['foreign', 'absent'])
 async def test_panel_info_validates_supplied_subscription_before_unconfigured_service_access(
-    monkeypatch, ownership_boundary, multi_tariff, subscription_id
+    monkeypatch, ownership_boundary, subscription_id
 ):
     """Would fail if panel-info checks service configuration before ownership."""
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: multi_tariff)
     calls = {'constructed': 0, 'get_api_client': 0}
 
     class UnconfiguredService:
@@ -325,7 +318,6 @@ async def test_selected_actions_pin_sync_to_the_selected_identity_when_legacy_mo
     monkeypatch, ownership_boundary, owned_subscription, action, request_kwargs
 ):
     """A supplied subscription id must opt out of all single-tariff fallbacks."""
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     ownership_boundary.remnawave_id = LEGACY_USER_PANEL_ID
     owned_subscription.remnawave_id = OWNED_PANEL_ID
     sync = AsyncMock()
@@ -382,7 +374,6 @@ async def test_selected_sync_uses_only_selected_panel_id_when_legacy_mode_is_ena
             short_uuid='short',
         )
 
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr('app.services.remnawave_service.RemnaWaveService', Service)
     monkeypatch.setattr('app.services.panel_sync.payload.get_traffic_reset_strategy', lambda _tariff: 'NO_RESET')
     monkeypatch.setattr('app.utils.subscription_utils.resolve_hwid_device_limit_for_payload', lambda _sub: None)
@@ -421,7 +412,6 @@ async def test_selected_sync_uses_only_selected_panel_id_when_legacy_mode_is_ena
 
 async def test_selected_sync_with_no_panel_link_does_not_substitute_legacy_identity(monkeypatch):
     """A null selected link must cause no panel access, even in legacy mode."""
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     user = SimpleNamespace(id=OWNER_ID, remnawave_id=LEGACY_USER_PANEL_ID)
     subscription = SimpleNamespace(id=OWNED_ID, remnawave_id=None)
     db = AsyncMock()
@@ -438,7 +428,6 @@ async def test_selected_devices_return_selected_subscription_device_limit(monkey
     selected = _subscription(OWNED_ID, OWNER_ID, panel_id=OWNED_PANEL_ID)
     selected.device_limit = 9
     user = _user(primary, selected, remnawave_id=LEGACY_USER_PANEL_ID)
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr(admin_users, 'get_user_by_id', AsyncMock(return_value=user))
     monkeypatch.setattr(admin_users, '_get_owned_subscription_or_404', AsyncMock(return_value=selected))
 

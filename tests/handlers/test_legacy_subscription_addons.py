@@ -15,7 +15,6 @@ import pytest
 
 import app.handlers.subscription.devices as devices_module
 import app.handlers.subscription.traffic as traffic_module
-from app.config import Settings
 
 
 def _legacy_sub() -> MagicMock:
@@ -48,11 +47,6 @@ def _state() -> AsyncMock:
     state = AsyncMock()
     state.get_data = AsyncMock(return_value={})
     return state
-
-
-@pytest.fixture(autouse=True)
-def tariffs_mode(monkeypatch):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
 
 
 def _assert_refused(callback: MagicMock) -> None:

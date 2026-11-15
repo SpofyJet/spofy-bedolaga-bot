@@ -20,7 +20,6 @@ import pytest
 
 import app.database.crud.subscription as crud_sub_mod
 import app.services.panel_sync.lease as lease_mod
-from app.config import Settings
 from app.database.models import SubscriptionStatus
 from app.services.remnawave_service import RemnaWaveService
 
@@ -74,7 +73,6 @@ def harness(monkeypatch):
 
     monkeypatch.setattr(crud_sub_mod, 'get_subscriptions_batch', fake_batch)
     monkeypatch.setattr(lease_mod, 'subscription_update_lease', fake_lease)
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
 
     service = RemnaWaveService()
     service._config_error = None

@@ -43,7 +43,6 @@ async def test_expiring_paid_supports_days_placeholder(monkeypatch):
     monkeypatch.setattr(settings, 'ENABLE_LOGO_MODE', False)
     monkeypatch.setattr(settings, 'ENABLE_AUTOPAY', False)
     # Метод патчится на классе: pydantic не даёт setattr для методов на инстансе.
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr('app.services.monitoring_service.get_texts', lambda _lang: _LegacyTexts())
 
     bot = MagicMock()

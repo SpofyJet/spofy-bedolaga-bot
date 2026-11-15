@@ -163,7 +163,6 @@ def _patch_reset_env(monkeypatch, *, subs, is_configured, delete_side_effect=Non
     monkeypatch.setattr('app.services.subscription_service.SubscriptionService', lambda: fake_service)
 
     fake_settings = MagicMock()
-    fake_settings.is_multi_tariff_enabled.return_value = False  # single-tariff
     # Заглушка настроек — MagicMock: незаданный геттер вернул бы объект-мок, и
     # сравнение с 'delete' молча выбрало бы ветку disable. Режим задаём явно.
     fake_settings.get_remnawave_user_delete_mode.return_value = delete_mode

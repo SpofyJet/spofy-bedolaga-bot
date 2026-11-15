@@ -30,11 +30,6 @@ def _fake_sub(actual_status: str, status: str) -> SimpleNamespace:
 
 
 def _patch_tariffs_mode(monkeypatch):
-    from app.config import Settings
-
-    # is_tariffs_mode/is_multi_tariff_enabled are methods on the pydantic Settings
-    # class — patch them on the class (the singleton instance can't take new attrs).
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
     monkeypatch.setattr(kb, 'get_display_subscription_link', lambda sub: None)
 
 

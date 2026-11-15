@@ -8,7 +8,6 @@ import pytest
 
 from app.cabinet.routes import admin_users
 from app.cabinet.schemas.users import UpdateSubscriptionRequest
-from app.config import settings
 from app.database.crud.subscription import reactivate_subscription
 from app.database.crud.user import get_user_by_id
 from app.database.models import Base, Subscription, Transaction, TransactionType, User
@@ -80,12 +79,10 @@ class Panel(RemnaWaveAPI):
 
 
 @pytest.mark.parametrize('flow', ['telegram', 'cabinet'])
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('policy', [ROUTINE, BULK_SNAPSHOT, ADMIN_PULL], ids=lambda p: p.name)
 async def test_reset_does_not_regain_paid_days_from_panel(
-    postgres_database, monkeypatch, flow, multi, policy, expiry_error=False
+    postgres_database, monkeypatch, flow, policy, expiry_error=False
 ):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
     now = datetime.now(UTC)
     panel = Panel(now, expiry_error=expiry_error)
 
@@ -97,11 +94,11 @@ async def test_reset_does_not_regain_paid_days_from_panel(
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
         db.add_all(
             [
-                User(id=1, telegram_id=101, language='ru', remnawave_id=9002 if multi else 9001),
+                User(id=1, telegram_id=101, language='ru', remnawave_id=9001),
                 User(id=2, telegram_id=202, language='ru'),
             ]
         )
-        for sub_id, owner, panel_id in [(10, 1, 9001), (20, 1 if multi else 2, 9002)]:
+        for sub_id, owner, panel_id in [(10, 1, 9001), (20, 2, 9002)]:
             db.add(
                 Subscription(
                     id=sub_id,
@@ -124,7 +121,7 @@ async def test_reset_does_not_regain_paid_days_from_panel(
             assert result['panel_expiry_extinguished'] is (not expiry_error)
         else:
             result = await admin_users.update_user_subscription(
-                1, UpdateSubscriptionRequest(action='reset', subscription_id=10 if multi else None), user, db
+                1, UpdateSubscriptionRequest(action='reset', subscription_id=None), user, db
             )
             assert result.success
         if expiry_error:
@@ -151,7 +148,6 @@ async def test_reset_does_not_regain_paid_days_from_panel(
 @pytest.mark.parametrize('live', [False, True])
 @pytest.mark.parametrize('read_failure', [False, True])
 async def test_expired_update_sends_closing_date_in_first_patch(postgres_database, monkeypatch, live, read_failure):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
     now = datetime.now(UTC)
     panel = Panel(now)
     original_read = panel.get_user_by_id

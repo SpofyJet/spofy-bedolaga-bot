@@ -83,7 +83,6 @@ def env(monkeypatch):
         ('WEBHOOK_URL', None),
     ):
         monkeypatch.setattr(settings, name, value, raising=False)
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
 
     cache = CacheService()
     cache.redis_client = FakeRedis()
@@ -277,15 +276,6 @@ async def test_visible_change_edits_the_same_message(env):
     assert (request.chat_id, request.message_id, request.parse_mode) == (100, 42, None)
     fp = rich_menu.live_menu_fingerprint(env.user, get_texts('ru'))
     assert await env.cache.get(KEY) == {'m': 42, 'fp': fp}
-
-
-async def test_multi_tariff_takes_traffic_by_subscription_panel_id(env, monkeypatch):
-    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
-    env.user.subscription.remnawave_id = 777
-    await _track(env)
-
-    assert await live._refresh_one(env.bot, KEY, {501: 0, 777: 32 * GIB}, datetime.now(UTC)) == 'edited'
-    assert env.user.subscription.traffic_used_gb == 32
 
 
 async def test_new_menu_during_build_is_not_overwritten(env, monkeypatch):

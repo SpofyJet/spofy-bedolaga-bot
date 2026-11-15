@@ -92,7 +92,6 @@ async def test_bulk_change_tariff_keeps_paid_devices():
     )
     db = AsyncMock()
     fake_settings = MagicMock()
-    fake_settings.is_multi_tariff_enabled.return_value = False
     fake_settings.RESET_TRAFFIC_ON_TARIFF_SWITCH = False
 
     with (

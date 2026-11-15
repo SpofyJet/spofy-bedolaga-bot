@@ -1,7 +1,7 @@
 """Tests for native gift catalog, menu entries, and FSM navigation (Task 4).
 
 Covers:
-- Entry visibility in single-tariff and multi-tariff views when CABINET_GIFT_ENABLED is True/False.
+- Entry visibility in the subscription view when CABINET_GIFT_ENABLED is True/False.
 - State transitions across GiftPurchaseStates (selecting_tariff, selecting_period, confirming_purchase, cart_saved_for_topup).
 - Localized catalog rendering with HTML escaping, traffic limit display, device limit.
 - Period selection with discounts and prices.
@@ -32,7 +32,6 @@ from aiogram.types import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import Settings
 from app.database.models import User
 from app.handlers.gift_activation import (
     register_handlers as register_gift_activation_handlers,
@@ -45,10 +44,6 @@ from app.handlers.subscription.gift import (
     handle_gift_catalog,
     handle_gift_period_select,
     handle_gift_tariff_select,
-)
-from app.handlers.subscription.my_subscriptions import (
-    _build_subscriptions_keyboard,
-    show_my_subscriptions,
 )
 from app.handlers.subscription.purchase import show_subscription_info
 from app.keyboards.inline import get_subscription_keyboard
@@ -126,7 +121,7 @@ def memory_state() -> FSMContext:
 
 
 class TestSubscriptionGiftEntryVisibility:
-    """Test gift entry button visibility in single and multi-tariff layouts."""
+    """Test gift entry button visibility in the subscription layout."""
 
     def test_single_mode_active_sub_with_gift_enabled(self):
         sub = SimpleNamespace(id=1, is_trial=False, actual_status='paid_active', tariff_id=1, traffic_limit_gb=100)
@@ -182,7 +177,6 @@ class TestSubscriptionGiftEntryVisibility:
         self, mock_callback, mock_db_user, mock_db, monkeypatch
     ):
         mock_db_user.subscription = None
-        monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
         await show_subscription_info(mock_callback, mock_db_user, mock_db)
 
         assert mock_callback.message.edit_text.called
@@ -190,41 +184,6 @@ class TestSubscriptionGiftEntryVisibility:
         reply_markup = kwargs.get('reply_markup')
         assert reply_markup is not None
         assert 'subscription_gift' in _callbacks(reply_markup)
-
-    def test_multi_mode_build_subscriptions_keyboard_gift_enabled(self):
-        subs = [SimpleNamespace(id=10, tariff=SimpleNamespace(name='Basic'), tariff_id=10, is_trial=False)]
-        kb = _build_subscriptions_keyboard(subs, language='ru', gift_enabled=True)
-        callbacks = _callbacks(kb)
-        assert 'subscription_gift' in callbacks
-        assert 'sm:10' in callbacks
-        assert 'menu_buy' in callbacks
-        assert 'back_to_menu' in callbacks
-
-    def test_multi_mode_build_subscriptions_keyboard_gift_disabled(self):
-        subs = [SimpleNamespace(id=10, tariff=SimpleNamespace(name='Basic'), tariff_id=10, is_trial=False)]
-        kb = _build_subscriptions_keyboard(subs, language='ru', gift_enabled=False)
-        callbacks = _callbacks(kb)
-        assert 'subscription_gift' not in callbacks
-        assert 'sm:10' in callbacks
-        assert 'menu_buy' in callbacks
-
-    @pytest.mark.asyncio
-    async def test_show_my_subscriptions_empty_keeps_gift_entry_reachable(
-        self, mock_callback, mock_db_user, mock_db, monkeypatch
-    ):
-        monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-        with patch(
-            'app.handlers.subscription.my_subscriptions.get_all_subscriptions_by_user_id',
-            AsyncMock(return_value=[]),
-        ):
-            await show_my_subscriptions(mock_callback, mock_db_user, mock_db)
-
-            assert mock_callback.message.edit_text.called
-            _, kwargs = mock_callback.message.edit_text.call_args
-            reply_markup = kwargs.get('reply_markup')
-            assert reply_markup is not None
-            assert 'subscription_gift' in _callbacks(reply_markup)
-            assert 'menu_buy' in _callbacks(reply_markup)
 
 
 # ── Step 2: Catalog, Selection, and Navigation Tests ────────────────────────

@@ -196,17 +196,6 @@ def test_highlighted_tariff_is_marked_in_the_list():
     assert 'Базовый' in labels
 
 
-def test_purchased_mark_wins_over_the_badge():
-    """Галочка «уже куплен» отвечает на другой вопрос и важнее подсказки о выгоде."""
-    from app.handlers.subscription.tariff_purchase import get_tariffs_keyboard
-
-    tariffs = [SimpleNamespace(id=2, name='Про', is_highlighted=True)]
-    labels = _labels(get_tariffs_keyboard(tariffs, 'ru', purchased_tariff_ids={2}))
-
-    assert any(label.startswith('✅') for label in labels)
-    assert not [label for label in labels if BADGE in label]
-
-
 def test_tariff_list_survives_objects_without_the_flag():
     """Старые вызовы передают тарифы без нового поля — список не должен падать."""
     from app.handlers.subscription.tariff_purchase import get_tariffs_keyboard

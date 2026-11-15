@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.config import settings
 from app.database.crud.user import lock_user_for_pricing
 from app.database.models import Base, Subscription, Tariff, User
 from app.handlers.subscription import tariff_purchase as m
@@ -12,21 +11,10 @@ from app.utils.formatting import format_price_kopeks
 from tests.fixtures.sqlite_memory import memory_session
 
 
-@pytest.mark.parametrize(
-    ('entry', 'expired', 'multi'),
-    [
-        (entry, expired, multi)
-        for entry in ['select', 'days', 'traffic', 'period']
-        for expired in [False, True]
-        for multi in [False, True]
-        if not (entry == 'select' and multi and not expired)
-    ],
-)
+@pytest.mark.parametrize('entry', ['select', 'days', 'traffic', 'period'])
+@pytest.mark.parametrize('expired', [False, True])
 @pytest.mark.parametrize('base_limit', [0, 2])
-async def test_custom_preview_shows_inherited_devices_and_checkout_price(
-    monkeypatch, entry, expired, multi, base_limit
-):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
+async def test_custom_preview_shows_inherited_devices_and_checkout_price(monkeypatch, entry, expired, base_limit):
     async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
         now = datetime.now(UTC)
         db.add_all(

@@ -15,7 +15,6 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.config import settings
 from app.database.models import Base, Subscription, SubscriptionStatus, User
 from app.services.panel_sync import should_create_panel_account
 from tests.fixtures.postgres_db import postgres_session
@@ -25,16 +24,6 @@ pytestmark = pytest.mark.postgres
 
 TABLES = list(Base.metadata.sorted_tables)
 PANEL_ID = 555
-
-
-@pytest.fixture
-def multi_tariff(monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-
-
-@pytest.fixture
-def single_tariff(monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
 
 
 def _subscription(user_id: int, *, panel_id: int | None, short_id: str) -> Subscription:
@@ -62,45 +51,7 @@ async def _seed(db, *, user_panel_id: int | None, sub_panel_id: int | None) -> t
 
 
 @pytest.mark.asyncio
-async def test_multi_tariff_row_with_panel_id_is_updated(postgres_database, multi_tariff):
-    async with postgres_session(postgres_database, TABLES) as db:
-        user, sub = await _seed(db, user_panel_id=PANEL_ID, sub_panel_id=PANEL_ID)
-
-        assert await should_create_panel_account(db, sub, user) is False
-
-
-@pytest.mark.asyncio
-async def test_multi_tariff_row_without_id_adopts_free_user_account(postgres_database, multi_tariff):
-    """Старая подписка без id, аккаунт у человека есть и свободен — привязать и обновить, не создавать."""
-    async with postgres_session(postgres_database, TABLES) as db:
-        user, sub = await _seed(db, user_panel_id=PANEL_ID, sub_panel_id=None)
-
-        assert await should_create_panel_account(db, sub, user) is False
-        assert sub.remnawave_id == PANEL_ID
-
-
-@pytest.mark.asyncio
-async def test_multi_tariff_row_without_id_creates_when_user_account_is_taken(postgres_database, multi_tariff):
-    """Аккаунт человека уже у другой подписки — новой строке нужен свой аккаунт."""
-    async with postgres_session(postgres_database, TABLES) as db:
-        user, sub = await _seed(db, user_panel_id=PANEL_ID, sub_panel_id=None)
-        db.add(_subscription(user.id, panel_id=PANEL_ID, short_id='sub-b'))
-        await db.commit()
-
-        assert await should_create_panel_account(db, sub, user) is True
-        assert sub.remnawave_id is None
-
-
-@pytest.mark.asyncio
-async def test_multi_tariff_row_without_any_account_creates(postgres_database, multi_tariff):
-    async with postgres_session(postgres_database, TABLES) as db:
-        user, sub = await _seed(db, user_panel_id=None, sub_panel_id=None)
-
-        assert await should_create_panel_account(db, sub, user) is True
-
-
-@pytest.mark.asyncio
-async def test_single_tariff_follows_user_account_only(postgres_database, single_tariff):
+async def test_single_tariff_follows_user_account_only(postgres_database):
     async with postgres_session(postgres_database, TABLES) as db:
         user, sub = await _seed(db, user_panel_id=PANEL_ID, sub_panel_id=None)
         assert await should_create_panel_account(db, sub, user) is False
@@ -110,7 +61,7 @@ async def test_single_tariff_follows_user_account_only(postgres_database, single
 
 
 @pytest.mark.asyncio
-async def test_single_tariff_adopts_subscription_account_when_user_has_none(postgres_database, single_tariff):
+async def test_single_tariff_adopts_subscription_account_when_user_has_none(postgres_database):
     """Аккаунт создан в мультитарифе (записан у подписки), оператор вернулся в одиночный режим:
     покупка обновляет этот аккаунт и записывает его человеку, а не заводит новый."""
     async with postgres_session(postgres_database, TABLES) as db:
@@ -121,7 +72,7 @@ async def test_single_tariff_adopts_subscription_account_when_user_has_none(post
 
 
 @pytest.mark.asyncio
-async def test_single_tariff_does_not_steal_account_held_by_another_user(postgres_database, single_tariff):
+async def test_single_tariff_does_not_steal_account_held_by_another_user(postgres_database):
     async with postgres_session(postgres_database, TABLES) as db:
         user, sub = await _seed(db, user_panel_id=None, sub_panel_id=PANEL_ID)
         db.add(User(telegram_id=1002, first_name='Другой', language='ru', status='active', remnawave_id=PANEL_ID))

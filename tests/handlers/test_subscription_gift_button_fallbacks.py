@@ -7,7 +7,6 @@ the intended default label must be rendered without breaking callback_data or UR
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -18,7 +17,6 @@ from app.handlers.subscription.gift import (
     _render_period_selection,
     _render_tariff_catalog,
 )
-from app.handlers.subscription.my_subscriptions import _build_subscriptions_keyboard
 from app.keyboards.inline import get_subscription_keyboard
 from app.localization.texts import Texts, get_texts
 from app.services.gift_purchase_service import GiftQuote, GiftTariffOffer
@@ -52,14 +50,6 @@ class TestGiftButtonFallbacks:
     def test_gift_subscription_button_fallback_in_single_keyboard(self):
         """Test GIFT_SUBSCRIPTION_BUTTON fallback in get_subscription_keyboard."""
         kb = get_subscription_keyboard(language='ru', has_subscription=False, gift_enabled=True)
-        gift_buttons = [b for row in kb.inline_keyboard for b in row if b.callback_data == 'subscription_gift']
-        assert len(gift_buttons) == 1
-        assert gift_buttons[0].text == '🎁 Подарить подписку'
-
-    def test_gift_subscription_button_fallback_in_multi_keyboard(self):
-        """Test GIFT_SUBSCRIPTION_BUTTON fallback in _build_subscriptions_keyboard."""
-        subs = [SimpleNamespace(id=1, tariff=SimpleNamespace(name='Pro'), tariff_id=1, is_trial=False)]
-        kb = _build_subscriptions_keyboard(subs, language='ru', gift_enabled=True)
         gift_buttons = [b for row in kb.inline_keyboard for b in row if b.callback_data == 'subscription_gift']
         assert len(gift_buttons) == 1
         assert gift_buttons[0].text == '🎁 Подарить подписку'

@@ -19,7 +19,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.config import settings
 from app.database.models import Base, Subscription, SubscriptionStatus, Tariff, User
 from tests.fixtures.sqlite_memory import memory_session
 
@@ -36,11 +35,6 @@ class _FakePanelSync:
 
     async def enable_remnawave_user(self, panel_user_id, db=None):
         return True
-
-
-@pytest.fixture(autouse=True)
-def single_tariff_mode(monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
 
 
 @pytest.fixture

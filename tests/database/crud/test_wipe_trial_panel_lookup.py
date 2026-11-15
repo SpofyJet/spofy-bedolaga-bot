@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 import app.services.subscription_service as subscription_service_mod
-from app.config import Settings, settings
+from app.config import settings
 from app.database.crud.subscription import wipe_trial_subscriptions
 
 
@@ -68,82 +68,6 @@ def db():
     return session
 
 
-@pytest.mark.asyncio
-async def test_adopts_by_short_uuid_and_deletes_the_right_account(monkeypatch, patched_service, db):
-    """Ключевой сценарий: id ещё не пробэкфилен, но панель знает shortUuid.
-
-    Мутация «panel_user_id = subscription.id» проходила зелёный прогон и
-    удаляла НЕ ТОТ аккаунт, поэтому проверяем именно переданный id.
-    """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    patched_service.get_user_by_short_uuid.return_value = SimpleNamespace(id=9001)
-
-    await wipe_trial_subscriptions(db, [_sub(42, short_uuid='abc')])
-
-    patched_service.get_user_by_short_uuid.assert_awaited_once_with('abc')
-    patched_service.delete_user.assert_awaited_once_with(9001)
-
-
-@pytest.mark.asyncio
-async def test_does_not_orphan_a_live_panel_account(monkeypatch, patched_service, db):
-    """Пропустить панель и удалить строку — значит оставить ACTIVE-сироту."""
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    patched_service.get_user_by_short_uuid.return_value = SimpleNamespace(id=9001)
-
-    await wipe_trial_subscriptions(db, [_sub(42, short_uuid='abc')])
-
-    assert patched_service.delete_user.await_count == 1, 'панельный аккаунт обязан быть удалён'
-
-
-@pytest.mark.asyncio
-async def test_panel_error_during_lookup_does_not_wipe_the_row(monkeypatch, patched_service, db):
-    """Таймаут — не доказательство. Строку оставляем следующему запуску."""
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    patched_service.get_user_by_short_uuid.side_effect = RuntimeError('panel down')
-
-    wiped = await wipe_trial_subscriptions(db, [_sub(42, short_uuid='abc')])
-
-    assert wiped == 0
-    patched_service.delete_user.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_unknown_short_uuid_does_not_block_the_reset_forever(monkeypatch, patched_service, db):
-    """Панель этот shortUuid забыла — удалять нечего, но и застревать нельзя.
-
-    Прежний guard возвращал False без запроса к панели, и такая строка не
-    сбрасывалась НИКОГДА: бэкфил её тоже не разрешает по построению.
-    """
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    patched_service.get_user_by_short_uuid.return_value = None
-
-    wiped = await wipe_trial_subscriptions(db, [_sub(42, short_uuid='gone')])
-
-    assert wiped == 1
-    patched_service.delete_user.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_row_that_never_had_a_panel_user_needs_no_lookup(monkeypatch, patched_service, db):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-
-    wiped = await wipe_trial_subscriptions(db, [_sub(42)])
-
-    assert wiped == 1
-    patched_service.get_user_by_short_uuid.assert_not_awaited()
-    patched_service.delete_user.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_existing_numeric_id_is_used_directly(monkeypatch, patched_service, db):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-
-    await wipe_trial_subscriptions(db, [_sub(42, panel_id=8812, short_uuid='abc')])
-
-    patched_service.get_user_by_short_uuid.assert_not_awaited()
-    patched_service.delete_user.assert_awaited_once_with(8812)
-
-
 # ---------------------------------------------------------------------------
 # REMNAWAVE_USER_DELETE_MODE. Отчёт из «Багов»: при сбросе триала аккаунт
 # удалялся из панели, хотя в .env стоял disable. Режим читался только при
@@ -158,22 +82,9 @@ def _executed_updates(db) -> list:
 
 
 @pytest.mark.asyncio
-async def test_disable_mode_deactivates_instead_of_deleting(monkeypatch, patched_service, db):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', 'disable')
-
-    wiped = await wipe_trial_subscriptions(db, [_sub(42, panel_id=9001)])
-
-    assert wiped == 1
-    patched_service.disable_user.assert_awaited_once_with(9001)
-    patched_service.delete_user.assert_not_awaited()
-
-
-@pytest.mark.asyncio
 async def test_disable_mode_keeps_single_tariff_user_identity(monkeypatch, patched_service, db):
     """Аккаунт остаётся (отключённым) — users.remnawave_id обязан остаться с ним:
     следующий триал или покупка включат тот же аккаунт заново."""
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', 'disable')
 
     wiped = await wipe_trial_subscriptions(db, [_sub(42, user_panel_id=555)])
@@ -187,7 +98,6 @@ async def test_disable_mode_keeps_single_tariff_user_identity(monkeypatch, patch
 @pytest.mark.asyncio
 async def test_delete_mode_still_clears_single_tariff_user_identity(monkeypatch, patched_service, db):
     """Регресс-стража: в режиме delete аккаунта больше нет — ссылку на него стираем."""
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', 'delete')
 
     wiped = await wipe_trial_subscriptions(db, [_sub(42, user_panel_id=555)])
@@ -195,18 +105,6 @@ async def test_delete_mode_still_clears_single_tariff_user_identity(monkeypatch,
     assert wiped == 1
     patched_service.delete_user.assert_awaited_once_with(555)
     assert len(_executed_updates(db)) == 1
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize('panel_message', ['User not found', 'User already disabled'])
-async def test_disable_mode_treats_gone_or_already_disabled_as_success(monkeypatch, patched_service, db, panel_message):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', 'disable')
-    patched_service.disable_user.side_effect = RuntimeError(panel_message)
-
-    wiped = await wipe_trial_subscriptions(db, [_sub(42, panel_id=9001)])
-
-    assert wiped == 1
 
 
 # ---------------------------------------------------------------------------
@@ -249,56 +147,3 @@ async def _user_panel_id(db, user_id: int):
     from app.database.models import User
 
     return (await db.execute(select(User.remnawave_id).where(User.id == user_id))).scalar_one()
-
-
-@pytest.mark.asyncio
-async def test_multi_tariff_trial_reset_clears_dead_account_on_user(monkeypatch, patched_service):
-    from app.database.models import Base
-    from tests.fixtures.sqlite_memory import memory_session
-
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', 'delete')
-    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
-        user, (trial,) = await _seed_multi(db, user_panel_id=8812, subs=[(8812, True)])
-
-        assert await wipe_trial_subscriptions(db, [trial]) == 1
-        await db.commit()
-
-        patched_service.delete_user.assert_awaited_once_with(8812)
-        assert await _user_panel_id(db, user.id) is None
-
-
-@pytest.mark.asyncio
-async def test_multi_tariff_trial_reset_keeps_live_account_of_other_subscription(monkeypatch, patched_service):
-    """У человека записан аккаунт живой платной подписки — сброс триала его не трогает."""
-    from app.database.models import Base
-    from tests.fixtures.sqlite_memory import memory_session
-
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', 'delete')
-    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
-        user, (paid, trial) = await _seed_multi(db, user_panel_id=5000, subs=[(5000, False), (8812, True)])
-
-        assert await wipe_trial_subscriptions(db, [trial]) == 1
-        await db.commit()
-
-        patched_service.delete_user.assert_awaited_once_with(8812)
-        assert await _user_panel_id(db, user.id) == 5000
-
-
-@pytest.mark.asyncio
-async def test_multi_tariff_trial_reset_in_disable_mode_keeps_link(monkeypatch, patched_service):
-    """disable: аккаунт жив (отключён) — связь с ним стирать нельзя."""
-    from app.database.models import Base
-    from tests.fixtures.sqlite_memory import memory_session
-
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
-    monkeypatch.setattr(settings, 'REMNAWAVE_USER_DELETE_MODE', 'disable')
-    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
-        user, (trial,) = await _seed_multi(db, user_panel_id=8812, subs=[(8812, True)])
-
-        assert await wipe_trial_subscriptions(db, [trial]) == 1
-        await db.commit()
-
-        patched_service.disable_user.assert_awaited_once_with(8812)
-        assert await _user_panel_id(db, user.id) == 8812

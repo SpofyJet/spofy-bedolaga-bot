@@ -33,7 +33,6 @@ TABLES = [*_TABLES, SubscriptionEvent.__table__]
 @pytest.fixture(autouse=True)
 def _bot_menu_mode(monkeypatch):
     monkeypatch.setattr(settings, 'MAIN_MENU_MODE', 'default')
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False)
 
 
 def _user(**kw):

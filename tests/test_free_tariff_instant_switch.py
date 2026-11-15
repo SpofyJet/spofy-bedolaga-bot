@@ -70,9 +70,6 @@ def _fake_sub(tariff) -> SimpleNamespace:
 
 
 def _patch_tariffs_mode(monkeypatch):
-    from app.config import Settings
-
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
     monkeypatch.setattr(kb, 'get_display_subscription_link', lambda sub: None)
 
 
@@ -204,10 +201,8 @@ async def test_instant_confirm_refuses_free_source_and_never_charges(monkeypatch
 
 async def test_instant_list_keeps_prorated_flow_for_paid_source(monkeypatch):
     """Платный источник: prorated instant-switch работает как раньше."""
-    from app.config import Settings
 
     monkeypatch.setattr(tp.settings, 'TARIFF_SWITCH_RESET_FREE_DAYS', True)
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     _patch_get_tariff(monkeypatch)
 
     sub = _free_sub()

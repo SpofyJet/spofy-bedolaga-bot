@@ -113,24 +113,3 @@ async def test_bad_format_is_not_checked_but_answered(env):
     assert await link.claim_promo_link(message, env.state, None, None, 'promo_a b!') is True
     env.valid.assert_not_awaited()
     assert 'Неверный промокод' in message.answer.await_args.args[0]
-
-
-async def test_several_subscriptions_offer_the_choice_instead_of_invalid(env):
-    """Раньше валидный код на дни при нескольких подписках показывался как «❌ Неверный промокод»."""
-    env.activate.return_value = {
-        'success': False,
-        'error': 'select_subscription',
-        'code': 'DAYS-7',
-        'eligible_subscriptions': [
-            {'id': 11, 'tariff_name': 'Стандарт', 'days_left': 5},
-            {'id': 12, 'tariff_name': 'ULTIMA', 'days_left': 40},
-        ],
-    }
-    message = _message()
-    assert await link.claim_promo_link(message, env.state, SimpleNamespace(id=7, language='ru'), None, 'promo_DAYS-7')
-    text = message.answer.await_args.args[0]
-    assert 'Неверный' not in text and 'К какой подписке' in text
-    callbacks = [
-        b.callback_data for row in message.answer.await_args.kwargs['reply_markup'].inline_keyboard for b in row
-    ]
-    assert callbacks == ['promo_sub:11:DAYS-7', 'promo_sub:12:DAYS-7', 'back_to_menu']

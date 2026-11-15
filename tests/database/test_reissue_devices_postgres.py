@@ -50,12 +50,8 @@ class Panel(RemnaWaveAPI):
 
 
 @pytest.mark.parametrize('flow', ['service', 'cabinet', 'bot'])
-@pytest.mark.parametrize('multi', [False, True])
 @pytest.mark.parametrize('outcome', ['ok', 'partial', 'error', 'gone', 'revoke_error', 'empty_url', 'missing_id'])
-async def test_reissue_resets_selected_hwid_and_preserves_new_link(
-    postgres_database, monkeypatch, flow, multi, outcome
-):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', multi)
+async def test_reissue_resets_selected_hwid_and_preserves_new_link(postgres_database, monkeypatch, flow, outcome):
     monkeypatch.setattr(settings, 'SUBSCRIPTION_REVOKE_ENABLED', True)
     panel = Panel(outcome)
 
@@ -67,11 +63,11 @@ async def test_reissue_resets_selected_hwid_and_preserves_new_link(
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
         db.add_all(
             [
-                User(id=1, telegram_id=101, status='active', language='ru', remnawave_id=9002 if multi else 9001),
+                User(id=1, telegram_id=101, status='active', language='ru', remnawave_id=9001),
                 User(id=2, telegram_id=202, status='active', language='ru'),
             ]
         )
-        for sub_id, owner, panel_id in [(10, 1, 9001), (20, 1 if multi else 2, 9002)]:
+        for sub_id, owner, panel_id in [(10, 1, 9001), (20, 2, 9002)]:
             db.add(
                 Subscription(
                     id=sub_id,
@@ -90,10 +86,7 @@ async def test_reissue_resets_selected_hwid_and_preserves_new_link(
         user = await get_user_by_id(db, 1)
         sub = await db.get(Subscription, 10)
         if outcome == 'missing_id':
-            if multi:
-                sub.remnawave_id = None
-            else:
-                user.remnawave_id = None
+            user.remnawave_id = None
             await db.commit()
         callback = SimpleNamespace(answer=AsyncMock(), message=SimpleNamespace(edit_text=AsyncMock()))
         if flow == 'service':
@@ -103,17 +96,15 @@ async def test_reissue_resets_selected_hwid_and_preserves_new_link(
                 from fastapi import HTTPException
 
                 with pytest.raises(HTTPException):
-                    await cabinet.revoke_subscription(10 if multi else None, user, db)
+                    await cabinet.revoke_subscription(None, user, db)
                 result = None
             else:
-                result = await cabinet.revoke_subscription(10 if multi else None, user, db)
+                result = await cabinet.revoke_subscription(None, user, db)
         else:
             handler = telegram.confirm_subscription_revoke
             while hasattr(handler, '__wrapped__'):
                 handler = handler.__wrapped__
-            state = SimpleNamespace(
-                get_data=AsyncMock(return_value={'revoke_sub_id': 10} if multi else {}), update_data=AsyncMock()
-            )
+            state = SimpleNamespace(get_data=AsyncMock(return_value={}), update_data=AsyncMock())
             await handler(callback, user, db, state)
             result = None
         await db.refresh(sub)
@@ -136,7 +127,7 @@ async def test_reissue_resets_selected_hwid_and_preserves_new_link(
             from fastapi import HTTPException
 
             with pytest.raises(HTTPException) as exc:
-                await cabinet.revoke_subscription(10 if multi else None, user, db)
+                await cabinet.revoke_subscription(None, user, db)
             assert exc.value.status_code == 429
             assert panel.revoked == [9001]
         else:
@@ -148,56 +139,3 @@ async def test_reissue_resets_selected_hwid_and_preserves_new_link(
                 assert 'не удалось' in text
             await handler(callback, user, db, state)
             assert panel.revoked == [9001]
-
-
-@pytest.mark.parametrize('flow', ['cabinet', 'bot'])
-@pytest.mark.parametrize('selected', [None, 20, 999])
-async def test_reissue_never_guesses_or_accepts_a_foreign_subscription(postgres_database, monkeypatch, flow, selected):
-    from fastapi import HTTPException
-
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    monkeypatch.setattr(settings, 'SUBSCRIPTION_REVOKE_ENABLED', True)
-    panel = Panel('ok')
-
-    @asynccontextmanager
-    async def client(self):
-        yield panel
-
-    monkeypatch.setattr(SubscriptionService, 'get_api_client', client)
-    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
-        db.add_all(
-            [
-                User(id=1, telegram_id=101, status='active', language='ru'),
-                User(id=2, telegram_id=202, status='active', language='ru'),
-            ]
-        )
-        for sub_id, owner, panel_id in [(10, 1, 9001), (11, 1, 9002), (20, 2, 9003)]:
-            db.add(
-                Subscription(
-                    id=sub_id,
-                    user_id=owner,
-                    remnawave_id=panel_id,
-                    remnawave_short_id=f'test-{sub_id}',
-                    status='active',
-                    is_trial=False,
-                    end_date=datetime.now(UTC) + timedelta(days=30),
-                    subscription_url='https://old.example/sub/test',
-                )
-            )
-        await db.commit()
-        user = await get_user_by_id(db, 1)
-        if flow == 'cabinet':
-            with pytest.raises(HTTPException) as exc:
-                await cabinet.revoke_subscription(selected, user, db)
-            assert exc.value.status_code == (400 if selected is None else 404)
-        else:
-            callback = SimpleNamespace(answer=AsyncMock(), message=SimpleNamespace(edit_text=AsyncMock()))
-            state = SimpleNamespace(
-                get_data=AsyncMock(return_value={'revoke_sub_id': selected}), update_data=AsyncMock()
-            )
-            handler = telegram.confirm_subscription_revoke
-            while hasattr(handler, '__wrapped__'):
-                handler = handler.__wrapped__
-            await handler(callback, user, db, state)
-        assert panel.revoked == []
-        assert panel.devices == {9001: ['a', 'b'], 9002: ['c']}

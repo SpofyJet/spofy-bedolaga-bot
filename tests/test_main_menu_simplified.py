@@ -126,23 +126,6 @@ def test_inactive_subscription_without_link_has_no_dead_connect(monkeypatch):
     assert 'menu_buy' in flat
 
 
-def test_inactive_multi_tariff_connect_targets_exact_subscription(monkeypatch):
-    monkeypatch.setattr(settings, 'CONNECT_BUTTON_MODE', 'guide')
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
-    sub = SimpleNamespace(
-        id=45,
-        actual_status='expired',
-        is_trial=False,
-        traffic_limit_gb=0,
-        tariff_id=2,
-        subscription_url='https://example.invalid/sub/45',
-        subscription_crypto_link=None,
-    )
-    kb = get_main_menu_keyboard(subscription=sub)
-    assert 'sl:45' in _flat(kb)
-    assert 'subscription_connect' not in _flat(kb)
-
-
 def test_support_is_not_in_main_menu_even_when_enabled(monkeypatch):
     # «Поддержка» живёт внутри «Инфо»; SUPPORT_MENU_ENABLED на главную её не возвращает.
     monkeypatch.setattr(settings, 'SUPPORT_MENU_ENABLED', True, raising=False)
@@ -151,26 +134,6 @@ def test_support_is_not_in_main_menu_even_when_enabled(monkeypatch):
         has_had_paid_subscription=True, has_active_subscription=True, subscription_is_active=True, subscription=sub
     )
     assert 'menu_support' not in _flat(kb) and 'menu_info' in _flat(kb)
-
-
-async def test_random_menu_message_remains_without_pending_checkout(monkeypatch):
-    from app.handlers import menu as menu_mod
-
-    user = SimpleNamespace(id=123, full_name='User')
-    texts = SimpleNamespace(
-        MAIN_MENU='Hello {user_name}\n{subscription_status}\nChoose:',
-        t=lambda key, default: default,
-    )
-    monkeypatch.setattr(menu_mod.settings, 'MULTI_TARIFF_ENABLED', True)
-    monkeypatch.setattr(menu_mod, '_get_multi_tariff_status', AsyncMock(return_value=('Active', '')))
-    monkeypatch.setattr(menu_mod, 'build_promo_offer_hint', AsyncMock(return_value=None))
-    monkeypatch.setattr(menu_mod, 'build_test_access_hint', AsyncMock(return_value=None))
-    monkeypatch.setattr(menu_mod, 'has_resumable_cart', AsyncMock(return_value=False))
-    monkeypatch.setattr(menu_mod, 'get_random_active_message', AsyncMock(return_value='Random promo'))
-
-    result = await menu_mod.get_main_menu_text(user, texts, AsyncMock())
-
-    assert 'Random promo' in result
 
 
 async def test_free_trial_is_activated_in_one_tap(monkeypatch):

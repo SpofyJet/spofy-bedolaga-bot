@@ -30,7 +30,6 @@ def _code():
 def env(monkeypatch):
     user = SimpleNamespace(id=5, telegram_id=1, balance_kopeks=0, full_name='x', username=None)
     calls = SimpleNamespace(subscription=None, grant=AsyncMock(), reserve=AsyncMock(return_value=SimpleNamespace(id=1)))
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', False, raising=False)
     monkeypatch.setattr(module, 'get_user_by_id', AsyncMock(return_value=user))
     monkeypatch.setattr(module, 'get_promocode_by_code', AsyncMock(return_value=_code()))
     monkeypatch.setattr(module, 'check_user_promocode_usage', AsyncMock(return_value=None))

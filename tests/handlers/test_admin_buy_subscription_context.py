@@ -10,7 +10,6 @@ from app.handlers.admin import users
 
 @pytest.fixture
 def case(monkeypatch):
-    monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     monkeypatch.setattr(type(settings), 'get_available_subscription_periods', lambda self: [30, 60])
     selected = SimpleNamespace(id=22, tariff_id=None, traffic_limit_gb=100, device_limit=3, connected_squads=[])
     default = SimpleNamespace(id=11, tariff_id=None, traffic_limit_gb=50, device_limit=1, connected_squads=[])

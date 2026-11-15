@@ -10,14 +10,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import app.services.subscription_service as ss
-from app.config import Settings
 from app.database.crud.subscription import reset_subscription
 from app.database.models import SubscriptionStatus
-
-
-def _set_multi_tariff(monkeypatch, enabled: bool):
-    # is_multi_tariff_enabled is a method on the pydantic Settings class.
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: enabled)
 
 
 def _sub(**kw) -> SimpleNamespace:
@@ -50,49 +44,6 @@ async def test_reset_subscription_zeroes_fields():
     assert sub.autopay_enabled is False
 
 
-async def test_reset_with_panel_disables_subscription_panel_id(monkeypatch):
-    disabled: list[int] = []
-
-    async def fake_disable(self, panel_user_id):
-        disabled.append(panel_user_id)
-        return True
-
-    monkeypatch.setattr(ss.SubscriptionService, 'disable_remnawave_user', fake_disable)
-    _set_multi_tariff(monkeypatch, True)
-
-    sub = _sub(remnawave_id=7001)
-    user = SimpleNamespace(id=1, remnawave_id=9001)
-
-    result = await ss.reset_subscription_with_panel(AsyncMock(), user, sub)
-
-    assert disabled == [7001]  # per-subscription panel id (never the user-level one)
-    assert result['panel_disabled'] is True
-    assert result['panel_user_id'] == 7001
-    assert sub.status == SubscriptionStatus.DISABLED.value  # DB reset applied too
-
-
-async def test_reset_with_panel_multitariff_no_sub_panel_id_skips_panel(monkeypatch):
-    """Multi-tariff + no per-sub panel id → must NOT fall back to user.remnawave_id
-    (that legacy id could belong to a different active sub). Panel is skipped."""
-    disabled: list[int] = []
-
-    async def fake_disable(self, panel_user_id):
-        disabled.append(panel_user_id)
-        return True
-
-    monkeypatch.setattr(ss.SubscriptionService, 'disable_remnawave_user', fake_disable)
-    _set_multi_tariff(monkeypatch, True)
-
-    sub = _sub(remnawave_id=None)
-    user = SimpleNamespace(id=1, remnawave_id=9001)
-
-    result = await ss.reset_subscription_with_panel(AsyncMock(), user, sub)
-
-    assert disabled == []  # no fallback in multi-tariff
-    assert result['panel_disabled'] is False
-    assert sub.status == SubscriptionStatus.DISABLED.value  # bot-side reset still applied
-
-
 async def test_reset_with_panel_singletariff_falls_back_to_user_panel_id(monkeypatch):
     disabled: list[int] = []
 
@@ -101,7 +52,6 @@ async def test_reset_with_panel_singletariff_falls_back_to_user_panel_id(monkeyp
         return True
 
     monkeypatch.setattr(ss.SubscriptionService, 'disable_remnawave_user', fake_disable)
-    _set_multi_tariff(monkeypatch, False)
 
     sub = _sub(remnawave_id=None)
     user = SimpleNamespace(id=1, remnawave_id=9001)

@@ -17,7 +17,6 @@ from unittest.mock import AsyncMock
 import pytest
 import structlog
 
-from app.config import Settings
 from app.services.remnawave_service import RemnaWaveService
 
 
@@ -69,9 +68,7 @@ def service(monkeypatch) -> RemnaWaveService:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('multi_tariff', [True, False], ids=['multi', 'single'])
-async def test_import_skips_accounts_without_identity_and_says_so(monkeypatch, service, db, multi_tariff):
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: multi_tariff)
+async def test_import_skips_accounts_without_identity_and_says_so(monkeypatch, service, db):
 
     with structlog.testing.capture_logs() as logs:
         stats = await service.sync_users_from_panel(db, 'all')
