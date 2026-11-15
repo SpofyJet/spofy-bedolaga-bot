@@ -12,10 +12,9 @@ from aiogram.types import BufferedInputFile
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.bot_factory import create_bot
-from app.database.models import Subscription, Transaction, TransactionType, User
+from app.database.models import Subscription, Tariff, Transaction, TransactionType, User
 from app.services.remnawave_service import RemnaWaveService
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -171,34 +170,241 @@ def _compute_date_range(period_days: int) -> tuple[str, str]:
     return start_dt.strftime('%Y-%m-%dT%H:%M:%SZ'), end_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
-async def _load_user_map(db: AsyncSession) -> dict[int, User]:
-    """Load all users with remnawave_id, eagerly loading subscription + tariff.
+class _TariffRow:
+    """Тариф подписки — только имя, больше странице ничего не нужно."""
 
-    In multi-tariff mode panel ids live on Subscription rows, not on User.
-    Both sources are merged so the caller gets a complete panel id → User map.
+    __slots__ = ('name',)
+
+    def __init__(self, name: str | None) -> None:
+        self.name = name
+
+
+class _SubscriptionRow:
+    """Подписка без ORM: только поля, которые читают таблица, обогащение и CSV.
+
+    Статусы — те же свойства модели ``Subscription`` (не копия логики), поэтому
+    «активна/истекла/триал» считаются ровно так же, как раньше на ORM-объекте.
     """
 
-    # Build user map from both user-level and subscription-level panel ids
-    user_map: dict[int, User] = {}
+    __slots__ = ('device_limit', 'end_date', 'id', 'start_date', 'status', 'tariff', 'traffic_limit_gb')
 
-    # Legacy: user-level panel ids
-    stmt_users = (
-        select(User)
+    is_active = Subscription.is_active
+    actual_status = Subscription.actual_status
+
+    def __init__(self, id, status, start_date, end_date, traffic_limit_gb, device_limit, tariff) -> None:
+        self.id = id
+        self.status = status
+        self.start_date = start_date
+        self.end_date = end_date
+        self.traffic_limit_gb = traffic_limit_gb
+        self.device_limit = device_limit
+        self.tariff = tariff
+
+
+class _UserRow:
+    """Пользователь без ORM; ``full_name`` — то же свойство модели ``User``."""
+
+    __slots__ = ('email', 'first_name', 'id', 'last_name', 'remnawave_id', 'subscriptions', 'telegram_id', 'username')
+
+    full_name = User.full_name
+
+    def __init__(self, id, telegram_id, username, email, first_name, last_name, remnawave_id) -> None:
+        self.id = id
+        self.telegram_id = telegram_id
+        self.username = username
+        self.email = email
+        self.first_name = first_name
+        self.last_name = last_name
+        self.remnawave_id = remnawave_id
+        self.subscriptions: list[_SubscriptionRow] = []
+
+
+async def _load_user_map(db: AsyncSession) -> dict[int, _UserRow]:
+    """Все пользователи с panel id → лёгкие строки с подписками и тарифом.
+
+    Раньше грузились полные ORM-объекты ``User`` + selectinload подписок и
+    тарифов: ~24 тыс. пользователей, 50 запросов и ~2,7 с гидратации ORM на
+    event loop на КАЖДЫЙ запрос страницы (а страница шлёт их пять разом).
+    Один запрос по нужным колонкам отдаёт те же данные за доли секунды.
+    Порядок подписок — как у ``User.subscriptions`` (created_at по убыванию).
+    """
+    tariffs_result = await db.execute(select(Tariff.id, Tariff.name))
+    tariffs = {tariff_id: _TariffRow(name) for tariff_id, name in tariffs_result.all()}
+
+    result = await db.execute(
+        select(
+            User.id,
+            User.telegram_id,
+            User.username,
+            User.email,
+            User.first_name,
+            User.last_name,
+            User.remnawave_id,
+            Subscription.id,
+            Subscription.status,
+            Subscription.start_date,
+            Subscription.end_date,
+            Subscription.traffic_limit_gb,
+            Subscription.device_limit,
+            Subscription.tariff_id,
+        )
+        .select_from(User)
+        .outerjoin(Subscription, Subscription.user_id == User.id)
         .where(User.remnawave_id.isnot(None))
-        .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
+        .order_by(User.id, Subscription.created_at.desc(), Subscription.id.desc())
     )
-    result_users = await db.execute(stmt_users)
-    users = result_users.scalars().all()
-    for u in users:
-        if u.remnawave_id:
-            user_map[u.remnawave_id] = u
+
+    user_map: dict[int, _UserRow] = {}
+    current: _UserRow | None = None
+    for (
+        user_id,
+        telegram_id,
+        username,
+        email,
+        first_name,
+        last_name,
+        remnawave_id,
+        sub_id,
+        sub_status,
+        sub_start,
+        sub_end,
+        sub_traffic_limit,
+        sub_device_limit,
+        sub_tariff_id,
+    ) in result.all():
+        if current is None or current.id != user_id:
+            current = _UserRow(user_id, telegram_id, username, email, first_name, last_name, remnawave_id)
+            if remnawave_id:
+                user_map[remnawave_id] = current
+        if sub_id is not None:
+            current.subscriptions.append(
+                _SubscriptionRow(
+                    sub_id,
+                    sub_status,
+                    sub_start,
+                    sub_end,
+                    sub_traffic_limit,
+                    sub_device_limit,
+                    tariffs.get(sub_tariff_id) if sub_tariff_id is not None else None,
+                )
+            )
 
     return user_map
 
 
+# Страница трафика шлёт разом основной запрос и четыре предзагрузки соседних
+# периодов; одновременные запросы делят одну загрузку пользователей вместо
+# нескольких одинаковых. Делится только загрузка «в полёте» — готовый результат
+# не запоминается, поэтому данные не старее, чем при отдельной загрузке.
+_user_map_inflight: asyncio.Future | None = None
+
+
+async def _get_user_map(db: AsyncSession) -> dict[int, _UserRow]:
+    global _user_map_inflight
+    pending = _user_map_inflight
+    if pending is not None:
+        try:
+            return await asyncio.shield(pending)
+        except Exception:
+            # Загрузка, к которой присоединились, не удалась — грузим сами.
+            return await _load_user_map(db)
+
+    pending = asyncio.get_running_loop().create_future()
+    _user_map_inflight = pending
+    try:
+        user_map = await _load_user_map(db)
+    except BaseException:
+        pending.set_exception(RuntimeError('shared user map load failed'))
+        pending.exception()  # помечаем извлечённым, если ждущих не было
+        raise
+    finally:
+        _user_map_inflight = None
+    pending.set_result(user_map)
+    return user_map
+
+
+class _TrafficRow:
+    """Строка таблицы трафика до сериализации.
+
+    Фильтры и сортировка идут по всем ~24 тыс. пользователям, а наружу уходит
+    одна страница (50 строк). Pydantic-модели строим только для неё
+    (``to_item``): раньше их собирали на всех — ~0,35 с чистого CPU на event loop
+    за запрос. Имена полей совпадают с ``UserTrafficItem``, поэтому сортировка и
+    CSV читают их так же.
+    """
+
+    __slots__ = (
+        '_subscriptions',
+        'device_limit',
+        'email',
+        'full_name',
+        'node_traffic',
+        'subscription_status',
+        'tariff_name',
+        'telegram_id',
+        'total_bytes',
+        'traffic_limit_gb',
+        'user_id',
+        'username',
+    )
+
+    def __init__(
+        self,
+        user_id,
+        telegram_id,
+        username,
+        email,
+        full_name,
+        tariff_name,
+        subscription_status,
+        traffic_limit_gb,
+        device_limit,
+        node_traffic,
+        total_bytes,
+        subscriptions,
+    ) -> None:
+        self.user_id = user_id
+        self.telegram_id = telegram_id
+        self.username = username
+        self.email = email
+        self.full_name = full_name
+        self.tariff_name = tariff_name
+        self.subscription_status = subscription_status
+        self.traffic_limit_gb = traffic_limit_gb
+        self.device_limit = device_limit
+        self.node_traffic = node_traffic
+        self.total_bytes = total_bytes
+        self._subscriptions = subscriptions
+
+    def to_item(self) -> UserTrafficItem:
+        return UserTrafficItem(
+            user_id=self.user_id,
+            telegram_id=self.telegram_id,
+            username=self.username,
+            email=self.email,
+            full_name=self.full_name,
+            tariff_name=self.tariff_name,
+            subscription_status=self.subscription_status,
+            traffic_limit_gb=self.traffic_limit_gb,
+            device_limit=self.device_limit,
+            node_traffic=self.node_traffic,
+            total_bytes=self.total_bytes,
+            subscriptions=[
+                SubscriptionTrafficInfo(
+                    subscription_id=sub.id,
+                    tariff_name=sub.tariff.name if sub.tariff else None,
+                    status=_get_status(sub),
+                    traffic_limit_gb=float(sub.traffic_limit_gb or 0),
+                    device_limit=sub.device_limit or 1,
+                )
+                for sub in self._subscriptions
+            ],
+        )
+
+
 def _build_traffic_items(
     user_traffic: dict[int, dict[str, int]],
-    user_map: dict[int, User],
+    user_map: dict[int, _UserRow],
     nodes_info: list[TrafficNodeInfo],
     search: str = '',
     sort_by: str = 'total_bytes',
@@ -206,9 +412,9 @@ def _build_traffic_items(
     tariff_filter: set[str] | None = None,
     status_filter: set[str] | None = None,
     node_filter: set[str] | None = None,
-) -> list[UserTrafficItem]:
+) -> list[_TrafficRow]:
     """Merge traffic data with user data, apply search/tariff/status/node filters, return sorted list."""
-    items: list[UserTrafficItem] = []
+    items: list[_TrafficRow] = []
     search_lower = search.lower().strip()
 
     all_panel_user_ids = set(user_traffic.keys()) | set(user_map.keys())
@@ -262,32 +468,20 @@ def _build_traffic_items(
 
         total_bytes = sum(traffic.values())
 
-        # Build per-subscription detail list for multi-subscription display
-        subscriptions_traffic = [
-            SubscriptionTrafficInfo(
-                subscription_id=sub.id,
-                tariff_name=sub.tariff.name if sub.tariff else None,
-                status=_get_status(sub),
-                traffic_limit_gb=float(sub.traffic_limit_gb or 0),
-                device_limit=sub.device_limit or 1,
-            )
-            for sub in subs
-        ]
-
         items.append(
-            UserTrafficItem(
-                user_id=user.id,
-                telegram_id=user.telegram_id,
-                username=username,
-                email=email,
-                full_name=full_name,
-                tariff_name=tariff_name,
-                subscription_status=subscription_status,
-                traffic_limit_gb=traffic_limit_gb,
-                device_limit=device_limit,
-                node_traffic=traffic,
-                total_bytes=total_bytes,
-                subscriptions=subscriptions_traffic,
+            _TrafficRow(
+                user.id,
+                user.telegram_id,
+                username,
+                email,
+                full_name,
+                tariff_name,
+                subscription_status,
+                traffic_limit_gb,
+                device_limit,
+                traffic,
+                total_bytes,
+                subs,  # per-subscription detail — собирается в to_item() только для страницы
             )
         )
 
@@ -345,7 +539,7 @@ async def get_traffic_usage(
         start_str, end_str = _compute_date_range(period)
         effective_period = period
 
-    user_map = await _load_user_map(db)
+    user_map = await _get_user_map(db)
     user_traffic, nodes_info = await _aggregate_traffic(start_str, end_str, list(user_map.keys()))
 
     # Collect all available tariff names (before filtering)
@@ -412,7 +606,7 @@ async def get_traffic_usage(
         items.sort(key=lambda x: key_fn(enrichment_data.get(x.user_id, empty)), reverse=sort_desc)
 
     total = len(items)
-    paginated = items[offset : offset + limit]
+    paginated = [row.to_item() for row in items[offset : offset + limit]]
 
     return TrafficUsageResponse(
         items=paginated,
@@ -434,25 +628,31 @@ _enrichment_lock = asyncio.Lock()
 
 
 async def _get_bulk_spending(db: AsyncSession, user_ids: list[int]) -> dict[int, int]:
-    """Get total spent kopeks for multiple users in a single query."""
+    """Get total spent kopeks for multiple users in a single query.
+
+    Раньше id шли в ``IN (...)`` — ~24 тыс. bind-параметров на запрос, а у
+    asyncpg потолок 32 767: с ростом базы запрос начал бы падать. Оплаты
+    подписок есть у ~5 тыс. человек, поэтому дешевле сгруппировать их все
+    одним проходом и оставить только нужных — суммы те же.
+    """
     if not user_ids:
         return {}
+    wanted = set(user_ids)
     result = await db.execute(
         select(Transaction.user_id, func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
         .where(
             and_(
-                Transaction.user_id.in_(user_ids),
                 Transaction.is_completed.is_(True),
                 Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
             )
         )
         .group_by(Transaction.user_id)
     )
-    return {row[0]: int(row[1]) for row in result.all()}
+    return {row[0]: int(row[1]) for row in result.all() if row[0] in wanted}
 
 
 async def _build_enrichment(
-    db: AsyncSession, user_map: dict[int, User]
+    db: AsyncSession, user_map: dict[int, _UserRow]
 ) -> tuple[dict[int, UserTrafficEnrichment], bool]:
     """Build enrichment data for all users: devices, spending, dates, last node.
 
@@ -593,7 +793,7 @@ async def get_traffic_enrichment(
         if cached and (now - cached[0]) < _ENRICHMENT_CACHE_TTL:
             return TrafficEnrichmentResponse(data=cached[1])
 
-        user_map = await _load_user_map(db)
+        user_map = await _get_user_map(db)
         enrichment, panel_degraded = await _build_enrichment(db, user_map)
 
         # Тот же довод, что и у _aggregate_traffic: запомнить деградированный
@@ -650,7 +850,7 @@ async def export_traffic_csv(
         period_label = f'{request.period}d'
         period_days = request.period
 
-    user_map = await _load_user_map(db)
+    user_map = await _get_user_map(db)
     user_traffic, nodes_info = await _aggregate_traffic(start_str, end_str, list(user_map.keys()))
     enrichment, _ = await _build_enrichment(db, user_map)
 
