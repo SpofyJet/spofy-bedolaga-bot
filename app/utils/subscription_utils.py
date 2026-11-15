@@ -2,8 +2,6 @@ from datetime import UTC, datetime
 from urllib.parse import quote, urlparse, urlunparse
 
 import structlog
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import Subscription
@@ -29,35 +27,6 @@ def resolve_tariff_cart_traffic(tariff, cart_data: dict) -> tuple[int | None, in
     ):
         raise ValueError('Custom traffic selection is unavailable')
     return custom, custom
-
-
-async def cleanup_duplicate_subscriptions(db: AsyncSession) -> int:
-    result = await db.execute(
-        select(Subscription.user_id).group_by(Subscription.user_id).having(func.count(Subscription.id) > 1)
-    )
-    users_with_duplicates = result.scalars().all()
-
-    total_deleted = 0
-
-    for user_id in users_with_duplicates:
-        subscriptions_result = await db.execute(
-            select(Subscription).where(Subscription.user_id == user_id).order_by(Subscription.created_at.desc())
-        )
-        subscriptions = subscriptions_result.scalars().all()
-
-        for old_subscription in subscriptions[1:]:
-            await db.delete(old_subscription)
-            total_deleted += 1
-            logger.info(
-                '🗑️ Удалена дублирующаяся подписка',
-                old_subscription_id=old_subscription.id,
-                user_id=user_id,
-            )
-
-    await db.commit()
-    logger.info('🧹 Очищено дублирующихся подписок', total_deleted=total_deleted)
-
-    return total_deleted
 
 
 def get_display_subscription_link(subscription: Subscription | None) -> str | None:

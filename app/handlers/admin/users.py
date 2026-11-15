@@ -1,7 +1,5 @@
 import html
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 import structlog
 from aiogram import Dispatcher, F, types
@@ -44,22 +42,6 @@ from app.utils.user_utils import get_effective_referral_commission_percent
 
 
 logger = structlog.get_logger(__name__)
-
-
-# =============================================================================
-# Конфигурация фильтров пользователей
-# =============================================================================
-
-
-@dataclass
-class UserFilterConfig:
-    """Конфигурация для типа фильтра."""
-
-    fsm_state: Any  # State из AdminStates
-    title: str
-    empty_message: str
-    pagination_prefix: str
-    order_param: str  # параметр для get_users_page
 
 
 @admin_required

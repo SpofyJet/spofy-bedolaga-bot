@@ -104,23 +104,6 @@ def format_days_declension(days: int, language: str = 'ru') -> str:
     return f'{days} дней'
 
 
-def format_bytes(bytes_value: int) -> str:
-    if bytes_value == 0:
-        return '0 B'
-
-    units = ['B', 'KB', 'MB', 'GB', 'TB']
-    size = float(bytes_value)
-    unit_index = 0
-
-    while size >= 1024 and unit_index < len(units) - 1:
-        size /= 1024
-        unit_index += 1
-
-    if size == int(size):
-        return f'{int(size)} {units[unit_index]}'
-    return f'{size:.1f} {units[unit_index]}'
-
-
 def format_username_link(username: str | None, fallback: str = '') -> str:
     """Telegram-логин явной ссылкой.
 

@@ -673,10 +673,6 @@ def get_broadcast_button_labels(language: str) -> dict[str, str]:
     return {key: value['text'] for key, value in get_broadcast_button_config(language).items()}
 
 
-def get_message_buttons_selector_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
-    return get_updated_message_buttons_selector_keyboard_with_media(list(DEFAULT_BROADCAST_BUTTONS), False, language)
-
-
 def get_broadcast_media_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(

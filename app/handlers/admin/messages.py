@@ -78,10 +78,6 @@ CABINET_MINIAPP_BUTTON_KEYS = {
 }
 
 
-def get_message_buttons_selector_keyboard(language: str = 'ru') -> types.InlineKeyboardMarkup:
-    return get_updated_message_buttons_selector_keyboard(list(DEFAULT_SELECTED_BUTTONS), language)
-
-
 def get_updated_message_buttons_selector_keyboard(
     selected_buttons: list, language: str = 'ru'
 ) -> types.InlineKeyboardMarkup:

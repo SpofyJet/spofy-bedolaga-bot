@@ -33,13 +33,6 @@ def test_format_days_declension_handles_russian_rules() -> None:
     assert formatters.format_days_declension(10) == '10 дней'
 
 
-def test_format_bytes_scales_value() -> None:
-    """Размер должен выражаться в наиболее подходящей единице."""
-    assert formatters.format_bytes(0) == '0 B'
-    assert formatters.format_bytes(1024) == '1 KB'
-    assert formatters.format_bytes(1024 * 1024) == '1 MB'
-
-
 def test_format_username_link_wraps_telegram_handle_in_anchor() -> None:
     """Rich-сообщения идут со skip_entity_detection=True — ссылка нужна явная."""
     assert formatters.format_username_link('durov') == '<a href="https://t.me/durov">@durov</a>'

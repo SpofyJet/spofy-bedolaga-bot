@@ -218,25 +218,6 @@ class BlacklistService:
                 return (bl_id, bl_username, bl_reason)
         return None
 
-    async def get_user_by_username(self, username: str) -> tuple[int, str, str] | None:
-        """
-        Возвращает информацию о пользователе из черного списка по username
-
-        Args:
-            username: Username пользователя
-
-        Returns:
-            Кортеж (telegram_id, username, reason) или None, если не найден
-        """
-        # Проверяем как с @, так и без
-        username_with_at = f'@{username}' if not username.startswith('@') else username
-        username_without_at = username.lstrip('@')
-
-        for bl_id, bl_username, bl_reason in self.blacklist_data:
-            if bl_username == username_with_at or bl_username.lstrip('@') == username_without_at:
-                return (bl_id, bl_username, bl_reason)
-        return None
-
 
 # Глобальный экземпляр сервиса
 blacklist_service = BlacklistService()

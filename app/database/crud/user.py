@@ -196,32 +196,6 @@ async def find_phantom_user_by_username(db: AsyncSession, username: str) -> User
     return result.scalars().first()
 
 
-async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
-    if not username:
-        return None
-
-    normalized = username.lower()
-
-    result = await db.execute(
-        select(User)
-        .options(
-            selectinload(User.subscriptions).selectinload(Subscription.tariff),
-            selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
-            selectinload(User.referrer),
-            selectinload(User.promo_group),
-        )
-        .where(func.lower(User.username) == normalized)
-    )
-
-    user = result.scalar_one_or_none()
-
-    if user and user.subscription:
-        # Загружаем дополнительные зависимости для subscription
-        _ = user.subscription.is_active
-
-    return user
-
-
 async def get_user_by_referral_code(db: AsyncSession, referral_code: str) -> User | None:
     result = await db.execute(
         select(User)

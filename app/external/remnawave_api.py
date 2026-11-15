@@ -1998,21 +1998,6 @@ class RemnaWaveAPI:
         )
 
 
-def format_bytes(bytes_value: int) -> str:
-    if bytes_value == 0:
-        return '0 B'
-
-    units = ['B', 'KB', 'MB', 'GB', 'TB']
-    size = bytes_value
-    unit_index = 0
-
-    while size >= 1024 and unit_index < len(units) - 1:
-        size /= 1024
-        unit_index += 1
-
-    return f'{size:.1f} {units[unit_index]}'
-
-
 def parse_bytes(size_str: str) -> int:
     size_str = size_str.strip()
 

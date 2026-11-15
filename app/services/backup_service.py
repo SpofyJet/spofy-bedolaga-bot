@@ -137,19 +137,6 @@ async def _terminate_competing_backends(conn) -> int:
 
 
 @dataclass
-class BackupMetadata:
-    timestamp: str
-    version: str = '1.2'
-    database_type: str = 'postgresql'
-    backup_type: str = 'full'
-    tables_count: int = 0
-    total_records: int = 0
-    compressed: bool = True
-    file_size_bytes: int = 0
-    created_by: int | None = None
-
-
-@dataclass
 class BackupSettings:
     auto_backup_enabled: bool = True
     backup_interval_hours: int = 24

@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -62,15 +62,6 @@ async def reload_after_panel_failure(db: AsyncSession, *objects: Any) -> None:
             await db.refresh(obj)
         except Exception as error:
             logger.warning('Не удалось перечитать объект после сбоя панели', kind=type(obj).__name__, error=error)
-
-
-@dataclass
-class PropagateSquadsResult:
-    """Результат применения скводов тарифа к подпискам."""
-
-    total: int = 0
-    synced: int = 0
-    failed_ids: list[int] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
