@@ -118,19 +118,8 @@ async def deliver_pinned_message_to_user(
     return success
 
 
-async def broadcast_pinned_message(
-    bot: Bot,
-    db: AsyncSession,
-    pinned_message: PinnedMessage,
-) -> tuple[int, int]:
-    """
-    Рассылает закреплённое сообщение всем активным пользователям.
-
-    ВАЖНО: Извлекаем telegram_id в список ДО начала долгой рассылки,
-    чтобы избежать обращения к ORM-объектам после истечения таймаута
-    соединения с БД.
-    """
-    # Собираем telegram_id всех активных пользователей
+async def _active_telegram_ids(db: AsyncSession) -> list[int]:
+    """telegram_id всех активных пользователей (email-only пропускаются), пачками по 5000."""
     recipient_telegram_ids: list[int] = []
     offset = 0
     batch_size = 5000
@@ -146,12 +135,28 @@ async def broadcast_pinned_message(
         if not batch:
             break
 
-        # Извлекаем только telegram_id, фильтруем email-only пользователей
         for user in batch:
             if user.telegram_id is not None:
                 recipient_telegram_ids.append(user.telegram_id)
 
         offset += batch_size
+
+    return recipient_telegram_ids
+
+
+async def broadcast_pinned_message(
+    bot: Bot,
+    db: AsyncSession,
+    pinned_message: PinnedMessage,
+) -> tuple[int, int]:
+    """
+    Рассылает закреплённое сообщение всем активным пользователям.
+
+    ВАЖНО: Извлекаем telegram_id в список ДО начала долгой рассылки,
+    чтобы избежать обращения к ORM-объектам после истечения таймаута
+    соединения с БД.
+    """
+    recipient_telegram_ids = await _active_telegram_ids(db)
 
     sent_count = 0
     failed_count = 0
@@ -215,28 +220,7 @@ async def unpin_active_pinned_message(
     if not pinned_message:
         return 0, 0, False
 
-    # Собираем telegram_id всех активных пользователей
-    recipient_telegram_ids: list[int] = []
-    offset = 0
-    batch_size = 5000
-
-    while True:
-        batch = await get_users_list(
-            db,
-            offset=offset,
-            limit=batch_size,
-            status=UserStatus.ACTIVE,
-        )
-
-        if not batch:
-            break
-
-        # Извлекаем только telegram_id, фильтруем email-only пользователей
-        for user in batch:
-            if user.telegram_id is not None:
-                recipient_telegram_ids.append(user.telegram_id)
-
-        offset += batch_size
+    recipient_telegram_ids = await _active_telegram_ids(db)
 
     unpinned_count = 0
     failed_count = 0
