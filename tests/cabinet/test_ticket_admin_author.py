@@ -55,15 +55,28 @@ def _keyword(call: ast.Call, name: str) -> ast.expr:
     raise AssertionError(f'TicketMessage(...) has no keyword {name!r}')
 
 
+def _admin_reply_author(func: ast.AsyncFunctionDef) -> ast.expr:
+    """Автор админ-ответа: ``user_id=`` в ``TicketMessage(...)`` или ``author_id`` (второй аргумент)
+    общей сборки ``new_ticket_message(...)`` — она кладёт его в ``user_id``
+    (tests/cabinet/test_new_ticket_message.py)."""
+    for node in ast.walk(func):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+            continue
+        if node.func.id == 'TicketMessage':
+            return _keyword(node, 'user_id')
+        if node.func.id == 'new_ticket_message':
+            assert ast.unparse(_keyword(node, 'is_from_admin')) == 'True', 'ответ админа должен быть is_from_admin=True'
+            return node.args[1]
+    raise AssertionError('reply_to_ticket должен создавать TicketMessage')
+
+
 def test_cabinet_admin_reply_stores_admin_id() -> None:
     """REGRESSION: reply_to_ticket в admin_tickets.py должен писать admin.id,
     а не ticket.user_id — иначе не установить, кто из сотрудников отвечал."""
     source = (APP_DIR / 'cabinet' / 'routes' / 'admin_tickets.py').read_text(encoding='utf-8')
     func = _find_function(ast.parse(source), 'reply_to_ticket')
 
-    calls = _ticket_message_calls(func)
-    assert calls, 'reply_to_ticket должен создавать TicketMessage'
-    user_id = _keyword(calls[0], 'user_id')
+    user_id = _admin_reply_author(func)
 
     assert isinstance(user_id, ast.Attribute) and user_id.attr == 'id', (
         'user_id админ-ответа должен быть <admin>.id, а не id владельца тикета'
