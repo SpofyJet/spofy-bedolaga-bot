@@ -2589,6 +2589,31 @@ async def select_tariff_extend_period(
     await callback.answer()
 
 
+# Чьё продление или смену тарифа с баланса бот сейчас оформляет (users.id). Второе нажатие
+# «Подтвердить», пока первое не закончилось, не встаёт в очередь за блокировкой строки
+# пользователя и не списывает второй раз, а получает «уже оформляется»: кнопка исчезает
+# только когда первое нажатие отредактирует сообщение — после списания, панели и уведомлений
+# (05.10.2026: продление 209 ₽ списано дважды с разницей 2,4 с).
+_balance_checkouts_in_flight: set[int] = set()
+
+
+async def _checkout_once_per_user(callback: types.CallbackQuery, db_user: User, checkout) -> None:
+    user_id = db_user.id
+    if user_id in _balance_checkouts_in_flight:
+        await callback.answer(
+            get_texts(db_user.language).t(
+                'TARIFF_PURCHASE_IN_PROGRESS', '⏳ Покупка уже обрабатывается. Повторное списание не требуется.'
+            ),
+            show_alert=True,
+        )
+        return
+    _balance_checkouts_in_flight.add(user_id)
+    try:
+        await checkout()
+    finally:
+        _balance_checkouts_in_flight.discard(user_id)
+
+
 @error_handler
 async def confirm_tariff_extend(
     callback: types.CallbackQuery,
@@ -2597,6 +2622,15 @@ async def confirm_tariff_extend(
     state: FSMContext,
 ):
     """Подтверждает продление по тарифу."""
+    await _checkout_once_per_user(callback, db_user, lambda: _confirm_tariff_extend_once(callback, db_user, db, state))
+
+
+async def _confirm_tariff_extend_once(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
     texts = get_texts(db_user.language)
 
     # tariff_ext_confirm:{sub_id}:{tariff_id}:{period}
@@ -3471,6 +3505,15 @@ async def confirm_tariff_switch(
     state: FSMContext,
 ):
     """Подтверждает переключение тарифа."""
+    await _checkout_once_per_user(callback, db_user, lambda: _confirm_tariff_switch_once(callback, db_user, db, state))
+
+
+async def _confirm_tariff_switch_once(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
     texts = get_texts(db_user.language)
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
