@@ -12,7 +12,6 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.database.models import PaidTrafficResetIntent, Subscription, User
 from app.services.panel_sync.identity import find_foreign_panel_owner
 
@@ -81,7 +80,7 @@ async def _locked(db: AsyncSession, intent_id: int):
 
 
 def _target(user, sub):
-    return sub.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
+    return user.remnawave_id
 
 
 def _identity_matches(intent, panel_user) -> bool:
@@ -148,10 +147,7 @@ async def _activate_confirmed(db: AsyncSession, intent_id: int) -> None:
         not _valid(user, sub, intent)
         or _target(user, sub) != intent.target_panel_id
         or (sub.remnawave_short_uuid and sub.remnawave_short_uuid != intent.target_short_uuid)
-        or await find_foreign_panel_owner(
-            db, user, sub, intent.target_panel_id, multi_tariff=settings.is_multi_tariff_enabled()
-        )
-        is not None
+        or await find_foreign_panel_owner(db, user, sub, intent.target_panel_id) is not None
     ):
         intent.activation_pending = False
         intent.last_error = 'activation_owner_or_cycle_changed'
@@ -220,10 +216,7 @@ async def _reconcile_attempted(db, user, sub, intent) -> bool:
                 _valid(user, sub, intent)
                 and _target(user, sub) == intent.target_panel_id
                 and (not sub.remnawave_short_uuid or sub.remnawave_short_uuid == intent.target_short_uuid)
-                and await find_foreign_panel_owner(
-                    db, user, sub, intent.target_panel_id, multi_tariff=settings.is_multi_tariff_enabled()
-                )
-                is None
+                and await find_foreign_panel_owner(db, user, sub, intent.target_panel_id) is None
             )
             # Resolving an old/deleted owner's ambiguity must not write new-cycle rights.
             await _confirm(db, sub, intent, snapshot, update_subscription=owns_current_cycle)
@@ -275,10 +268,7 @@ async def deliver_daily_reset(db: AsyncSession, intent_id: int) -> bool:
         intent.next_check_at = datetime.now(UTC) + timedelta(minutes=2)
         await db.commit()
         return False
-    if (
-        await find_foreign_panel_owner(db, user, sub, panel_id, multi_tariff=settings.is_multi_tariff_enabled())
-        is not None
-    ):
+    if await find_foreign_panel_owner(db, user, sub, panel_id) is not None:
         _block(intent, 'panel_account_owned_elsewhere')
         await db.commit()
         return False
@@ -362,10 +352,7 @@ async def deliver_daily_reset(db: AsyncSession, intent_id: int) -> bool:
                 not _valid(user, sub, intent)
                 or _target(user, sub) != intent.target_panel_id
                 or (sub.remnawave_short_uuid and sub.remnawave_short_uuid != intent.target_short_uuid)
-                or await find_foreign_panel_owner(
-                    db, user, sub, intent.target_panel_id, multi_tariff=settings.is_multi_tariff_enabled()
-                )
-                is not None
+                or await find_foreign_panel_owner(db, user, sub, intent.target_panel_id) is not None
             ):
                 intent.attempted_at = None
                 _block(intent, 'owner_identity_or_cycle_changed_before_send')

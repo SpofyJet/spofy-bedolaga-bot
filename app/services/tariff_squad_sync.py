@@ -12,7 +12,6 @@ import structlog
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import joinedload
 
-from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import Subscription, SubscriptionStatus, User
 from app.services.panel_sync import patch_panel_squads
@@ -66,11 +65,7 @@ async def sync_tariff_squads_in_background(tariff_id: int, admin_id: int) -> Non
 
                 async def _sync_one(sub: Subscription) -> None:
                     nonlocal updated, failed
-                    remnawave_id = (
-                        sub.remnawave_id
-                        if settings.is_multi_tariff_enabled()
-                        else (sub.user.remnawave_id if sub.user else None)
-                    )
+                    remnawave_id = sub.user.remnawave_id if sub.user else None
                     if not remnawave_id:
                         return
                     async with semaphore:

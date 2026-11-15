@@ -417,10 +417,7 @@ class SubscriptionRenewalService:
         panel_result = None
         try:
             await db.refresh(user)
-            if settings.is_multi_tariff_enabled():
-                _should_create = subscription_after.remnawave_id is None
-            else:
-                _should_create = getattr(user, 'remnawave_id', None) is None
+            _should_create = getattr(user, 'remnawave_id', None) is None
 
             async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
                 if _should_create:
@@ -467,11 +464,7 @@ class SubscriptionRenewalService:
                 from app.services.remnawave_service import RemnaWaveService
 
                 rw_service = RemnaWaveService()
-                _panel_user_id = (
-                    subscription_after.remnawave_id
-                    if settings.is_multi_tariff_enabled()
-                    else getattr(user, 'remnawave_id', None)
-                )
+                _panel_user_id = getattr(user, 'remnawave_id', None)
                 if _panel_user_id is not None:
                     async with rw_service.get_api_client() as api:
                         # reset_user_devices не бросает при отказе панели — ловит

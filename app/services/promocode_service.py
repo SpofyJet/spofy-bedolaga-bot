@@ -23,15 +23,6 @@ from app.services.subscription_service import SubscriptionService
 logger = structlog.get_logger(__name__)
 
 
-class _SelectSubscriptionRequired(Exception):
-    """Raised when multi-tariff promo requires user to select a subscription."""
-
-    def __init__(self, eligible_subscriptions: list[dict], code: str):
-        self.eligible_subscriptions = eligible_subscriptions
-        self.code = code
-        super().__init__('select_subscription')
-
-
 class PromoCodeService:
     def __init__(self):
         self.remnawave_service = RemnaWaveService()
@@ -173,15 +164,6 @@ class PromoCodeService:
                 result_description = await self._apply_promocode_effects(
                     db, user, promocode, subscription_id=subscription_id
                 )
-            except _SelectSubscriptionRequired as e:
-                # Мульти-тариф: нужен выбор подписки — откатываем резерв И claim инкремента.
-                await self._rollback_keeping_user_usable(db, user)
-                return {
-                    'success': False,
-                    'error': 'select_subscription',
-                    'eligible_subscriptions': e.eligible_subscriptions,
-                    'code': e.code,
-                }
             except ValueError as e:
                 error_key = str(e)
                 if error_key == 'trial_provisioning_failed':
@@ -315,13 +297,8 @@ class PromoCodeService:
 
     async def _has_active_paid_subscription(self, db: AsyncSession, user: User) -> bool:
         """Есть ли действующая подписка, которая не триал."""
-        if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-            subscriptions = await get_active_subscriptions_by_user_id(db, user.id)
-        else:
-            subscription = await get_subscription_by_user_id(db, user.id)
-            subscriptions = [subscription] if subscription else []
+        subscription = await get_subscription_by_user_id(db, user.id)
+        subscriptions = [subscription] if subscription else []
         return any(item.is_active and not item.is_trial for item in subscriptions)
 
     async def _pick_target_subscription(
@@ -333,40 +310,15 @@ class PromoCodeService:
     ) -> Subscription:
         """Подписка, к которой применяются бонусы промокода: дни и трафик.
 
-        В мультитарифе подходящих может быть несколько — тогда просим
-        пользователя выбрать: угадывать нельзя, бонус уйдёт не туда.
         Код ошибки общий с днями — снаружи он уже переведён как
         «нужна активная или истёкшая подписка», что верно и для трафика.
         """
-        if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import (
-                get_active_subscriptions_by_user_id,
-                get_all_subscriptions_by_user_id,
-            )
-
-            active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-            if not active_subs:
-                # Parity with classic/single mode, which extend the primary sub
-                # via get_subscription_by_user_id (ANY status — incl. EXPIRED and
-                # DISABLED). get_active_* excludes both, so a lapsed multi-tariff
-                # user would hit no_subscription_for_days despite the explicit
-                # "active or expired" promise. extend_subscription revives
-                # EXPIRED/DISABLED→ACTIVE, so fall back to those here too (full
-                # parity with classic/single, which already revive DISABLED).
-                all_subs = await get_all_subscriptions_by_user_id(db, user.id)
-                active_subs = [
-                    s
-                    for s in all_subs
-                    if s.status in (SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value)
-                ]
-        else:
-            single_sub = await get_subscription_by_user_id(db, user.id)
-            active_subs = [single_sub] if single_sub else []
+        single_sub = await get_subscription_by_user_id(db, user.id)
+        active_subs = [single_sub] if single_sub else []
 
         if not active_subs:
             raise ValueError('no_subscription_for_days')
 
-        # Multi-tariff: require subscription selection if >1 non-daily subscriptions
         non_daily = [s for s in active_subs if not (s.tariff and getattr(s.tariff, 'is_daily', False))]
         eligible = non_daily or active_subs
 
@@ -376,15 +328,6 @@ class PromoCodeService:
                 raise ValueError('subscription_not_found')
         elif len(eligible) == 1:
             target_sub = eligible[0]
-        elif len(eligible) > 1 and settings.is_multi_tariff_enabled():
-            # Need user to choose — raise with eligible subscriptions list
-            raise _SelectSubscriptionRequired(
-                eligible_subscriptions=[
-                    {'id': s.id, 'tariff_name': s.tariff.name if s.tariff else f'#{s.id}', 'days_left': s.days_left}
-                    for s in eligible
-                ],
-                code=promocode.code,
-            )
         # Prefer non-daily subscription with most days remaining
         elif eligible:
             target_sub = max(eligible, key=lambda s: s.days_left)
@@ -416,17 +359,11 @@ class PromoCodeService:
         from app.database.crud.server_squad import get_effective_tariff_squad_uuids
         from app.database.crud.subscription import (
             create_paid_subscription,
-            get_subscription_by_user_and_tariff,
             replace_subscription,
         )
 
         days = promocode.subscription_days
-        multi = settings.is_multi_tariff_enabled()
-        existing = (
-            await get_subscription_by_user_and_tariff(db, user.id, tariff.id, include_inactive=True)
-            if multi
-            else await get_subscription_by_user_id(db, user.id)
-        )
+        existing = await get_subscription_by_user_id(db, user.id)
         squads = await get_effective_tariff_squad_uuids(db, tariff.allowed_squads)
 
         if existing is not None and existing.tariff_id == tariff.id and not existing.is_trial:
@@ -445,7 +382,7 @@ class PromoCodeService:
                 await self.subscription_service.sync_remnawave_user(db, existing)
                 return existing
 
-        if existing is None or (multi and existing.tariff_id != tariff.id):
+        if existing is None:
             subscription = await create_paid_subscription(
                 db=db,
                 user_id=user.id,
@@ -579,13 +516,10 @@ class PromoCodeService:
                 panel_result = await self.subscription_service.update_remnawave_user(db, target_sub)
                 await self._refresh_after_panel_call(db, user, promocode, target_sub, panel_result)
 
-            tariff_label = ''
-            if settings.is_multi_tariff_enabled() and getattr(target_sub, 'tariff', None):
-                tariff_label = f' «{target_sub.tariff.name}»'
             if tariff_grant is not None:
                 effects.append(f'🎁 Подписка «{tariff_grant.name}» на {promocode.subscription_days} дн. активирована')
             else:
-                effects.append(f'⏰ Подписка{tariff_label} продлена на {promocode.subscription_days} дней')
+                effects.append(f'⏰ Подписка продлена на {promocode.subscription_days} дней')
             logger.info(
                 '✅ Подписка пользователя продлена на дней в RemnaWave',
                 _format_user_log=self._format_user_log(user),
@@ -631,11 +565,7 @@ class PromoCodeService:
                 await self._refresh_after_panel_call(db, user, promocode, target_sub, panel_result)
 
                 # PATCH не всегда снимает LIMITED — включаем явно.
-                panel_user_id = (
-                    target_sub.remnawave_id
-                    if settings.is_multi_tariff_enabled() and target_sub.remnawave_id
-                    else getattr(user, 'remnawave_id', None)
-                )
+                panel_user_id = getattr(user, 'remnawave_id', None)
                 if panel_user_id and target_sub.status == SubscriptionStatus.ACTIVE.value:
                     await self.subscription_service.enable_remnawave_user(panel_user_id)
 
@@ -697,43 +627,12 @@ class PromoCodeService:
             # Check if user already has a subscription with the same tariff
             existing_same_tariff_sub = None
             can_create_new = True
-            if settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import (
-                    get_active_subscriptions_by_user_id,
-                    get_all_subscriptions_by_user_id,
-                )
-
-                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-                if tariff_id_for_trial:
-                    existing_same_tariff_sub = next(
-                        (s for s in active_subs if s.tariff_id == tariff_id_for_trial), None
-                    )
-                    if existing_same_tariff_sub is None:
-                        # Revive an EXPIRED/DISABLED same-tariff subscription in place
-                        # instead of inserting a duplicate row. The partial unique index
-                        # uq_subscriptions_user_tariff_active only covers active/trial/
-                        # limited, so a dup wouldn't error but would litter the table and
-                        # break the one-sub-per-(user,tariff) invariant.
-                        all_subs = await get_all_subscriptions_by_user_id(db, user.id)
-                        existing_same_tariff_sub = next(
-                            (
-                                s
-                                for s in all_subs
-                                if s.tariff_id == tariff_id_for_trial
-                                and s.status in (SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value)
-                            ),
-                            None,
-                        )
+            existing_sub = await get_subscription_by_user_id(db, user.id)
+            if existing_sub:
+                if tariff_id_for_trial and existing_sub.tariff_id == tariff_id_for_trial:
+                    existing_same_tariff_sub = existing_sub
                 else:
-                    # No tariff configured — block if any subscription exists
-                    can_create_new = len(active_subs) == 0
-            else:
-                existing_sub = await get_subscription_by_user_id(db, user.id)
-                if existing_sub:
-                    if tariff_id_for_trial and existing_sub.tariff_id == tariff_id_for_trial:
-                        existing_same_tariff_sub = existing_sub
-                    else:
-                        can_create_new = False
+                    can_create_new = False
 
             trial_days = (
                 promocode.subscription_days if promocode.subscription_days > 0 else settings.TRIAL_DURATION_DAYS

@@ -5,7 +5,6 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.database.crud.subscription import get_active_subscriptions_by_user_id
 from app.database.models import User
 from app.services.subscription_service import SubscriptionService
@@ -68,10 +67,7 @@ async def resync_user_subscriptions_with_panel(
         # Panel identity is the numeric `remnawave_id` since Remnawave 3.0.0.
         # `is not None` rather than truthiness: getting this gate wrong does not
         # raise, it creates a duplicate panel account on every single pass.
-        if settings.is_multi_tariff_enabled():
-            panel_user_exists = subscription.remnawave_id is not None
-        else:
-            panel_user_exists = user.remnawave_id is not None
+        panel_user_exists = user.remnawave_id is not None
 
         try:
             if panel_user_exists:

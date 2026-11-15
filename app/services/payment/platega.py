@@ -1606,7 +1606,6 @@ async def purchase_tariff_with_sbp_recurring(
 
     from app.database.crud.subscription import (
         create_sbp_pending_subscription,
-        get_subscription_by_user_and_tariff,
         get_subscription_by_user_id,
     )
 
@@ -1619,8 +1618,6 @@ async def purchase_tariff_with_sbp_recurring(
             tariff_id=tariff.id,
             subscription_id=subscription_id,
         )
-    elif settings.is_multi_tariff_enabled():
-        subscription = await get_subscription_by_user_and_tariff(db, user.id, tariff.id, include_inactive=True)
     else:
         subscription = await get_subscription_by_user_id(db, user.id)
         # Подписка ДРУГОГО тарифа — не отказ: рекуррент привязывается к ней,

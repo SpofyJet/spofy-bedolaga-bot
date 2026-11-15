@@ -142,8 +142,6 @@ class TrafficCycleService:
         anchor = subscription.traffic_cycle_anchor_at or subscription.start_date
         if anchor is None or not is_cycle_due(anchor, subscription.traffic_cycle_reset_at, now, get_local_timezone()):
             return None
-        if settings.is_multi_tariff_enabled():
-            return subscription.remnawave_id or None
         return subscription.user.remnawave_id or None
 
     async def _reset_one(self, db, subscription_id: int) -> bool:

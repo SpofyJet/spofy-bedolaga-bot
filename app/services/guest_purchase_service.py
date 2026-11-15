@@ -330,16 +330,7 @@ async def fulfill_purchase(
             return purchase
 
         # Check if user already has a subscription
-        if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-            # In multi-tariff mode, only block if user already has THIS SPECIFIC tariff active.
-            # Different tariffs can be purchased simultaneously — that's the whole point.
-            existing_subscription = await get_subscription_by_user_and_tariff(
-                db, user.id, tariff.id, include_inactive=not purchase.is_gift
-            )
-        else:
-            existing_subscription = await get_subscription_by_user_id(db, user.id)
+        existing_subscription = await get_subscription_by_user_id(db, user.id)
         if existing_subscription is not None and (existing_subscription.is_active or purchase.is_gift):
             # Active subscription or gift with any existing subscription — hold for manual activation
             purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
@@ -1326,14 +1317,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
             all_servers, _ = await get_all_server_squads(db, available_only=True)
             squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
-        if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-            existing_subscription = await get_subscription_by_user_and_tariff(
-                db, user.id, tariff.id, include_inactive=not purchase.is_gift
-            )
-        else:
-            existing_subscription = await get_subscription_by_user_id(db, user.id)
+        existing_subscription = await get_subscription_by_user_id(db, user.id)
         is_tariff_renewal = (
             not purchase.is_gift and existing_subscription is not None and existing_subscription.tariff_id == tariff.id
         )
@@ -1361,7 +1345,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
                 db,
                 existing_subscription,
                 purchase.period_days,
-                tariff_id=tariff.id if is_tariff_renewal or not settings.is_multi_tariff_enabled() else None,
+                tariff_id=tariff.id,
                 traffic_limit_gb=tariff.traffic_limit_gb,
                 device_limit=tariff.device_limit,
                 connected_squads=squads,

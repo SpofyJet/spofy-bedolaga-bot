@@ -310,7 +310,6 @@ class BypassDowngradeService:
                 [
                     build_subscription_extend_button(
                         texts.get('BYPASS_RENEW_BUTTON', '⏰ Продлить подписку'),
-                        getattr(subscription, 'id', None),
                         style='success',
                     )
                 ],

@@ -834,10 +834,9 @@ class RemnaWaveWebhookService:
                 # A shortUuid fallback can recover missing numeric linkage, but
                 # cannot override a different, already bound panel account.
                 unbound = Subscription.remnawave_id.is_(None)
-                if not settings.is_multi_tariff_enabled():
-                    unbound = unbound & Subscription.user.has(
-                        User.remnawave_id.is_(None) | (User.remnawave_id == panel_user_id)
-                    )
+                unbound = unbound & Subscription.user.has(
+                    User.remnawave_id.is_(None) | (User.remnawave_id == panel_user_id)
+                )
                 short_filter = short_filter & (unbound | (Subscription.remnawave_id == panel_user_id))
             filters.append(short_filter)
         return filters
@@ -991,9 +990,6 @@ class RemnaWaveWebhookService:
             if panel_user_id is None or panel_user_id != user.remnawave_id:
                 return None, None
 
-        if settings.is_multi_tariff_enabled():
-            # In multi-tariff mode, don't fall back to arbitrary subscription
-            return user, None
         subscription = await get_subscription_by_user_id(db, user.id)
         if subscription and (panel_user_id is not None or short_uuid):
             if subscription.remnawave_id is not None and subscription.remnawave_id != panel_user_id:
@@ -1020,12 +1016,12 @@ class RemnaWaveWebhookService:
             return False
         return bool(re.match(r'^[a-zA-Z][a-zA-Z0-9+\-.]*://', value))
 
-    def _get_renew_keyboard(self, user: User, subscription_id: int | None = None) -> InlineKeyboardMarkup:
+    def _get_renew_keyboard(self, user: User) -> InlineKeyboardMarkup:
         texts = get_texts(user.language)
         button_text = texts.get('WEBHOOK_RENEW_BUTTON', 'Renew subscription')
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [build_subscription_extend_button(button_text, subscription_id, style='success')],
+                [build_subscription_extend_button(button_text, style='success')],
             ]
         )
 
@@ -1107,18 +1103,12 @@ class RemnaWaveWebhookService:
             logger.warning('Missing locale key for language', text_key=text_key, language=user.language)
             return
 
-        # Inject tariff_label for multi-tariff subscription identification
+        # Тексты уведомлений содержат плейсхолдер {tariff_label}: в однотарифном
+        # режиме он всегда пустой.
         if format_kwargs is None:
             format_kwargs = {}
         if 'tariff_label' not in format_kwargs:
-            tariff_label = ''
-            if settings.is_multi_tariff_enabled() and subscription:
-                # Access tariff only if already eagerly loaded to avoid
-                # MissingGreenlet from lazy loading in async context
-                loaded_tariff = sa_inspect(subscription).dict.get('tariff')
-                if loaded_tariff is not None:
-                    tariff_label = f' «{loaded_tariff.name}»'
-            format_kwargs['tariff_label'] = tariff_label
+            format_kwargs['tariff_label'] = ''
 
         if format_kwargs:
             try:
@@ -1222,7 +1212,7 @@ class RemnaWaveWebhookService:
         await self._notify_user(
             user,
             'WEBHOOK_SUB_EXPIRED',
-            reply_markup=self._get_renew_keyboard(user, subscription.id),
+            reply_markup=self._get_renew_keyboard(user),
             subscription=subscription,
         )
 
@@ -1503,35 +1493,10 @@ class RemnaWaveWebhookService:
         # Clear remnawave linkage Запоминаем удалённый аккаунт ДО очистки: ниже по нему проверяются соседние
         # подписки, а в single-tariff идентичность живёт именно здесь.
         deleted_panel_user_id = getattr(user, 'remnawave_id', None)
-        if not settings.is_multi_tariff_enabled():
-            if user.remnawave_id:
-                user.remnawave_id = None
-            # И uuid — тот же инвариант, что в `validate_and_clean_subscription`.
-            user.remnawave_uuid = None
-        elif panel_user_id is not None and user.remnawave_id == panel_user_id:
-            # Мультитариф: первый аккаунт записан и человеку. Мёртвый id там достался
-            # бы следующей покупке (should_create_panel_account привязывает «свободный
-            # аккаунт человека») — и каждый запрос по ней отвечал бы «User not found».
+        if user.remnawave_id:
             user.remnawave_id = None
-        if settings.is_multi_tariff_enabled() and subscription is None:
-            # Идентичность обязана быть непустой: сравнение None с None приклеило бы
-            # очистку к первой попавшейся непровиженной подписке.
-            if panel_user_id is not None or short_uuid:
-                await db.refresh(user, ['subscriptions'])
-                for sub in getattr(user, 'subscriptions', None) or []:
-                    sub_panel_id = getattr(sub, 'remnawave_id', None)
-                    sub_short_uuid = getattr(sub, 'remnawave_short_uuid', None)
-                    matched = (panel_user_id is not None and sub_panel_id == panel_user_id) or (
-                        bool(short_uuid) and sub_short_uuid == short_uuid
-                    )
-                    if matched:
-                        sub.remnawave_id = None
-                        sub.remnawave_short_uuid = None
-                        # Тот же инвариант, что двумя ветками выше: аккаунт
-                        # удалён, поэтому исторический uuid тоже не должен
-                        # пережить его и отравить карту бэкфила.
-                        sub.remnawave_uuid = None
-                        break
+        # И uuid — тот же инвариант, что в `validate_and_clean_subscription`.
+        user.remnawave_uuid = None
 
         # Deactivate sibling subscriptions whose panel user also no longer exists.
         # In multi-tariff each subscription has its own panel user — only expire those
@@ -1644,7 +1609,7 @@ class RemnaWaveWebhookService:
         await self._notify_user(
             user,
             'WEBHOOK_SUB_DELETED',
-            reply_markup=self._get_renew_keyboard(user, getattr(subscription, 'id', None) if subscription else None),
+            reply_markup=self._get_renew_keyboard(user),
             subscription=subscription,
         )
 
@@ -1707,7 +1672,7 @@ class RemnaWaveWebhookService:
         await self._notify_user(
             user,
             'WEBHOOK_SUB_EXPIRES_72H',
-            reply_markup=self._get_renew_keyboard(user, subscription.id),
+            reply_markup=self._get_renew_keyboard(user),
             subscription=subscription,
         )
 
@@ -1722,7 +1687,7 @@ class RemnaWaveWebhookService:
         await self._notify_user(
             user,
             'WEBHOOK_SUB_EXPIRES_48H',
-            reply_markup=self._get_renew_keyboard(user, subscription.id),
+            reply_markup=self._get_renew_keyboard(user),
             subscription=subscription,
         )
 
@@ -1737,7 +1702,7 @@ class RemnaWaveWebhookService:
         await self._notify_user(
             user,
             'WEBHOOK_SUB_EXPIRES_24H',
-            reply_markup=self._get_renew_keyboard(user, subscription.id),
+            reply_markup=self._get_renew_keyboard(user),
             subscription=subscription,
         )
 
@@ -1752,7 +1717,7 @@ class RemnaWaveWebhookService:
         await self._notify_user(
             user,
             'WEBHOOK_SUB_EXPIRED_24H_AGO',
-            reply_markup=self._get_renew_keyboard(user, subscription.id),
+            reply_markup=self._get_renew_keyboard(user),
             subscription=subscription,
         )
 
@@ -1800,7 +1765,7 @@ class RemnaWaveWebhookService:
         await self._notify_user(
             user,
             text_key,
-            reply_markup=self._get_renew_keyboard(user, subscription.id),
+            reply_markup=self._get_renew_keyboard(user),
             subscription=subscription,
         )
 

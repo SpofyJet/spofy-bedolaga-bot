@@ -735,23 +735,10 @@ class MonitoringService:
         if user and self.bot:
             from app.utils.notification_prefs import is_subscription_expiry_enabled
 
-            # Skip notification if user has another ACTIVE subscription (multi-tariff)
             skip_notify = (
                 not NotificationSettingsService.are_notifications_globally_enabled()
                 or not is_subscription_expiry_enabled(user)
             )
-            if settings.is_multi_tariff_enabled():
-                other_active = await db.execute(
-                    select(Subscription.id)
-                    .where(
-                        Subscription.user_id == user.id,
-                        Subscription.id != subscription.id,
-                        Subscription.status == SubscriptionStatus.ACTIVE.value,
-                        Subscription.end_date > datetime.now(UTC),
-                    )
-                    .limit(1)
-                )
-                skip_notify = skip_notify or other_active.scalar_one_or_none() is not None
             if not skip_notify:
                 await self._send_subscription_expired_notification(user, subscription, tariff_name=_tariff_name)
 
@@ -808,9 +795,7 @@ class MonitoringService:
             async with service.get_api_client() as api:
                 # С базой: аккаунт другого человека (та же почта у второй записи,
                 # #3245) не наш — его оплаченный срок себе не забираем.
-                identity = await resolve_panel_identity(
-                    api, user, subscription, multi_tariff=settings.is_multi_tariff_enabled(), db=db
-                )
+                identity = await resolve_panel_identity(api, user, subscription, db=db)
         except Exception as error:
             logger.warning(
                 'Панель не ответила перед гашением подписки — гасим по своей дате',
@@ -834,13 +819,7 @@ class MonitoringService:
                 return None
 
             user = await get_user_by_id(db, subscription.user_id)
-            panel_user_id = (
-                subscription.remnawave_id
-                if settings.is_multi_tariff_enabled() and getattr(subscription, 'remnawave_id', None) is not None
-                else user.remnawave_id
-                if user
-                else None
-            )
+            panel_user_id = user.remnawave_id if user else None
             if not user or panel_user_id is None:
                 logger.error('RemnaWave id не найден для пользователя', user_id=subscription.user_id)
                 return None
@@ -1360,11 +1339,7 @@ class MonitoringService:
                                 is_trial=subscription.is_trial,
                             )
 
-                            panel_user_id = (
-                                subscription.remnawave_id
-                                if settings.is_multi_tariff_enabled() and subscription.remnawave_id is not None
-                                else user.remnawave_id
-                            )
+                            panel_user_id = user.remnawave_id
                             if panel_user_id is not None:
                                 try:
                                     await self.subscription_service.disable_remnawave_user(panel_user_id)
@@ -1437,10 +1412,7 @@ class MonitoringService:
                             )
 
                             try:
-                                if settings.is_multi_tariff_enabled():
-                                    _should_create = subscription.remnawave_id is None
-                                else:
-                                    _should_create = getattr(user, 'remnawave_id', None) is None
+                                _should_create = getattr(user, 'remnawave_id', None) is None
 
                                 if _should_create:
                                     # create_remnawave_user calls db.commit() internally --
@@ -1448,11 +1420,7 @@ class MonitoringService:
                                     await batch_db.commit()
                                     await self.subscription_service.create_remnawave_user(batch_db, subscription)
                                 else:
-                                    _enable_panel_user_id = (
-                                        subscription.remnawave_id
-                                        if settings.is_multi_tariff_enabled()
-                                        else user.remnawave_id
-                                    )
+                                    _enable_panel_user_id = user.remnawave_id
                                     if _enable_panel_user_id is not None:
                                         await self.subscription_service.enable_remnawave_user(_enable_panel_user_id)
                             except Exception as api_error:
@@ -1569,21 +1537,6 @@ class MonitoringService:
 
                 if subscription.end_date is None:
                     continue
-
-                # Skip if user has another ACTIVE subscription — they still have service
-                if settings.is_multi_tariff_enabled():
-                    other_active = await db.execute(
-                        select(Subscription.id)
-                        .where(
-                            Subscription.user_id == user.id,
-                            Subscription.id != subscription.id,
-                            Subscription.status == SubscriptionStatus.ACTIVE.value,
-                            Subscription.end_date > now,
-                        )
-                        .limit(1)
-                    )
-                    if other_active.scalar_one_or_none() is not None:
-                        continue
 
                 time_since_end = now - subscription.end_date
                 if time_since_end.total_seconds() < 0:
@@ -2003,9 +1956,7 @@ class MonitoringService:
                                 and self.bot
                                 and NotificationSettingsService.are_notifications_globally_enabled()
                             ):
-                                await self._send_autopay_success_notification(
-                                    user, charge_amount, autopay_period, subscription=subscription
-                                )
+                                await self._send_autopay_success_notification(user, charge_amount, autopay_period)
                             elif not user.telegram_id:
                                 # Email-only user - use notification delivery service
                                 await notification_delivery_service.notify_autopay_success(
@@ -2086,11 +2037,6 @@ class MonitoringService:
                     context={'tariff_name': tariff_name or ''},
                 )
             tariff_label = ''
-            if settings.is_multi_tariff_enabled():
-                if tariff_name:
-                    tariff_label = f' «{tariff_name}»'
-                elif hasattr(subscription, 'tariff') and subscription.tariff:
-                    tariff_label = f' «{subscription.tariff.name}»'
             texts = get_texts(user.language)
             from aiogram.types import InlineKeyboardMarkup
 
@@ -2121,7 +2067,6 @@ class MonitoringService:
                         [
                             build_subscription_extend_button(
                                 texts.t('MENU_EXTEND_SUBSCRIPTION', '⏰ Продлить подписку'),
-                                subscription.id,
                                 style='success',
                             )
                         ],
@@ -2254,10 +2199,7 @@ class MonitoringService:
                     )
 
             end_date = format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')
-            # Add tariff name for multi-subscription clarity
             tariff_label = ''
-            if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
-                tariff_label = f' «{subscription.tariff.name}»'
 
             # Автопродление включено и денег хватает — это не «продлите», а «продлим сами». Кнопка
             # «Продлить подписку» в таком письме приводила ко второй оплате того же периода.
@@ -2311,15 +2253,12 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardMarkup
 
-            sub_btn_text = texts.t(
-                'BTN_MY_SUBSCRIPTIONS' if settings.is_multi_tariff_enabled() else 'BTN_MY_SUBSCRIPTION',
-                '📱 Мои подписки' if settings.is_multi_tariff_enabled() else '📱 Моя подписка',
-            )
+            sub_btn_text = texts.t('BTN_MY_SUBSCRIPTION', '📱 Моя подписка')
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         build_subscription_extend_button(
-                            texts.t('BTN_RENEW_SUBSCRIPTION', '⏰ Продлить подписку'), subscription.id, style='success'
+                            texts.t('BTN_RENEW_SUBSCRIPTION', '⏰ Продлить подписку'), style='success'
                         )
                     ],
                     [
@@ -2509,8 +2448,6 @@ class MonitoringService:
             texts = get_texts(user.language)
             tariff = getattr(subscription, 'tariff', None)
             tariff_label = ''
-            if settings.is_multi_tariff_enabled() and tariff:
-                tariff_label = f' «{tariff.name}»'
 
             renewal_period = (tariff.get_shortest_period() if tariff else None) or 30
             try:
@@ -2546,7 +2483,7 @@ class MonitoringService:
                 inline_keyboard=[
                     [
                         build_subscription_extend_button(
-                            texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'), subscription.id, style='success'
+                            texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'), style='success'
                         )
                     ],
                     [
@@ -2616,8 +2553,6 @@ class MonitoringService:
             texts = get_texts(user.language)
 
             tariff_label = ''
-            if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
-                tariff_label = f' «{subscription.tariff.name}»'
 
             if wave == 'second':
                 template = texts.get(
@@ -2691,22 +2626,10 @@ class MonitoringService:
             logger.error('Ошибка отправки скидочного уведомления пользователю', telegram_id=user.telegram_id, e=e)
             return False
 
-    async def _send_autopay_success_notification(
-        self, user: User, amount: int, days: int, *, subscription: Subscription | None = None
-    ):
+    async def _send_autopay_success_notification(self, user: User, amount: int, days: int):
         try:
             texts = get_texts(user.language)
-            tariff_label = ''
-            if (
-                settings.is_multi_tariff_enabled()
-                and subscription
-                and hasattr(subscription, 'tariff')
-                and subscription.tariff
-            ):
-                tariff_label = f' «{subscription.tariff.name}»'
             message = texts.AUTOPAY_SUCCESS.format(days=days, amount=settings.format_price(amount))
-            if tariff_label:
-                message += f'\n📦 Тариф:{tariff_label}'
             await self._send_message_with_logo(
                 chat_id=user.telegram_id,
                 text=message,
@@ -2762,8 +2685,7 @@ class MonitoringService:
             await cache.set(key, 1, expire=int(hours_left * 3600) + 72 * 3600)
 
             texts = get_texts(user.language)
-            tariff = getattr(subscription, 'tariff', None)
-            tariff_label = f' «{tariff.name}»' if settings.is_multi_tariff_enabled() and tariff else ''
+            tariff_label = ''
             end_date = format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')
             if user.telegram_id:
                 from aiogram.types import InlineKeyboardMarkup
@@ -2779,7 +2701,6 @@ class MonitoringService:
                         [
                             build_subscription_extend_button(
                                 texts.t('BTN_RENEW_SUBSCRIPTION', '⏰ Продлить подписку'),
-                                subscription.id,
                                 style='success',
                             )
                         ]
@@ -2836,13 +2757,6 @@ class MonitoringService:
             else:
                 template = texts.AUTOPAY_FAILED
             message = template.format(balance=settings.format_price(balance), required=settings.format_price(required))
-            if (
-                settings.is_multi_tariff_enabled()
-                and subscription
-                and hasattr(subscription, 'tariff')
-                and subscription.tariff
-            ):
-                message += f'\n📦 Тариф: «{subscription.tariff.name}»'
 
             from aiogram.types import InlineKeyboardMarkup
 

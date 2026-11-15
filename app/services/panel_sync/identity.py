@@ -110,7 +110,9 @@ def _not_deleted():
     return or_(User.status.is_(None), User.status != UserStatus.DELETED.value)
 
 
-async def find_foreign_panel_owner(db, user, subscription, panel_id, *, multi_tariff: bool) -> PanelOwner | None:
+async def find_foreign_panel_owner(
+    db, user, subscription, panel_id, *, multi_tariff: bool = False
+) -> PanelOwner | None:
     """Чей это аккаунт панели, если не этой подписки; ``None`` — наш или ничей.
 
     Хозяин определяется по базе бота, а не по полям аккаунта: почта и Telegram
@@ -192,7 +194,7 @@ async def resolve_panel_identity(
     user,
     subscription,
     *,
-    multi_tariff: bool,
+    multi_tariff: bool = False,
     pinned: bool = False,
     verify_recorded_id: bool = True,
     ignore_recorded_ids: bool = False,
@@ -380,33 +382,17 @@ async def link_subscription_panel_identity(db, subscription, panel_id: int | Non
 async def should_create_panel_account(db, subscription, user) -> bool:
     """Перед синхронизацией после покупки/перевода: заводить аккаунт панели или обновлять свой.
 
-    Одиночный режим: аккаунт у человека (``users.remnawave_id``) — создаём, только
-    если его нет. Мультитариф: аккаунт у подписки. Если у строки id нет, а у
-    человека есть и его не держит другая подписка (старая подписка из одиночного
-    режима; миграция 0124 привязывала только при одной строке) — привязываем и
-    ОБНОВЛЯЕМ: у человека остаётся его ссылка. Иначе каждая точка «create или
-    update» заводила бы второй аккаунт. True — нужен новый аккаунт.
+    Аккаунт у человека (``users.remnawave_id``) — создаём, только если его нет.
+    Если id записан лишь у подписки (старая строка) и он не занят другим
+    человеком — обновляем этот аккаунт и записываем его человеку.
+    True — нужен новый аккаунт.
     """
-    from app.config import settings
-
     user_panel_id = getattr(user, 'remnawave_id', None)
-    if not settings.is_multi_tariff_enabled():
-        if user_panel_id:
-            return False
-        # Аккаунт создан в мультитарифе (записан у подписки), оператор вернулся в
-        # одиночный режим: обновляем этот аккаунт и записываем его человеку.
-        subscription_panel_id = getattr(subscription, 'remnawave_id', None)
-        if subscription_panel_id and await user_panel_id_is_free_for(db, user, subscription_panel_id):
-            user.remnawave_id = int(subscription_panel_id)
-            await db.commit()
-            return False
-        return True
-    if getattr(subscription, 'remnawave_id', None):
+    if user_panel_id:
         return False
-    if await link_subscription_panel_identity(db, subscription, user_panel_id):
-        # Подписка уже сохранена (create/extend коммитят до синхронизации), а
-        # точки синхронизации после себя не коммитят — привязку сохраняем здесь,
-        # иначе она живёт только в памяти сессии.
+    subscription_panel_id = getattr(subscription, 'remnawave_id', None)
+    if subscription_panel_id and await user_panel_id_is_free_for(db, user, subscription_panel_id):
+        user.remnawave_id = int(subscription_panel_id)
         await db.commit()
         return False
     return True

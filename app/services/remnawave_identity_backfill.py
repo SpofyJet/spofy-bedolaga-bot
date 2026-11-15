@@ -598,13 +598,9 @@ async def _prefer_alive_sibling(
     (жёсткий data fault), а вебхук резолвит события на мёртвую строку, потому
     что фильтрует по `Subscription.remnawave_id` раньше, чем по shortUuid.
 
-    Только для single-tariff: там у пользователя один панельный аккаунт, и
-    любая его подписка адресует именно его. В multi-tariff у каждой подписки
-    свой аккаунт, и переносить id между ними нельзя.
+    У пользователя один панельный аккаунт, и любая его подписка адресует
+    именно его.
     """
-    if settings.is_multi_tariff_enabled():
-        return
-
     by_user: dict[int, list[Subscription]] = defaultdict(list)
     for subscription in subscriptions:
         by_user[int(subscription.user_id)].append(subscription)
@@ -681,26 +677,9 @@ async def _backfill_users(
 ) -> None:
     """Give each bot user the panel id of its own panel account.
 
-    ТОЛЬКО в single-tariff. Там бот-пользователю соответствует ровно один
-    панельный аккаунт, и `users.remnawave_id` — его канонический адрес.
-
-    В multi-tariff колонка не заполняется вообще. Идентичность живёт на
-    подписке, а на User колонка исторически пуста — именно поэтому около
-    десятка фолбэков вида `sub.remnawave_id or user.remnawave_id` (продление
-    из админки, платный сброс трафика, возврат в канал, экран устройств)
-    безопасно пропускали панель. Заполнив её, бэкфил оживил бы их: подписка,
-    чей собственный id не разрезолвился, начала бы адресовать панельный
-    аккаунт СОСЕДНЕГО тарифа — продление переписывало бы чужой expireAt и
-    сквады, а сброс трафика обнулял бы чужой счётчик.
-
-    Гейт по `users.remnawave_uuid` для этого недостаточен: инсталляция,
-    начинавшая в single-tariff и переключённая на multi-tariff, несёт эту
-    колонку заполненной у всех «дореформенных» пользователей.
+    Бот-пользователю соответствует ровно один панельный аккаунт, и
+    `users.remnawave_id` — его канонический адрес.
     """
-    if settings.is_multi_tariff_enabled():
-        logger.info('backfill: multi-tariff — users.remnawave_id намеренно не заполняется')
-        return
-
     per_user: dict[int, set[int]] = defaultdict(set)
     for subscription in subscriptions:
         panel_id = resolved_by_subscription.get(int(subscription.id))

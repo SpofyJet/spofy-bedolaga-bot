@@ -174,16 +174,14 @@ class SubscriptionService:
     ) -> RemnaWaveUser | None:
         """Создать пользователя панели или обновить — по тому, известен ли панели его id.
 
-        В мультитарифе id панели живёт у подписки, вне его — у пользователя (аккаунт в
-        панели один на человека). Нет id — create_remnawave_user (это upsert: пользователя,
+        Id панели живёт у пользователя (аккаунт в панели один на человека).
+        Нет id — create_remnawave_user (это upsert: пользователя,
         которого панель уже знает, он обновит); есть — update_remnawave_user. Свежая подписка
         (награда за реферала, купон, покупка) id ещё не имеет, и update для неё падал с
         «RemnaWave id не найден»: человек оставался без пользователя в панели и без ссылки.
         """
-        panel_id = subscription.remnawave_id
-        if not settings.is_multi_tariff_enabled():
-            user = await get_user_by_id(db, subscription.user_id)
-            panel_id = getattr(user, 'remnawave_id', None)
+        user = await get_user_by_id(db, subscription.user_id)
+        panel_id = getattr(user, 'remnawave_id', None)
         if panel_id:
             return await self.update_remnawave_user(
                 db, subscription, reset_traffic=reset_traffic, reset_reason=reset_reason
@@ -259,31 +257,17 @@ class SubscriptionService:
             async with self.get_api_client() as api:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
 
-                # Multi-tariff mode: each subscription has its own Remnawave user
-                if settings.is_multi_tariff_enabled():
-                    updated_user = await self._create_or_update_remnawave_user_multi(
-                        api,
-                        user,
-                        subscription,
-                        db=db,
-                        user_tag=user_tag,
-                        hwid_limit=hwid_limit,
-                        ext_squad_uuid=ext_squad_uuid,
-                        reset_traffic=reset_traffic,
-                        reset_reason=reset_reason,
-                    )
-                else:
-                    updated_user = await self._create_or_update_remnawave_user_single(
-                        api,
-                        user,
-                        subscription,
-                        db=db,
-                        user_tag=user_tag,
-                        hwid_limit=hwid_limit,
-                        ext_squad_uuid=ext_squad_uuid,
-                        reset_traffic=reset_traffic,
-                        reset_reason=reset_reason,
-                    )
+                updated_user = await self._create_or_update_remnawave_user_single(
+                    api,
+                    user,
+                    subscription,
+                    db=db,
+                    user_tag=user_tag,
+                    hwid_limit=hwid_limit,
+                    ext_squad_uuid=ext_squad_uuid,
+                    reset_traffic=reset_traffic,
+                    reset_reason=reset_reason,
+                )
 
                 subscription.remnawave_short_uuid = updated_user.short_uuid
                 subscription.subscription_url = updated_user.subscription_url
@@ -302,16 +286,8 @@ class SubscriptionService:
                         subscription_id=subscription.id,
                         remnawave_id=updated_user.id,
                     )
-                # Одиночный режим адресует панель через человека — держим актуальным.
-                # Мультитариф: аккаунты у подписок, но первый записываем и человеку,
-                # иначе после возврата оператора в одиночный режим у него «нет аккаунта».
-                if not settings.is_multi_tariff_enabled():
-                    user.remnawave_id = updated_user.id
-                elif not user.remnawave_id:
-                    from app.services.panel_sync import user_panel_id_is_free_for
-
-                    if await user_panel_id_is_free_for(db, user, updated_user.id):
-                        user.remnawave_id = updated_user.id
+                # Панель адресуется через человека — держим актуальным.
+                user.remnawave_id = updated_user.id
 
                 await db.commit()
 
@@ -341,7 +317,7 @@ class SubscriptionService:
     async def _panel_id_is_free_for(self, db: AsyncSession, subscription, panel_id: int | None) -> bool:
         return await panel_id_is_free_for(db, subscription, panel_id)
 
-    async def _adopt_panel_id_for_update(self, db: AsyncSession, subscription, user, multi_tariff: bool) -> int | None:
+    async def _adopt_panel_id_for_update(self, db: AsyncSession, subscription, user) -> int | None:
         """Достать числовой id панели по shortUuid и сохранить его на строке.
 
         Нужно ровно для окна между миграцией 0104 и прогоном бэкфила, когда
@@ -371,26 +347,11 @@ class SubscriptionService:
             subscription_id=getattr(subscription, 'id', None),
             remnawave_id=adopted.id,
         )
-        if multi_tariff:
-            # Четвёртый писатель в частично-уникальную колонку. Но здесь мало
-            # НЕ ЗАПИСАТЬ колонку: возвращённый id вызывающий тут же отправляет
-            # в панель PATCH-ом. Если аккаунт держит соседняя подписка, такой
-            # PATCH перепишет ЕЁ срок, лимиты и сквады — и это необратимо, в
-            # отличие от отката транзакции. Поэтому отказываемся целиком.
-            if not await self._panel_id_is_free_for(db, subscription, adopted.id):
-                logger.warning(
-                    '⚠️ Панельный id уже закреплён за другой подпиской — обновление отменено',
-                    subscription_id=getattr(subscription, 'id', None),
-                    remnawave_id=adopted.id,
-                )
-                return None
-            subscription.remnawave_id = adopted.id
-        else:
-            # Только на User: в single-tariff все подписки одного пользователя
-            # указывают на ОДИН панельный аккаунт, а `uq_subscriptions_remnawave_id`
-            # частично-уникален — записав id второй строке, мы бы словили
-            # IntegrityError и откатили вместе с ним уже применённое пополнение.
-            user.remnawave_id = adopted.id
+        # Только на User: все подписки одного пользователя указывают на ОДИН
+        # панельный аккаунт, а `uq_subscriptions_remnawave_id` частично-уникален —
+        # записав id второй строке, мы бы словили IntegrityError и откатили
+        # вместе с ним уже применённое пополнение.
+        user.remnawave_id = adopted.id
         await db.flush((subscription, user))
         return adopted.id
 
@@ -401,7 +362,6 @@ class SubscriptionService:
         subscription: Subscription,
         *,
         db: AsyncSession | None = None,
-        multi_tariff: bool,
         user_tag: str | None,
         hwid_limit: int | None,
         ext_squad_uuid: str | None,
@@ -419,7 +379,7 @@ class SubscriptionService:
         сам, — вычисление одно и то же, но лишний обход тарифа не нужен.
         """
         payload = replace(
-            build_panel_payload(user, subscription, multi_tariff=multi_tariff, user_tag=user_tag),
+            build_panel_payload(user, subscription, user_tag=user_tag),
             hwid_device_limit=hwid_limit,
             external_squad_uuid=ext_squad_uuid,
         )
@@ -428,39 +388,11 @@ class SubscriptionService:
             user,
             subscription,
             db=db,
-            multi_tariff=multi_tariff,
             payload=payload,
         )
         if reset_traffic:
             await self._reset_user_traffic(api, result.panel_user.id, user, reset_reason)
         return result.panel_user
-
-    async def _create_or_update_remnawave_user_multi(
-        self,
-        api: RemnaWaveAPI,
-        user: User,
-        subscription: Subscription,
-        *,
-        db: AsyncSession | None = None,
-        user_tag: str | None,
-        hwid_limit: int | None,
-        ext_squad_uuid: str | None,
-        reset_traffic: bool,
-        reset_reason: str | None,
-    ) -> RemnaWaveUser:
-        """Мультитариф: у каждой подписки свой пользователь панели."""
-        return await self._push_subscription_to_panel(
-            api,
-            user,
-            subscription,
-            db=db,
-            multi_tariff=True,
-            user_tag=user_tag,
-            hwid_limit=hwid_limit,
-            ext_squad_uuid=ext_squad_uuid,
-            reset_traffic=reset_traffic,
-            reset_reason=reset_reason,
-        )
 
     async def _create_or_update_remnawave_user_single(
         self,
@@ -481,7 +413,6 @@ class SubscriptionService:
             user,
             subscription,
             db=db,
-            multi_tariff=False,
             user_tag=user_tag,
             hwid_limit=hwid_limit,
             ext_squad_uuid=ext_squad_uuid,
@@ -504,9 +435,7 @@ class SubscriptionService:
                 logger.error('Пользователь не найден', user_id=subscription.user_id)
                 return None
 
-            # Resolve the Remnawave panel id: prefer subscription-level in multi-tariff mode
-            multi_tariff = settings.is_multi_tariff_enabled()
-            remnawave_id = subscription.remnawave_id if multi_tariff else user.remnawave_id
+            remnawave_id = user.remnawave_id
 
             if not remnawave_id:
                 # Строка была привязана к панели до апгрейда на 3.0.0: числового
@@ -514,7 +443,7 @@ class SubscriptionService:
                 # Просто сдаться здесь нельзя — вызывающие этот метод (докупка
                 # трафика и устройств, смена сквадов) результат не проверяют:
                 # деньги списываются и коммитятся, а в панель не уезжает ничего.
-                remnawave_id = await self._adopt_panel_id_for_update(db, subscription, user, multi_tariff)
+                remnawave_id = await self._adopt_panel_id_for_update(db, subscription, user)
 
             if not remnawave_id:
                 logger.error(
@@ -593,7 +522,6 @@ class SubscriptionService:
                     build_panel_payload(
                         user,
                         subscription,
-                        multi_tariff=multi_tariff,
                         user_tag=user_tag,
                         now=current_time,
                     ),
@@ -609,7 +537,6 @@ class SubscriptionService:
                         user,
                         subscription,
                         db=db,
-                        multi_tariff=multi_tariff,
                         payload=panel_payload,
                         only_fields=only_fields,
                         identity=await self._known_panel_identity(api, user, subscription, remnawave_id),
@@ -623,16 +550,7 @@ class SubscriptionService:
                     raise RemnaWaveAPIError('Remnawave returned no user after subscription renewal update')
 
                 if reset_traffic:
-                    if settings.is_multi_tariff_enabled():
-                        reset_id = subscription.remnawave_id
-                        if not reset_id:
-                            logger.warning(
-                                'Multi-tariff: subscription has no remnawave_id, skipping traffic reset',
-                                subscription_id=subscription.id,
-                                user_id=subscription.user_id,
-                            )
-                    else:
-                        reset_id = user.remnawave_id
+                    reset_id = user.remnawave_id
                     if reset_id:
                         await self._reset_user_traffic(
                             api,
@@ -717,15 +635,7 @@ class SubscriptionService:
             subscription_id=subscription.id,
             user_id=subscription.user_id,
         )
-        # Мультитариф: панель только что сказала, что аккаунта с этим id нет. Оставить
-        # его человеку — значит отдать мёртвый адрес следующей покупке
-        # (should_create_panel_account привязывает «свободный аккаунт человека»).
-        # В одиночном режиме users.remnawave_id перезапишет сам create-флоу.
-        dead_panel_id = subscription.remnawave_id
-        if settings.is_multi_tariff_enabled() and dead_panel_id:
-            subscription.remnawave_id = None
-            if user is not None and user.remnawave_id == dead_panel_id:
-                user.remnawave_id = None
+        # users.remnawave_id перезапишет сам create-флоу.
         return await self.create_remnawave_user(
             db, subscription, reset_traffic=reset_traffic, reset_reason=reset_reason
         )
@@ -784,7 +694,6 @@ class SubscriptionService:
                     user,
                     subscription,
                     db=db,
-                    multi_tariff=settings.is_multi_tariff_enabled(),
                     identity=await self._known_panel_identity(api, user, subscription, panel_user_id),
                     only_fields={'status', 'expire_at'},
                     create_if_missing=False,
@@ -875,17 +784,7 @@ class SubscriptionService:
             user = await get_user_by_id(db, subscription.user_id)
             if not user:
                 return None
-            if settings.is_multi_tariff_enabled():
-                revoke_id = subscription.remnawave_id
-                if not revoke_id:
-                    logger.warning(
-                        'Multi-tariff: subscription has no remnawave_id, cannot revoke',
-                        subscription_id=subscription.id,
-                        user_id=subscription.user_id,
-                    )
-                    return None
-            else:
-                revoke_id = user.remnawave_id
+            revoke_id = user.remnawave_id
             if not revoke_id:
                 return None
 
@@ -930,17 +829,7 @@ class SubscriptionService:
             user = await get_user_by_id(db, subscription.user_id)
             if not user:
                 return False
-            if settings.is_multi_tariff_enabled():
-                sync_id = subscription.remnawave_id
-                if not sync_id:
-                    logger.warning(
-                        'Multi-tariff: subscription has no remnawave_id, cannot sync usage',
-                        subscription_id=subscription.id,
-                        user_id=subscription.user_id,
-                    )
-                    return False
-            else:
-                sync_id = user.remnawave_id
+            sync_id = user.remnawave_id
             if not sync_id:
                 return False
 
@@ -990,7 +879,7 @@ class SubscriptionService:
                 return False, 'user_not_found'
 
             # Проверяем, нужна ли синхронизация
-            panel_user_id = subscription.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
+            panel_user_id = user.remnawave_id
             needs_sync = not subscription.subscription_url or not panel_user_id
 
             if not needs_sync:
@@ -1039,12 +928,8 @@ class SubscriptionService:
                     # иначе строка останется с uuid удалённого аккаунта при живом
                     # новом id, а бэкфилл строит по этой паре карту uuid -> id и
                     # выдаст grace-сессии мёртвого аккаунта живой, оплаченный.
-                    if settings.is_multi_tariff_enabled():
-                        subscription.remnawave_id = None
-                        subscription.remnawave_uuid = None
-                    else:
-                        user.remnawave_id = None
-                        user.remnawave_uuid = None
+                    user.remnawave_id = None
+                    user.remnawave_uuid = None
                     result = await self.create_remnawave_user(
                         db,
                         subscription,
@@ -1094,16 +979,12 @@ class SubscriptionService:
             foreign_short_uuid = False
             user_log = self._format_user_log(user)
 
-            # In multi-tariff mode, validate per-subscription panel id, not user-level id.
-            # В single-tariff берём id пользователя, но при пустом — id самой
+            # Берём id пользователя, но при пустом — id самой
             # подписки: бэкфилл штатно оставляет строку пользователя
             # неразрешённой, заполнив при этом подписку, и без этого фолбэка
             # проверка считала бы аккаунт отсутствующим и стирала идентичность,
             # которую только что восстановили, — с пересозданием дубля в панели.
-            if settings.is_multi_tariff_enabled():
-                check_id = subscription.remnawave_id
-            else:
-                check_id = user.remnawave_id or subscription.remnawave_id
+            check_id = user.remnawave_id or subscription.remnawave_id
 
             if check_id:
                 try:
@@ -1192,7 +1073,7 @@ class SubscriptionService:
                             subscription_id=subscription.id,
                             remnawave_id=panel_user.id,
                         )
-                    if not settings.is_multi_tariff_enabled() and not user.remnawave_id:
+                    if not user.remnawave_id:
                         user.remnawave_id = panel_user.id
                     await db.flush((subscription, user))
                     return True
@@ -1216,9 +1097,8 @@ class SubscriptionService:
                 subscription.subscription_url = ''
                 subscription.subscription_crypto_link = ''
 
-                if not settings.is_multi_tariff_enabled():
-                    user.remnawave_id = None
-                    user.remnawave_uuid = None
+                user.remnawave_id = None
+                user.remnawave_uuid = None
 
                 # Keep cleanup in the caller's transaction.  Committing here
                 # could burn a coupon/payment if the following panel create
@@ -1260,13 +1140,8 @@ async def reset_subscription_with_panel(db, user: User, subscription: Subscripti
 
     await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
-    # В мультитарифном режиме у каждой подписки свой панельный id — НЕ откатываемся
-    # на user.remnawave_id (это легаси single-tariff id, иначе можно отключить
-    # не того панельного пользователя). В single-tariff fallback на user корректен.
-    if settings.is_multi_tariff_enabled():
-        panel_user_id = subscription.remnawave_id
-    else:
-        panel_user_id = subscription.remnawave_id or user.remnawave_id
+    # Fallback на user.remnawave_id: панель адресуется через человека.
+    panel_user_id = subscription.remnawave_id or user.remnawave_id
 
     panel_disabled = False
     if panel_user_id:

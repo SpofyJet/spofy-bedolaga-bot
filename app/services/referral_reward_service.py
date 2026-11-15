@@ -856,7 +856,7 @@ async def _create_subscription_for_days(db: AsyncSession, user: User, days: int,
         )
         return None
 
-    if existing and not settings.is_multi_tariff_enabled():
+    if existing:
         logger.info(
             'Дни не выданы: вне мультитарифа вторая подписка не заводится',
             user_id=user.id,

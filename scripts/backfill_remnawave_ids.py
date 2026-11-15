@@ -116,16 +116,9 @@ def _print_report(report) -> None:
 
 async def _run(apply: bool) -> int:
     # Настройки, отредактированные из кабинета, живут в system_settings, а не в
-    # .env — их обязан подтянуть и одноразовый контейнер. Без этого
-    # MULTI_TARIFF_ENABLED (в .env.example его нет вовсе) читался бы как False,
-    # и на мультитарифе бэкфилл пошёл бы по однотарифной ветке: перенёс бы
-    # панельный id между подписками, чего в мультитарифе делать нельзя.
+    # .env — их обязан подтянуть и одноразовый контейнер.
     await bot_configuration_service.initialize()
-    logger.info(
-        'backfill: конфигурация загружена',
-        multi_tariff=settings.is_multi_tariff_enabled(),
-    )
-    print(f'  режим: {"МУЛЬТИТАРИФ" if settings.is_multi_tariff_enabled() else "однотарифный"}')
+    logger.info('backfill: конфигурация загружена')
 
     async with AsyncSessionLocal() as db:
         report = await backfill_remnawave_ids(db, dry_run=not apply)

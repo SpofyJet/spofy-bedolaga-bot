@@ -10,7 +10,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config import settings
 from app.database.auth_methods import OAUTH_PROVIDER_COLUMNS
 from app.database.constants import POSTGRES_INT4_MAX, POSTGRES_INT4_MIN
 from app.database.crud.discount_offer import get_latest_claimed_offer_for_user
@@ -266,21 +265,6 @@ async def get_user_by_remnawave_id(db: AsyncSession, remnawave_id: int) -> User 
         .where(User.remnawave_id == panel_user_id)
     )
     user = result.scalar_one_or_none()
-
-    # Multi-tariff: панельная идентичность лежит на Subscription, не на User
-    if not user and settings.is_multi_tariff_enabled():
-        from app.database.models import Subscription as _Subscription
-
-        sub_result = await db.execute(
-            select(_Subscription)
-            .options(
-                selectinload(_Subscription.user).selectinload(User.subscriptions).selectinload(_Subscription.tariff)
-            )
-            .where(_Subscription.remnawave_id == panel_user_id)
-        )
-        sub = sub_result.scalar_one_or_none()
-        if sub and sub.user:
-            user = sub.user
 
     if user and user.subscription:
         # Загружаем дополнительные зависимости для subscription

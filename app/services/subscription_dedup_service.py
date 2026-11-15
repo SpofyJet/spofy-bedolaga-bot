@@ -17,8 +17,7 @@ Scope is deliberately DB-only and conservative:
   it here risked removing a user that is still referenced (A063 "user not found")
   if the surrounding DB transaction didn't commit. The expired duplicate panel
   users are inactive and harmless; if a live subscription's panel user is ever
-  missing, the normal sync recreates it (see
-  ``SubscriptionService._create_or_update_remnawave_user_multi``).
+  missing, the normal sync recreates it.
 
 Runs once in the background on startup. Idempotent — a no-op once there are no
 duplicates.

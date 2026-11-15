@@ -164,7 +164,7 @@ def build_panel_payload(
     user,
     subscription,
     *,
-    multi_tariff: bool,
+    multi_tariff: bool = False,
     user_tag: str | None = None,
     now: datetime | None = None,
 ) -> PanelPayload:

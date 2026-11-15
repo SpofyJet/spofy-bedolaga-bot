@@ -181,15 +181,14 @@ async def _refresh_one(bot, key: str, used_bytes: dict[int, int], fetched_at: da
         return None
     state = json.loads(raw)
     chat_id = int(key.rsplit(':', 1)[1])
-    multi = settings.is_multi_tariff_enabled()
     async with AsyncSessionLocal() as db:
         user = await get_user_by_telegram_id(db, chat_id)
         if user is None:
             await cache.delete(key)
             return 'dropped'
         changed = False
-        for sub in filter(None, user.subscriptions if multi else [user.subscription]):
-            panel_bytes = used_bytes.get(sub.remnawave_id if multi else user.remnawave_id)
+        for sub in filter(None, [user.subscription]):
+            panel_bytes = used_bytes.get(user.remnawave_id)
             # ponytail: 5 мин запаса — сброс трафика коммитит БД до вызова панели, а now() в БД — начало транзакции
             if panel_bytes is None or (sub.updated_at and sub.updated_at > fetched_at - timedelta(minutes=5)):
                 continue  # подписку меняли около снимка (продление, сброс трафика): пропускаем один проход

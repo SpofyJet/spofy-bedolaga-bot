@@ -35,15 +35,14 @@ async def _panel_account_is_referenced(db: AsyncSession, subscription: Subscript
         return True
 
     references = [Subscription.id != subscription.id]
-    if not settings.is_multi_tariff_enabled():
-        # Single-tariff rows intentionally share the owner's account. Dead
-        # history must not prevent revoking their last live subscription.
-        references.append(
-            or_(
-                Subscription.user_id != subscription.user_id,
-                Subscription.status.in_(tuple(ALIVE_SUBSCRIPTION_STATUSES)),
-            )
+    # Single-tariff rows intentionally share the owner's account. Dead
+    # history must not prevent revoking their last live subscription.
+    references.append(
+        or_(
+            Subscription.user_id != subscription.user_id,
+            Subscription.status.in_(tuple(ALIVE_SUBSCRIPTION_STATUSES)),
         )
+    )
     identities = [Subscription.remnawave_id == panel_user_id]
     # Single-tariff targets the owner's ID, which may differ from a historical
     # subscription ID. That row's shortUuid cannot identify the owner's account.
@@ -95,10 +94,7 @@ async def _resolve_panel_target(db: AsyncSession, subscription: Subscription) ->
 
     Возвращает ``(panel_user_id, deletable)``.
 
-    В мультитарифе аккаунт принадлежит подписке, но старый дубль может
-    ссылаться на тот же аккаунт по shortUuid. Такую панель не трогаем.
-
-    В однотарифном режиме аккаунт принадлежит ПОЛЬЗОВАТЕЛЮ. Колонка подписки
+    Аккаунт принадлежит ПОЛЬЗОВАТЕЛЮ. Колонка подписки
     там пуста у всех строк, кроме одной: ``uq_subscriptions_remnawave_id``
     частично уникален, поэтому второй строке id не пишется, а адресация
     остаётся через ``users.remnawave_id`` (см. subscription_service). Читать
@@ -113,26 +109,23 @@ async def _resolve_panel_target(db: AsyncSession, subscription: Subscription) ->
     удаляемая строка была последней живой, и не трогается вовсе, если живая
     соседка есть.
     """
-    if settings.is_multi_tariff_enabled():
-        panel_user_id, deletable = subscription.remnawave_id, True
-    else:
-        panel_user_id = await db.scalar(select(User.remnawave_id).where(User.id == subscription.user_id))
-        deletable = not bool(panel_user_id)
-        if panel_user_id:
-            alive_sibling = await db.scalar(
-                select(Subscription.id)
-                .where(
-                    Subscription.user_id == subscription.user_id,
-                    Subscription.id != subscription.id,
-                    Subscription.status.in_(tuple(ALIVE_SUBSCRIPTION_STATUSES)),
-                )
-                .limit(1)
+    panel_user_id = await db.scalar(select(User.remnawave_id).where(User.id == subscription.user_id))
+    deletable = not bool(panel_user_id)
+    if panel_user_id:
+        alive_sibling = await db.scalar(
+            select(Subscription.id)
+            .where(
+                Subscription.user_id == subscription.user_id,
+                Subscription.id != subscription.id,
+                Subscription.status.in_(tuple(ALIVE_SUBSCRIPTION_STATUSES)),
             )
-            if alive_sibling is not None:
-                return None, False
-        else:
-            # Historical rows can retain the identity only on the subscription.
-            panel_user_id = subscription.remnawave_id
+            .limit(1)
+        )
+        if alive_sibling is not None:
+            return None, False
+    else:
+        # Historical rows can retain the identity only on the subscription.
+        panel_user_id = subscription.remnawave_id
 
     if panel_user_id and await _panel_account_is_referenced(db, subscription, panel_user_id):
         logger.info(

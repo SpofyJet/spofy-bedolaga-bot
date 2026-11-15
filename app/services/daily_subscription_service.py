@@ -307,11 +307,7 @@ class DailySubscriptionService:
                 reset_reason = 'суточное списание' if reset_traffic else None
 
                 subscription_service = SubscriptionService()
-                _has_panel_user = (
-                    getattr(subscription, 'remnawave_id', None)
-                    if settings.is_multi_tariff_enabled()
-                    else getattr(user, 'remnawave_id', None)
-                ) is not None
+                _has_panel_user = getattr(user, 'remnawave_id', None) is not None
                 if _has_panel_user:
                     panel_result = await subscription_service.update_remnawave_user(
                         db,
@@ -329,11 +325,7 @@ class DailySubscriptionService:
                     )
                     # POST может игнорировать activeInternalSquads — отправляем PATCH
                     await db.refresh(user)
-                    _sync_panel_user_id = (
-                        getattr(subscription, 'remnawave_id', None)
-                        if settings.is_multi_tariff_enabled()
-                        else getattr(user, 'remnawave_id', None)
-                    )
+                    _sync_panel_user_id = getattr(user, 'remnawave_id', None)
                     if _sync_panel_user_id is not None and subscription.connected_squads:
                         try:
                             # Досыл сквадов — часть того же события оплаты:
@@ -411,11 +403,8 @@ class DailySubscriptionService:
         amount_rubles = amount_kopeks / 100
         balance_rubles = user.balance_kopeks / 100
 
-        tariff_label = ''
-        if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
-            tariff_label = f'\n📦 Тариф: «{subscription.tariff.name}»'
         message = (
-            f'💳 <b>Списали {amount_rubles:.2f} ₽ за сутки</b>{tariff_label}\n\n'
+            f'💳 <b>Списали {amount_rubles:.2f} ₽ за сутки</b>\n\n'
             f'На балансе {balance_rubles:.2f} ₽. Следующее списание через 24 часа.'
         )
 
@@ -440,11 +429,8 @@ class DailySubscriptionService:
         required_rubles = required_amount / 100
         balance_rubles = user.balance_kopeks / 100
 
-        tariff_label = ''
-        if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
-            tariff_label = f' «{subscription.tariff.name}»'
         message = (
-            f'⚠️ <b>Подписка{tariff_label} приостановлена</b>\n\n'
+            '⚠️ <b>Подписка приостановлена</b>\n\n'
             f'Недостаточно средств для суточной оплаты.\n\n'
             f'Требуется: {required_rubles:.2f} ₽\n'
             f'Баланс: {balance_rubles:.2f} ₽\n\n'
@@ -808,11 +794,8 @@ class DailySubscriptionService:
         from app.services.subscription_service import SubscriptionService
 
         service = SubscriptionService()
-        if settings.is_multi_tariff_enabled():
-            panel_user_id = subscription.remnawave_id
-        else:
-            user = await get_user_by_id(db, subscription.user_id)
-            panel_user_id = user.remnawave_id if user else None
+        user = await get_user_by_id(db, subscription.user_id)
+        panel_user_id = user.remnawave_id if user else None
         if panel_user_id is None:
             return None
 
@@ -834,11 +817,8 @@ class DailySubscriptionService:
 
     async def _notify_traffic_reset(self, user: User, subscription: Subscription, reset_gb: int):
         """Уведомляет пользователя о сбросе докупленного трафика."""
-        tariff_label = ''
-        if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
-            tariff_label = f'\n📦 Тариф: «{subscription.tariff.name}»'
         message = (
-            f'ℹ️ <b>Докупленные {reset_gb} ГБ закончились</b>{tariff_label}\n\n'
+            f'ℹ️ <b>Докупленные {reset_gb} ГБ закончились</b>\n\n'
             f'Прошло 30 дней с первой докупки. Лимит теперь {subscription.traffic_limit_gb} ГБ.'
         )
 

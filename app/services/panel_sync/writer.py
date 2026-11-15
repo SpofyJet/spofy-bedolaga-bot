@@ -175,7 +175,7 @@ async def push_subscription(
     subscription,
     *,
     db=None,
-    multi_tariff: bool | None = None,
+    multi_tariff: bool = False,
     pinned: bool = False,
     identity: PanelIdentity | None = None,
     payload: PanelPayload | None = None,
@@ -195,6 +195,9 @@ async def push_subscription(
     ``subscriptions.remnawave_id`` не проставится (колонка частично уникальна, и
     проверить занятость id без базы нельзя).
 
+    ``multi_tariff=True`` — аккаунт адресуется по подписке, а не по человеку
+    (``pinned``-синхронизация выбранной подписки из админки кабинета).
+
     ``only_fields`` — узкая правка: в панель уедут лишь перечисленные поля.
 
     ``recreate_on_missing=False`` — не пересоздавать аккаунт, если панель на PATCH
@@ -210,8 +213,6 @@ async def push_subscription(
     (сначала опознать аккаунт по shortUuid), но запрос собирается так же.
     """
     moment = now or datetime.now(UTC)
-    if multi_tariff is None:
-        multi_tariff = settings.is_multi_tariff_enabled()
     if identity is None:
         identity = await resolve_panel_identity(
             api,

@@ -308,23 +308,7 @@ class MiniAppSubscriptionPurchaseService:
     ) -> PurchaseOptionsContext:
         from app.database.crud.subscription import get_subscription_by_user_id
 
-        if settings.is_multi_tariff_enabled():
-            if subscription_id:
-                from app.database.crud.subscription import get_subscription_by_id_for_user
-
-                subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
-            else:
-                from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-                if active_subs:
-                    _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
-                    _pool = _non_daily or active_subs
-                    subscription = max(_pool, key=lambda s: s.days_left)
-                else:
-                    subscription = None
-        else:
-            subscription = await get_subscription_by_user_id(db, user.id)
+        subscription = await get_subscription_by_user_id(db, user.id)
         balance_kopeks = int(user.balance_kopeks or 0)
         currency = (getattr(user, 'balance_currency', None) or 'RUB').upper()
         texts = get_texts(user.language)
@@ -952,26 +936,14 @@ class MiniAppSubscriptionPurchaseService:
                     subscription = None
                     context.subscription = None
             else:
-                context_subscription_id: int | None = context.payload.get('subscription_id')
-                if settings.is_multi_tariff_enabled() and context_subscription_id is not None:
-                    result = await db.execute(
-                        select(Subscription)
-                        .where(
-                            Subscription.user_id == user.id,
-                            Subscription.id == context_subscription_id,
-                        )
-                        .with_for_update()
-                        .execution_options(populate_existing=True)
-                    )
-                else:
-                    result = await db.execute(
-                        select(Subscription)
-                        .where(Subscription.user_id == user.id)
-                        .order_by(Subscription.created_at.desc())
-                        .limit(1)
-                        .with_for_update()
-                        .execution_options(populate_existing=True)
-                    )
+                result = await db.execute(
+                    select(Subscription)
+                    .where(Subscription.user_id == user.id)
+                    .order_by(Subscription.created_at.desc())
+                    .limit(1)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
                 subscription = result.scalar_one_or_none()
                 if subscription is not None:
                     context.subscription = subscription
@@ -1147,7 +1119,7 @@ class MiniAppSubscriptionPurchaseService:
         # Disable killed trials on RemnaWave panel
         for trial_id, trial_panel_id in killed_trial_refs:
             try:
-                if trial_panel_id is None and not settings.is_multi_tariff_enabled():
+                if trial_panel_id is None:
                     trial_panel_id = user.remnawave_id
                 if trial_panel_id is not None:
                     await subscription_service.disable_remnawave_user(trial_panel_id)
@@ -1156,13 +1128,8 @@ class MiniAppSubscriptionPurchaseService:
 
         panel_action = 'update'
         try:
-            # In multi-tariff mode, each subscription has its own panel user.
-            # A new subscription has no remnawave_id yet, so always CREATE.
-            # In single-tariff mode, reuse the user-level panel id if available.
-            if settings.is_multi_tariff_enabled():
-                _should_create = subscription.remnawave_id is None
-            else:
-                _should_create = user.remnawave_id is None
+            # Reuse the user-level panel id if available.
+            _should_create = user.remnawave_id is None
             panel_action = 'create' if _should_create else 'update'
 
             if _should_create:

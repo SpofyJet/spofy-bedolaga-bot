@@ -32,11 +32,6 @@ def resolve_tariff_cart_traffic(tariff, cart_data: dict) -> tuple[int | None, in
 
 
 async def cleanup_duplicate_subscriptions(db: AsyncSession) -> int:
-    # В multi-tariff режиме несколько подписок у пользователя — это нормально
-    if settings.is_multi_tariff_enabled():
-        logger.info('♻️ cleanup_duplicate_subscriptions пропущена: multi-tariff режим')
-        return 0
-
     result = await db.execute(
         select(Subscription.user_id).group_by(Subscription.user_id).having(func.count(Subscription.id) > 1)
     )

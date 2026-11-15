@@ -7,10 +7,8 @@ from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 import structlog
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database.crud.subscription import (
@@ -21,8 +19,6 @@ from app.database.crud.user import (
     get_user_by_telegram_id,
 )
 from app.database.models import (
-    Subscription,
-    SubscriptionStatus,
     User,
 )
 from app.external.remnawave_api import (
@@ -87,42 +83,6 @@ def _panel_import_data(user_obj) -> dict[str, Any]:
         'activeInternalSquads': user_obj.active_internal_squads,
         'tag': getattr(user_obj, 'tag', None),
     }
-
-
-def _relink_existing_subscription(
-    user_subscriptions,
-    panel_user: dict[str, Any],
-    panel_user_id: int,
-    *,
-    live_panel_ids: set[int],
-):
-    """Строка подписки, которой на самом деле принадлежит этот аккаунт панели.
-
-    Аккаунт опознаётся только точными ключами: ``shortUuid`` или суффикс имени
-    ``_{remnawave_short_id}``, которым бот помечает аккаунты мультитарифа. Строку,
-    чей записанный id панель отдала в этом же снимке, не трогаем — она привязана
-    к живому аккаунту, а совпадение ключей тогда означает дубль в панели.
-    """
-    short_uuid = (panel_user.get('shortUuid') or '').strip()
-    username = panel_user.get('username') or ''
-    for candidate in user_subscriptions:
-        recorded_id = _normalize_panel_user_id(candidate.remnawave_id)
-        if recorded_id is not None and recorded_id in live_panel_ids:
-            continue
-        short_id = (getattr(candidate, 'remnawave_short_id', None) or '').strip()
-        same_short_uuid = bool(short_uuid) and candidate.remnawave_short_uuid == short_uuid
-        same_username = bool(short_id) and username.endswith(f'_{short_id}')
-        if not (same_short_uuid or same_username):
-            continue
-        logger.warning(
-            '🔗 [multi-tariff] Аккаунт панели пересоздан — перепривязываем существующую подписку',
-            subscription_id=candidate.id,
-            dead_panel_user_id=recorded_id,
-            panel_user_id=panel_user_id,
-        )
-        candidate.remnawave_id = panel_user_id
-        return candidate
-    return None
 
 
 def _normalize_panel_user_id(value: Any) -> int | None:
@@ -1141,9 +1101,6 @@ class RemnaWaveService:
         # Выгрузка панели идёт минутами; транзакцию, с которой пришла сессия
         # (авторизация кабинета, middleware бота), на это время не держим.
         await release_transaction(db)
-        # In multi-tariff mode, match panel users to subscriptions by remnawave_id
-        if settings.is_multi_tariff_enabled():
-            return await self._sync_users_from_panel_multi(db, sync_type)
 
         try:
             stats = {'created': 0, 'updated': 0, 'errors': 0, 'deleted': 0}
@@ -1342,32 +1299,9 @@ class RemnaWaveService:
 
                         # Используем async запрос вместо доступа к relationship,
                         # чтобы избежать lazy-load в async контексте
-                        if settings.is_multi_tariff_enabled():
-                            from app.database.crud.subscription import get_active_subscriptions_by_user_id as _get_subs
+                        from app.database.crud.subscription import get_subscription_by_user_id as _get_sub
 
-                            _subs = await _get_subs(db, db_user.id)
-                            # Match by remnawave_id from panel. Пустая идентичность
-                            # никогда не матчится: иначе непровиженный черновик
-                            # (remnawave_id IS NULL) поймал бы панельного юзера
-                            # без id и получил бы его состояние.
-                            _panel_id = _normalize_panel_user_id(panel_user.get('id'))
-                            existing_sub = (
-                                next(
-                                    (s for s in _subs if _normalize_panel_user_id(s.remnawave_id) == _panel_id),
-                                    None,
-                                )
-                                if _panel_id is not None
-                                else None
-                            )
-                            if not existing_sub and _subs:
-                                # No panel-id match — fall back to best non-daily subscription
-                                _non_daily = [s for s in _subs if not getattr(s, 'is_daily_tariff', False)]
-                                _pool = _non_daily or _subs
-                                existing_sub = max(_pool, key=lambda s: s.days_left)
-                        else:
-                            from app.database.crud.subscription import get_subscription_by_user_id as _get_sub
-
-                            existing_sub = await _get_sub(db, db_user.id)
+                        existing_sub = await _get_sub(db, db_user.id)
                         if existing_sub:
                             await self._update_subscription_from_panel_data(
                                 db,
@@ -1470,34 +1404,9 @@ class RemnaWaveService:
                                 db_user.remnawave_id = panel_user_id
 
                             # Используем async запрос вместо доступа к relationship
-                            if settings.is_multi_tariff_enabled():
-                                from app.database.crud.subscription import (
-                                    get_active_subscriptions_by_user_id as _get_subs_email,
-                                )
+                            from app.database.crud.subscription import get_subscription_by_user_id as _get_sub_email
 
-                                _subs_e = await _get_subs_email(db, db_user.id)
-                                # Пустая идентичность не матчится — см. основной цикл.
-                                existing_sub = (
-                                    next(
-                                        (
-                                            s
-                                            for s in _subs_e
-                                            if _normalize_panel_user_id(s.remnawave_id) == panel_user_id
-                                        ),
-                                        None,
-                                    )
-                                    if panel_user_id is not None
-                                    else None
-                                )
-                                if not existing_sub and _subs_e:
-                                    # No panel-id match — fall back to best non-daily subscription
-                                    _non_daily_e = [s for s in _subs_e if not getattr(s, 'is_daily_tariff', False)]
-                                    _pool_e = _non_daily_e or _subs_e
-                                    existing_sub = max(_pool_e, key=lambda s: s.days_left)
-                            else:
-                                from app.database.crud.subscription import get_subscription_by_user_id as _get_sub_email
-
-                                existing_sub = await _get_sub_email(db, db_user.id)
+                            existing_sub = await _get_sub_email(db, db_user.id)
                             if existing_sub:
                                 await self._update_subscription_from_panel_data(
                                     db,
@@ -1736,338 +1645,6 @@ class RemnaWaveService:
             await rollback_quietly(db)  # иначе следующий шаг синхронизации упадёт на этой сессии
             return {'created': 0, 'updated': 0, 'errors': 1, 'deleted': 0}
 
-    async def _sync_users_from_panel_multi(self, db: AsyncSession, sync_type: str) -> dict[str, int]:
-        """Multi-tariff sync: match panel users to subscriptions by remnawave_id."""
-
-        stats = {'created': 0, 'updated': 0, 'errors': 0, 'deleted': 0}
-        # Момент снимка: см. sync_users_from_panel — список выгружается целиком и
-        # применяется минутами позже.
-        snapshot_taken_at = self._now_utc()
-        try:
-            logger.info('🔄 [multi-tariff] Начинаем синхронизацию типа', sync_type=sync_type)
-
-            # Load all panel users
-            async with self.get_api_client() as api:
-                panel_users = []
-                cursor: str | None = None
-                size = 500
-
-                while True:
-                    page = await api.get_all_users_page_stream(cursor=cursor, size=size, enrich_happ_links=False)
-                    users_batch = page['users']
-                    for user_obj in users_batch:
-                        panel_users.append(_panel_import_data(user_obj))
-                    if not page['hasMore'] or not page['nextCursor']:
-                        break
-                    cursor = page['nextCursor']
-
-            logger.info('✅ [multi-tariff] Загружено из панели', panel_users_count=len(panel_users))
-
-            # Load all subscriptions with remnawave_id
-            subs_result = await db.execute(
-                select(Subscription)
-                .options(selectinload(Subscription.user), selectinload(Subscription.tariff))
-                .where(Subscription.remnawave_id.isnot(None))
-            )
-            all_subs = subs_result.scalars().all()
-            subs_by_panel_id = {}
-            for sub in all_subs:
-                _sub_panel_id = _normalize_panel_user_id(sub.remnawave_id)
-                if _sub_panel_id is not None:
-                    subs_by_panel_id[_sub_panel_id] = sub
-
-            # Fallback: build user-level panel id → user map for legacy migration
-            from app.database.models import User
-
-            users_result = await db.execute(
-                select(User)
-                .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
-                .where(User.remnawave_id.isnot(None))
-            )
-            users_by_panel_id = {}
-            for u in users_result.scalars().all():
-                _u_panel_id = _normalize_panel_user_id(u.remnawave_id)
-                if _u_panel_id is not None:
-                    users_by_panel_id[_u_panel_id] = u
-
-            # Load all bot users for matching unlinked panel users
-            all_users_result = await db.execute(
-                select(User).options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
-            )
-            _all_users = all_users_result.scalars().all()
-            bot_users_by_tg = {u.telegram_id: u for u in _all_users if u.telegram_id}
-            bot_users_by_email = {u.email.lower(): u for u in _all_users if u.email and u.email_verified}
-
-            logger.info(
-                '📊 [multi-tariff] Подписок с remnawave_id',
-                subs_count=len(subs_by_panel_id),
-                users_legacy_count=len(users_by_panel_id),
-                bot_users_by_tg=len(bot_users_by_tg),
-                bot_users_by_email=len(bot_users_by_email),
-            )
-
-            # Аккаунты без Telegram id и без почты бот не создавал — их не
-            # подтягиваем и не трогаем; считаем, чтобы пропуск был виден оператору.
-            foreign_accounts_count = 0
-
-            # Id, которые панель отдала в этом снимке: строка, чей id среди них,
-            # привязана к живому аккаунту, и перепривязывать её нельзя.
-            live_panel_ids = {
-                _id for _id in (_normalize_panel_user_id(pu.get('id')) for pu in panel_users) if _id is not None
-            }
-
-            def resolve_owner(panel_user):
-                panel_id = _normalize_panel_user_id(panel_user.get('id'))
-                existing = subs_by_panel_id.get(panel_id)
-                if existing is not None:
-                    return existing.user
-                legacy = users_by_panel_id.get(panel_id)
-                if legacy is not None:
-                    return legacy
-                tg_owner = bot_users_by_tg.get(panel_user.get('telegramId'))
-                if tg_owner is not None:
-                    return tg_owner
-                return bot_users_by_email.get((panel_user.get('email') or '').lower().strip())
-
-            # Row locks live until the bulk commit: all importers must visit
-            # owners in the same order, including differently ordered API pages.
-            panel_users.sort(
-                key=lambda pu: (getattr(resolve_owner(pu), 'id', 0), _normalize_panel_user_id(pu.get('id')) or 0)
-            )
-
-            # Match and update
-            for panel_user in panel_users:
-                panel_user_id = _normalize_panel_user_id(panel_user.get('id'))
-                if panel_user_id is None:
-                    # В 3.0.0 числовой id обязателен: его отсутствие — нарушение
-                    # контракта панели, а не рядовой пропуск. Молча пропускать
-                    # такое нельзя, иначе весь синк отрапортует успех на нуле.
-                    logger.warning(
-                        '⚠️ [multi-tariff] Панельный пользователь без числового id — пропускаем',
-                        username=panel_user.get('username'),
-                        short_uuid=panel_user.get('shortUuid'),
-                    )
-                    stats['errors'] += 1
-                    continue
-
-                owner = resolve_owner(panel_user)
-                if owner is None:
-                    if not panel_user.get('telegramId') and not panel_user.get('email'):
-                        foreign_accounts_count += 1
-                    continue
-
-                # Refresh the collection only after acquiring the owner lock:
-                # a second import must see the first import before checking the cap.
-                # Production disables autoflush; otherwise populate_existing
-                # discards the previous account's unflushed projection/relink.
-                await db.flush()
-                owner_result = await db.execute(
-                    select(User)
-                    .where(User.id == owner.id)
-                    .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
-                    .with_for_update()
-                    .execution_options(populate_existing=True)
-                )
-                _bot_user = owner_result.scalar_one_or_none()
-                if _bot_user is None:
-                    continue
-                _user_subs = list(_bot_user.subscriptions)
-                subscription = next(
-                    (s for s in _user_subs if _normalize_panel_user_id(s.remnawave_id) == panel_user_id), None
-                )
-                if subscription is None:
-                    # An exact shortUuid/username match beats the historical
-                    # user-level ID, which cannot choose among several subscriptions.
-                    subscription = _relink_existing_subscription(
-                        _user_subs, panel_user, panel_user_id, live_panel_ids=live_panel_ids
-                    )
-                if subscription is None and users_by_panel_id.get(panel_user_id) is not None:
-                    legacy_candidates = [
-                        s for s in _user_subs if s.status in ('active', 'trial') and not s.remnawave_id
-                    ]
-                    if len(legacy_candidates) == 1:
-                        subscription = legacy_candidates[0]
-                        subscription.remnawave_id = panel_user_id
-                    elif len(legacy_candidates) > 1:
-                        logger.warning(
-                            'Ambiguous legacy panel identity; skipping import',
-                            user_id=_bot_user.id,
-                            panel_user_id=panel_user_id,
-                        )
-                        stats['errors'] += 1
-                        continue
-                if subscription is not None:
-                    subs_by_panel_id[panel_user_id] = subscription
-
-                if not subscription:
-                    # Check MAX_ACTIVE_SUBSCRIPTIONS
-                    _active_count = sum(1 for s in _user_subs if s.status in ('active', 'trial'))
-                    if _active_count >= settings.get_max_active_subscriptions():
-                        logger.debug(
-                            '⚠️ [multi-tariff] User at max subscriptions, skipping',
-                            user_id=_bot_user.id,
-                            active_count=_active_count,
-                        )
-                        continue
-
-                    try:
-                        from app.database.crud.subscription import generate_unique_short_id
-
-                        # A bulk snapshot may predate a completed deletion. A new
-                        # local row requires a current account, never just that snapshot.
-                        async with self.get_api_client() as api:
-                            current_panel_user = await api.get_user_by_id(panel_user_id)
-                        if current_panel_user is None:
-                            continue
-                        current_data = _panel_import_data(current_panel_user)
-                        current_tg = current_data.get('telegramId')
-                        current_email = (current_data.get('email') or '').lower().strip()
-                        if not (
-                            (current_tg and current_tg == _bot_user.telegram_id)
-                            or (
-                                current_email
-                                and _bot_user.email_verified
-                                and current_email == (_bot_user.email or '').lower()
-                            )
-                        ):
-                            logger.warning(
-                                'Panel owner changed during import; skipping account', panel_user_id=panel_user_id
-                            )
-                            stats['errors'] += 1
-                            continue
-                        panel_user = current_data
-
-                        _expire_at = self._parse_remnawave_date(panel_user.get('expireAt', ''))
-                        _now = self._now_utc()
-                        _panel_status = panel_user.get('status', 'ACTIVE')
-                        if _panel_status == 'ACTIVE' and _expire_at > _now:
-                            _sub_status = SubscriptionStatus.ACTIVE
-                        elif _expire_at <= _now:
-                            _sub_status = SubscriptionStatus.EXPIRED
-                        else:
-                            _sub_status = SubscriptionStatus.DISABLED
-
-                        _traffic_limit_bytes = int(panel_user.get('trafficLimitBytes') or 0)  # 2.8.0: number→int
-                        _used_bytes = panel_user.get('usedTrafficBytes', 0) or 0
-                        _squads = panel_user.get('activeInternalSquads', []) or []
-                        _squad_uuids = []
-                        if isinstance(_squads, list):
-                            for _sq in _squads:
-                                if isinstance(_sq, dict) and 'uuid' in _sq:
-                                    _squad_uuids.append(_sq['uuid'])
-                                elif isinstance(_sq, str):
-                                    _squad_uuids.append(_sq)
-
-                        _short_id = await generate_unique_short_id(db)
-
-                        # Squads are not a tariff identifier. Preserve unique
-                        # existing mappings, but never pick the first ambiguous match.
-                        _matched_tariff_id = None
-                        if _squad_uuids:
-                            from app.database.crud.tariff import get_all_active_tariffs
-
-                            _matches = [
-                                tariff
-                                for tariff in await get_all_active_tariffs(db)
-                                if tariff.allowed_squads and set(_squad_uuids).issubset(set(tariff.allowed_squads))
-                            ]
-                            if len(_matches) == 1:
-                                _matched_tariff_id = _matches[0].id
-
-                        new_sub = Subscription(
-                            user_id=_bot_user.id,
-                            status=_sub_status.value,
-                            is_trial=_panel_import_is_trial(panel_user),
-                            end_date=_expire_at,
-                            traffic_limit_gb=_traffic_limit_bytes // (1024**3) if _traffic_limit_bytes > 0 else 0,
-                            traffic_used_gb=_used_bytes / (1024**3),
-                            device_limit=coerce_panel_device_limit(panel_user.get('hwidDeviceLimit')),
-                            connected_squads=_squad_uuids,
-                            remnawave_id=panel_user_id,
-                            remnawave_short_id=_short_id,
-                            remnawave_short_uuid=panel_user.get('shortUuid'),
-                            subscription_url=panel_user.get('subscriptionUrl', ''),
-                            subscription_crypto_link=panel_user.get('subscriptionCryptoLink', ''),
-                            tariff_id=_matched_tariff_id,
-                        )
-                        # Savepoint: один человек с конфликтом уникальности не должен
-                        # откатывать синхронизацию всех остальных.
-                        async with db.begin_nested():
-                            db.add(new_sub)
-                            await db.flush((new_sub,))
-                        subs_by_panel_id[panel_user_id] = new_sub
-                        # Keep in-memory state consistent for subsequent iterations
-                        if hasattr(_bot_user, 'subscriptions') and isinstance(_bot_user.subscriptions, list):
-                            _bot_user.subscriptions.append(new_sub)
-                        stats['created'] += 1
-                        logger.info(
-                            '✅ [multi-tariff] Создана подписка из панели',
-                            panel_user_id=panel_user_id,
-                            user_id=_bot_user.id,
-                        )
-                    except IntegrityError as create_err:
-                        logger.warning(
-                            '⚠️ [multi-tariff] Подписка из панели конфликтует с существующей — пропускаем',
-                            panel_user_id=panel_user_id,
-                            user_id=_bot_user.id,
-                            error=str(create_err.orig)[:200],
-                        )
-                        stats['errors'] += 1
-                    except Exception as create_err:
-                        logger.error(
-                            '❌ [multi-tariff] Ошибка создания подписки из панели',
-                            panel_user_id=panel_user_id,
-                            error=create_err,
-                        )
-                        stats['errors'] += 1
-                    continue
-
-                try:
-                    # Полный проход выгружает весь список панели и применяет его
-                    # минутами позже, поэтому снимку нельзя верить на слово:
-                    # свежее webhook-обновление (оплата во время прохода) важнее.
-                    from app.database.crud.subscription import is_recently_updated_by_webhook
-                    from app.database.crud.transaction import get_last_subscription_payment_at
-
-                    project_onto_subscription(
-                        subscription,
-                        read_panel_user(panel_user),
-                        now=self._now_utc(),
-                        policy=BULK_SNAPSHOT,
-                        snapshot_taken_at=snapshot_taken_at,
-                        trust_status=not is_recently_updated_by_webhook(subscription),
-                        paid_at=await get_last_subscription_payment_at(db, subscription.user_id),
-                    )
-
-                    stats['updated'] += 1
-                except Exception as e:
-                    logger.error(
-                        '❌ [multi-tariff] Ошибка обновления подписки',
-                        subscription_id=subscription.id,
-                        error=e,
-                    )
-                    stats['errors'] += 1
-
-            await db.commit()
-
-            if foreign_accounts_count > 0:
-                logger.info(
-                    '⏭️ [multi-tariff] Аккаунтов панели без Telegram ID и почты — созданы не ботом, пропускаем',
-                    foreign_accounts_count=foreign_accounts_count,
-                )
-
-            logger.info(
-                '🎯 [multi-tariff] Синхронизация завершена',
-                updated=stats['updated'],
-                errors=stats['errors'],
-            )
-            return stats
-
-        except Exception as e:
-            logger.error('❌ [multi-tariff] Критическая ошибка синхронизации', error=e)
-            await rollback_quietly(db)  # иначе следующий шаг синхронизации упадёт на этой сессии
-            return {'created': 0, 'updated': 0, 'errors': 1, 'deleted': 0}
-
     async def _create_subscription_from_panel_data(self, db: AsyncSession, user, panel_user):
         try:
             from app.database.crud.subscription import create_subscription_no_commit
@@ -2161,25 +1738,7 @@ class RemnaWaveService:
             from app.database.crud.subscription import get_subscription_by_user_id, is_recently_updated_by_webhook
 
             # Всегда используем async CRUD запрос для получения подписки
-            if settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import get_active_subscriptions_by_user_id as _get_subs_upd
-
-                _subs_upd = await _get_subs_upd(db, user.id)
-                # Strict match by panel user id — never fallback to another subscription.
-                # Пустая идентичность не матчится ни при каких условиях: иначе
-                # состояние панельного пользователя записывалось бы на первый
-                # попавшийся непровиженный черновик (remnawave_id IS NULL).
-                _panel_id_upd = _normalize_panel_user_id(panel_user.get('id'))
-                subscription = (
-                    next(
-                        (s for s in _subs_upd if _normalize_panel_user_id(s.remnawave_id) == _panel_id_upd),
-                        None,
-                    )
-                    if _panel_id_upd is not None
-                    else None
-                )
-            else:
-                subscription = await get_subscription_by_user_id(db, user.id)
+            subscription = await get_subscription_by_user_id(db, user.id)
 
             if not subscription:
                 await self._create_subscription_from_panel_data(db, user, panel_user)
@@ -2370,18 +1929,11 @@ class RemnaWaveService:
 
             logger.info('🗑️ ПРИНУДИТЕЛЬНАЯ полная очистка данных пользователя', user_id_display=user_id_display)
 
-            # Reset devices for all subscription panel ids in multi-tariff, or user panel id in single-tariff
+            # Reset devices for the user's panel id
             _panel_ids_to_reset = set()
-            if settings.is_multi_tariff_enabled():
-                user_subs = user.subscriptions or []
-                for sub in user_subs:
-                    _sub_panel_id = _normalize_panel_user_id(getattr(sub, 'remnawave_id', None))
-                    if _sub_panel_id is not None:
-                        _panel_ids_to_reset.add(_sub_panel_id)
-            if not _panel_ids_to_reset:
-                _user_panel_id = _normalize_panel_user_id(user.remnawave_id)
-                if _user_panel_id is not None:
-                    _panel_ids_to_reset.add(_user_panel_id)
+            _user_panel_id = _normalize_panel_user_id(user.remnawave_id)
+            if _user_panel_id is not None:
+                _panel_ids_to_reset.add(_user_panel_id)
 
             for _panel_user_id in _panel_ids_to_reset:
                 try:
@@ -2738,9 +2290,7 @@ class RemnaWaveService:
                             subscription.status = SubscriptionStatus.EXPIRED.value
                             issues_fixed += 1
 
-                        _lookup_panel_id = (
-                            getattr(subscription, 'remnawave_id', None) if settings.is_multi_tariff_enabled() else None
-                        ) or getattr(user, 'remnawave_id', None)
+                        _lookup_panel_id = getattr(user, 'remnawave_id', None)
                         if not subscription.remnawave_short_uuid and _lookup_panel_id:
                             try:
                                 async with self.get_api_client() as api:

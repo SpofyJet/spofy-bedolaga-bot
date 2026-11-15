@@ -88,12 +88,11 @@ class UserService:
         subs = user.subscriptions or []
         has_extendable = any(sub.status in {'active', 'expired', 'trial'} for sub in subs)
         if has_extendable:
-            extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
             keyboard_rows.append(
                 [
                     types.InlineKeyboardButton(
                         text=get_texts(user.language).t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
-                        callback_data=extend_callback,
+                        callback_data='subscription_extend',
                         style='success',
                     )
                 ]
@@ -130,18 +129,7 @@ class UserService:
             if not user:
                 return None
 
-            if settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-                if active_subs:
-                    _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
-                    _pool = _non_daily or active_subs
-                    subscription = max(_pool, key=lambda s: s.days_left)
-                else:
-                    subscription = None
-            else:
-                subscription = await get_subscription_by_user_id(db, user_id)
+            subscription = await get_subscription_by_user_id(db, user_id)
             transactions_count = await get_user_transactions_count(db, user_id)
 
             return {
@@ -367,25 +355,7 @@ class UserService:
 
                 subscription_service = SubscriptionService()
 
-                if settings.is_multi_tariff_enabled():
-                    # In multi-tariff mode, disable each subscription's panel user individually
-                    for sub in subs:
-                        panel_user_id = sub.remnawave_id
-                        if panel_user_id:
-                            try:
-                                await subscription_service.disable_remnawave_user(panel_user_id)
-                                logger.info(
-                                    '✅ RemnaWave пользователь деактивирован при блокировке',
-                                    remnawave_id=panel_user_id,
-                                    subscription_id=sub.id,
-                                )
-                            except Exception as e:
-                                logger.error(
-                                    '❌ Ошибка деактивации RemnaWave при блокировке',
-                                    error=e,
-                                    subscription_id=sub.id,
-                                )
-                elif user.remnawave_id:
+                if user.remnawave_id:
                     try:
                         await subscription_service.disable_remnawave_user(user.remnawave_id)
                         logger.info(
@@ -430,7 +400,7 @@ class UserService:
                         logger.info(
                             '✅ RemnaWave подписка восстановлена при разблокировке',
                             subscription_id=sub.id,
-                            remnawave_id=sub.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id,
+                            remnawave_id=user.remnawave_id,
                         )
                     except Exception as e:
                         logger.error(
@@ -489,10 +459,7 @@ class UserService:
             for sub in subs:
                 await cancel_platega_recurring_for_subscription_safe(db, sub.id)
 
-            if settings.is_multi_tariff_enabled():
-                panel_user_ids = [sub.remnawave_id for sub in subs if sub.remnawave_id]
-            else:
-                panel_user_ids = [user.remnawave_id] if user.remnawave_id else []
+            panel_user_ids = [user.remnawave_id] if user.remnawave_id else []
 
             if panel_user_ids:
                 if not force_panel_delete and any(is_active_paid_subscription(sub) for sub in subs):
