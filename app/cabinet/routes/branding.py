@@ -343,6 +343,12 @@ async def set_setting_value(db: AsyncSession, key: str, value: str):
     _setting_cache.pop(key, None)
 
 
+async def _get_flag_setting(db: AsyncSession, key: str, default: bool) -> bool:
+    """Флаг из system_settings: «true» в любом регистре — вкл., иное — выкл.; нет записи — default."""
+    value = await get_setting_value(db, key)
+    return value.lower() == 'true' if value is not None else default
+
+
 def get_logo_path() -> Path | None:
     """Get the path to the custom logo file (any supported format)."""
     if not BRANDING_DIR.exists():
@@ -1063,14 +1069,7 @@ async def get_animation_enabled(
     Get animation enabled setting.
     This is a public endpoint - no authentication required.
     """
-    animation_value = await get_setting_value(db, ANIMATION_ENABLED_KEY)
-
-    if animation_value is not None:
-        enabled = animation_value.lower() == 'true'
-        return AnimationEnabledResponse(enabled=enabled)
-
-    # Default: enabled
-    return AnimationEnabledResponse(enabled=True)
+    return AnimationEnabledResponse(enabled=await _get_flag_setting(db, ANIMATION_ENABLED_KEY, default=True))
 
 
 @router.patch('/animation', response_model=AnimationEnabledResponse)
@@ -1161,14 +1160,7 @@ async def get_fullscreen_enabled(
     Get fullscreen enabled setting.
     This is a public endpoint - no authentication required.
     """
-    fullscreen_value = await get_setting_value(db, FULLSCREEN_ENABLED_KEY)
-
-    if fullscreen_value is not None:
-        enabled = fullscreen_value.lower() == 'true'
-        return FullscreenEnabledResponse(enabled=enabled)
-
-    # Default: disabled
-    return FullscreenEnabledResponse(enabled=False)
+    return FullscreenEnabledResponse(enabled=await _get_flag_setting(db, FULLSCREEN_ENABLED_KEY, default=False))
 
 
 @router.patch('/fullscreen', response_model=FullscreenEnabledResponse)
@@ -1236,15 +1228,15 @@ async def get_telegram_widget_config(
 
     size_val = await get_setting_value(db, TELEGRAM_WIDGET_SIZE_KEY)
     radius_val = await get_setting_value(db, TELEGRAM_WIDGET_RADIUS_KEY)
-    userpic_val = await get_setting_value(db, TELEGRAM_WIDGET_USERPIC_KEY)
-    request_access_val = await get_setting_value(db, TELEGRAM_WIDGET_REQUEST_ACCESS_KEY)
+    userpic = await _get_flag_setting(db, TELEGRAM_WIDGET_USERPIC_KEY, settings.TELEGRAM_WIDGET_USERPIC)
+    request_access = await _get_flag_setting(
+        db, TELEGRAM_WIDGET_REQUEST_ACCESS_KEY, settings.TELEGRAM_WIDGET_REQUEST_ACCESS
+    )
 
-    oidc_enabled_val = await get_setting_value(db, TELEGRAM_OIDC_ENABLED_KEY)
+    oidc_enabled_flag = await _get_flag_setting(db, TELEGRAM_OIDC_ENABLED_KEY, settings.TELEGRAM_OIDC_ENABLED)
     oidc_client_id_val = await get_setting_value(db, TELEGRAM_OIDC_CLIENT_ID_KEY)
     oidc_client_id = oidc_client_id_val or settings.TELEGRAM_OIDC_CLIENT_ID
-    oidc_enabled = (
-        oidc_enabled_val.lower() == 'true' if oidc_enabled_val is not None else settings.TELEGRAM_OIDC_ENABLED
-    ) and bool(oidc_client_id)
+    oidc_enabled = oidc_enabled_flag and bool(oidc_client_id)
 
     return TelegramWidgetConfigResponse(
         bot_username=bot_username,
@@ -1252,10 +1244,8 @@ async def get_telegram_widget_config(
         radius=max(0, min(int(radius_val), 20))
         if radius_val and radius_val.isdigit()
         else settings.TELEGRAM_WIDGET_RADIUS,
-        userpic=userpic_val.lower() == 'true' if userpic_val is not None else settings.TELEGRAM_WIDGET_USERPIC,
-        request_access=request_access_val.lower() == 'true'
-        if request_access_val is not None
-        else settings.TELEGRAM_WIDGET_REQUEST_ACCESS,
+        userpic=userpic,
+        request_access=request_access,
         oidc_enabled=oidc_enabled,
         oidc_client_id=oidc_client_id if oidc_enabled else '',
     )
@@ -1264,14 +1254,8 @@ async def get_telegram_widget_config(
 # ============ Analytics Counters Routes ============
 
 
-@router.get('/analytics', response_model=AnalyticsCountersResponse)
-async def get_analytics_counters(
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """
-    Get analytics counter settings.
-    This is a public endpoint - no authentication required.
-    """
+async def _analytics_counters_response(db: AsyncSession) -> AnalyticsCountersResponse:
+    """Текущие счётчики (из БД) и снимок офлайн-конверсий Метрики (из Settings, секрет замаскирован)."""
     yandex_id = await get_setting_value(db, YANDEX_METRIKA_ID_KEY) or ''
     google_id = await get_setting_value(db, GOOGLE_ADS_ID_KEY) or ''
     google_label = await get_setting_value(db, GOOGLE_ADS_LABEL_KEY) or ''
@@ -1298,6 +1282,17 @@ async def get_analytics_counters(
         offline_conv_measurement_secret_masked=oc_secret_masked,
         offline_conv_goals=oc_goals,
     )
+
+
+@router.get('/analytics', response_model=AnalyticsCountersResponse)
+async def get_analytics_counters(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get analytics counter settings.
+    This is a public endpoint - no authentication required.
+    """
+    return await _analytics_counters_response(db)
 
 
 @router.patch('/analytics', response_model=AnalyticsCountersResponse)
@@ -1330,32 +1325,7 @@ async def update_analytics_counters(
 
     logger.info('Admin updated analytics counters', telegram_id=admin.telegram_id)
 
-    # Return current state
-    yandex_id = await get_setting_value(db, YANDEX_METRIKA_ID_KEY) or ''
-    google_id = await get_setting_value(db, GOOGLE_ADS_ID_KEY) or ''
-    google_label = await get_setting_value(db, GOOGLE_ADS_LABEL_KEY) or ''
-
-    oc_enabled = bool(settings.YANDEX_OFFLINE_CONV_ENABLED)
-    oc_counter = str(settings.YANDEX_OFFLINE_CONV_COUNTER_ID or '')
-    oc_secret = str(settings.YANDEX_OFFLINE_CONV_MEASUREMENT_SECRET or '')
-    oc_secret_masked = ('*' * 8 + oc_secret[-4:]) if len(oc_secret) > 4 else ('***' if oc_secret else '')
-    oc_goals: list[OfflineConvGoal] = []
-    if oc_enabled:
-        oc_goals = [
-            OfflineConvGoal(name='Registration', event_id='registration', dedup='user_id'),
-            OfflineConvGoal(name='Trial', event_id='trial-add', dedup='user_id'),
-            OfflineConvGoal(name='Purchase', event_id='purchase', dedup='order_id'),
-        ]
-
-    return AnalyticsCountersResponse(
-        yandex_metrika_id=yandex_id,
-        google_ads_id=google_id,
-        google_ads_label=google_label,
-        offline_conv_enabled=oc_enabled,
-        offline_conv_counter_id=oc_counter,
-        offline_conv_measurement_secret_masked=oc_secret_masked,
-        offline_conv_goals=oc_goals,
-    )
+    return await _analytics_counters_response(db)
 
 
 # ============ Yandex CID Sync ============
@@ -1397,14 +1367,7 @@ async def get_lite_mode_enabled(
     This is a public endpoint - no authentication required.
     When enabled, shows simplified dashboard with minimal features.
     """
-    lite_mode_value = await get_setting_value(db, LITE_MODE_ENABLED_KEY)
-
-    if lite_mode_value is not None:
-        enabled = lite_mode_value.lower() == 'true'
-        return LiteModeEnabledResponse(enabled=enabled)
-
-    # Default: disabled
-    return LiteModeEnabledResponse(enabled=False)
+    return LiteModeEnabledResponse(enabled=await _get_flag_setting(db, LITE_MODE_ENABLED_KEY, default=False))
 
 
 @router.patch('/lite-mode', response_model=LiteModeEnabledResponse)
@@ -1467,10 +1430,7 @@ async def get_footer_enabled(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get legal footer enabled setting. Public endpoint - no authentication required."""
-    value = await get_setting_value(db, FOOTER_ENABLED_KEY)
-    if value is not None:
-        return FooterEnabledResponse(enabled=value.lower() == 'true')
-    return FooterEnabledResponse(enabled=True)
+    return FooterEnabledResponse(enabled=await _get_flag_setting(db, FOOTER_ENABLED_KEY, default=True))
 
 
 @router.patch('/footer-enabled', response_model=FooterEnabledResponse)
