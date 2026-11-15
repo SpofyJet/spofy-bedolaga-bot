@@ -302,7 +302,7 @@ async def test_support_ws_reply_notifies_legacy_user_websocket(monkeypatch) -> N
     async def fake_get_visible_ticket(_db, _context, _ticket_id):
         return ticket
 
-    async def fake_check_permission(_db, _user, permission, ip_address=None):
+    async def fake_check_permission(_db, _user, permission):
         return permission == 'tickets:reply', 'ok'
 
     async def fake_log_action(_db, **_kwargs):
@@ -347,9 +347,8 @@ async def test_privileged_ws_reply_writes_permission_audit_without_sensitive_pay
     async def fake_get_visible_ticket(_db, _context, _ticket_id):
         return ticket
 
-    async def fake_check_permission(_db, _user, permission, ip_address=None):
+    async def fake_check_permission(_db, _user, permission):
         assert permission == 'tickets:reply'
-        assert ip_address == '203.0.113.9'
         return True, 'ok'
 
     async def fake_log_action(_db, **kwargs):
@@ -382,6 +381,7 @@ async def test_privileged_ws_reply_writes_permission_audit_without_sensitive_pay
     assert len(audit_rows) == 1
     row = audit_rows[0]
     assert row['action'] == 'tickets:reply'
+    assert row['ip_address'] == '203.0.113.9'
     assert row['resource_type'] == 'tickets'
     assert row['resource_id'] == str(ticket.id)
     assert row['status'] == 'success'
@@ -409,9 +409,8 @@ async def test_privileged_ws_status_update_writes_permission_audit(monkeypatch) 
     async def fake_get_visible_ticket(_db, _context, _ticket_id):
         return ticket
 
-    async def fake_check_permission(_db, _user, permission, ip_address=None):
+    async def fake_check_permission(_db, _user, permission):
         assert permission == 'tickets:close'
-        assert ip_address == '203.0.113.10'
         return True, 'ok'
 
     async def fake_log_action(_db, **kwargs):
@@ -441,6 +440,7 @@ async def test_privileged_ws_status_update_writes_permission_audit(monkeypatch) 
     assert len(audit_rows) == 1
     row = audit_rows[0]
     assert row['action'] == 'tickets:close'
+    assert row['ip_address'] == '203.0.113.10'
     assert row['resource_type'] == 'tickets'
     assert row['resource_id'] == str(ticket.id)
     assert row['status'] == 'success'

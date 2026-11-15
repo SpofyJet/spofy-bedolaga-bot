@@ -581,12 +581,7 @@ async def _require_ws_permission(
     ticket_id: int | None = None,
     details: dict[str, Any] | None = None,
 ) -> None:
-    allowed, reason = await PermissionService.check_permission(
-        db,
-        session.context.user,
-        permission,
-        ip_address=_ws_client_ip(session.websocket),
-    )
+    allowed, reason = await PermissionService.check_permission(db, session.context.user, permission)
     if not allowed:
         await _log_ws_permission_audit(
             db,

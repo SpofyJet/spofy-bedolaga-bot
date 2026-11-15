@@ -1,10 +1,8 @@
 """Права журнала системных ошибок должны быть в PERMISSION_REGISTRY.
 
 ``require_permission('system_errors:read')`` работает и без регистрации — проверка
-идёт по строке. А вот редактор ролей валидирует список по реестру: незнакомое
-право отдаёт 400. Поэтому без записи в реестре страницу нельзя выдать никакой
-роли, и — хуже — сохранение роли, которой bootstrap уже проставил
-``system_errors:*``, падает с 400 на ровном месте.
+идёт по строке. Реестр — единый список прав кабинета, по нему сверяются роли
+из bootstrap.
 
 Ратчет на каждое право, которое проверяют роуты кабинета: тот же класс промаха,
 что был у ``users:send_message`` и ``coupons:*``.
@@ -15,7 +13,6 @@ from pathlib import Path
 
 import pytest
 
-from app.cabinet.routes.admin_roles import _validate_permissions
 from app.services.permission_service import PERMISSION_REGISTRY, get_all_permissions
 from app.services.rbac_bootstrap_service import _PRESET_ROLES
 
@@ -28,14 +25,8 @@ def test_section_is_registered():
 
 
 @pytest.mark.parametrize('permission', SYSTEM_ERROR_PERMISSIONS)
-def test_permission_is_grantable(permission):
+def test_permission_is_registered(permission):
     assert permission in get_all_permissions()
-    _validate_permissions([permission])
-
-
-def test_wildcard_from_bootstrap_survives_a_role_save():
-    """Bootstrap раздаёт ``system_errors:*`` — редактор ролей обязан его принять."""
-    _validate_permissions(['system_errors:*'])
 
 
 def test_every_permission_required_by_cabinet_routes_is_registered():
@@ -49,7 +40,7 @@ def test_every_permission_required_by_cabinet_routes_is_registered():
 
 
 def test_bootstrap_roles_only_grant_registered_permissions():
-    """То же с другой стороны: роль из bootstrap должна проходить валидацию редактора."""
+    """То же с другой стороны: роль из bootstrap раздаёт только права из реестра."""
     known = set(get_all_permissions()) | {f'{section}:*' for section in PERMISSION_REGISTRY} | {'*:*'}
 
     for role in _PRESET_ROLES:

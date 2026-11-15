@@ -417,12 +417,7 @@ def require_permission(*permissions: str):
                 resource_type = first_perm.split(':', maxsplit=1)[0]
 
         for perm in permissions:
-            allowed, reason = await PermissionService.check_permission(
-                db,
-                user,
-                perm,
-                ip_address=client_ip,
-            )
+            allowed, reason = await PermissionService.check_permission(db, user, perm)
             if not allowed:
                 await PermissionService.log_action(
                     db,
