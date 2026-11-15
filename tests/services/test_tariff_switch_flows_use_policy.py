@@ -55,7 +55,6 @@ ALLOWED_DIRECT_READERS = {
     'app/database/crud/subscription.py',  # extend_subscription: оплаченная покупка тарифа
     'app/services/subscription_auto_purchase_service.py',  # автопокупка после пополнения
     'app/cabinet/routes/admin_users.py',  # админ меняет тариф руками
-    'app/cabinet/routes/admin_bulk_actions.py',  # массовая смена тарифа админом
     'app/handlers/admin/users.py',  # то же из бота
 }
 

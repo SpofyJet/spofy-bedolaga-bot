@@ -382,43 +382,6 @@ async def test_cancel_safe_wiring_proof_multi_tariff_delete_subscription(monkeyp
     assert call_order == ['platega_cancel']
 
 
-async def test_cancel_safe_wiring_proof_admin_bulk_delete_subscription(monkeypatch):
-    """Same wiring proof, for the third reachable delete path that was
-    missed: the cabinet admin bulk-actions delete-subscription path
-    (``admin_bulk_actions.py::_do_delete_subscription``, "Массовые действия"
-    -> delete subscription for a batch of users).
-    """
-    from app.cabinet.routes import admin_bulk_actions
-    from app.cabinet.schemas.bulk_actions import BulkActionParams
-
-    recorded: list[tuple[object, int]] = []
-    call_order: list[str] = []
-
-    async def fake_cancel(db, subscription_id):
-        recorded.append((db, subscription_id))
-        call_order.append('platega_cancel')
-
-    monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', fake_cancel)
-
-    sub = SimpleNamespace(
-        id=77,
-        is_active=False,
-        is_trial=False,
-        tariff=None,
-        remnawave_id=None,
-    )
-    user = SimpleNamespace(id=1, username='victim', subscriptions=[], remnawave_id=None)
-    db = AsyncMock()
-
-    result = await admin_bulk_actions._do_delete_subscription(
-        db, user, BulkActionParams(), dry_run=False, sub_override=sub
-    )
-
-    assert result.success is True
-    assert recorded == [(db, 77)]  # cancel called with the subscription being deleted, before its DB delete
-    assert call_order == ['platega_cancel']
-
-
 # --- Optional/lower-priority sites: full-user deletion paths ----------------
 #
 # UserService.delete_user_account and BlockedUsersService.delete_user_from_db
