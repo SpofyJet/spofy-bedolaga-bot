@@ -929,6 +929,11 @@ async def reconcile_subscription_traffic_limit(
         if tariff is None:
             return False, subscription.traffic_limit_gb or 0
 
+    # Тариф с произвольным трафиком: объём человек выбрал и оплатил при покупке,
+    # общей базы у тарифа нет — «лечение» сбросило бы купленные ГБ к базе тарифа.
+    if tariff.can_purchase_custom_traffic():
+        return False, subscription.traffic_limit_gb or 0
+
     # Lock subscription row — как в add_subscription_traffic / housekeeping,
     # чтобы не затереть конкурентную докупку.
     await _lock_subscription_row(db, subscription)
