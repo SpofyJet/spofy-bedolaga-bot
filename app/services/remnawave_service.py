@@ -1144,16 +1144,19 @@ class RemnaWaveService:
 
                 logger.info('✅ Всего загружено пользователей из панели', panel_users_count=len(panel_users))
 
-            # Загрузка пользователей с их подписками за один запрос (bulk loading)
             from sqlalchemy import select
-            from sqlalchemy.orm import selectinload
 
-            from app.database.models import Subscription, User
+            from app.database.models import Tariff, User
 
-            # Получаем всех пользователей с их подписками за один запрос
-            bot_users_result = await db.execute(
-                select(User).options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
-            )
+            # Все люди — одним запросом, подписки — нет: проход ниже берёт каждому его
+            # подписку отдельной выборкой (get_subscription_by_user_id_in_session), а
+            # деактивация поднимает подписки только тем, кого нет в панели. Раньше
+            # подписки с тарифами поднимались всем заранее — ~120 МБ на 24 тыс.,
+            # которые процесс бота держал до перезапуска. Тарифы держим в сессии:
+            # связь подписки с тарифом заполняется из неё без запроса.
+            # identity map держит объекты слабо: без ссылки тарифы ушли бы из сессии.
+            _tariffs_kept_in_session = (await db.execute(select(Tariff))).scalars().all()
+            bot_users_result = await db.execute(select(User))
             bot_users = bot_users_result.scalars().all()
             # Filter out email-only users (telegram_id=None) to avoid None key issues
             bot_users_by_telegram_id = {user.telegram_id: user for user in bot_users if user.telegram_id is not None}
@@ -1443,15 +1446,26 @@ class RemnaWaveService:
                 processed_count = 0
                 cleanup_panel_id_mutations: list[_PanelIdMapMutation] = []
 
+                # Подписки — кандидатам на деактивацию (нет в панели и нет panel id):
+                # проход выше их не поднимал.
+                await self._load_subscriptions_of(
+                    db,
+                    [
+                        db_user
+                        for telegram_id, db_user in bot_users_by_telegram_id.items()
+                        if telegram_id not in panel_telegram_ids and not getattr(db_user, 'remnawave_id', None)
+                    ],
+                )
+
                 # Собираем список пользователей для деактивации
                 users_to_deactivate = [
                     (telegram_id, db_user)
                     for telegram_id, db_user in bot_users_by_telegram_id.items()
                     if telegram_id not in panel_telegram_ids
-                    and any(True for _ in (getattr(db_user, 'subscriptions', None) or []))
                     # BUG-6 fix: Skip users who have a remnawave_id — they exist in panel
                     # but may not have telegram_id set there (OAuth users who linked TG later)
                     and not getattr(db_user, 'remnawave_id', None)
+                    and any(True for _ in (getattr(db_user, 'subscriptions', None) or []))
                 ]
 
                 if users_to_deactivate:
@@ -1646,6 +1660,27 @@ class RemnaWaveService:
             logger.error('❌ Критическая ошибка синхронизации пользователей', error=e)
             await rollback_quietly(db)  # иначе следующий шаг синхронизации упадёт на этой сессии
             return {'created': 0, 'updated': 0, 'errors': 1, 'deleted': 0}
+
+    @staticmethod
+    async def _load_subscriptions_of(db: AsyncSession, users: list, chunk_size: int = 1000) -> None:
+        """Поднять ``user.subscriptions`` (с тарифами) людям из сессии — пачками, без ленивой подгрузки."""
+        from sqlalchemy import inspect as sa_inspect, select
+        from sqlalchemy.orm import selectinload
+
+        from app.database.models import Subscription, User
+
+        user_ids = []
+        for user in users:
+            state = sa_inspect(user)
+            # Протухших после отката не трогаем: обращение к ним падает так же, как раньше.
+            if 'subscriptions' in state.unloaded and not state.expired_attributes and state.identity:
+                user_ids.append(state.identity[0])
+        for start in range(0, len(user_ids), chunk_size):
+            await db.execute(
+                select(User)
+                .where(User.id.in_(user_ids[start : start + chunk_size]))
+                .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
+            )
 
     async def _create_subscription_from_panel_data(self, db: AsyncSession, user, panel_user):
         try:

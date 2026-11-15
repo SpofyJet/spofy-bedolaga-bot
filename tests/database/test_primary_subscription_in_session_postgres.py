@@ -129,3 +129,73 @@ async def test_expires_overdue_active_like_full_load(postgres_database):
         assert got.status == SubscriptionStatus.EXPIRED.value
         stored = (await db.execute(select(Subscription.status).where(Subscription.id == got.id))).scalar_one()
         assert stored == SubscriptionStatus.EXPIRED.value
+
+
+async def test_people_without_preloaded_subscriptions_one_query(postgres_database):
+    """Как синк теперь: в сессии люди и тарифы, подписок нет — строка одной выборкой, связи из сессии."""
+    async with postgres_session(postgres_database, TABLES) as db:
+        db.add(Tariff(id=7, name='Тариф', is_active=True, period_prices={'30': 300}))
+        await db.flush()
+        user = await _person(
+            db,
+            3001,
+            [
+                {'status': 'expired', 'end_date': NOW - timedelta(days=2)},
+                {'status': 'active', 'end_date': NOW + timedelta(days=9), 'tariff_id': 7},
+            ],
+        )
+        expected_id = (await get_subscription_by_user_id(db, user.id)).id
+        db.expunge_all()
+
+        tariffs = (await db.execute(select(Tariff))).scalars().all()
+        people = (await db.execute(select(User))).scalars().all()
+        statements: list[str] = []
+        listener = lambda *args: statements.append(args[2])  # noqa: E731
+        event.listen(db.bind.sync_engine, 'before_cursor_execute', listener)
+        try:
+            got = await get_subscription_by_user_id_in_session(db, user.id)
+            tariff, owner = got.tariff, got.user  # заполнены, ленивой подгрузки нет
+        finally:
+            event.remove(db.bind.sync_engine, 'before_cursor_execute', listener)
+
+        assert got.id == expected_id
+        assert tariff is tariffs[0]
+        assert owner is people[0]
+        assert len(statements) == 1
+
+
+async def test_subscription_without_tariff_gets_empty_relation(postgres_database):
+    async with postgres_session(postgres_database, TABLES) as db:
+        user = await _person(db, 3002, [{'status': 'active', 'end_date': NOW + timedelta(days=3)}])
+        db.expunge_all()
+        people = (await db.execute(select(User))).scalars().all()
+
+        got = await get_subscription_by_user_id_in_session(db, user.id)
+
+        assert got.tariff is None
+        assert got.user is people[0]
+
+
+async def test_load_subscriptions_of_fills_collections_for_people_in_session(postgres_database):
+    """Деактивация в синке: подписки поднимаются пачкой тем, кого нет в панели — без ленивой подгрузки."""
+    from app.services.remnawave_service import RemnaWaveService
+
+    async with postgres_session(postgres_database, TABLES) as db:
+        first = await _person(
+            db,
+            4001,
+            [
+                {'status': 'expired', 'end_date': NOW - timedelta(days=2)},
+                {'status': 'active', 'end_date': NOW + timedelta(days=9)},
+            ],
+        )
+        second = await _person(db, 4002, [])
+        db.expunge_all()
+        people = {user.telegram_id: user for user in (await db.execute(select(User))).scalars().all()}
+
+        await RemnaWaveService._load_subscriptions_of(db, list(people.values()), chunk_size=1)
+
+        loaded = people[4001].subscriptions  # без запроса: иначе MissingGreenlet в async
+        assert [subscription.status for subscription in loaded] == ['active', 'expired']  # order_by created_at desc
+        assert people[4002].subscriptions == []
+        assert {first.id, second.id} == {user.id for user in people.values()}

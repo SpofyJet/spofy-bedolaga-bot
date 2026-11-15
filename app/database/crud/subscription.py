@@ -241,42 +241,48 @@ def _primary_subscription_order() -> tuple:
 
 
 async def get_subscription_by_user_id_in_session(db: AsyncSession, user_id: int) -> Subscription | None:
-    """То же, что ``get_subscription_by_user_id``, но строку, уже поднятую в сессию, не грузит заново.
+    """То же, что ``get_subscription_by_user_id``, но человек и тариф — из сессии, без selectinload.
 
-    Полный проход синка с панелью заранее поднимает всех людей с подписками и
-    тарифами и на каждого из ~23 тыс. дважды звал ``get_subscription_by_user_id``:
-    по три запроса (строка + selectinload человека и тарифа), ответ которых
-    отбрасывается — объект уже лежит в identity map сессии. Здесь та же строка
-    выбирается тем же порядком одним запросом по id, а объект берётся из сессии.
-    Нет его там, протух после отката или не поднят тариф — обычная загрузка.
+    Полный проход синка с панелью держит в сессии всех людей и тарифы и на
+    каждого из ~23 тыс. дважды звал ``get_subscription_by_user_id``: строка +
+    selectinload человека + selectinload тарифа, три запроса, хотя оба связанных
+    объекта уже лежат в identity map. Здесь — одна выборка той же строки тем же
+    порядком, связи заполняются из сессии. Кого-то из них в сессии нет или он
+    протух после отката — обычная загрузка.
     """
-    subscription_id = (
+    subscription = (
         await db.execute(
-            select(Subscription.id)
+            select(Subscription)
             .where(Subscription.user_id == user_id)
             .order_by(*_primary_subscription_order())
             .limit(1)
         )
     ).scalar_one_or_none()
-    if subscription_id is None:
+    if subscription is None:
         return None
-    subscription = db.identity_map.get(identity_key(Subscription, subscription_id))
-    if subscription is None or not _relations_ready_in_session(db, subscription):
+    if not _relations_ready_in_session(db, subscription):
         return await get_subscription_by_user_id(db, user_id)
     return await check_and_update_subscription_status(db, subscription)
 
 
 def _relations_ready_in_session(db: AsyncSession, subscription: Subscription) -> bool:
-    """Подписка из сессии годится без запроса: не протухла, тариф поднят, человек — в сессии."""
+    """Связи подписки с человеком и тарифом заполняются из сессии; False — кого-то там нет."""
     state = sa_inspect(subscription)
-    if state.expired_attributes or 'tariff' in state.unloaded:
+    if state.expired_attributes:
         return False
-    if 'user' in state.unloaded:
-        user = db.identity_map.get(identity_key(User, subscription.user_id))
-        if user is None or sa_inspect(user).expired_attributes:
-            return False
-        # Как selectinload(Subscription.user) в обычной загрузке: связь заполнена без запроса.
-        set_committed_value(subscription, 'user', user)
+    for key, model, related_id in (
+        ('tariff', Tariff, subscription.tariff_id),
+        ('user', User, subscription.user_id),
+    ):
+        if key not in state.unloaded:
+            continue
+        related = None
+        if related_id is not None:
+            related = db.identity_map.get(identity_key(model, related_id))
+            if related is None or sa_inspect(related).expired_attributes:
+                return False
+        # Как selectinload в обычной загрузке: связь заполнена, но без запроса.
+        set_committed_value(subscription, key, related)
     return True
 
 
