@@ -53,10 +53,12 @@ TELEGRAM_WIDGET_REQUEST_ACCESS_KEY = 'TELEGRAM_WIDGET_REQUEST_ACCESS'
 TELEGRAM_OIDC_ENABLED_KEY = 'TELEGRAM_OIDC_ENABLED'
 TELEGRAM_OIDC_CLIENT_ID_KEY = 'TELEGRAM_OIDC_CLIENT_ID'
 
-# Default animation config
+# Анимированный фон кабинета с 15.11.2026 один — «чернила» (type 'ink'); 20 прежних
+# эффектов удалены из кабинета. Старое значение type в базе (aurora, boxes…) кабинет
+# читает как 'ink', поэтому GET отдаёт сохранённое как есть.
 DEFAULT_ANIMATION_CONFIG = {
-    'enabled': True,
-    'type': 'aurora',
+    'enabled': False,
+    'type': 'ink',
     'settings': {},
     'opacity': 1.0,
     'blur': 0,
@@ -167,8 +169,8 @@ def _validate_settings(v: dict) -> dict:
 class AnimationConfigResponse(BaseModel):
     """Full animation config."""
 
-    enabled: bool = True
-    type: str = 'aurora'
+    enabled: bool = False
+    type: str = 'ink'
     settings: dict = Field(default_factory=dict)
     opacity: float = Field(default=1.0, ge=0.0, le=1.0)
     blur: float = Field(default=0, ge=0, le=100)
@@ -179,33 +181,7 @@ class AnimationConfigUpdate(BaseModel):
     """Request to update animation config (partial update)."""
 
     enabled: bool | None = None
-    type: (
-        Literal[
-            'aurora',
-            'sparkles',
-            'vortex',
-            'shooting-stars',
-            'background-beams',
-            'background-beams-collision',
-            'gradient-animation',
-            'wavy',
-            'background-lines',
-            'boxes',
-            'meteors',
-            'grid',
-            'dots',
-            'spotlight',
-            'ripple',
-            'fireflies',
-            'snowfall',
-            'starfield',
-            'matrix-rain',
-            'liquid-gradient',
-            'constellation',
-            'none',
-        ]
-        | None
-    ) = None
+    type: Literal['ink', 'none'] | None = None
     settings: dict | None = None
     opacity: float | None = Field(default=None, ge=0.0, le=1.0)
     blur: float | None = Field(default=None, ge=0, le=100)
