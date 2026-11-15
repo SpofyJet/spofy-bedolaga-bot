@@ -141,7 +141,7 @@ async def test_existing_subscription_promo_survives_panel_rollback(postgres_data
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
         db.add_all(
             [
-                User(id=1, telegram_id=101, language='ru', status='active', balance_kopeks=0),
+                User(id=1, telegram_id=101, language='ru', status='active', balance_kopeks=0, remnawave_id=9001),
                 Tariff(
                     id=1,
                     name='Test',

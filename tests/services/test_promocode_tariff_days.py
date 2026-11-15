@@ -101,3 +101,19 @@ async def test_lower_paid_tariff_is_upgraded(env):
     calls.current = _sub(2, days_left=30)
     await service._grant_tariff_days(None, SimpleNamespace(id=7), _code(), BYPASS)
     assert calls.replace.await_args.kwargs['duration_days'] == 760
+
+
+@pytest.mark.parametrize(('panel_id', 'action'), [(None, 'create'), (9001, 'update')])
+async def test_panel_failure_reloads_objects_and_queues_the_sync(env, monkeypatch, panel_id, action):
+    """Сбой панели откатывает сессию: объекты перечитываются, синхронизация — в очередь с тем же сбросом трафика."""
+    from app.services import remnawave_retry_queue as retry
+
+    service, _ = env
+    service.subscription_service.sync_remnawave_user = AsyncMock(return_value=None)
+    queue = retry.RemnaWaveRetryQueue()
+    monkeypatch.setattr(retry, 'remnawave_retry_queue', queue)
+    db = AsyncMock()
+    await service._grant_tariff_days(db, SimpleNamespace(id=7, remnawave_id=panel_id), _code(), BYPASS)
+    db.rollback.assert_awaited()
+    item = queue._queue[0]
+    assert (item.subscription_id, item.user_id, item.action, item.reset_traffic) == (1, 7, action, True)

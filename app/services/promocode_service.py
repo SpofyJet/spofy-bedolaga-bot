@@ -64,6 +64,9 @@ class PromoCodeService:
         panel_result: Any,
         *,
         retry_update: bool = True,
+        retry_action: str | None = 'update',
+        reset_traffic: bool = False,
+        reset_reason: str | None = None,
     ) -> None:
         # Panel services can roll back the shared session and return None.
         # Promo effects have already committed: reload before reading columns
@@ -77,7 +80,14 @@ class PromoCodeService:
         if panel_result is None and retry_update:
             from app.services.remnawave_retry_queue import remnawave_retry_queue
 
-            remnawave_retry_queue.enqueue(subscription_id=subscription.id, user_id=user.id, action='update')
+            remnawave_retry_queue.enqueue(
+                subscription_id=subscription.id,
+                user_id=user.id,
+                # None — по id панели после перечитывания: нет аккаунта — создать.
+                action=retry_action or ('update' if user.remnawave_id else 'create'),
+                reset_traffic=reset_traffic,
+                reset_reason=reset_reason,
+            )
 
     async def activate_promocode(
         self, db: AsyncSession, user_id: int, code: str, *, subscription_id: int | None = None
@@ -368,7 +378,7 @@ class PromoCodeService:
 
         if existing is not None and existing.tariff_id == tariff.id and not existing.is_trial:
             await extend_subscription(db, existing, days)
-            await self.subscription_service.sync_remnawave_user(db, existing)
+            await self._sync_granted_subscription(db, user, promocode, existing)
             return existing
 
         if existing is not None and not existing.is_trial and existing.tariff_id != tariff.id:
@@ -379,7 +389,7 @@ class PromoCodeService:
             alive_now = existing.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.LIMITED.value)
             if alive_now and current is not None and (current.tier_level or 0) > (tariff.tier_level or 0):
                 await extend_subscription(db, existing, days)
-                await self.subscription_service.sync_remnawave_user(db, existing)
+                await self._sync_granted_subscription(db, user, promocode, existing)
                 return existing
 
         if existing is None:
@@ -412,10 +422,38 @@ class PromoCodeService:
                 tariff_id=tariff.id,
                 update_server_counters=True,
             )
-        await self.subscription_service.sync_remnawave_user(
-            db, subscription, reset_traffic=True, reset_reason='promocode tariff'
+        await self._sync_granted_subscription(
+            db, user, promocode, subscription, reset_traffic=True, reset_reason='promocode tariff'
         )
         return subscription
+
+    async def _sync_granted_subscription(
+        self,
+        db: AsyncSession,
+        user: User,
+        promocode: PromoCode,
+        subscription: Subscription,
+        *,
+        reset_traffic: bool = False,
+        reset_reason: str | None = None,
+    ) -> None:
+        # Дни уже записаны. Сбой панели (None) откатывает общую сессию, и объекты
+        # протухают — перечитываем их и ставим синхронизацию в очередь.
+        panel_result = await self.subscription_service.sync_remnawave_user(
+            db, subscription, reset_traffic=reset_traffic, reset_reason=reset_reason
+        )
+        if panel_result is not None:
+            return
+        await self._refresh_after_panel_call(
+            db,
+            user,
+            promocode,
+            subscription,
+            panel_result,
+            retry_action=None,
+            reset_traffic=reset_traffic,
+            reset_reason=reset_reason,
+        )
 
     async def _apply_promocode_effects(
         self, db: AsyncSession, user: User, promocode: PromoCode, *, subscription_id: int | None = None
@@ -496,6 +534,8 @@ class PromoCodeService:
             and promocode.subscription_days > 0
         ):
             tariff_grant = await self._tariff_for_days(db, promocode)
+            # Имя — до обращения к панели: её сбой откатывает сессию, и объект тарифа протухает.
+            tariff_grant_name = tariff_grant.name if tariff_grant is not None else None
             if tariff_grant is not None:
                 # Код привязан к тарифу: человек получает именно его, даже без подписки.
                 target_sub = await self._grant_tariff_days(db, user, promocode, tariff_grant)
@@ -517,7 +557,7 @@ class PromoCodeService:
                 await self._refresh_after_panel_call(db, user, promocode, target_sub, panel_result)
 
             if tariff_grant is not None:
-                effects.append(f'🎁 Подписка «{tariff_grant.name}» на {promocode.subscription_days} дн. активирована')
+                effects.append(f'🎁 Подписка «{tariff_grant_name}» на {promocode.subscription_days} дн. активирована')
             else:
                 effects.append(f'⏰ Подписка продлена на {promocode.subscription_days} дней')
             logger.info(
