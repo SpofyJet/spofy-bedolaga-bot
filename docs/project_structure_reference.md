@@ -207,7 +207,7 @@
   Функции: `list_template_types` — List all available email template types with override status., `get_templates_for_type` — Get all language templates for a specific notification type., `update_template` — Save a custom email template override., `set_template_enabled` — Выключатель писем по типу: отключённое письмо не отправляется никому., `reset_template` — Delete custom template override, reverting to default., `preview_template` — Preview a rendered email template with sample data., `send_test_email` — Send a test email to the admin's email address.
 - `app/cabinet/routes/admin_legal_pages.py` — Python-модуль
   Классы: `LegalDocumentItem`, `LegalDocumentResponse`, `LegalDocumentItemUpdate`, `LegalDocumentUpdateRequest`, `RulesItem`, `RulesResponse`, `RulesItemUpdate`, `RulesUpdateRequest`, `FaqSettingItem`, `FaqPageItem`, `FaqResponse`, `FaqUpdateRequest`, `FaqPageCreateRequest`, `FaqPageUpdateRequest`
-  Функции: `get_privacy_policy_admin`, `update_privacy_policy_admin`, `get_public_offer_admin`, `update_public_offer_admin`, `get_recurrent_payments_admin`, `update_recurrent_payments_admin`, `get_rules_admin`, `update_rules_admin`, `get_faq_admin`, `update_faq_admin`, `create_faq_page_admin`, `update_faq_page_admin`, `delete_faq_page_admin`
+  Функции: `get_privacy_policy_admin`, `update_privacy_policy_admin`, `get_public_offer_admin`, `update_public_offer_admin`, `get_rules_admin`, `update_rules_admin`, `get_faq_admin`, `update_faq_admin`, `create_faq_page_admin`, `update_faq_page_admin`, `delete_faq_page_admin`
 - `app/cabinet/routes/admin_menu_layout.py` — Python-модуль
   Классы: `ButtonConfig`, `RowConfig`, `MenuConfigResponse`, `MenuConfigUpdateRequest`
   Функции: `get_menu_layout` — Return merged menu layout config (rows + button styles). Admin only., `update_menu_layout` — Save full menu layout config. Splits into layout + button styles. Admin only., `reset_menu_layout` — Reset menu layout AND button styles to defaults. Admin only.
@@ -281,8 +281,8 @@
   Классы: нет
   Функции: `get_gift_config` — Get gift subscription configuration: tariffs, payment methods, balance., `create_gift_purchase` — Create a gift subscription purchase from the cabinet., `get_pending_gifts` — Get pending gift purchases that the current user can activate., `get_gift_purchase_status` — Get the status of a cabinet gift purchase., `get_sent_gifts` — Get all gifts the current user has sent., `get_received_gifts` — Get all gifts the current user has received., `activate_gift_by_code` — Activate a gift subscription by its code (token).
 - `app/cabinet/routes/info.py` — Python-модуль
-  Классы: `FaqPageResponse`, `RulesResponse`, `PrivacyPolicyResponse`, `PublicOfferResponse`, `RecurrentPaymentsResponse`, `SupportConfigResponse`, `InfoVisibilityResponse`, `LegalConsentConfigResponse`
-  Функции: `get_faq_pages` — Get list of FAQ pages., `get_rules` — Get service rules - uses same function as bot., `get_privacy_policy` — Get privacy policy., `get_public_offer` — Get public offer., `get_recurrent_payments` — Get recurring-payments terms document., `get_available_languages` — Get list of available languages., `get_support_config` — Get support/tickets configuration for cabinet., `get_legal_consent_config` — Нужны ли новому пользователю галочки «ознакомлен» и с чем именно., `get_info_visibility`
+  Классы: `FaqPageResponse`, `RulesResponse`, `PrivacyPolicyResponse`, `PublicOfferResponse`, `SupportConfigResponse`, `InfoVisibilityResponse`, `LegalConsentConfigResponse`
+  Функции: `get_faq_pages` — Get list of FAQ pages., `get_rules` — Get service rules - uses same function as bot., `get_privacy_policy` — Get privacy policy., `get_public_offer` — Get public offer., `get_available_languages` — Get list of available languages., `get_support_config` — Get support/tickets configuration for cabinet., `get_legal_consent_config` — Нужны ли новому пользователю галочки «ознакомлен» и с чем именно., `get_info_visibility`
 - `app/cabinet/routes/landing.py` — Python-модуль
   Классы: `PurchaseStatusResponse`, `GiftClaimRequest` (1 методов), `GiftClaimResponse`
   Функции: `get_purchase_status` — Get the status of a guest purchase by token., `activate_purchase` — Activate a pending guest purchase, replacing the user's current subscription., `get_gift_claim` — Public gift claim page data (tariff, period, message, claim links)., `claim_gift` — Web (email) arm of the channel-agnostic gift claim.
@@ -459,7 +459,7 @@
   Классы: нет
   Функции: `apply_legacy_aliases` — Возвращает копию контекста со старыми именами плейсхолдеров, если есть новые., `build_common_context` — Values for the type-independent placeholders., `substitute_context_vars` — Replace {var} placeholders in template text with context values., `get_template_override` — Get custom email template from the database., `get_all_overrides` — Get all custom template overrides from the database., `get_overrides_for_type` — Get all language overrides for a specific notification type., `save_template_override` — Save or update a custom email template in the database., `get_rendered_override` — Get a custom template override rendered with the base email template., `delete_template_override` — Delete a custom template override (revert to default).
 - `app/cabinet/services/email_templates.py` — Python-модуль
-  Классы: `EmailNotificationTemplates` (77 методов)
+  Классы: `EmailNotificationTemplates` (72 методов)
   Функции: нет
 - `app/cabinet/services/email_type_switch.py` — Python-модуль
   Классы: нет
@@ -573,9 +573,6 @@
 - `app/database/crud/rbac.py` — Python-модуль
   Классы: `UserRoleCRUD` (2 методов), `AuditLogCRUD` (1 методов)
   Функции: нет
-- `app/database/crud/recurrent_payments.py` — Python-модуль
-  Классы: нет
-  Функции: `get_recurrent_payments`, `upsert_recurrent_payments`, `set_recurrent_payments_enabled`
 - `app/database/crud/referral.py` — Python-модуль
   Классы: нет
   Функции: `not_referee_directed` — Предикат «строка описывает МОЕГО реферала»., `get_user_campaign_id` — Получить campaign_id первой регистрации пользователя., `create_referral_earning` — Строка реферального ledger'а., `get_commission_payment_count` — Подсчитать количество комиссионных начислений реферера за платежи конкретного реферала., `get_referral_statistics`, `get_user_referral_stats_light` — Облегчённая статистика для главного меню: один запрос к Postgres.
@@ -743,10 +740,10 @@
   Функции: `show_admin_panel`, `show_users_submenu`, `show_promo_submenu`, `show_communications_submenu`, `show_support_submenu`, `show_moderator_panel`, `show_system_submenu`, `register_handlers`
 - `app/handlers/admin/maintenance.py` — Python-модуль
   Классы: `MaintenanceStates`
-  Функции: `show_maintenance_panel`, `toggle_maintenance_mode`, `process_maintenance_reason`, `toggle_monitoring`, `force_api_check`, `check_panel_status`, `send_manual_notification`, `handle_manual_notification`, `process_notification_message`, `back_to_admin_panel`, `register_handlers`
+  Функции: `show_maintenance_panel`, `toggle_maintenance_mode`, `process_maintenance_reason`, `toggle_monitoring`, `force_api_check`, `check_panel_status`, `send_manual_notification`, `handle_manual_notification`, `process_notification_message`, `register_handlers`
 - `app/handlers/admin/messages.py` — Python-модуль
   Классы: нет
-  Функции: `safe_edit_or_send_text` — Безопасно редактирует сообщение или удаляет и отправляет новое., `get_updated_message_buttons_selector_keyboard`, `create_broadcast_keyboard`, `show_messages_menu`, `show_broadcast_targets`, `show_custom_broadcast`, `select_custom_criteria`, `select_broadcast_target`, `process_broadcast_message`, `handle_media_selection`, `process_broadcast_media`, `show_media_preview`, `handle_media_confirmation`, `handle_change_media`, `show_button_selector_callback`, `toggle_button_selection`, `confirm_button_selection`, `confirm_broadcast`, `get_target_users_count` — Быстрый подсчёт пользователей через SQL COUNT вместо загрузки всех в память., `get_target_users`, `get_custom_users_count`, `get_custom_users`, `get_users_statistics`, `get_target_name`, `get_target_display_name`, `register_handlers`
+  Функции: `safe_edit_or_send_text` — Безопасно редактирует сообщение или удаляет и отправляет новое., `create_broadcast_keyboard`, `show_messages_menu`, `show_broadcast_targets`, `show_custom_broadcast`, `select_custom_criteria`, `select_broadcast_target`, `process_broadcast_message`, `handle_media_selection`, `process_broadcast_media`, `show_media_preview`, `handle_media_confirmation`, `handle_change_media`, `show_button_selector_callback`, `toggle_button_selection`, `confirm_button_selection`, `confirm_broadcast`, `get_target_users_count` — Быстрый подсчёт пользователей через SQL COUNT вместо загрузки всех в память., `get_target_users`, `get_custom_users_count`, `get_custom_users`, `get_users_statistics`, `get_target_name`, `get_target_display_name`, `register_handlers`
 - `app/handlers/admin/promo_offers.py` — Python-модуль
   Классы: нет
   Функции: `show_promo_offers_menu`, `show_promo_offer_details`, `show_promo_offer_logs`, `prompt_edit_active_duration`, `show_send_segments`, `send_offer_to_segment`, `process_edit_active_duration_hours`, `register_handlers`
@@ -934,7 +931,7 @@
   Классы: `ThrottlingMiddleware` (3 методов)
   Функции: нет
 - `app/middlewares/tidy_text_request.py` — Python-модуль
-  Классы: `TidyTextRequestMiddleware` (2 методов)
+  Классы: `TidyTextRequestMiddleware` (4 методов)
   Функции: нет
 
 ### app/services
@@ -1140,9 +1137,6 @@
 - `app/services/rbac_bootstrap_service.py` — Python-модуль
   Классы: `AdminEnvCheck` (2 методов)
   Функции: `normalize_admin_email` — Канонизация email для сравнения с ADMIN_EMAILS: NFKC + lower + strip., `is_user_admin_by_env` — Проверяет, является ли юзер админом по ENV-конфигу (ADMIN_IDS/ADMIN_EMAILS)., `is_protected_from_blocking` — An account named in ADMIN_IDS/ADMIN_EMAILS must never end up BLOCKED., `bootstrap_superadmins` — Ensure every user from ADMIN_IDS / ADMIN_EMAILS has the Superadmin role., `ensure_superadmin_role_on_login` — Idempotent Superadmin assign for ADMIN_IDS / ADMIN_EMAILS users at login time.
-- `app/services/recurrent_payments_service.py` — Python-модуль
-  Классы: `RecurrentPaymentsService` (7 методов)
-  Функции: нет
 - `app/services/referral_reward_service.py` — Python-модуль
   Классы: `RewardEvent`, `LevelConfig` (3 методов), `RewardComponent` (1 методов), `ReferralRewardLevelService` (4 методов), `DaysGrant`, `GrantOutcome` (1 методов), `LevelView`, `TierProgress`
   Функции: `resolve_referrer_chain` — Цепочка пригласивших снизу вверх: [(1, прямой), (2, его пригласивший), ...]., `count_level_payments` — Сколько раз этот уровень уже платил за эту пару., `count_referrals` — Сколько рефералов у пользователя., `is_level_unlocked` — Открыт ли уровень для этого партнёра., `select_tier_config` — Ранг партнёра: единственный уровень, который к нему применяется., `resolve_reward_preference` — Что получатель предпочитает, когда правило платит и деньгами, и днями., `build_reward_components` — Что и кому причитается. Ничего не начисляет., `grant_reward_days` — Выдать дни подписки. Возвращает исход, а не бросает., `award_referral_rewards` — Посчитать и выдать награды всей цепочке. Возвращает фактически выданное., `build_level_views` — Ступени программы, уровень смотрящего и его личная ставка., `describe_reward_choice_sides` — Что человек получит, выбрав деньги, и что — выбрав дни., `describe_active_levels` — Человекочитаемое описание активных ступеней., `describe_referee_bonus` — Что получит сам приглашённый. ``None`` — ничего не настроено., `resolve_tier_progress` — Ранг партнёра и ближайшая недостигнутая ступень. ``None`` вне режима рангов., `format_tier_progress` — Прогресс по рангам двумя строками: где сейчас и сколько до следующего., `format_reward_total` — Выплаченное одной строкой: деньги, дни или и то и другое., `legacy_percent_for_import` — Процент для переносимого уровня и то, о чём нужно предупредить.
@@ -1580,7 +1574,7 @@
   Функции: `case_variants` — Регистровые варианты термина, по которым имеет смысл искать., `contains_patterns` — LIKE-шаблоны «содержит term» для всех регистровых вариантов., `contains_conditions` — ILIKE-условия «колонка содержит term» — по каждой колонке и каждому варианту.
 - `app/utils/text_tidy.py` — Python-модуль
   Классы: нет
-  Функции: `tidy_text` — Схлопывает 2+ пустые строки в одну и убирает хвостовые пробелы. ``None`` и пустое возвращает как есть., `strip_tg_emoji` — <tg-emoji …>🎁</tg-emoji> → 🎁 for text that leaves the bot as plain text (copied, forwarded, shared)., `plain_alert_text` — Текст для всплывающего окна после нажатия кнопки: HTML там не разбирается.
+  Функции: `tidy_text` — Схлопывает 2+ пустые строки в одну и убирает хвостовые пробелы. ``None`` и пустое возвращает как есть., `strip_tg_emoji` — <tg-emoji …>🎁</tg-emoji> → 🎁 for text that leaves the bot as plain text (copied, forwarded, shared)., `plain_alert_text` — Текст для всплывающего окна после нажатия кнопки: HTML там не разбирается., `brand_bypass_sign` — «Голый» 🏴‍☠️ в HTML-тексте → тот же щит Spofy, что в локали и на кнопках. Только для parse_mode=HTML.
 - `app/utils/ticket_media.py` — Python-модуль
   Классы: нет
   Функции: `get_ticket_media`, `ticket_media_chunks`, `send_ticket_media` — Отправить вложения тикета пачками (одно — отдельным сообщением)., `delete_ticket_media_notice` — Кнопка «🗑 Удалить» под отправленными вложениями: убрать последнее вложение и само уведомление.
@@ -2201,6 +2195,9 @@
 - `tests/test_button_styles.py` — Python-модуль
   Классы: нет
   Функции: `test_subscription_screen_main_actions`, `test_balance_keyboard_topup_success`, `test_devices_management_styles`, `test_referral_secondary_buttons_plain`, `test_one_accent_keeps_only_the_preferred_button`, `test_one_accent_falls_back_to_the_top_button`, `test_subscription_screen_has_one_green_button`
+- `tests/test_bypass_sign_in_texts.py` — Python-модуль
+  Классы: нет
+  Функции: `test_sign_is_the_same_as_on_buttons`, `test_bare_flag_becomes_shield_and_wrapped_one_is_left_alone`, `test_text_caption_media_and_rich_message_get_the_shield`, `test_non_html_messages_and_alerts_are_left_alone`
 - `tests/test_classic_trial_remaining_days.py` — Python-модуль
   Классы: `FrozenDateTime` (1 методов), `PurchasePersisted`
   Функции: `test_classic_purchase_persists_expiry_balance_and_conversion`
@@ -2571,7 +2568,7 @@
   Функции: `decrypted_url`, `incy_enabled`
 - `tests/cabinet/test_info_display_mode_gating.py` — Python-модуль
   Классы: нет
-  Функции: `test_visibility_defaults_all_true`, `test_visibility_hides_bot_only_sections`, `test_rules_endpoint_404_when_bot_only`, `test_privacy_endpoint_404_when_bot_only`, `test_offer_endpoint_404_when_bot_only`, `test_recurrent_endpoint_404_when_bot_only`, `test_faq_list_empty_when_bot_only`
+  Функции: `test_visibility_defaults_all_true`, `test_visibility_hides_bot_only_sections`, `test_rules_endpoint_404_when_bot_only`, `test_privacy_endpoint_404_when_bot_only`, `test_offer_endpoint_404_when_bot_only`, `test_faq_list_empty_when_bot_only`
 - `tests/cabinet/test_info_documents_language_fallback.py` — Python-модуль
   Классы: нет
   Функции: `test_empty_row_falls_back_to_default_language` — Пустая строка на zh (или одни пробелы) не должна подменять собой документ на ru., `test_filled_document_is_returned_as_is` — Заполненный документ на запрошенном языке не трогается., `test_no_text_anywhere_keeps_stub` — Нет текста и на языке по умолчанию — прежнее поведение, встроенная заглушка., `test_rules_without_language_row_use_default_language` — Правил на zh нет — берутся правила ru, а не встроенный текст., `test_rules_with_empty_language_row_use_default_language` — Пустая строка на zh — как и у остальных документов, откат на ru, а не пустой экран., `test_rules_in_requested_language_are_kept`, `test_rules_fall_back_to_built_in_stub_when_nothing_is_filled`
@@ -3087,7 +3084,7 @@
   Функции: `test_rejected_prefill_then_exact_retry_creates_exact_pending_invoice`
 - `tests/database/test_unlimited_device_addons_postgres.py` — Python-модуль
   Классы: нет
-  Функции: `test_unlimited_devices_cannot_be_sold_additional_slots`, `test_unlimited_granted_after_debit_refunds_and_preserves_limit`, `test_concurrent_device_increase_refunds_with_balanced_ledger`
+  Функции: `test_unlimited_devices_cannot_be_sold_additional_slots`, `test_unlimited_granted_after_debit_refunds_and_preserves_limit`, `test_concurrent_device_increase_refunds_with_balanced_ledger`, `test_auto_device_purchase_holds_subscription_lock_through_debit` — Автопокупка: между списанием и выдачей чужая транзакция не может поменять лимит подписки.
 - `tests/database/test_unpaid_trial_visibility_postgres.py` — Python-модуль
   Классы: нет
   Функции: нет
