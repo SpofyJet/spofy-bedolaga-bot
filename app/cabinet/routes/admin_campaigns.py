@@ -17,6 +17,7 @@ from app.database.crud.campaign import (
     get_campaigns_count,
     get_campaigns_list,
     get_campaigns_overview,
+    get_campaigns_statistics,
     update_campaign,
 )
 from app.database.crud.server_squad import get_all_server_squads
@@ -182,13 +183,16 @@ async def list_campaigns(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get list of all campaigns."""
-    campaigns = await get_campaigns_list(db, offset=offset, limit=limit, include_inactive=include_inactive)
+    campaigns = await get_campaigns_list(
+        db, offset=offset, limit=limit, include_inactive=include_inactive, load_registrations=False
+    )
     total = await get_campaigns_count(db, is_active=True if not include_inactive else None)
+    stats_by_campaign = await get_campaigns_statistics(db, [campaign.id for campaign in campaigns])
 
     items = []
     for campaign in campaigns:
         # Get quick stats
-        stats = await get_campaign_statistics(db, campaign.id)
+        stats = stats_by_campaign[campaign.id]
         items.append(
             CampaignListItem(
                 id=campaign.id,

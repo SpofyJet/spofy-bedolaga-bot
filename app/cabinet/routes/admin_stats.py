@@ -8,10 +8,10 @@ from typing import Any
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.crud.campaign import get_campaign_statistics, get_campaigns_count, get_campaigns_list
+from app.database.crud.campaign import get_campaigns_count, get_campaigns_list, get_campaigns_statistics
 from app.database.crud.referral import not_referee_directed
 from app.database.crud.server_squad import get_server_statistics
 from app.database.crud.subscription import get_subscriptions_statistics
@@ -487,8 +487,9 @@ async def _get_tariff_stats(db: AsyncSession) -> TariffStats | None:
     """Get statistics for all tariffs."""
     try:
         # Получаем ВСЕ тарифы (включая неактивные) для статистики
-        tariffs_result = await db.execute(select(Tariff).order_by(Tariff.display_order))
-        tariffs = tariffs_result.scalars().all()
+        # Только id и имя: полный ORM-тариф тянул каскадом промогруппы и их серверы (selectin).
+        tariffs_result = await db.execute(select(Tariff.id, Tariff.name).order_by(Tariff.display_order))
+        tariffs = tariffs_result.all()
 
         if not tariffs:
             logger.info('📊 Нет тарифов в системе, пропускаем статистику')
@@ -502,54 +503,32 @@ async def _get_tariff_stats(db: AsyncSession) -> TariffStats | None:
         tariff_items = []
         total_tariff_subscriptions = 0
 
+        # Все счётчики по всем тарифам — один проход по подпискам (раньше 5 COUNT на
+        # каждый тариф). Условия те же, что были у отдельных запросов.
+        is_active_status = Subscription.status == SubscriptionStatus.ACTIVE.value
+        not_trial = Subscription.is_trial == False
+
+        def _count_where(*conditions):
+            return func.coalesce(func.sum(case((and_(*conditions), 1), else_=0)), 0)
+
+        counts_result = await db.execute(
+            select(
+                Subscription.tariff_id,
+                _count_where(is_active_status),
+                _count_where(is_active_status, Subscription.is_trial == True),
+                _count_where(Subscription.created_at >= today_start, not_trial),
+                _count_where(Subscription.created_at >= week_ago, not_trial),
+                _count_where(Subscription.created_at >= month_ago, not_trial),
+            )
+            .where(Subscription.tariff_id.in_([tariff.id for tariff in tariffs]))
+            .group_by(Subscription.tariff_id)
+        )
+        counts_by_tariff = {row[0]: tuple(int(value or 0) for value in row[1:]) for row in counts_result.all()}
+
         for tariff in tariffs:
-            # Активные подписки на этом тарифе
-            active_result = await db.execute(
-                select(func.count(Subscription.id)).where(
-                    Subscription.tariff_id == tariff.id, Subscription.status == SubscriptionStatus.ACTIVE.value
-                )
+            active_count, trial_count, purchased_today, purchased_week, purchased_month = counts_by_tariff.get(
+                tariff.id, (0, 0, 0, 0, 0)
             )
-            active_count = active_result.scalar() or 0
-
-            # Триальные подписки на этом тарифе
-            trial_result = await db.execute(
-                select(func.count(Subscription.id)).where(
-                    Subscription.tariff_id == tariff.id,
-                    Subscription.status == SubscriptionStatus.ACTIVE.value,
-                    Subscription.is_trial == True,
-                )
-            )
-            trial_count = trial_result.scalar() or 0
-
-            # Куплено сегодня (не триальные)
-            today_result = await db.execute(
-                select(func.count(Subscription.id)).where(
-                    Subscription.tariff_id == tariff.id,
-                    Subscription.created_at >= today_start,
-                    Subscription.is_trial == False,
-                )
-            )
-            purchased_today = today_result.scalar() or 0
-
-            # Куплено за неделю
-            week_result = await db.execute(
-                select(func.count(Subscription.id)).where(
-                    Subscription.tariff_id == tariff.id,
-                    Subscription.created_at >= week_ago,
-                    Subscription.is_trial == False,
-                )
-            )
-            purchased_week = week_result.scalar() or 0
-
-            # Куплено за месяц
-            month_result = await db.execute(
-                select(func.count(Subscription.id)).where(
-                    Subscription.tariff_id == tariff.id,
-                    Subscription.created_at >= month_ago,
-                    Subscription.is_trial == False,
-                )
-            )
-            purchased_month = month_result.scalar() or 0
 
             logger.info(
                 '📊 Тариф активных=, триал', tariff_name=tariff.name, active_count=active_count, trial_count=trial_count
@@ -777,14 +756,15 @@ async def get_top_campaigns(
     """Get top advertising campaigns with statistics."""
     try:
         # Get all campaigns
-        campaigns = await get_campaigns_list(db, offset=0, limit=100, include_inactive=True)
+        campaigns = await get_campaigns_list(db, offset=0, limit=100, include_inactive=True, load_registrations=False)
+        stats_by_campaign = await get_campaigns_statistics(db, [campaign.id for campaign in campaigns])
 
         campaign_items = []
         total_registrations = 0
         total_revenue = 0
 
         for campaign in campaigns:
-            stats = await get_campaign_statistics(db, campaign.id)
+            stats = stats_by_campaign[campaign.id]
 
             campaign_items.append(
                 TopCampaignItem(

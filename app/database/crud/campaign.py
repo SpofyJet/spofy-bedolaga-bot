@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy import and_, case, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -102,14 +102,23 @@ async def get_campaigns_list(
     offset: int = 0,
     limit: int = 20,
     include_inactive: bool = True,
+    load_registrations: bool = True,
 ) -> list[AdvertisingCampaign]:
+    """Кампании, новые первыми.
+
+    ``load_registrations=False`` — не тянуть ORM-строки всех регистраций (их
+    тысячи); спискам кабинета они не нужны, числа берутся из
+    ``get_campaigns_statistics``. Список кампаний в боте их читает.
+    """
+    options = [
+        selectinload(AdvertisingCampaign.tariff),
+        selectinload(AdvertisingCampaign.partner),
+    ]
+    if load_registrations:
+        options.append(selectinload(AdvertisingCampaign.registrations))
     stmt = (
         select(AdvertisingCampaign)
-        .options(
-            selectinload(AdvertisingCampaign.tariff),
-            selectinload(AdvertisingCampaign.partner),
-            selectinload(AdvertisingCampaign.registrations),
-        )
+        .options(*options)
         .order_by(AdvertisingCampaign.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -377,6 +386,43 @@ async def get_campaign_statistics(
     )
     subscription_payments = subscription_payments_rows.all()
 
+    return _compose_campaign_statistics(
+        count=count,
+        total_balance=total_balance,
+        last_registration=last_registration,
+        subscription_bonuses_issued=subscription_bonuses_issued,
+        deposits_total=deposits_total,
+        trial_users_count=trial_users_count,
+        active_trials_count=active_trials_count,
+        conversion_count=conversion_count,
+        paid_users_from_flag=paid_users_from_flag,
+        conversion_entries=conversion_entries,
+        subscription_payments=subscription_payments,
+    )
+
+
+def _compose_campaign_statistics(
+    *,
+    count: int,
+    total_balance: int,
+    last_registration: datetime | None,
+    subscription_bonuses_issued: int,
+    deposits_total: int,
+    trial_users_count: int,
+    active_trials_count: int,
+    conversion_count: int,
+    paid_users_from_flag: int,
+    conversion_entries,
+    subscription_payments,
+) -> dict[str, int | None]:
+    """Итоговые числа кампании из сырых агрегатов — общая часть для одной
+    кампании и для пачки (``get_campaigns_statistics``), чтобы арифметика
+    не разъехалась.
+
+    ``conversion_entries`` — (user_id, first_payment_amount_kopeks, converted_at)
+    по возрастанию converted_at; ``subscription_payments`` — (user_id,
+    amount_kopeks, created_at) по (user_id, created_at).
+    """
     subscription_payments_total = 0
     paid_users_from_transactions = set()
     conversion_user_ids = set()
@@ -446,6 +492,150 @@ async def get_campaign_statistics(
         'avg_revenue_per_user_kopeks': avg_revenue_per_user,
         'avg_first_payment_kopeks': avg_first_payment,
     }
+
+
+async def get_campaigns_statistics(
+    db: AsyncSession,
+    campaign_ids: list[int],
+) -> dict[int, dict[str, int | None]]:
+    """``get_campaign_statistics`` для пачки кампаний за 6 запросов вместо 9 на каждую.
+
+    Списки кампаний (главная админки и раздел «Кампании») звали одиночную
+    статистику в цикле: 49 кампаний = 441 запрос на каждое открытие и каждое
+    автообновление главной. Здесь те же выборки, сгруппированные по кампании:
+    «пользователь кампании» = строка регистрации, а пара (campaign_id, user_id)
+    уникальна (uq_campaign_user), поэтому JOIN по регистрациям считает каждую
+    транзакцию/подписку кампании ровно один раз — как ``IN (подзапрос)`` в
+    одиночной версии. Итоговая арифметика общая — ``_compose_campaign_statistics``.
+    """
+    ids = list(dict.fromkeys(campaign_ids))
+    if not ids:
+        return {}
+
+    reg = AdvertisingCampaignRegistration
+    in_campaigns = reg.campaign_id.in_(ids)
+
+    registrations = {
+        campaign_id: (count or 0, total_balance or 0, last_registration, int(subscription_issued or 0))
+        for campaign_id, count, total_balance, last_registration, subscription_issued in (
+            await db.execute(
+                select(
+                    reg.campaign_id,
+                    func.count(reg.id),
+                    func.coalesce(func.sum(reg.balance_bonus_kopeks), 0),
+                    func.max(reg.created_at),
+                    func.coalesce(func.sum(case((reg.bonus_type == 'subscription', 1), else_=0)), 0),
+                )
+                .where(in_campaigns)
+                .group_by(reg.campaign_id)
+            )
+        ).all()
+    }
+
+    # Only count real deposits (exclude promo bonuses, wheel prizes, admin top-ups)
+    deposits = dict(
+        (
+            await db.execute(
+                select(reg.campaign_id, func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+                .select_from(reg)
+                .join(Transaction, Transaction.user_id == reg.user_id)
+                .where(
+                    in_campaigns,
+                    Transaction.type == TransactionType.DEPOSIT.value,
+                    Transaction.is_completed.is_(True),
+                    Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
+                )
+                .group_by(reg.campaign_id)
+            )
+        ).all()
+    )
+
+    trials = {
+        campaign_id: (trial_users or 0, active_trials or 0)
+        for campaign_id, trial_users, active_trials in (
+            await db.execute(
+                select(
+                    reg.campaign_id,
+                    func.count(func.distinct(Subscription.user_id)),
+                    func.count(
+                        func.distinct(
+                            case((Subscription.status == SubscriptionStatus.ACTIVE.value, Subscription.user_id))
+                        )
+                    ),
+                )
+                .select_from(reg)
+                .join(Subscription, Subscription.user_id == reg.user_id)
+                .where(in_campaigns, Subscription.is_trial.is_(True))
+                .group_by(reg.campaign_id)
+            )
+        ).all()
+    }
+
+    paid_flags = dict(
+        (
+            await db.execute(
+                select(reg.campaign_id, func.count(User.id))
+                .select_from(reg)
+                .join(User, User.id == reg.user_id)
+                .where(in_campaigns, User.has_had_paid_subscription.is_(True))
+                .group_by(reg.campaign_id)
+            )
+        ).all()
+    )
+
+    conversion_entries: dict[int, list] = {campaign_id: [] for campaign_id in ids}
+    for campaign_id, user_id, amount_kopeks, converted_at in (
+        await db.execute(
+            select(
+                reg.campaign_id,
+                SubscriptionConversion.user_id,
+                SubscriptionConversion.first_payment_amount_kopeks,
+                SubscriptionConversion.converted_at,
+            )
+            .select_from(reg)
+            .join(SubscriptionConversion, SubscriptionConversion.user_id == reg.user_id)
+            .where(in_campaigns)
+            .order_by(reg.campaign_id, SubscriptionConversion.converted_at, SubscriptionConversion.id)
+        )
+    ).all():
+        conversion_entries[campaign_id].append((user_id, amount_kopeks, converted_at))
+
+    subscription_payments: dict[int, list] = {campaign_id: [] for campaign_id in ids}
+    for campaign_id, user_id, amount_kopeks, created_at in (
+        await db.execute(
+            select(reg.campaign_id, Transaction.user_id, Transaction.amount_kopeks, Transaction.created_at)
+            .select_from(reg)
+            .join(Transaction, Transaction.user_id == reg.user_id)
+            .where(
+                in_campaigns,
+                Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                Transaction.is_completed.is_(True),
+            )
+            .order_by(reg.campaign_id, Transaction.user_id, Transaction.created_at, Transaction.id)
+        )
+    ).all():
+        subscription_payments[campaign_id].append((user_id, amount_kopeks, created_at))
+
+    stats: dict[int, dict[str, int | None]] = {}
+    for campaign_id in ids:
+        count, total_balance, last_registration, subscription_issued = registrations.get(campaign_id, (0, 0, None, 0))
+        trial_users_count, active_trials_count = trials.get(campaign_id, (0, 0))
+        entries = conversion_entries[campaign_id]
+        stats[campaign_id] = _compose_campaign_statistics(
+            count=count,
+            total_balance=total_balance,
+            last_registration=last_registration,
+            subscription_bonuses_issued=subscription_issued,
+            deposits_total=deposits.get(campaign_id) or 0,
+            trial_users_count=trial_users_count,
+            active_trials_count=active_trials_count,
+            # = COUNT(DISTINCT user_id) по тем же строкам конверсий, что и у одиночной версии
+            conversion_count=len({user_id for user_id, _, _ in entries}),
+            paid_users_from_flag=paid_flags.get(campaign_id) or 0,
+            conversion_entries=entries,
+            subscription_payments=subscription_payments[campaign_id],
+        )
+    return stats
 
 
 async def get_campaigns_overview(db: AsyncSession) -> dict[str, int]:

@@ -8,6 +8,7 @@ from sqlalchemy import (
     cast,
     delete,
     func,
+    literal,
     select,
     text,
     update,
@@ -428,23 +429,23 @@ async def get_server_statistics(db: AsyncSession) -> dict:
     available_result = await db.execute(select(func.count(ServerSquad.id)).where(ServerSquad.is_available == True))
     available_servers = available_result.scalar()
 
-    servers_with_connections = 0
-    all_servers_result = await db.execute(select(ServerSquad.squad_uuid))
-    all_server_uuids = [row[0] for row in all_servers_result.fetchall()]
-
-    for squad_uuid in all_server_uuids:
-        count_result = await db.execute(
-            text("""
-                SELECT COUNT(s.id)
-                FROM subscriptions s
-                WHERE s.status IN ('active', 'trial')
-                AND s.connected_squads::text LIKE :uuid_pattern
-            """),
-            {'uuid_pattern': f'%"{squad_uuid}"%'},
+    # Серверы, которые стоят хотя бы в одной активной/триальной подписке. Раньше —
+    # отдельный COUNT с LIKE-сканом подписок на каждый сервер (21 запрос на открытие
+    # главной); теперь один запрос с тем же предикатом под EXISTS — скан
+    # останавливается на первой найденной подписке.
+    has_connections = (
+        select(Subscription.id)
+        .where(
+            Subscription.status.in_(['active', 'trial']),
+            cast(Subscription.connected_squads, String).like(
+                literal('%"', String) + ServerSquad.squad_uuid + literal('"%', String)
+            ),
         )
-        user_count = count_result.scalar() or 0
-        if user_count > 0:
-            servers_with_connections += 1
+        .exists()
+    )
+    servers_with_connections = (
+        await db.execute(select(func.count(ServerSquad.id)).where(has_connections))
+    ).scalar() or 0
 
     revenue_result = await db.execute(select(func.coalesce(func.sum(SubscriptionServer.paid_price_kopeks), 0)))
     total_revenue_kopeks = revenue_result.scalar()
