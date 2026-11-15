@@ -10,9 +10,9 @@ from app.database.crud.subscription import (
     add_subscription_traffic,
     reactivate_subscription,
 )
-from app.database.crud.transaction import create_transaction
+from app.database.crud.transaction import create_transaction, emit_transaction_side_effects
 from app.database.crud.user import subtract_user_balance
-from app.database.models import TransactionType, User
+from app.database.models import PaymentMethod, TransactionType, User
 from app.keyboards.inline import (
     get_add_traffic_keyboard,
     get_add_traffic_keyboard_from_tariff,
@@ -22,8 +22,9 @@ from app.keyboards.inline import (
 )
 from app.localization.texts import get_texts
 from app.services.pricing_engine import PricingEngine
+from app.services.remnawave_retry_queue import remnawave_retry_queue
 from app.services.remnawave_service import RemnaWaveService
-from app.services.subscription_service import SubscriptionService
+from app.services.subscription_service import SubscriptionService, reload_after_panel_failure
 from app.services.user_cart_service import user_cart_service
 from app.utils.legacy_subscription import is_legacy_subscription
 from app.utils.pricing_utils import (
@@ -510,16 +511,31 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     old_traffic_limit = subscription.traffic_limit_gb
 
     try:
+        # Списание, запись о платеже и трафик — одним коммитом и до панели: её сбой
+        # откатывает сессию, и всё, что не закоммичено к этому моменту, пропадает.
         success = await subtract_user_balance(
             db,
             db_user,
             price,
             f'Добавление {traffic_gb} ГБ трафика',
+            commit=False,
         )
 
         if not success:
             await callback.answer('⚠️ Ошибка списания средств', show_alert=True)
             return
+
+        payment = await create_transaction(
+            db=db,
+            user_id=db_user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=price,
+            description=f'Добавление {traffic_gb} ГБ трафика',
+            commit=False,
+        )
+
+        # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
+        await reactivate_subscription(db, subscription, commit=False)
 
         if traffic_gb == 0:
             subscription.traffic_limit_gb = 0
@@ -531,28 +547,35 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             await db.execute(delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
             subscription.purchased_traffic_gb = 0
             subscription.traffic_reset_at = None
+            await db.commit()
         else:
-            # add_subscription_traffic уже создаёт TrafficPurchase и обновляет все необходимые поля
+            # add_subscription_traffic создаёт TrafficPurchase, обновляет поля и коммитит —
+            # вместе со списанием и записью о платеже выше.
             await add_subscription_traffic(db, subscription, traffic_gb)
 
-        # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
-        await reactivate_subscription(db, subscription)
-
-        subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, subscription)
-
-        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        _en_panel_id = db_user.remnawave_id
-        if _en_panel_id and subscription.status == 'active':
-            await subscription_service.enable_remnawave_user(_en_panel_id)
-
-        await create_transaction(
-            db=db,
+        await emit_transaction_side_effects(
+            db,
+            payment,
+            amount_kopeks=price,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=price,
+            payment_method=PaymentMethod.BALANCE,
             description=f'Добавление {traffic_gb} ГБ трафика',
         )
+
+        subscription_service = SubscriptionService()
+        subscription_id, user_id = subscription.id, db_user.id
+        panel_result = await subscription_service.update_remnawave_user(db, subscription)
+        # Панель не ответила — её сервис откатил сессию. Оплата уже закоммичена: перечитываем
+        # объекты и ставим оплаченный лимит в очередь повторов.
+        await reload_after_panel_failure(db, db_user, subscription)
+        if panel_result is None:
+            remnawave_retry_queue.enqueue(subscription_id=subscription_id, user_id=user_id, action='update')
+        else:
+            # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+            _en_panel_id = db_user.remnawave_id
+            if _en_panel_id and subscription.status == 'active':
+                await subscription_service.enable_remnawave_user(_en_panel_id)
 
         await db.refresh(db_user)
         await db.refresh(subscription)

@@ -36,7 +36,7 @@ from app.database.crud.user_device_alias import (
 )
 from app.database.models import Subscription, TransactionType, User
 from app.services.panel_sync import should_create_panel_account
-from app.services.subscription_service import SubscriptionService
+from app.services.subscription_service import SubscriptionService, reload_after_panel_failure
 from app.services.user_cart_service import user_cart_service
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
@@ -236,22 +236,34 @@ async def purchase_devices(
         else:
             description = f'Покупка {request.devices} доп. устройств'
 
+        # Списание, запись о платеже и новый лимит уходят одним коммитом ниже — до панели.
         success = await subtract_user_balance(
             db=db,
             user=user,
             amount_kopeks=price_kopeks,
             description=description,
-            create_transaction=True,
             payment_method=PaymentMethod.BALANCE,
             transaction_type=TransactionType.SUBSCRIPTION_PAYMENT,
+            commit=False,
         )
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail='Insufficient funds',
             )
+        from app.database.crud.transaction import create_transaction, emit_transaction_side_effects
 
-        # Re-lock subscription after subtract_user_balance committed (which released all locks).
+        payment = await create_transaction(
+            db,
+            user.id,
+            TransactionType.SUBSCRIPTION_PAYMENT,
+            price_kopeks,
+            description,
+            payment_method=PaymentMethod.BALANCE,
+            commit=False,
+        )
+
+        # Re-lock subscription (the debit above is not committed yet, the user row stays locked).
         # Re-validate max device limit to prevent concurrent purchases exceeding the limit.
         user = await lock_user_for_pricing(db, user.id)
         relock_result = await db.execute(
@@ -296,25 +308,41 @@ async def purchase_devices(
         subscription.device_limit = actual_new
         await db.commit()
         await db.refresh(subscription)
+        await emit_transaction_side_effects(
+            db,
+            payment,
+            amount_kopeks=price_kopeks,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            payment_method=PaymentMethod.BALANCE,
+            description=description,
+        )
 
         # Sync with RemnaWave (time-bounded — see REMNAWAVE_SYNC_TIMEOUT; product is
-        # already committed, defer slow syncs to remnawave_retry_queue).
+        # already committed, defer slow or failed syncs to remnawave_retry_queue).
         service = SubscriptionService()
+        subscription_id, user_id = subscription.id, user.id
+        _should_create = False
+        panel_result = None
         try:
             _should_create = await should_create_panel_account(db, subscription, user)
 
             async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
                 if _should_create:
-                    await service.create_remnawave_user(db, subscription)
+                    panel_result = await service.create_remnawave_user(db, subscription)
                 else:
-                    await service.update_remnawave_user(db, subscription)
+                    panel_result = await service.update_remnawave_user(db, subscription)
         except Exception as e:
             logger.error('Failed to sync devices with RemnaWave', error=e)
+
+        # Сбой панели откатывает сессию и протухают все объекты: перечитываем оплаченное состояние.
+        await reload_after_panel_failure(db, user, subscription)
+        if panel_result is None:
             from app.services.remnawave_retry_queue import remnawave_retry_queue
 
             remnawave_retry_queue.enqueue(
-                subscription_id=subscription.id,
-                user_id=user.id,
+                subscription_id=subscription_id,
+                user_id=user_id,
                 action='create' if _should_create else 'update',
             )
 

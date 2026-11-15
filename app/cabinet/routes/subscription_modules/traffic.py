@@ -21,12 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cabinet.routes.subscription_modules.helpers import ensure_subscription_has_tariff
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
-from app.database.crud.transaction import create_transaction
+from app.database.crud.transaction import create_transaction, emit_transaction_side_effects
 from app.database.crud.user import subtract_user_balance
-from app.database.models import TransactionType, User
+from app.database.models import PaymentMethod, TransactionType, User
 from app.services.panel_sync import should_create_panel_account
 from app.services.remnawave_service import RemnaWaveService
-from app.services.subscription_service import SubscriptionService
+from app.services.subscription_service import SubscriptionService, reload_after_panel_failure
 from app.services.user_cart_service import user_cart_service
 from app.utils.cache import RateLimitCache, cache, cache_key
 from app.utils.legacy_subscription import is_legacy_subscription
@@ -337,58 +337,77 @@ async def purchase_traffic(
     else:
         traffic_description = f'Докупка {request.gb} ГБ трафика'
 
-    # Списываем баланс
-    success = await subtract_user_balance(db, user, final_price, traffic_description)
+    # Списание, запись о платеже и трафик — одним коммитом и до панели: её сбой
+    # откатывает сессию, и всё незакоммиченное к этому моменту пропадает.
+    success = await subtract_user_balance(db, user, final_price, traffic_description, commit=False)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to charge balance',
         )
 
-    # Добавляем трафик (add_subscription_traffic обновляет purchased_traffic_gb, traffic_reset_at и коммитит)
-    await add_subscription_traffic(db, subscription, request.gb)
+    payment = await create_transaction(
+        db=db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=final_price,
+        description=traffic_description,
+        commit=False,
+    )
 
     # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
     from app.database.crud.subscription import reactivate_subscription
 
-    await reactivate_subscription(db, subscription)
+    await reactivate_subscription(db, subscription, commit=False)
+
+    # Добавляем трафик (add_subscription_traffic обновляет purchased_traffic_gb, traffic_reset_at и коммитит
+    # вместе со списанием и записью о платеже выше)
+    await add_subscription_traffic(db, subscription, request.gb)
+
+    await emit_transaction_side_effects(
+        db,
+        payment,
+        amount_kopeks=final_price,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        payment_method=PaymentMethod.BALANCE,
+        description=traffic_description,
+    )
 
     # Синхронизируем с RemnaWave с ограничением по времени: товар (трафик) уже
     # зафиксирован в БД выше, и медленная/недоступная панель не должна держать
     # HTTP-ответ открытым (из-за чего кнопка оплаты в кабинете крутится «бесконечно»).
-    # Если синк не уложился в бюджет — отдаём ответ сразу, а синк уходит в
-    # remnawave_retry_queue (та же ветка обработки, что и при ошибке).
+    # Если синк не уложился в бюджет или панель не ответила — отдаём ответ сразу,
+    # а синк уходит в remnawave_retry_queue.
+    subscription_id, user_id = subscription.id, user.id
+    _should_create = False
+    panel_result = None
     try:
         subscription_service = SubscriptionService()
         _should_create = await should_create_panel_account(db, subscription, user)
 
         async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
             if _should_create:
-                await subscription_service.create_remnawave_user(db, subscription)
+                panel_result = await subscription_service.create_remnawave_user(db, subscription)
             else:
-                await subscription_service.update_remnawave_user(db, subscription)
-                if subscription.status == 'active':
+                panel_result = await subscription_service.update_remnawave_user(db, subscription)
+                if panel_result is not None and subscription.status == 'active':
                     _enable_panel_user_id = getattr(user, 'remnawave_id', None)
                     if _enable_panel_user_id:
                         await subscription_service.enable_remnawave_user(_enable_panel_user_id)
     except Exception as e:
         logger.error('Failed to sync traffic with RemnaWave', error=e)
+
+    # Сбой панели откатывает сессию и протухают все объекты: перечитываем оплаченное состояние.
+    await reload_after_panel_failure(db, user, subscription)
+    if panel_result is None:
         from app.services.remnawave_retry_queue import remnawave_retry_queue
 
         remnawave_retry_queue.enqueue(
-            subscription_id=subscription.id,
-            user_id=user.id,
+            subscription_id=subscription_id,
+            user_id=user_id,
             action='create' if _should_create else 'update',
         )
-
-    # Создаём транзакцию
-    await create_transaction(
-        db=db,
-        user_id=user.id,
-        type=TransactionType.SUBSCRIPTION_PAYMENT,
-        amount_kopeks=final_price,
-        description=traffic_description,
-    )
 
     await db.refresh(user)
     await db.refresh(subscription)

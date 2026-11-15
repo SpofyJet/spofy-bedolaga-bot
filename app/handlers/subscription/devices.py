@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.transaction import create_transaction
+from app.database.crud.transaction import create_transaction, emit_transaction_side_effects
 from app.database.crud.user import lock_user_for_pricing, subtract_user_balance
 from app.database.crud.user_device_alias import (
     ALIAS_MAX_LENGTH,
@@ -19,7 +19,7 @@ from app.database.crud.user_device_alias import (
     normalize_alias,
     upsert_alias,
 )
-from app.database.models import Subscription, TransactionType, User
+from app.database.models import PaymentMethod, Subscription, TransactionType, User
 from app.keyboards.inline import (
     get_app_selection_keyboard,
     get_back_keyboard,
@@ -33,8 +33,9 @@ from app.keyboards.inline import (
 )
 from app.localization.texts import get_texts
 from app.services.pricing_engine import PricingEngine
+from app.services.remnawave_retry_queue import remnawave_retry_queue
 from app.services.remnawave_service import RemnaWaveService
-from app.services.subscription_service import SubscriptionService
+from app.services.subscription_service import SubscriptionService, reload_after_panel_failure
 from app.services.user_cart_service import user_cart_service
 from app.states import SubscriptionStates
 from app.utils.legacy_subscription import is_legacy_subscription
@@ -645,10 +646,17 @@ async def execute_change_devices(
     else:
         price = 0
 
+    payment = None
+    payment_description = ''
     try:
         if price > 0:
+            # Списание, запись о платеже и новый лимит уходят одним коммитом ниже.
             success = await subtract_user_balance(
-                db, db_user, price, f'Изменение количества устройств с {current_devices} до {new_devices_count}'
+                db,
+                db_user,
+                price,
+                f'Изменение количества устройств с {current_devices} до {new_devices_count}',
+                commit=False,
             )
 
             if not success:
@@ -659,15 +667,19 @@ async def execute_change_devices(
                 return
 
             charged_days = max(1, math.ceil((subscription.end_date - datetime.now(UTC)).total_seconds() / 86400))
-            await create_transaction(
+            payment_description = (
+                f'Изменение устройств с {current_devices} до {new_devices_count} за {charged_days} дн.'
+            )
+            payment = await create_transaction(
                 db=db,
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=price,
-                description=f'Изменение устройств с {current_devices} до {new_devices_count} за {charged_days} дн.',
+                description=payment_description,
+                commit=False,
             )
 
-        # Re-lock subscription after subtract_user_balance committed (released all locks)
+        # Re-lock subscription (the debit above is not committed yet, the user row stays locked)
         db_user = await lock_user_for_pricing(db, db_user.id)
         relock_result = await db.execute(
             select(Subscription)
@@ -756,17 +768,34 @@ async def execute_change_devices(
 
         await db.commit()
 
+        if payment is not None:
+            await emit_transaction_side_effects(
+                db,
+                payment,
+                amount_kopeks=price,
+                user_id=db_user.id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                payment_method=PaymentMethod.BALANCE,
+                description=payment_description,
+            )
+
         # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
         from app.database.crud.subscription import reactivate_subscription
 
         await reactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, subscription)
+        subscription_id, user_id = subscription.id, db_user.id
+        panel_result = await subscription_service.update_remnawave_user(db, subscription)
+        # Панель не ответила — её сервис откатил сессию. Оплата уже закоммичена: перечитываем
+        # объекты и ставим оплаченный лимит в очередь повторов.
+        await reload_after_panel_failure(db, db_user, subscription)
+        if panel_result is None:
+            remnawave_retry_queue.enqueue(subscription_id=subscription_id, user_id=user_id, action='update')
 
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
         panel_user_id = _get_panel_user_id(subscription, db_user)
-        if panel_user_id and subscription.status == 'active':
+        if panel_result is not None and panel_user_id and subscription.status == 'active':
             await subscription_service.enable_remnawave_user(panel_user_id)
 
         # При уменьшении лимита - удалить лишние устройства (последние подключённые)
@@ -1781,15 +1810,16 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
         return
 
     try:
+        # Списание, запись о платеже и новый лимит уходят одним коммитом ниже — до панели.
         success = await subtract_user_balance(
-            db, db_user, price, f'Добавление {devices_count} устройств на {period_label}'
+            db, db_user, price, f'Добавление {devices_count} устройств на {period_label}', commit=False
         )
 
         if not success:
             await callback.answer('⚠️ Ошибка списания средств', show_alert=True)
             return
 
-        # Re-lock subscription after subtract_user_balance committed (released all locks)
+        # Re-lock subscription (the debit above is not committed yet, the user row stays locked)
         db_user = await lock_user_for_pricing(db, db_user.id)
         relock_result = await db.execute(
             select(Subscription)
@@ -1824,7 +1854,25 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
 
         subscription.device_limit = actual_new
         subscription.updated_at = datetime.now(UTC)
+        payment_description = f'Добавление {devices_count} устройств на {period_label}'
+        payment = await create_transaction(
+            db=db,
+            user_id=db_user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=price,
+            description=payment_description,
+            commit=False,
+        )
         await db.commit()
+        await emit_transaction_side_effects(
+            db,
+            payment,
+            amount_kopeks=price,
+            user_id=db_user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            payment_method=PaymentMethod.BALANCE,
+            description=payment_description,
+        )
 
         # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
         from app.database.crud.subscription import reactivate_subscription
@@ -1832,20 +1880,18 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
         await reactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, subscription)
+        subscription_id, user_id = subscription.id, db_user.id
+        panel_result = await subscription_service.update_remnawave_user(db, subscription)
+        # Панель не ответила — её сервис откатил сессию. Оплата уже закоммичена: перечитываем
+        # объекты и ставим оплаченный лимит в очередь повторов.
+        await reload_after_panel_failure(db, db_user, subscription)
+        if panel_result is None:
+            remnawave_retry_queue.enqueue(subscription_id=subscription_id, user_id=user_id, action='update')
 
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
         panel_user_id = _get_panel_user_id(subscription, db_user)
-        if panel_user_id and subscription.status == 'active':
+        if panel_result is not None and panel_user_id and subscription.status == 'active':
             await subscription_service.enable_remnawave_user(panel_user_id)
-
-        await create_transaction(
-            db=db,
-            user_id=db_user.id,
-            type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=price,
-            description=f'Добавление {devices_count} устройств на {period_label}',
-        )
 
         await db.refresh(db_user)
         await db.refresh(subscription)
