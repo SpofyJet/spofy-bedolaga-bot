@@ -181,7 +181,6 @@ _PRESET_ROLES: list[dict] = [
             'apps:*',
             'email_templates:*',
             'pinned_messages:*',
-            'updates:*',
             'system_errors:*',
         ],
         'color': '#F59E0B',
