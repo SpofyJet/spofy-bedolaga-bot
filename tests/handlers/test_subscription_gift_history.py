@@ -22,6 +22,7 @@ Covers:
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -52,6 +53,14 @@ from app.services.gift_notification_service import (
     build_gift_history_detail_presentation,
 )
 from app.utils.gift_links import build_gift_public_code
+
+
+_TG_EMOJI_RE = re.compile(r"<tg-emoji emoji-id=['\"]\d+['\"]>(.*?)</tg-emoji>")
+
+
+def _visible(text: str) -> str:
+    """Текст без обёрток премиум-эмодзи: их emoji-id — произвольные цифры, а не суммы."""
+    return _TG_EMOJI_RE.sub(r'\1', text)
 
 
 def _callbacks(keyboard: InlineKeyboardMarkup) -> list[str]:
@@ -451,8 +460,8 @@ class TestSourceNeutralPresentation:
         assert '30000' not in text_bot
         assert '300.00' not in text_bot
         assert 'руб' not in text_bot.lower()
-        assert '🤖 В Telegram:' in text_bot
-        assert '🌐 В личном кабинете:' in text_bot
+        assert '🤖 В Telegram:' in _visible(text_bot)
+        assert '🌐 В личном кабинете:' in _visible(text_bot)
         assert any('t.me/TestGiftBot' in url for url in _urls(kb_bot))
         assert any('cabinet.example.com/buy/gift/' in url for url in _urls(kb_bot))
 

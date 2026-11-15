@@ -32,8 +32,13 @@ RICH_HTML = (
 _TAG_RE = re.compile(r'<\s*/?\s*([a-zA-Z][\w-]*)')
 
 
+# <tg-emoji> Telegram тоже понимает: им бот рисует премиум-эмодзи в заголовках
+# экранов. Из текста страницы преобразователь его по-прежнему вырезает.
+_SENDABLE_TAGS = set(TELEGRAM_ALLOWED_TAGS) | {'tg-emoji'}
+
+
 def _disallowed_tags(text: str) -> set[str]:
-    return {match.group(1).lower() for match in _TAG_RE.finditer(text)} - set(TELEGRAM_ALLOWED_TAGS)
+    return {match.group(1).lower() for match in _TAG_RE.finditer(text)} - _SENDABLE_TAGS
 
 
 class _Callback:

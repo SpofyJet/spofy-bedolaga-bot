@@ -15,6 +15,7 @@ Covers:
 from __future__ import annotations
 
 import html
+import re
 import urllib.parse
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -57,6 +58,14 @@ from app.utils.gift_links import (
     build_gift_public_code,
 )
 from tests.fixtures.gift_callbacks import bind_gift_action
+
+
+_TG_EMOJI_RE = re.compile(r"<tg-emoji emoji-id=['\"]\d+['\"]>(.*?)</tg-emoji>")
+
+
+def _visible(text: str) -> str:
+    """Текст без обёрток премиум-эмодзи: их emoji-id — произвольные цифры, а не суммы."""
+    return _TG_EMOJI_RE.sub(r'\1', text)
 
 
 # ── Helpers & Fixtures ──────────────────────────────────────────────────────
@@ -572,6 +581,7 @@ class TestGiftReplayAndPresentation:
             purchase_result=sample_purchase_result,
             bot_username='test_gift_bot',
         )
+        text = _visible(text)
 
         # 1. HTML escaping of tariff name
         assert html.escape('Premium <VIP> Plan & More') in text
@@ -655,6 +665,7 @@ class TestGiftReplayAndPresentation:
             bot_username='test_gift_bot',
             cabinet_url='https://cabinet.example.com',
         )
+        text = _visible(text)
 
         assert bot_label in text
         assert cabinet_label in text
