@@ -126,10 +126,7 @@ def test_subscription_keyboard_has_no_renew_for_lifetime():
     )
     lifetime = SimpleNamespace(**base, end_date=LIFETIME_END)
     regular = SimpleNamespace(**base, end_date=datetime.now(UTC) + timedelta(days=30))
-    try:
-        regular_callbacks = callbacks(regular)
-    except Exception as exc:  # pragma: no cover - клавиатура требует больше полей
-        pytest.skip(f'keyboard needs a richer fixture: {exc}')
+    regular_callbacks = callbacks(regular)
     assert 'subscription_extend' in regular_callbacks
     assert 'subscription_extend' not in callbacks(lifetime)
     assert 'subscription_autopay' not in callbacks(lifetime)

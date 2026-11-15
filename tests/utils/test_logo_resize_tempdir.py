@@ -12,15 +12,12 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
+from PIL import Image
 
 from app.utils import message_patch as mp
 
 
 def test_oversized_logo_resized_into_writable_tempdir(tmp_path):
-    pytest.importorskip('PIL')
-    from PIL import Image
-
     src = tmp_path / 'vpn_logo.png'  # stands in for the read-only source dir
     Image.new('RGB', (2000, 1500), (10, 20, 30)).save(src, format='PNG')
 
@@ -34,9 +31,6 @@ def test_oversized_logo_resized_into_writable_tempdir(tmp_path):
 
 
 def test_small_logo_returned_unchanged(tmp_path):
-    pytest.importorskip('PIL')
-    from PIL import Image
-
     src = tmp_path / 'small.png'
     Image.new('RGB', (64, 64), (0, 0, 0)).save(src, format='PNG')
 

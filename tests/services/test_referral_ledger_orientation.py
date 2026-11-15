@@ -34,7 +34,15 @@ _ALLOWED = {
 
 
 def _iter_python_files():
-    yield from sorted(APP_ROOT.rglob('*.py'))
+    """Файлы app/ без разобранных вручную: для них проверка не нужна, а не пропускается."""
+    for path in sorted(APP_ROOT.rglob('*.py')):
+        if str(path.relative_to(APP_ROOT)) not in _ALLOWED:
+            yield path
+
+
+def test_allowed_files_still_exist():
+    """Исключение для удалённого или переименованного файла — мусор, который прикроет чужой."""
+    assert {path for path in _ALLOWED if not (APP_ROOT / path).exists()} == set()
 
 
 def _uses_referral_id_as_grouping(node: ast.AST) -> bool:
@@ -89,9 +97,6 @@ def _spans(node: ast.stmt) -> int:
 @pytest.mark.parametrize('path', list(_iter_python_files()), ids=lambda p: str(p.relative_to(APP_ROOT)))
 def test_referral_id_grouping_excludes_referee_rows(path):
     relative = str(path.relative_to(APP_ROOT))
-    if relative in _ALLOWED:
-        pytest.skip('файл разобран вручную')
-
     source = path.read_text(encoding='utf-8')
     if 'referral_id' not in source:
         return

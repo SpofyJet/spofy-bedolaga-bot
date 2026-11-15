@@ -69,21 +69,12 @@ def test_enabled_is_flag_and_configured(monkeypatch, provider: str, flag: bool) 
     assert enabled == (flag and configured)
 
 
-# Провайдеры, у которых `configured` нельзя получить присваиванием атрибутов:
-# Apple IAP дополнительно читает файлы сертификатов. Список закрытый нарочно —
-# иначе новый провайдер с таким же поведением начал бы тихо пропускаться, и две
-# проверки ниже перестали бы его касаться, не сказав ни слова.
-UNFAKEABLE_CREDENTIALS = frozenset({})
-
-
-def _skip_if_unfakeable(provider: str) -> None:
-    if getattr(settings, f'is_{provider}_configured')():
-        return
-    assert provider in UNFAKEABLE_CREDENTIALS, (
-        f'{provider}: учётные данные перестали подделываться присваиванием — '
-        'проверка молча выключилась бы; разберитесь или внесите его в UNFAKEABLE_CREDENTIALS'
+def _assert_credentials_faked(provider: str) -> None:
+    # Пропускать нельзя: иначе провайдер, чьи учётные данные перестали
+    # подделываться присваиванием, молча выпал бы из двух проверок ниже.
+    assert getattr(settings, f'is_{provider}_configured')(), (
+        f'{provider}: учётные данные перестали подделываться присваиванием — разберитесь'
     )
-    pytest.skip(f'{provider}: учётные данные не подделываются присваиванием')
 
 
 @pytest.mark.parametrize('provider', PROVIDERS)
@@ -92,7 +83,7 @@ def test_enabled_is_flag_when_credentials_are_present(monkeypatch, provider: str
     for name in _credential_names(provider):
         monkeypatch.setattr(settings, name, 'x', raising=False)
 
-    _skip_if_unfakeable(provider)
+    _assert_credentials_faked(provider)
 
     monkeypatch.setattr(settings, _flag_name(provider), True, raising=False)
     assert getattr(settings, f'is_{provider}_enabled')() is True
@@ -107,7 +98,7 @@ def test_missing_credential_disables_the_provider(monkeypatch, provider: str) ->
     credentials = _credential_names(provider)
     for name in credentials:
         monkeypatch.setattr(settings, name, 'x', raising=False)
-    _skip_if_unfakeable(provider)
+    _assert_credentials_faked(provider)
 
     for missing in credentials:
         monkeypatch.setattr(settings, missing, None, raising=False)
