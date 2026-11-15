@@ -71,8 +71,40 @@ async def _ensure_not_blocked(db: AsyncSession, user: User) -> None:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
-def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
-    """Convert TicketMessage to response."""
+def new_ticket_message(ticket_id: int, author_id: int, request, *, is_from_admin: bool) -> TicketMessage:
+    """Сообщение тикета из запроса кабинета (пользователь или админ).
+
+    Вложения: media_items приоритетнее старых полей одного вложения; первое из
+    media_items становится основным, его подпись — запасной для media_caption.
+    """
+    items_payload = None
+    primary_type = request.media_type
+    primary_file_id = request.media_file_id
+    primary_caption = request.media_caption
+    if request.media_items:
+        items_payload = [it.model_dump() for it in request.media_items]
+        first = request.media_items[0]
+        primary_type = first.type
+        primary_file_id = first.file_id
+        primary_caption = primary_caption or first.caption
+
+    has_media = bool(primary_file_id)
+    return TicketMessage(
+        ticket_id=ticket_id,
+        user_id=author_id,
+        message_text=request.message,
+        is_from_admin=is_from_admin,
+        has_media=has_media,
+        media_type=primary_type if has_media else None,
+        media_file_id=primary_file_id if has_media else None,
+        media_caption=primary_caption if has_media else None,
+        media_items=items_payload,
+        created_at=datetime.now(UTC),
+    )
+
+
+def ticket_message_to_response(message: TicketMessage) -> TicketMessageResponse:
+    """Convert TicketMessage to response (общий для кабинета пользователя и админки)."""
     raw_items = message.media_items or None
     items = None
     if raw_items:
@@ -104,7 +136,7 @@ def _ticket_to_response(ticket: Ticket, include_last_message: bool = True) -> Ti
 
     if include_last_message and ticket.messages:
         last_msg = max(ticket.messages, key=lambda m: m.created_at)
-        last_message = _message_to_response(last_msg)
+        last_message = ticket_message_to_response(last_msg)
 
     return TicketResponse(
         id=ticket.id,
@@ -193,32 +225,9 @@ async def create_ticket(
     db.add(ticket)
     await db.flush()
 
-    # Resolve media payload
-    items_payload = None
-    primary_type = request.media_type
-    primary_file_id = request.media_file_id
-    primary_caption = request.media_caption
-    if getattr(request, 'media_items', None):
-        items_payload = [it.model_dump() for it in request.media_items]
-        first = request.media_items[0]
-        primary_type = first.type
-        primary_file_id = first.file_id
-        primary_caption = primary_caption or first.caption
-
     # Create initial message with optional media
-    has_media = bool(primary_file_id)
-    message = TicketMessage(
-        ticket_id=ticket.id,
-        user_id=user.id,
-        message_text=request.message,
-        is_from_admin=False,
-        has_media=has_media,
-        media_type=primary_type if has_media else None,
-        media_file_id=primary_file_id if has_media else None,
-        media_caption=primary_caption if has_media else None,
-        media_items=items_payload,
-        created_at=datetime.now(UTC),
-    )
+    message = new_ticket_message(ticket.id, user.id, request, is_from_admin=False)
+    has_media = message.has_media
     db.add(message)
     await db.commit()
 
@@ -237,7 +246,7 @@ async def create_ticket(
                 'title': ticket.title,
                 'status': ticket.status,
                 'priority': ticket.priority or 'normal',
-                'has_media': bool(primary_file_id),
+                'has_media': has_media,
             },
             db=db,
         )
@@ -259,7 +268,7 @@ async def create_ticket(
     except Exception as e:
         logger.error('Error creating cabinet notification for new ticket', error=e)
 
-    messages = [_message_to_response(m) for m in ticket.messages]
+    messages = [ticket_message_to_response(m) for m in ticket.messages]
 
     return TicketDetailResponse(
         id=ticket.id,
@@ -297,7 +306,7 @@ async def get_ticket(
         )
 
     messages = sorted(ticket.messages or [], key=lambda m: m.created_at)
-    messages_response = [_message_to_response(m) for m in messages]
+    messages_response = [ticket_message_to_response(m) for m in messages]
 
     return TicketDetailResponse(
         id=ticket.id,
@@ -373,32 +382,9 @@ async def add_ticket_message(
             detail='Replies to this ticket are blocked',
         )
 
-    # Resolve media payload
-    items_payload = None
-    primary_type = request.media_type
-    primary_file_id = request.media_file_id
-    primary_caption = request.media_caption
-    if getattr(request, 'media_items', None):
-        items_payload = [it.model_dump() for it in request.media_items]
-        first = request.media_items[0]
-        primary_type = first.type
-        primary_file_id = first.file_id
-        primary_caption = primary_caption or first.caption
-
     # Create message with optional media
-    has_media = bool(primary_file_id)
-    message = TicketMessage(
-        ticket_id=ticket.id,
-        user_id=user.id,
-        message_text=request.message,
-        is_from_admin=False,
-        has_media=has_media,
-        media_type=primary_type if has_media else None,
-        media_file_id=primary_file_id if has_media else None,
-        media_caption=primary_caption if has_media else None,
-        media_items=items_payload,
-        created_at=datetime.now(UTC),
-    )
+    message = new_ticket_message(ticket.id, user.id, request, is_from_admin=False)
+    has_media = message.has_media
     db.add(message)
 
     # Update ticket status and timestamp
@@ -421,7 +407,7 @@ async def add_ticket_message(
                 'user_id': user.id,
                 'is_from_admin': False,
                 'message_text': (request.message or '')[:200],
-                'has_media': bool(primary_file_id),
+                'has_media': has_media,
                 'status': ticket.status,
             },
             db=db,
@@ -435,8 +421,8 @@ async def add_ticket_message(
             ticket,
             request.message,
             db,
-            media_file_id=primary_file_id,
-            media_type=primary_type,
+            media_file_id=message.media_file_id,
+            media_type=message.media_type,
         )
     except Exception as e:
         logger.error('Error notifying admins about ticket reply from cabinet', error=e)
@@ -452,4 +438,4 @@ async def add_ticket_message(
     except Exception as e:
         logger.error('Error creating cabinet notification for user reply', error=e)
 
-    return _message_to_response(message)
+    return ticket_message_to_response(message)

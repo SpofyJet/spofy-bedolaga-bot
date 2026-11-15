@@ -10,16 +10,16 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.cabinet.routes.media import make_media_token
 from app.cabinet.routes.websocket import notify_user_ticket_reply
 from app.config import settings
 from app.database.crud.ticket import TicketCRUD
 from app.database.crud.ticket_notification import TicketNotificationCRUD
-from app.database.models import Ticket, TicketMessage, User
+from app.database.models import Ticket, User
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.tickets import TicketMediaItem, TicketMessageResponse, _validate_media_bundle
 from .settings_form import env_locked_fields, form_updates, save_settings_form
+from .tickets import new_ticket_message, ticket_message_to_response
 
 
 logger = structlog.get_logger(__name__)
@@ -162,32 +162,6 @@ class TicketSettingsUpdateRequest(BaseModel):
     cabinet_admin_notifications_enabled: bool | None = Field(None, description='Enable admin notifications in cabinet')
 
 
-def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
-    """Convert TicketMessage to response."""
-    raw_items = message.media_items or None
-    items = None
-    if raw_items:
-        try:
-            items = [TicketMediaItem(**it) for it in raw_items]
-            for it in items:
-                it.token = make_media_token(it.file_id)
-        except (TypeError, KeyError, ValueError) as exc:
-            logger.warning('Failed to parse media_items', message_id=message.id, error=str(exc))
-            items = None
-    return TicketMessageResponse(
-        id=message.id,
-        message_text=message.message_text or '',
-        is_from_admin=message.is_from_admin,
-        has_media=bool(message.media_file_id) or bool(items),
-        media_type=message.media_type,
-        media_file_id=message.media_file_id,
-        media_token=make_media_token(message.media_file_id) if message.media_file_id else None,
-        media_caption=message.media_caption,
-        media_items=items,
-        created_at=message.created_at,
-    )
-
-
 def _user_to_info(user: User) -> AdminTicketUserInfo:
     """Convert User to admin info."""
     return AdminTicketUserInfo(
@@ -207,7 +181,7 @@ def _ticket_to_admin_response(ticket: Ticket, include_messages: bool = False) ->
 
     if ticket.messages:
         last_msg = max(ticket.messages, key=lambda m: m.created_at)
-        last_message = _message_to_response(last_msg)
+        last_message = ticket_message_to_response(last_msg)
 
     user_info = None
     if hasattr(ticket, 'user') and ticket.user:
@@ -392,7 +366,7 @@ async def get_ticket_detail(
         )
 
     messages = sorted(ticket.messages or [], key=lambda m: m.created_at)
-    messages_response = [_message_to_response(m) for m in messages]
+    messages_response = [ticket_message_to_response(m) for m in messages]
 
     user_info = None
     if ticket.user:
@@ -429,36 +403,14 @@ async def reply_to_ticket(
             detail='Ticket not found',
         )
 
-    # Resolve media payload: prefer media_items, fall back to legacy single-media fields
-    items_payload = None
-    primary_type = request.media_type
-    primary_file_id = request.media_file_id
-    primary_caption = request.media_caption
-    if request.media_items:
-        items_payload = [it.model_dump() for it in request.media_items]
-        first = request.media_items[0]
-        primary_type = first.type
-        primary_file_id = first.file_id
-        primary_caption = primary_caption or first.caption
-    has_media = bool(primary_file_id)
-
-    message = TicketMessage(
-        ticket_id=ticket.id,
-        # Автор сообщения — реально ответивший админ, а не владелец тикета:
-        # иначе при нескольких сотрудниках поддержки невозможно установить,
-        # кто отвечал (#3029). Бот-путь (handlers/admin/tickets.py) пишет id
-        # админа с самого начала — выравниваем семантику. Отображение стороны
-        # сообщения везде идёт по is_from_admin, а не по user_id.
-        user_id=admin.id,
-        message_text=request.message,
-        is_from_admin=True,
-        has_media=has_media,
-        media_type=primary_type if has_media else None,
-        media_file_id=primary_file_id if has_media else None,
-        media_caption=primary_caption if has_media else None,
-        media_items=items_payload,
-        created_at=datetime.now(UTC),
-    )
+    # Медиа: media_items приоритетнее старых полей одного вложения.
+    # Автор сообщения — реально ответивший админ, а не владелец тикета:
+    # иначе при нескольких сотрудниках поддержки невозможно установить,
+    # кто отвечал (#3029). Бот-путь (handlers/admin/tickets.py) пишет id
+    # админа с самого начала — выравниваем семантику. Отображение стороны
+    # сообщения везде идёт по is_from_admin, а не по user_id.
+    message = new_ticket_message(ticket.id, admin.id, request, is_from_admin=True)
+    has_media = message.has_media
     db.add(message)
 
     # Update ticket status to answered
@@ -515,7 +467,7 @@ async def reply_to_ticket(
     except Exception as e:
         logger.warning('Failed to create cabinet notification for admin reply', error=e)
 
-    return _message_to_response(message)
+    return ticket_message_to_response(message)
 
 
 @router.post('/{ticket_id}/status', response_model=AdminTicketDetailResponse)
@@ -557,7 +509,7 @@ async def update_ticket_status(
     await db.refresh(ticket)
 
     messages = sorted(ticket.messages or [], key=lambda m: m.created_at)
-    messages_response = [_message_to_response(m) for m in messages]
+    messages_response = [ticket_message_to_response(m) for m in messages]
 
     user_info = None
     if ticket.user:
