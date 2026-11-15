@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.models import PromoOfferTemplate, SubscriptionEvent
+from app.database.models import PromoOfferTemplate, Subscription, SubscriptionEvent, SubscriptionStatus
 from app.localization.texts import get_texts
 from app.utils.promo_offer import TARIFF_SOURCE_PREFIX, get_user_active_promo_discount_percent
 
@@ -78,6 +78,22 @@ async def _activated_recently(db: AsyncSession, user_id: int, hours: int) -> boo
     return result.scalar_one_or_none() is not None
 
 
+async def _owns_tariff(db: AsyncSession, user_id: int, tariff_id: int) -> bool:
+    """Действующая платная подписка на этот тариф уже есть."""
+    result = await db.execute(
+        select(Subscription.id)
+        .where(
+            Subscription.user_id == user_id,
+            Subscription.tariff_id == tariff_id,
+            Subscription.is_trial.is_(False),
+            Subscription.status == SubscriptionStatus.ACTIVE.value,
+            Subscription.end_date > datetime.now(UTC),
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 def _minutes_left(user) -> int:
     expires = getattr(user, 'promo_offer_discount_expires_at', None)
     if expires is None:
@@ -95,6 +111,10 @@ async def open_ultima_offer(message: types.Message, user, db: AsyncSession, *, s
     if template is None or not getattr(user, 'telegram_id', None):
         return False
     tariff_id = int(settings.PROMO_OFFER_TARIFF_ID)
+    # ULTIMA уже куплен (тариф «навсегда») — скидка на повторную покупку бесполезна.
+    if await _owns_tariff(db, user.id, tariff_id):
+        await _record(db, user.id, 'already_owned', source)
+        return False
     texts = get_texts(user.language)
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
