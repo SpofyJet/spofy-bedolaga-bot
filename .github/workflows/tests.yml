@@ -11,15 +11,23 @@ permissions:
 
 jobs:
   pytest:
-    name: pytest (PostgreSQL 15)
+    name: pytest (PostgreSQL ${{ matrix.postgres }})
     runs-on: ubuntu-latest
 
-    # Тот же образ, что и в docker-compose.yml. Проверки блокировок строк,
-    # ограничений VARCHAR и TIMESTAMPTZ имеют смысл только против настоящего
-    # PostgreSQL: на SQLite они молча проходят, ничего не проверяя.
+    # 18 — тот же образ, что и в docker-compose.yml: на нём весь прогон.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - postgres: '18'
+            full_suite: true
+
+    # Проверки блокировок строк, ограничений VARCHAR и TIMESTAMPTZ имеют смысл
+    # только против настоящего PostgreSQL: на SQLite они молча проходят,
+    # ничего не проверяя.
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:${{ matrix.postgres }}-alpine
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
@@ -59,4 +67,5 @@ jobs:
         run: uv run pytest -m postgres -q
 
       - name: Run full test suite
+        if: matrix.full_suite
         run: uv run pytest -q
