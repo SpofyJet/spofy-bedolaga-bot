@@ -211,9 +211,6 @@ def _build_offer_detail_keyboard(template: PromoOfferTemplate, language: str) ->
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-_TEMPLATE_ID_PATTERN = re.compile(r'promo_template_(?P<template_id>\d+)$')
-
-
 def _format_promo_offer_log_entry(
     entry: PromoOfferLog,
     index: int,

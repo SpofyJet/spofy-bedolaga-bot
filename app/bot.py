@@ -173,8 +173,6 @@ async def setup_bot(memory: MemoryStorage | None = None) -> tuple[Bot, Dispatche
     common.register_handlers(dp)
     register_stars_handlers(dp)
     logger.info('⭐ Зарегистрированы обработчики Telegram Stars платежей')
-    logger.info('⚡ Зарегистрированы обработчики простой покупки')
-    logger.info('⚡ Зарегистрированы обработчики простой подписки')
 
     if settings.is_maintenance_monitoring_enabled():
         try:

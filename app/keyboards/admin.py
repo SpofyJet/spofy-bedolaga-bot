@@ -236,10 +236,7 @@ def get_admin_messages_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=_t(texts, 'ADMIN_MESSAGES_ALL_USERS', '📨 Всем пользователям'), callback_data='admin_msg_all'
-                ),
-                InlineKeyboardButton(
-                    text=_t(texts, 'ADMIN_MESSAGES_BY_SUBSCRIPTIONS', '🎯 По подпискам'),
+                    text=_t(texts, 'ADMIN_MESSAGES_BY_SUBSCRIPTIONS', '🎯 Всем или по подпискам'),
                     callback_data='admin_msg_by_sub',
                 ),
             ],
@@ -502,14 +499,8 @@ def get_custom_criteria_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                     text=_t(texts, 'ADMIN_CRITERIA_REFERRALS', '🤝 Через рефералов'), callback_data='criteria_referrals'
                 ),
                 InlineKeyboardButton(
-                    text=_t(texts, 'ADMIN_CRITERIA_PROMOCODES', '🎫 Использовали промокоды'),
-                    callback_data='criteria_promocodes',
-                ),
-            ],
-            [
-                InlineKeyboardButton(
                     text=_t(texts, 'ADMIN_CRITERIA_DIRECT', '🎯 Прямая регистрация'), callback_data='criteria_direct'
-                )
+                ),
             ],
             [InlineKeyboardButton(text=texts.BACK, callback_data='admin_messages')],
         ]

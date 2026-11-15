@@ -21,7 +21,6 @@ def _get_url(event: str) -> str | None:
     """Get postback URL template for event type."""
     mapping = {
         'registration': settings.S2S_POSTBACK_REGISTRATION_URL,
-        'trial': settings.S2S_POSTBACK_TRIAL_URL,
         'purchase': settings.S2S_POSTBACK_PURCHASE_URL,
     }
     url = mapping.get(event, '')
@@ -37,7 +36,7 @@ async def send_postback(
     """Send S2S postback for an event.
 
     Args:
-        event: 'registration', 'trial', or 'purchase'
+        event: 'registration' or 'purchase'
         subid: tracking subid from URL
         amount: purchase amount in rubles (for purchase event)
         user_id: internal user ID for logging

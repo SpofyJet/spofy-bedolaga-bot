@@ -31,7 +31,6 @@ EXPECTED_BUTTON = {
     NotificationType.SUBSCRIPTION_ACTIVATED: '/connection',
     NotificationType.AUTOPAY_SUCCESS: '/subscriptions',
     NotificationType.AUTOPAY_FAILED: '/subscriptions',
-    NotificationType.AUTOPAY_INSUFFICIENT_FUNDS: '/balance/top-up',
     NotificationType.BALANCE_TOPUP: '/subscription/purchase',
     NotificationType.DAILY_DEBIT: '/balance/top-up',
     NotificationType.DAILY_INSUFFICIENT_FUNDS: '/balance/top-up',

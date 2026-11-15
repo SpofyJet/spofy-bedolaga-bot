@@ -48,7 +48,6 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'CRYPTOBOT_ENABLED', False, raising=False)
     monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', None, raising=False)
     monkeypatch.setattr(settings, 'CRYPTOBOT_WEBHOOK_PATH', '/cryptobot', raising=False)
-    monkeypatch.setattr(settings, 'CRYPTOBOT_WEBHOOK_SECRET', None, raising=False)
     monkeypatch.setattr(settings, 'WEBHOOK_URL', 'http://test', raising=False)
 
     monkeypatch.setattr(settings, 'PLATEGA_ENABLED', True, raising=False)

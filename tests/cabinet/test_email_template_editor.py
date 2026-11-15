@@ -368,8 +368,6 @@ def test_legacy_placeholder_names_resolve_in_sample_context():
     assert activated['end_date'] == activated['expires_at']
     topup = _build_sample_context('balance_topup')
     assert topup['amount'] == topup['formatted_amount'] and topup['balance'] == topup['formatted_balance']
-    low = _build_sample_context('autopay_insufficient_funds')
-    assert low['formatted_required'] == low['required_amount'] and low['balance'] == low['current_balance']
 
 
 @pytest.mark.asyncio

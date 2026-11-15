@@ -7,7 +7,7 @@ from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
-from app.keyboards.admin import get_admin_main_keyboard, get_maintenance_keyboard
+from app.keyboards.admin import get_maintenance_keyboard
 from app.localization.texts import get_texts
 from app.services.maintenance_service import maintenance_service
 from app.services.system_settings_service import bot_configuration_service
@@ -364,15 +364,6 @@ async def process_notification_message(message: types.Message, db_user: User, db
     )
 
 
-@admin_required
-@error_handler
-async def back_to_admin_panel(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    texts = get_texts(db_user.language)
-
-    await callback.message.edit_text(texts.ADMIN_PANEL, reply_markup=get_admin_main_keyboard(db_user.language))
-    await callback.answer()
-
-
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_maintenance_panel, F.data == 'maintenance_panel')
 
@@ -387,8 +378,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(send_manual_notification, F.data == 'maintenance_manual_notify')
 
     dp.callback_query.register(handle_manual_notification, F.data.startswith('manual_notify_'))
-
-    dp.callback_query.register(back_to_admin_panel, F.data == 'admin_panel')
 
     dp.message.register(process_maintenance_reason, MaintenanceStates.waiting_for_reason)
 

@@ -46,7 +46,7 @@ def _create_base_app(lifespan: Any = None) -> FastAPI:
 
     app = FastAPI(
         title='Spofy Bedolaga Server',
-        version=settings.WEB_API_VERSION,
+        version='1.0.0',
         docs_url=docs_config.get('docs_url'),
         redoc_url=None,
         openapi_url=docs_config.get('openapi_url'),

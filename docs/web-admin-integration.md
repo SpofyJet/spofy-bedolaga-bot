@@ -22,7 +22,6 @@ API разворачивается вместе с ботом, использу�
 | `WEB_API_BIND` | Адрес хоста, на котором docker-compose публикует порт. `0.0.0.0` открывает API в интернет (ufw его не закроет). | `127.0.0.1`
 | `WEB_API_ALLOWED_ORIGINS` | Список доменов для CORS, через запятую. `*` разрешит всё. | `https://admin.example.com`
 | `WEB_API_DOCS_ENABLED` | Включить `/docs`, `/doc` (редирект), `/redoc` и `/openapi.json`. В проде лучше `false`. | `false`
-| `WEB_API_WORKERS` | Количество воркеров uvicorn. В embed-режиме всегда приводится к `1`. | `1`
 | `WEB_API_REQUEST_LOGGING` | Логировать каждый запрос API. | `true`
 | `WEB_API_DEFAULT_TOKEN` | Бутстрап-токен, который будет создан при миграции. | `super-secret-token`
 | `WEB_API_DEFAULT_TOKEN_NAME` | Отображаемое имя созданного токена. | `Bootstrap Token`

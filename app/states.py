@@ -53,165 +53,33 @@ class PromoCodeStates(StatesGroup):
 
 class AdminStates(StatesGroup):
     waiting_for_user_search = State()
-    waiting_for_bulk_ban_list = State()
-    sending_user_message = State()
     editing_user_balance = State()
     extending_subscription = State()
     adding_traffic = State()
     granting_subscription = State()
-    editing_user_subscription = State()
     editing_user_restriction_reason = State()
 
     creating_promocode = State()
-    setting_promocode_type = State()
     setting_promocode_value = State()
     setting_promocode_uses = State()
     setting_promocode_expiry = State()
     setting_discount_hours = State()  # Для DISCOUNT: ввод срока действия скидки в часах
     setting_promocode_combo_days = State()  # Для BALANCE_AND_DAYS: ввод дней подписки после суммы
-    selecting_promo_group = State()
 
     creating_campaign_name = State()
     creating_campaign_start = State()
     creating_campaign_bonus = State()
     creating_campaign_balance = State()
-    creating_campaign_subscription_days = State()
-    creating_campaign_subscription_traffic = State()
-    creating_campaign_subscription_devices = State()
-    creating_campaign_subscription_servers = State()
-    # Состояния для создания кампании с тарифом
-    creating_campaign_tariff_select = State()
-    creating_campaign_tariff_days = State()
-
-    editing_campaign_name = State()
-    editing_campaign_start = State()
-    editing_campaign_balance = State()
-    editing_campaign_subscription_days = State()
-    editing_campaign_subscription_traffic = State()
-    editing_campaign_subscription_devices = State()
-    editing_campaign_subscription_servers = State()
-    # Состояния для редактирования кампании с тарифом
-    editing_campaign_tariff_select = State()
-    editing_campaign_tariff_days = State()
 
     waiting_for_broadcast_message = State()
     waiting_for_broadcast_media = State()
-    confirming_broadcast = State()
 
-    creating_promo_group_name = State()
-    creating_promo_group_priority = State()
-    creating_promo_group_traffic_discount = State()
-    creating_promo_group_server_discount = State()
-    creating_promo_group_device_discount = State()
-    creating_promo_group_period_discount = State()
-    creating_promo_group_auto_assign = State()
-
-    editing_promo_group_menu = State()
-    editing_promo_group_name = State()
-    editing_promo_group_priority = State()
-    editing_promo_group_traffic_discount = State()
-    editing_promo_group_server_discount = State()
-    editing_promo_group_device_discount = State()
-    editing_promo_group_period_discount = State()
-    editing_promo_group_auto_assign = State()
-
-    editing_squad_price = State()
-    editing_traffic_price = State()
-    editing_device_price = State()
-    editing_user_devices = State()
-    editing_user_traffic = State()
     editing_user_referrals = State()
     editing_user_referral_percent = State()
 
-    # Тестовое начисление реферального дохода
-    test_referral_earning_input = State()
-
-    # Редактор уровней реферальных наград: одно состояние на всё числовое поле,
-    # какое именно правится — хранится в data FSM (как в редакторе мониторинга).
-    referral_level_value_input = State()
-    referral_depth_input = State()
-
-    # Диагностика рефералов
-    referral_diagnostics_period = State()
-    waiting_for_log_file = State()
-
-    editing_rules_page = State()
-    editing_privacy_policy = State()
-    editing_public_offer = State()
-    creating_faq_title = State()
-    creating_faq_content = State()
-    editing_faq_title = State()
-    editing_faq_content = State()
-    editing_notification_value = State()
-    editing_traffic_setting = State()
-
-    confirming_sync = State()
-
-    editing_server_name = State()
-    editing_server_price = State()
-    editing_server_country = State()
-    editing_server_limit = State()
-    editing_server_description = State()
-    editing_server_promo_groups = State()
-
-    creating_server_uuid = State()
-    creating_server_name = State()
-    creating_server_price = State()
-    creating_server_country = State()
-
-    editing_welcome_text = State()
-    editing_pinned_message = State()
-    confirming_pinned_broadcast = State()
     waiting_for_message_buttons = 'waiting_for_message_buttons'
 
-    editing_promo_offer_message = State()
-    editing_promo_offer_button = State()
-    editing_promo_offer_valid_hours = State()
     editing_promo_offer_active_duration = State()
-    editing_promo_offer_discount = State()
-    editing_promo_offer_test_duration = State()
-    editing_promo_offer_squads = State()
-    selecting_promo_offer_user = State()
-    searching_promo_offer_user = State()
-
-    # Состояния для отслеживания источника перехода
-    viewing_user_from_balance_list = State()
-    viewing_user_from_campaign_list = State()
-    viewing_user_from_ready_to_renew_list = State()
-    viewing_user_from_potential_customers_list = State()
-
-    # Состояния для управления тарифами
-    creating_tariff_name = State()
-    creating_tariff_description = State()
-    creating_tariff_traffic = State()
-    creating_tariff_devices = State()
-    creating_tariff_tier = State()
-    creating_tariff_prices = State()
-    creating_tariff_squads = State()
-
-    editing_tariff_name = State()
-    editing_tariff_description = State()
-    editing_tariff_traffic = State()
-    editing_tariff_devices = State()
-    editing_tariff_tier = State()
-    editing_tariff_prices = State()
-    editing_tariff_device_price = State()
-    editing_tariff_max_devices = State()
-    editing_tariff_trial_days = State()
-    editing_tariff_squads = State()
-    editing_tariff_promo_groups = State()
-    editing_tariff_traffic_topup_packages = State()
-    editing_tariff_max_topup_traffic = State()
-    editing_tariff_custom_traffic_price = State()
-    editing_tariff_custom_traffic_min = State()
-    editing_tariff_custom_traffic_max = State()
-    editing_tariff_daily_price = State()
-    editing_tariff_panel_tag = State()
-    editing_tariff_display_order = State()
-    editing_tariff_custom_days_price = State()
-    editing_tariff_custom_days_min = State()
-    editing_tariff_custom_days_max = State()
-    editing_tariff_server_limit = State()
 
 
 class TicketStates(StatesGroup):

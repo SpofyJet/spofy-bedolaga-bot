@@ -10,7 +10,6 @@ from app.config import settings
 def test_admin_legal_pages_routes_registered(registered_paths):
     assert '/cabinet/admin/legal-pages/privacy-policy' in registered_paths
     assert '/cabinet/admin/legal-pages/public-offer' in registered_paths
-    assert '/cabinet/admin/legal-pages/recurrent-payments' in registered_paths
     assert '/cabinet/admin/legal-pages/rules' in registered_paths
     assert '/cabinet/admin/legal-pages/faq' in registered_paths
     assert '/cabinet/admin/legal-pages/faq/pages' in registered_paths

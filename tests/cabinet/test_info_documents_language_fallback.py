@@ -40,7 +40,6 @@ def _by_language(docs: dict[str, SimpleNamespace | None]) -> AsyncMock:
 DOCUMENT_ROUTES = [
     ('get_privacy_policy', 'PrivacyPolicyService', 'get_policy', '# Политика конфиденциальности'),
     ('get_public_offer', 'PublicOfferService', 'get_offer', '# Публичная оферта'),
-    ('get_recurrent_payments', 'RecurrentPaymentsService', 'get_document', '# Рекуррентные платежи'),
 ]
 
 

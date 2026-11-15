@@ -17,11 +17,6 @@ class WebAPIServer:
     def __init__(self, app: object) -> None:
         self._app = app
 
-        workers = max(1, int(settings.WEB_API_WORKERS or 1))
-        if workers > 1:
-            logger.warning('WEB_API_WORKERS > 1 не поддерживается в embed-режиме, используем 1')
-            workers = 1
-
         # Кастомный конфиг логирования - скрываем спам от WebSocket
         log_config = {
             'version': 1,
@@ -57,7 +52,7 @@ class WebAPIServer:
             host=settings.WEB_API_HOST,
             port=int(settings.WEB_API_PORT or 8080),
             log_level='warning',
-            workers=workers,
+            workers=1,
             lifespan='on',
             access_log=False,
             log_config=log_config,

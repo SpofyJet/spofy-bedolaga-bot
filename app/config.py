@@ -114,9 +114,6 @@ class Settings(BaseSettings):
     # Текст «о поддержке» по языкам (HTML); пусто — текст локали.
     SUPPORT_INFO_TEXT_RU: str = ''
     SUPPORT_INFO_TEXT_EN: str = ''
-    SUPPORT_INFO_TEXT_UA: str = ''
-    SUPPORT_INFO_TEXT_ZH: str = ''
-    SUPPORT_INFO_TEXT_FA: str = ''
 
     ADMIN_NOTIFICATIONS_ENABLED: bool = False
     # Rich-вид сообщений админ-чата (Bot API 10.1): заголовки, таблицы,
@@ -344,7 +341,6 @@ class Settings(BaseSettings):
     NOTIFICATION_EXPIRED_WAVE3_VALID_HOURS: int = 24
     NOTIFICATION_EXPIRED_WAVE3_TRIGGER_DAYS: int = 5
 
-    BASE_SUBSCRIPTION_PRICE: int = 50000
     AVAILABLE_SUBSCRIPTION_PERIODS: str = '14,30,60,90,180,360'
     AVAILABLE_RENEWAL_PERIODS: str = '30,90,180'
     PRICE_14_DAYS: int = 50000
@@ -418,7 +414,6 @@ class Settings(BaseSettings):
 
     REFERRAL_PROGRAM_ENABLED: bool = True
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
-    REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
 
     # Схема наград: 'legacy' — прежнее поведение на ключах REFERRAL_* выше,
     # 'levels' — таблица referral_reward_levels (деньги и/или дни, много уровней).
@@ -543,8 +538,6 @@ class Settings(BaseSettings):
     # (legacy-режим). 0 — без повторов (только первое + финальное).
     AUTOPAY_FAIL_REPEAT_INTERVAL_HOURS: int = 0
 
-    SUBSCRIPTION_RENEWAL_BALANCE_THRESHOLD_KOPEKS: int = 20000
-
     MONITORING_INTERVAL: int = 60
     # Жёсткий per-send таймаут (сек) на отправку уведомлений из MonitoringService.
     # Дефолтный session timeout aiogram = 60s; при медленном канале до Telegram
@@ -554,12 +547,6 @@ class Settings(BaseSettings):
     # получатель пропускается, цикл продолжается.
     MONITORING_NOTIFICATION_SEND_TIMEOUT: float = 20.0
     LOW_BALANCE_ALERT_EXPIRY_DAYS: int = 3  # Only alert when subscription expires within N days
-    # Months of inactivity before a user row is soft-deleted (status=DELETED).
-    # 12 months is conservative — VPN users are highly seasonal (vacations,
-    # business trips, geo-blocking events). Aggressive defaults were
-    # mass-deleting returning users; cabinet auto-revival makes the cost of
-    # raising this low. See `app/services/user_revival_service.py`.
-    INACTIVE_USER_DELETE_MONTHS: int = 12
 
     MAINTENANCE_MODE: bool = False
     MAINTENANCE_CHECK_INTERVAL: int = 30
@@ -587,7 +574,6 @@ class Settings(BaseSettings):
     # Telegram Login OIDC (new system via oauth.telegram.org)
     TELEGRAM_OIDC_ENABLED: bool = False
     TELEGRAM_OIDC_CLIENT_ID: str = ''
-    TELEGRAM_OIDC_CLIENT_SECRET: str = ''
 
     SUPPORT_TOPUP_ENABLED: bool = True
     PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED: bool = False
@@ -610,19 +596,15 @@ class Settings(BaseSettings):
     ACTIVATE_BUTTON_VISIBLE: bool = False
     ACTIVATE_BUTTON_TEXT: str = 'активировать'
     PAYMENT_BALANCE_DESCRIPTION: str = 'Пополнение баланса'
-    PAYMENT_SUBSCRIPTION_DESCRIPTION: str = 'Оплата подписки'
     PAYMENT_SERVICE_NAME: str = 'Интернет-сервис'
     PAYMENT_BALANCE_TEMPLATE: str = '{service_name} - {description}'
-    PAYMENT_SUBSCRIPTION_TEMPLATE: str = '{service_name} - {description}'
 
     CRYPTOBOT_ENABLED: bool = False
     CRYPTOBOT_DISPLAY_NAME: str = 'CryptoBot'
     CRYPTOBOT_API_TOKEN: str | None = None
-    CRYPTOBOT_WEBHOOK_SECRET: str | None = None
     CRYPTOBOT_BASE_URL: str = 'https://pay.crypt.bot'
     CRYPTOBOT_TESTNET: bool = False
     CRYPTOBOT_WEBHOOK_PATH: str = '/cryptobot-webhook'
-    CRYPTOBOT_WEBHOOK_PORT: int = 8083
     CRYPTOBOT_DEFAULT_ASSET: str = 'USDT'
     CRYPTOBOT_ASSETS: str = 'USDT,TON,BTC,ETH'
     CRYPTOBOT_INVOICE_EXPIRES_HOURS: int = 24
@@ -679,7 +661,6 @@ class Settings(BaseSettings):
     WATA_DISPLAY_NAME: str = 'Wata'
     WATA_BASE_URL: str = 'https://api.wata.pro/api/h2h'
     WATA_ACCESS_TOKEN: str | None = None
-    WATA_TERMINAL_PUBLIC_ID: str | None = None
     WATA_PAYMENT_TYPE: str = 'OneTime'
     WATA_SUCCESS_REDIRECT_URL: str | None = None
     WATA_FAIL_REDIRECT_URL: str | None = None
@@ -705,7 +686,6 @@ class Settings(BaseSettings):
     # ── S2S Postback (server-to-server affiliate notifications) ──
     S2S_POSTBACK_ENABLED: bool = False
     S2S_POSTBACK_REGISTRATION_URL: str = ''
-    S2S_POSTBACK_TRIAL_URL: str = ''
     S2S_POSTBACK_PURCHASE_URL: str = ''
 
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
@@ -761,15 +741,8 @@ class Settings(BaseSettings):
 
     # Media upload settings (news article images/videos)
     MEDIA_UPLOAD_DIR: str = './uploads'
-    MEDIA_MAX_IMAGE_SIZE_MB: int = 10
     MEDIA_MAX_VIDEO_SIZE_MB: int = 50
-    MEDIA_IMAGE_MAX_DIMENSION: int = 2048
-    MEDIA_JPEG_QUALITY: int = 85
     MINIAPP_PURCHASE_URL: str = ''
-    MINIAPP_SERVICE_NAME_EN: str = 'Spofy VPN'
-    MINIAPP_SERVICE_NAME_RU: str = 'Spofy VPN'
-    MINIAPP_SERVICE_DESCRIPTION_EN: str = 'Secure & Fast Connection'
-    MINIAPP_SERVICE_DESCRIPTION_RU: str = 'Безопасное и быстрое подключение'
     CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED: bool = False
     HAPP_CRYPTOLINK_REDIRECT_TEMPLATE: str | None = None
     # Remnawave 2.8.0 удалил /api/system/tools/happ/encrypt — недостающие crypt-ссылки
@@ -804,7 +777,6 @@ class Settings(BaseSettings):
 
     PRIVACY_POLICY_DISPLAY_MODE: str = 'both'
     PUBLIC_OFFER_DISPLAY_MODE: str = 'both'
-    RECURRENT_PAYMENTS_DISPLAY_MODE: str = 'both'
     SERVICE_RULES_DISPLAY_MODE: str = 'both'
     FAQ_DISPLAY_MODE: str = 'both'
 
@@ -858,15 +830,12 @@ class Settings(BaseSettings):
     # Общий веб-сервер бота (кабинет, вебхуки, /health); имена ключей остались от Web API.
     WEB_API_HOST: str = '0.0.0.0'
     WEB_API_PORT: int = 8080
-    WEB_API_WORKERS: int = 1
     WEB_API_DOCS_ENABLED: bool = False
-    WEB_API_VERSION: str = '1.0.0'
 
     APP_CONFIG_CACHE_TTL: int = 3600
 
     VERSION_CHECK_ENABLED: bool = True
     VERSION_CHECK_REPO: str = 'SpofyJet/spofy-bedolaga-bot'
-    VERSION_CHECK_INTERVAL_HOURS: int = 1
 
     # === Антиабуз триалов (n20) ===
     TRIAL_ABUSE_ENABLED: bool = True

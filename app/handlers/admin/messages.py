@@ -78,12 +78,6 @@ CABINET_MINIAPP_BUTTON_KEYS = {
 }
 
 
-def get_updated_message_buttons_selector_keyboard(
-    selected_buttons: list, language: str = 'ru'
-) -> types.InlineKeyboardMarkup:
-    return get_updated_message_buttons_selector_keyboard_with_media(selected_buttons, False, language)
-
-
 def create_broadcast_keyboard(
     selected_buttons: list,
     language: str = 'ru',
@@ -230,10 +224,8 @@ async def show_messages_menu(callback: types.CallbackQuery, db_user: User, db: A
 
 Выберите тип рассылки:
 
-- <b>Всем пользователям</b> - рассылка всем активным пользователям
-- <b>По подпискам</b> - фильтрация по типу подписки
+- <b>Всем или по подпискам</b> - всем пользователям либо по типу подписки
 - <b>По критериям</b> - настраиваемые фильтры
-- <b>История</b> - просмотр предыдущих рассылок
 
 ⚠️ Будьте осторожны с массовыми рассылками!
 """
@@ -1666,7 +1658,7 @@ def get_target_display_name(target: str) -> str:
 
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_messages_menu, F.data == 'admin_messages')
-    dp.callback_query.register(show_broadcast_targets, F.data.in_(['admin_msg_all', 'admin_msg_by_sub']))
+    dp.callback_query.register(show_broadcast_targets, F.data == 'admin_msg_by_sub')
     dp.callback_query.register(select_broadcast_target, F.data.startswith('broadcast_'))
     dp.callback_query.register(confirm_broadcast, F.data == 'admin_confirm_broadcast')
 

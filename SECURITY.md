@@ -241,7 +241,6 @@ ADMIN_IDS=123456789,987654321
 
 # Webhook секреты - генерируйте случайные значения
 TRIBUTE_WEBHOOK_SECRET=another_random_secret
-CRYPTOBOT_WEBHOOK_SECRET=yet_another_secret
 ```
 
 **Генерация безопасных секретов:**

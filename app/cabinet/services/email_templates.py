@@ -66,10 +66,8 @@ class EmailNotificationTemplates:
             NotificationType.WINBACK_TRIAL_ENDING: self._winback_trial_ending_template,
             NotificationType.AUTOPAY_SUCCESS: self._autopay_success_template,
             NotificationType.AUTOPAY_FAILED: self._autopay_failed_template,
-            NotificationType.AUTOPAY_INSUFFICIENT_FUNDS: self._autopay_insufficient_funds_template,
             NotificationType.DAILY_DEBIT: self._daily_debit_template,
             NotificationType.DAILY_INSUFFICIENT_FUNDS: self._daily_insufficient_funds_template,
-            NotificationType.WARNING_NOTIFICATION: self._warning_template,
             NotificationType.REFERRAL_BONUS: self._referral_bonus_template,
             NotificationType.REFERRAL_REGISTERED: self._referral_registered_template,
             NotificationType.REFERRAL_WELCOME: self._referral_welcome_template,
@@ -78,7 +76,6 @@ class EmailNotificationTemplates:
             NotificationType.WITHDRAWAL_APPROVED: self._withdrawal_approved_template,
             NotificationType.WITHDRAWAL_REJECTED: self._withdrawal_rejected_template,
             NotificationType.TRAFFIC_RESET: self._traffic_reset_template,
-            NotificationType.PAYMENT_RECEIVED: self._payment_received_template,
             NotificationType.PROMO_OFFER: self._promo_offer_template,
             NotificationType.TICKET_REPLY: self._ticket_reply_template,
             NotificationType.PROMO_GROUP_AUTO_ASSIGNED: self._promo_group_auto_assigned_template,
@@ -617,33 +614,6 @@ class EmailNotificationTemplates:
             return f'amount={(missing + 99) // 100}'
         return ''
 
-    def _modern_autopay_insufficient_funds(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
-        required = html.escape(str(context.get('required_amount') or ''))
-        balance = html.escape(str(context.get('current_balance') or ''))
-        query = self._topup_query(context)
-        if lang == 'ru':
-            content = self._letter(
-                'Не хватает на автопродление',
-                '<p class="lead">Пополните баланс — подписка продлится автоматически, ничего больше делать не нужно.</p>',
-                self._rows([('Нужно', required), ('На балансе', balance)]),
-                self._action('topup', 'ru', query=query),
-            )
-            return self._modern(
-                'Пополните баланс для автопродления',
-                content,
-                'ru',
-                preheader='Пополните баланс — подписка продлится сама.',
-            )
-        content = self._letter(
-            'Not enough for auto-renewal',
-            '<p class="lead">Top up your balance and the subscription renews by itself.</p>',
-            self._rows([('Required', required), ('Balance', balance)]),
-            self._action('topup', 'en', query=query),
-        )
-        return self._modern(
-            'Top up to keep auto-renewal', content, 'en', preheader='Top up and the subscription renews by itself.'
-        )
-
     def _modern_balance_topup(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
         amount = html.escape(str(context.get('formatted_amount') or f'{context.get("amount_rubles", 0):.2f} ₽'))
         balance = html.escape(str(context.get('formatted_balance') or f'{context.get("new_balance_rubles", 0):.2f} ₽'))
@@ -662,23 +632,6 @@ class EmailNotificationTemplates:
             self._action('buy', 'en'),
         )
         return self._modern(f'{amount} credited', content, 'en', preheader=f'Balance: {balance}')
-
-    def _modern_payment_received(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
-        amount = html.escape(str(context.get('formatted_amount') or f'{context.get("amount_rubles", 0):.2f} ₽'))
-        method = html.escape(str(context.get('payment_method') or ''))
-        if lang == 'ru':
-            content = self._letter(
-                'Оплата получена',
-                self._rows([('Сумма', amount), ('Способ', method)]),
-                self._action('cabinet', 'ru'),
-            )
-            return self._modern(f'Оплата получена: {amount}', content, 'ru')
-        content = self._letter(
-            'Payment received',
-            self._rows([('Amount', amount), ('Method', method)]),
-            self._action('cabinet', 'en'),
-        )
-        return self._modern(f'Payment received: {amount}', content, 'en')
 
     def _modern_daily_debit(self, lang: str, context: dict[str, Any]) -> dict[str, str]:
         amount = html.escape(str(context.get('formatted_amount') or f'{context.get("amount_rubles", 0):.2f} ₽'))
@@ -1088,10 +1041,6 @@ class EmailNotificationTemplates:
         lang = self._modern_lang(language)
         return self._modern_autopay_failed(lang, context)
 
-    def _autopay_insufficient_funds_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        lang = self._modern_lang(language)
-        return self._modern_autopay_insufficient_funds(lang, context)
-
     # ============================================================================
     # Daily Subscription Templates
     # ============================================================================
@@ -1136,35 +1085,6 @@ class EmailNotificationTemplates:
     # ============================================================================
     # Account Status Templates
     # ============================================================================
-
-    def _warning_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        """Template for warning notification."""
-        message = html.escape(context.get('message', ''))
-
-        subjects = {
-            'ru': 'Предупреждение',
-            'en': 'Warning',
-        }
-
-        bodies = {
-            'ru': f"""
-                <h2>Предупреждение</h2>
-                <div class="highlight warning">
-                    {f'<p>{message}</p>' if message else '<p>Вы получили предупреждение от администрации.</p>'}
-                </div>
-            """,
-            'en': f"""
-                <h2>Warning</h2>
-                <div class="highlight warning">
-                    {f'<p>{message}</p>' if message else '<p>You have received a warning from the administration.</p>'}
-                </div>
-            """,
-        }
-
-        return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
-        }
 
     # ============================================================================
     # Referral Templates
@@ -1521,10 +1441,6 @@ class EmailNotificationTemplates:
     # ============================================================================
     # Payment Templates
     # ============================================================================
-
-    def _payment_received_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
-        lang = self._modern_lang(language)
-        return self._modern_payment_received(lang, context)
 
     # ============================================================================
     # Support Ticket Templates

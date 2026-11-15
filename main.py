@@ -665,7 +665,7 @@ async def main():
         ) as stage:
             if settings.is_version_check_enabled():
                 version_check_task = asyncio.create_task(version_service.start_periodic_check())
-                stage.log(f'Интервал проверки: {settings.VERSION_CHECK_INTERVAL_HOURS}ч')
+                stage.log('Интервал проверки: 1ч')
             else:
                 version_check_task = None
                 stage.skip('Проверка версий отключена настройками')

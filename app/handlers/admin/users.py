@@ -191,12 +191,7 @@ async def handle_users_list_pagination_fixed(
 @error_handler
 async def start_user_search(callback: types.CallbackQuery, db_user: User, state: FSMContext):
     await callback.message.edit_text(
-        '🔍 <b>Поиск пользователя</b>\n\n'
-        'Введите для поиска:\n'
-        '• Telegram ID\n'
-        '• Username (без @)\n'
-        '• Имя или фамилию\n\n'
-        'Или нажмите /cancel для отмены',
+        '🔍 <b>Поиск пользователя</b>\n\nВведите для поиска:\n• Telegram ID\n• Username (без @)\n• Имя или фамилию',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_users')]]
         ),
@@ -675,17 +670,6 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
 
     text = '\n\n'.join(sections)
 
-    # Проверяем состояние, чтобы определить, откуда пришел пользователь
-    current_state = await state.get_state()
-    if current_state == AdminStates.viewing_user_from_balance_list:
-        back_callback = 'admin_users_balance_filter'
-    elif current_state == AdminStates.viewing_user_from_campaign_list:
-        back_callback = 'admin_users_campaign_filter'
-    elif current_state == AdminStates.viewing_user_from_ready_to_renew_list:
-        back_callback = 'admin_users_ready_to_renew_filter'
-    elif current_state == AdminStates.viewing_user_from_potential_customers_list:
-        back_callback = 'admin_users_potential_customers_filter'
-
     # Базовая клавиатура профиля
     kb = get_user_management_keyboard(user.id, user.status, db_user.language, back_callback)
     # Если пришли из тикета — добавим в начало кнопку возврата к тикету
@@ -878,8 +862,7 @@ async def start_balance_edit(callback: types.CallbackQuery, db_user: User, state
         'Введите сумму для изменения баланса:\n'
         '• Положительное число для пополнения\n'
         '• Отрицательное число для списания\n'
-        '• Примеры: 100, -50, 25.5\n\n'
-        'Или нажмите /cancel для отмены',
+        '• Примеры: 100, -50, 25.5',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='❌ Отмена', callback_data=f'admin_user_manage_{user_id}')]
@@ -1089,7 +1072,7 @@ async def ask_restriction_reason(callback: types.CallbackQuery, db_user: User, d
     )
     if current_reason:
         text += f'Текущая причина: <i>{html.escape(current_reason)}</i>\n\n'
-    text += 'Отправьте новую причину или /cancel для отмены:'
+    text += 'Отправьте новую причину:'
 
     await callback.message.edit_text(
         text,
@@ -1222,8 +1205,7 @@ async def extend_user_subscription(callback: types.CallbackQuery, db_user: User,
         'Введите количество дней для изменения:\n'
         '• Положительные значения продлят подписку\n'
         '• Отрицательные сократят срок подписки\n'
-        '• Диапазон: от -365 до 365 дней (0 недопустимо)\n\n'
-        'Или нажмите /cancel для отмены',
+        '• Диапазон: от -365 до 365 дней (0 недопустимо)',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -1373,8 +1355,7 @@ async def add_subscription_traffic(callback: types.CallbackQuery, db_user: User,
         '📊 <b>Добавление трафика</b>\n\n'
         'Введите количество ГБ для добавления:\n'
         '• Например: 50, 100, 500\n'
-        '• Максимум: 10000 ГБ\n\n'
-        'Или нажмите /cancel для отмены',
+        '• Максимум: 10000 ГБ',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -1664,8 +1645,7 @@ async def grant_paid_subscription(callback: types.CallbackQuery, db_user: User, 
         '💎 <b>Выдача подписки</b>\n\n'
         'Введите количество дней подписки:\n'
         '• Например: 30, 90, 180, 365\n'
-        '• Максимум: 730 дней\n\n'
-        'Или нажмите /cancel для отмены',
+        '• Максимум: 730 дней',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [

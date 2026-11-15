@@ -250,18 +250,6 @@ TEMPLATE_TYPES = [
         'context_vars': ['reason'],
     },
     {
-        'type': 'autopay_insufficient_funds',
-        'label': {
-            'ru': 'Недостаточно средств (автоплатёж)',
-            'en': 'Insufficient Funds (Autopay)',
-        },
-        'description': {
-            'ru': 'Уведомление о нехватке средств для автоплатежа',
-            'en': 'Insufficient funds for autopay notification',
-        },
-        'context_vars': ['required_amount', 'current_balance'],
-    },
-    {
         'type': 'daily_debit',
         'label': {'ru': 'Суточное списание', 'en': 'Daily Debit'},
         'description': {
@@ -281,15 +269,6 @@ TEMPLATE_TYPES = [
             'en': 'Insufficient funds for daily debit',
         },
         'context_vars': ['required_amount', 'current_balance'],
-    },
-    {
-        'type': 'warning_notification',
-        'label': {'ru': 'Предупреждение', 'en': 'Warning'},
-        'description': {
-            'ru': 'Предупреждение пользователю',
-            'en': 'Warning notification',
-        },
-        'context_vars': ['message'],
     },
     {
         'type': 'referral_bonus',
@@ -338,15 +317,6 @@ TEMPLATE_TYPES = [
             'en': 'Traffic reset notification',
         },
         'context_vars': ['reset_gb', 'current_limit_gb'],
-    },
-    {
-        'type': 'payment_received',
-        'label': {'ru': 'Платёж получен', 'en': 'Payment Received'},
-        'description': {
-            'ru': 'Уведомление о получении платежа',
-            'en': 'Payment received notification',
-        },
-        'context_vars': ['formatted_amount', 'payment_method'],
     },
     {
         'type': 'ticket_reply',
@@ -602,7 +572,6 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
     },
     'autopay_success': {'formatted_amount': '300.00 ₽', 'amount_rubles': 300, 'new_expires_at': '28.02.2026, 23:59'},
     'autopay_failed': {'reason': 'Card declined'},
-    'autopay_insufficient_funds': {'required_amount': '300.00 ₽', 'current_balance': '50.00 ₽'},
     'daily_debit': {
         'formatted_amount': '10.00 ₽',
         'formatted_balance': '490.00 ₽',
@@ -610,7 +579,6 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
         'new_balance_rubles': 490,
     },
     'daily_insufficient_funds': {'required_amount': '10.00 ₽', 'current_balance': '5.00 ₽'},
-    'warning_notification': {'message': 'Please review our terms of service'},
     'referral_bonus': {
         'formatted_bonus': '100.00 ₽',
         'bonus_rubles': 100,
@@ -625,7 +593,6 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
     'referral_registered': {'referral_name': 'John'},
     'referral_welcome': {'referrer_name': 'John', 'bonus_promise': '100.00 ₽ при первом пополнении от 500.00 ₽'},
     'traffic_reset': {'reset_gb': 50, 'current_limit_gb': 100},
-    'payment_received': {'formatted_amount': '500.00 ₽', 'amount_rubles': 500, 'payment_method': 'Platega'},
     'ticket_reply': {'ticket_id': 42, 'reply_preview': 'Проверьте настройки подключения', 'has_photo': False},
     'email_verification': {
         'username': 'John',

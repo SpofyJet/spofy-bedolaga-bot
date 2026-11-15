@@ -46,7 +46,6 @@ def _build_request(
 async def test_cryptobot_missing_signature(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'CRYPTOBOT_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', 'token', raising=False)
-    monkeypatch.setattr(settings, 'CRYPTOBOT_WEBHOOK_SECRET', 'secret', raising=False)
 
     router = create_payment_router(DummyBot(), SimpleNamespace())
     assert router is not None
@@ -69,7 +68,6 @@ async def test_cryptobot_missing_signature(monkeypatch: pytest.MonkeyPatch) -> N
 async def test_cryptobot_invalid_signature(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'CRYPTOBOT_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', 'token', raising=False)
-    monkeypatch.setattr(settings, 'CRYPTOBOT_WEBHOOK_SECRET', 'secret', raising=False)
 
     class StubCryptoBotService:
         @staticmethod
