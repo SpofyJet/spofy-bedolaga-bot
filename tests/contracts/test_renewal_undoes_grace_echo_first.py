@@ -36,7 +36,6 @@ EXEMPT: dict[str, str] = {
     'app/database/crud/subscription.py::replace_subscription': 'замена задаёт срок от «сейчас», сквады и лимит заново',
     'app/database/crud/subscription.py::resume_daily_subscription': 'суточное возобновление: срок «сейчас + сутки»',
     'app/cabinet/routes/subscription_modules/daily.py::toggle_subscription_pause': 'суточное: срок «сейчас + сутки»',
-    'app/webapi/routes/miniapp.py::toggle_daily_subscription_pause_endpoint': 'суточное: срок «сейчас + сутки»',
     'app/handlers/subscription/tariff_purchase.py::confirm_daily_tariff_purchase': (
         'суточный тариф: срок «сейчас + сутки», сквады тарифа'
     ),

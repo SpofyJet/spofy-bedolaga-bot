@@ -17,7 +17,6 @@ POLICY = 'app/services/tariff_switch_policy.py'
 
 SWITCH_FLOWS = [
     'cabinet/routes/subscription_modules/tariff_switch.py',
-    'webapi/routes/miniapp.py',
     'handlers/subscription/tariff_purchase.py',
 ]
 

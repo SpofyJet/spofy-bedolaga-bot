@@ -61,7 +61,7 @@ def _called_endpoints() -> dict[str, list[str]]:
 def test_client_calls_only_endpoints_that_exist_in_panel_spec() -> None:
     spec = _spec_endpoints()
     called = _called_endpoints()
-    assert len(called) >= 60, f'регулярка перестала находить вызовы клиента: {len(called)}'
+    assert len(called) >= 50, f'регулярка перестала находить вызовы клиента: {len(called)}'
 
     unknown = {
         endpoint: files

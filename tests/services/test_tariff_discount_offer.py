@@ -112,7 +112,6 @@ _NO_TARIFF_ALLOWED = {
     'app/handlers/subscription/common.py',
     'app/handlers/subscription/purchase.py',
     'app/services/subscription_auto_purchase_service.py',  # только суточный тариф
-    'app/webapi/routes/miniapp.py',  # суточные тарифы и служебные места
 }
 
 

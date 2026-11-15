@@ -35,9 +35,6 @@ KNOWN_WITHOUT_RULE: dict[str, str] = {
     'app/cabinet/routes/subscription_modules/daily.py::toggle_subscription_pause': (
         'суточная пауза/возобновление из кабинета: лимит ведёт суточный сервис'
     ),
-    'app/webapi/routes/miniapp.py::toggle_daily_subscription_pause_endpoint': (
-        'суточная пауза/возобновление из Mini App: лимит ведёт суточный сервис'
-    ),
 }
 
 

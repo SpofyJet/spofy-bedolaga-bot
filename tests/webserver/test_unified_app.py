@@ -55,7 +55,7 @@ async def test_unified_app_health_reports_features(monkeypatch: pytest.MonkeyPat
         if getattr(route, 'endpoint', None) and getattr(route.endpoint, '__name__', '') == 'unified_health'
     )
 
-    assert getattr(health_route, 'path', None) == '/health/unified'
+    assert getattr(health_route, 'path', None) == '/health'
 
     # FastAPI lifespan заменил deprecated @app.on_event — startup/shutdown
     # хуки регистрируются через async-контекст. router.startup()/shutdown()
@@ -66,7 +66,6 @@ async def test_unified_app_health_reports_features(monkeypatch: pytest.MonkeyPat
     payload = json.loads(response.body.decode('utf-8'))  # type: ignore[attr-defined]
 
     assert payload['status'] == 'ok'
-    assert payload['web_api_enabled'] is True
     assert payload['bot_run_mode'] == 'webhook'
     assert payload['telegram_webhook']['enabled'] is True
     assert payload['telegram_webhook']['running'] is True

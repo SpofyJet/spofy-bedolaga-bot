@@ -1,7 +1,7 @@
 """Возобновление суточной подписки тоже обнуляет трафик.
 
-Возобновление из кабинета и из Mini App списывает суточную оплату ровно так же,
-как ночной планировщик, но обе копии кода отправляли в панель жёсткое «не
+Возобновление из кабинета списывает суточную оплату ровно так же,
+как ночной планировщик, но код отправлял в панель жёсткое «не
 обнулять». Значит, тот же баг («плачу каждый день, а расход копится») жил и на
 кнопке «возобновить».
 
@@ -154,48 +154,6 @@ async def test_cabinet_resume_lifts_panel_limit_after_paid_reset(monkeypatch):
     """Подписка была в лимите трафика: после оплаты со сбросом лимит в панели снимается явно."""
     async with memory_session(monkeypatch, TABLES) as db:
         panel, subscription = await _resume_from_cabinet(
-            db,
-            monkeypatch,
-            traffic_reset_mode='NO_RESET',
-            reset_on_payment=True,
-            status=SubscriptionStatus.LIMITED.value,
-        )
-
-    assert panel.calls[0]['reset_traffic'] is True
-    assert panel.enabled == [9001]
-    assert subscription.status == SubscriptionStatus.ACTIVE.value
-
-
-@pytest.mark.asyncio
-async def test_miniapp_resume_resets_traffic(monkeypatch):
-    """Кнопка «возобновить» в Mini App живёт по той же политике, что и планировщик."""
-    async with memory_session(monkeypatch, TABLES) as db:
-        panel, subscription = await _resume_from_miniapp(
-            db, monkeypatch, traffic_reset_mode='NO_RESET', reset_on_payment=True
-        )
-
-    assert panel.calls, 'синхронизация с панелью не выполнялась'
-    assert panel.calls[0]['reset_traffic'] is True
-    assert subscription.traffic_used_gb == 0.0
-
-
-@pytest.mark.asyncio
-async def test_miniapp_resume_keeps_traffic_when_disabled(monkeypatch):
-    """Выключатель выключен — счётчик не трогаем."""
-    async with memory_session(monkeypatch, TABLES) as db:
-        panel, subscription = await _resume_from_miniapp(
-            db, monkeypatch, traffic_reset_mode='NO_RESET', reset_on_payment=False
-        )
-
-    assert panel.calls[0]['reset_traffic'] is False
-    assert subscription.traffic_used_gb == 90.0
-
-
-@pytest.mark.asyncio
-async def test_miniapp_resume_lifts_panel_limit_after_paid_reset(monkeypatch):
-    """Подписка была в лимите трафика: после оплаты со сбросом лимит в панели снимается явно."""
-    async with memory_session(monkeypatch, TABLES) as db:
-        panel, subscription = await _resume_from_miniapp(
             db,
             monkeypatch,
             traffic_reset_mode='NO_RESET',

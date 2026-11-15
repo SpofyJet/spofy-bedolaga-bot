@@ -30,7 +30,6 @@ SYNC_CALLS = {'update_remnawave_user', 'create_remnawave_user'}
 KNOWN_SITES = {
     'app/services/daily_subscription_service.py::_process_single_charge',
     'app/cabinet/routes/subscription_modules/daily.py::toggle_subscription_pause',
-    'app/webapi/routes/miniapp.py::toggle_daily_subscription_pause_endpoint',
     'app/handlers/subscription/purchase.py::handle_toggle_daily_subscription_pause',
     'app/services/subscription_auto_purchase_service.py::try_resume_disabled_daily_after_topup',
 }

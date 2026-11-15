@@ -13,7 +13,6 @@ PUBLIC_MODULES = {
     'app/cabinet/routes/support_ws.py',
     'app/cabinet/routes/landing.py',
     'app/services/guest_purchase_service.py',
-    'app/webapi/routes/users.py',
 }
 MUTATION_CALLS = {
     'create_user',
@@ -36,7 +35,6 @@ TRUSTED_FUNCTIONS = {
     ('app/handlers/start.py', '_create_user_with_registration_invite'),
     ('app/cabinet/routes/auth.py', '_recover_cabinet_user_after_gate'),
     ('app/services/guest_purchase_service.py', '_find_or_create_user'),
-    ('app/webapi/routes/users.py', 'create_user_endpoint'),  # API-token protected administration
 }
 # Helpers that create a user on behalf of a route which has already passed the gate.
 # Not trusted blindly: every call site must sit in a function that calls a gate

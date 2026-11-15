@@ -80,7 +80,7 @@ PAIRS = _request_pairs()
 
 def test_schema_pairs_are_discovered():
     """Пустой список сделал бы сторож ниже бессмысленно зелёным."""
-    assert len(PAIRS) >= 5, [name for name, _, _ in PAIRS]
+    assert len(PAIRS) >= 4, [name for name, _, _ in PAIRS]
 
 
 @pytest.mark.parametrize(('name', 'create', 'update'), PAIRS, ids=[pair[0] for pair in PAIRS])
