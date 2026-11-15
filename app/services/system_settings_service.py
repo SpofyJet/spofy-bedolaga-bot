@@ -302,8 +302,6 @@ class BotConfigurationService:
         'PRICE_360_DAYS': 'SUBSCRIPTION_PRICES',
         'PAID_SUBSCRIPTION_USER_TAG': 'SUBSCRIPTION_PRICES',
         'TRAFFIC_PACKAGES_CONFIG': 'TRAFFIC_PACKAGES',
-        'MULTI_TARIFF_ENABLED': 'SUBSCRIPTIONS_CORE',
-        'MAX_ACTIVE_SUBSCRIPTIONS': 'SUBSCRIPTIONS_CORE',
         'BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED': 'SUBSCRIPTIONS_CORE',
         'BASE_PROMO_GROUP_PERIOD_DISCOUNTS': 'SUBSCRIPTIONS_CORE',
         'PROMO_GROUP_AUTO_ASSIGN_NOTIFY_USER': 'SUBSCRIPTIONS_CORE',
@@ -378,7 +376,6 @@ class BotConfigurationService:
         'MAIN_MENU_RICH_ENABLED': 'INTERFACE',
         'MAIN_MENU_RICH_EFFECT_ID': 'INTERFACE',
         'MAIN_MENU_RICH_LOGO_URL': 'INTERFACE',
-        'MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE': 'INTERFACE',
         'MAIN_MENU_RICH_INLINE_BUTTONS': 'INTERFACE',
         'MAIN_MENU_LIVE_ENABLED': 'INTERFACE',
         'USER_NOTIFICATIONS_RICH_ENABLED': 'INTERFACE',
@@ -731,16 +728,6 @@ class BotConfigurationService:
             ),
             'dependencies': 'ADMIN_NOTIFICATIONS_ENABLED',
         },
-        'MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE': {
-            'description': (
-                'Сворачивать таблицу подписок rich-меню в раскрываемый блок, когда у пользователя '
-                'больше одной подписки (мультитарифный режим). Заголовок блока показывает счётчик.'
-            ),
-            'format': 'Булево значение.',
-            'example': 'true',
-            'warning': 'Действует только при MAIN_MENU_RICH_ENABLED и включённом мультитарифе.',
-            'dependencies': 'MAIN_MENU_RICH_ENABLED, MULTI_TARIFF_ENABLED',
-        },
         'MAIN_MENU_RICH_INLINE_BUTTONS': {
             'description': (
                 'Показывать кнопки ВНУТРИ полотна rich-сообщения (Bot API 10.3), а не отдельной '
@@ -803,29 +790,6 @@ class BotConfigurationService:
             'example': '90',
             'warning': 'Чистка выполняется раз в сутки циклом мониторинга.',
             'dependencies': 'USER_ACTION_LOG_ENABLED',
-        },
-        'MULTI_TARIFF_ENABLED': {
-            'description': (
-                'Разрешает пользователям покупать несколько тарифов одновременно. '
-                'Каждый тариф создаёт отдельную подписку с собственными серверами и лимитами.'
-            ),
-            'format': 'Булево значение.',
-            'example': 'true',
-            'warning': (
-                'Работает только в режиме продаж «Тарифы». '
-                'При включении синхронизация с панелью переключается на мультитарифный режим.'
-            ),
-            'dependencies': 'MAX_ACTIVE_SUBSCRIPTIONS',
-        },
-        'MAX_ACTIVE_SUBSCRIPTIONS': {
-            'description': (
-                'Максимальное количество одновременных активных подписок у одного пользователя. '
-                'Применяется только в мультитарифном режиме.'
-            ),
-            'format': 'Целое число от 1 и выше.',
-            'example': '10',
-            'warning': 'Большое значение может усложнить управление подписками для пользователя.',
-            'dependencies': 'MULTI_TARIFF_ENABLED',
         },
         'DEVICES_SELECTION_ENABLED': {
             'description': 'Разрешает пользователям выбирать количество устройств при покупке и продлении подписки.',

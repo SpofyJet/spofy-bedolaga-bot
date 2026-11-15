@@ -389,10 +389,6 @@ class Settings(BaseSettings):
     # - classic: классический режим (выбор серверов, трафика, устройств, периода отдельно)
     # - tariffs: режим тарифов (готовые пакеты с фиксированными параметрами)
 
-    # Multi-tariff mode: allows users to purchase multiple tariffs simultaneously
-    MULTI_TARIFF_ENABLED: bool = False
-    MAX_ACTIVE_SUBSCRIPTIONS: int = 10
-
     # ID тарифа для триала в режиме тарифов (0 = использовать стандартные настройки триала)
     # Если указан ID тарифа, параметры триала берутся из тарифа (traffic_limit_gb, device_limit, allowed_squads)
     # Длительность триала всё равно берётся из TRIAL_DURATION_DAYS
@@ -731,9 +727,6 @@ class Settings(BaseSettings):
     # 👍 5107584321108051014, 👎 5104858069142078462, 💩 5046589136895476101.
     # Пусто — без эффекта. При отказе сервера эффект отключается сам до рестарта.
     MAIN_MENU_RICH_EFFECT_ID: str = '5046509860389126442'
-    # Сворачивать таблицу подписок в раскрываемый details-блок, когда у юзера
-    # больше одной подписки (мультитариф) — меню компактнее.
-    MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE: bool = True
     # Bot API 10.3: кнопки живут внутри полотна rich-сообщения (<tg-button-row>),
     # а не отдельной клавиатурой под ним. Клавиатура при этом не дублируется.
     MAIN_MENU_RICH_INLINE_BUTTONS: bool = False
@@ -1848,14 +1841,6 @@ class Settings(BaseSettings):
     def is_subscription_revoke_enabled(self) -> bool:
         """Проверяет, включен ли перевыпуск подписки."""
         return self.SUBSCRIPTION_REVOKE_ENABLED
-
-    def is_multi_tariff_enabled(self) -> bool:
-        """Проверяет, включен ли мультитарифный режим."""
-        return self.MULTI_TARIFF_ENABLED
-
-    def get_max_active_subscriptions(self) -> int:
-        """Максимальное число одновременных подписок (>1 только в multi-tariff)."""
-        return self.MAX_ACTIVE_SUBSCRIPTIONS if self.is_multi_tariff_enabled() else 1
 
     def get_trial_tariff_id(self) -> int:
         """Возвращает ID тарифа для триала (0 = использовать стандартные настройки)."""
