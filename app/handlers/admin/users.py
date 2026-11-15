@@ -44,6 +44,28 @@ from app.utils.user_utils import get_effective_referral_commission_percent
 logger = structlog.get_logger(__name__)
 
 
+def _back_to_user_keyboard(user_id: int) -> types.InlineKeyboardMarkup:
+    """Одна кнопка «👤 К пользователю» под итогом действия над пользователем."""
+    return types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [types.InlineKeyboardButton(text='👤 К пользователю', callback_data=f'admin_user_manage_{user_id}')]
+        ]
+    )
+
+
+async def _confirm_user_action(callback: types.CallbackQuery, db_user: User, action: str, text: str) -> None:
+    """Экран «Вы уверены?»: «Да» ведёт на admin_user_{action}_confirm_{id}, «Нет» — к пользователю."""
+    user_id = int(callback.data.split('_')[-1])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_confirmation_keyboard(
+            f'admin_user_{action}_confirm_{user_id}', f'admin_user_manage_{user_id}', db_user.language
+        ),
+    )
+    await callback.answer()
+
+
 @admin_required
 @error_handler
 async def show_users_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
@@ -385,9 +407,10 @@ async def show_user_transactions(callback: types.CallbackQuery, db_user: User, d
 @admin_required
 @error_handler
 async def confirm_user_delete(callback: types.CallbackQuery, db_user: User):
-    user_id = int(callback.data.split('_')[-1])
-
-    await callback.message.edit_text(
+    await _confirm_user_action(
+        callback,
+        db_user,
+        'delete',
         '🗑️ <b>Удаление пользователя</b>\n\n'
         '⚠️ <b>ВНИМАНИЕ!</b>\n'
         'Вы уверены, что хотите удалить этого пользователя?\n\n'
@@ -396,11 +419,7 @@ async def confirm_user_delete(callback: types.CallbackQuery, db_user: User):
         '• Деактивирует его подписку\n'
         '• Заблокирует доступ к боту\n\n'
         'Данное действие необратимо!',
-        reply_markup=get_confirmation_keyboard(
-            f'admin_user_delete_confirm_{user_id}', f'admin_user_manage_{user_id}', db_user.language
-        ),
     )
-    await callback.answer()
 
 
 @admin_required
@@ -422,12 +441,7 @@ async def delete_user_account(callback: types.CallbackQuery, db_user: User, db: 
         )
     else:
         await callback.message.edit_text(
-            '❌ Ошибка удаления пользователя',
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [types.InlineKeyboardButton(text='👤 К пользователю', callback_data=f'admin_user_manage_{user_id}')]
-                ]
-            ),
+            '❌ Ошибка удаления пользователя', reply_markup=_back_to_user_keyboard(user_id)
         )
 
     await callback.answer()
@@ -935,17 +949,14 @@ async def process_balance_edit(message: types.Message, db_user: User, state: FSM
 @admin_required
 @error_handler
 async def confirm_user_block(callback: types.CallbackQuery, db_user: User):
-    user_id = int(callback.data.split('_')[-1])
-
-    await callback.message.edit_text(
+    await _confirm_user_action(
+        callback,
+        db_user,
+        'block',
         '🚫 <b>Блокировка пользователя</b>\n\n'
         'Вы уверены, что хотите заблокировать этого пользователя?\n'
         'Пользователь потеряет доступ к боту.',
-        reply_markup=get_confirmation_keyboard(
-            f'admin_user_block_confirm_{user_id}', f'admin_user_manage_{user_id}', db_user.language
-        ),
     )
-    await callback.answer()
 
 
 @admin_required
@@ -956,25 +967,10 @@ async def block_user(callback: types.CallbackQuery, db_user: User, db: AsyncSess
     user_service = UserService()
     success = await user_service.block_user(db, user_id, db_user.id, 'Заблокирован администратором')
 
-    if success:
-        await callback.message.edit_text(
-            '✅ Пользователь заблокирован',
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [types.InlineKeyboardButton(text='👤 К пользователю', callback_data=f'admin_user_manage_{user_id}')]
-                ]
-            ),
-        )
-    else:
-        await callback.message.edit_text(
-            '❌ Ошибка блокировки пользователя',
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [types.InlineKeyboardButton(text='👤 К пользователю', callback_data=f'admin_user_manage_{user_id}')]
-                ]
-            ),
-        )
-
+    await callback.message.edit_text(
+        '✅ Пользователь заблокирован' if success else '❌ Ошибка блокировки пользователя',
+        reply_markup=_back_to_user_keyboard(user_id),
+    )
     await callback.answer()
 
 
@@ -1182,17 +1178,14 @@ async def clear_user_restrictions(callback: types.CallbackQuery, db_user: User, 
 @admin_required
 @error_handler
 async def confirm_user_unblock(callback: types.CallbackQuery, db_user: User):
-    user_id = int(callback.data.split('_')[-1])
-
-    await callback.message.edit_text(
+    await _confirm_user_action(
+        callback,
+        db_user,
+        'unblock',
         '✅ <b>Разблокировка пользователя</b>\n\n'
         'Вы уверены, что хотите разблокировать этого пользователя?\n'
         'Пользователь снова получит доступ к боту.',
-        reply_markup=get_confirmation_keyboard(
-            f'admin_user_unblock_confirm_{user_id}', f'admin_user_manage_{user_id}', db_user.language
-        ),
     )
-    await callback.answer()
 
 
 @admin_required
@@ -1203,25 +1196,10 @@ async def unblock_user(callback: types.CallbackQuery, db_user: User, db: AsyncSe
     user_service = UserService()
     success = await user_service.unblock_user(db, user_id, db_user.id)
 
-    if success:
-        await callback.message.edit_text(
-            '✅ Пользователь разблокирован',
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [types.InlineKeyboardButton(text='👤 К пользователю', callback_data=f'admin_user_manage_{user_id}')]
-                ]
-            ),
-        )
-    else:
-        await callback.message.edit_text(
-            '❌ Ошибка разблокировки пользователя',
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [types.InlineKeyboardButton(text='👤 К пользователю', callback_data=f'admin_user_manage_{user_id}')]
-                ]
-            ),
-        )
-
+    await callback.message.edit_text(
+        '✅ Пользователь разблокирован' if success else '❌ Ошибка разблокировки пользователя',
+        reply_markup=_back_to_user_keyboard(user_id),
+    )
     await callback.answer()
 
 
