@@ -220,5 +220,5 @@ async def test_expired_update_sends_closing_date_in_first_patch(postgres_databas
 @pytest.mark.parametrize('failure', [True, 'ignored'])
 async def test_reset_preserves_local_reset_when_expiry_patch_fails(postgres_database, monkeypatch, flow, failure):
     await test_reset_does_not_regain_paid_days_from_panel(
-        postgres_database, monkeypatch, flow, True, ROUTINE, expiry_error=failure
+        postgres_database, monkeypatch, flow, ROUTINE, expiry_error=failure
     )

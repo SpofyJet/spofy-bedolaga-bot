@@ -128,5 +128,4 @@ async def test_http_query_reaches_owned_selected_row(
         enable_name,
         'selected',
         'http',
-        True,
     )
