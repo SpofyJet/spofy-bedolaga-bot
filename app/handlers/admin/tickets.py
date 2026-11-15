@@ -23,6 +23,7 @@ from app.services.support_settings_service import SupportSettingsService
 from app.states import AdminTicketStates
 from app.utils.cache import RateLimitCache
 from app.utils.chat_scope import callback_from_group
+from app.utils.pagination import build_page_nav_row
 from app.utils.photo_message import safe_edit_or_resend
 from app.utils.ticket_media import get_ticket_media, ticket_media_chunks
 from app.utils.ticket_text import (
@@ -300,16 +301,7 @@ async def view_admin_ticket(
 
     # Пагинация
     if total_pages > 1:
-        nav_row = []
-        if page > 1:
-            nav_row.append(
-                types.InlineKeyboardButton(text='⬅️', callback_data=f'admin_ticket_page_{ticket_id}_{page - 1}')
-            )
-        nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='noop'))
-        if page < total_pages:
-            nav_row.append(
-                types.InlineKeyboardButton(text='➡️', callback_data=f'admin_ticket_page_{ticket_id}_{page + 1}')
-            )
+        nav_row = build_page_nav_row(page, total_pages, f'admin_ticket_page_{ticket_id}_', current_callback='noop')
         if getattr(keyboard, 'inline_keyboard', None) is not None:
             keyboard.inline_keyboard.insert(0, nav_row)
 

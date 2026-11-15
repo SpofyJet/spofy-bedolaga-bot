@@ -13,6 +13,7 @@ from app.localization.texts import get_texts
 from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 from app.utils.lifetime import is_lifetime_end
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
+from app.utils.pagination import build_page_nav_row
 from app.utils.pricing_utils import (
     apply_percentage_discount,
 )
@@ -1841,25 +1842,7 @@ def get_pagination_keyboard(
     keyboard = []
 
     if total_pages > 1:
-        row = []
-
-        if current_page > 1:
-            row.append(
-                InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '⬅️'), callback_data=f'{callback_prefix}_page_{current_page - 1}'
-                )
-            )
-
-        row.append(InlineKeyboardButton(text=f'{current_page}/{total_pages}', callback_data='current_page'))
-
-        if current_page < total_pages:
-            row.append(
-                InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '➡️'), callback_data=f'{callback_prefix}_page_{current_page + 1}'
-                )
-            )
-
-        keyboard.append(row)
+        keyboard.append(build_page_nav_row(current_page, total_pages, f'{callback_prefix}_page_', texts=texts))
 
     return keyboard
 
@@ -2528,27 +2511,7 @@ def get_devices_management_keyboard(
         )
 
     if pagination.total_pages > 1:
-        nav_row = []
-
-        if pagination.has_prev:
-            nav_row.append(
-                InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '⬅️'), callback_data=f'devices_page_{pagination.prev_page}'
-                )
-            )
-
-        nav_row.append(
-            InlineKeyboardButton(text=f'{pagination.page}/{pagination.total_pages}', callback_data='current_page')
-        )
-
-        if pagination.has_next:
-            nav_row.append(
-                InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '➡️'), callback_data=f'devices_page_{pagination.next_page}'
-                )
-            )
-
-        keyboard.append(nav_row)
+        keyboard.append(build_page_nav_row(pagination.page, pagination.total_pages, 'devices_page_', texts=texts))
 
     keyboard.append(
         [
@@ -2734,25 +2697,7 @@ def get_my_tickets_keyboard(
 
     # Пагинация
     if total_pages > 1:
-        nav_row = []
-
-        if current_page > 1:
-            nav_row.append(
-                InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '⬅️'), callback_data=f'{page_prefix}{current_page - 1}'
-                )
-            )
-
-        nav_row.append(InlineKeyboardButton(text=f'{current_page}/{total_pages}', callback_data='current_page'))
-
-        if current_page < total_pages:
-            nav_row.append(
-                InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '➡️'), callback_data=f'{page_prefix}{current_page + 1}'
-                )
-            )
-
-        keyboard.append(nav_row)
+        keyboard.append(build_page_nav_row(current_page, total_pages, page_prefix, texts=texts))
 
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_support')])
 
@@ -2876,25 +2821,7 @@ def get_admin_tickets_keyboard(
 
     # Пагинация
     if total_pages > 1:
-        nav_row = []
-
-        if current_page > 1:
-            nav_row.append(
-                InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '⬅️'), callback_data=f'admin_tickets_page_{scope}_{current_page - 1}'
-                )
-            )
-
-        nav_row.append(InlineKeyboardButton(text=f'{current_page}/{total_pages}', callback_data='current_page'))
-
-        if current_page < total_pages:
-            nav_row.append(
-                InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '➡️'), callback_data=f'admin_tickets_page_{scope}_{current_page + 1}'
-                )
-            )
-
-        keyboard.append(nav_row)
+        keyboard.append(build_page_nav_row(current_page, total_pages, f'admin_tickets_page_{scope}_', texts=texts))
 
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
 

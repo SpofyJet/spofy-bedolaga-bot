@@ -26,6 +26,7 @@ from app.services.blocked_users_service import (
     BlockedUsersService,
 )
 from app.utils.decorators import admin_required, error_handler
+from app.utils.pagination import build_page_nav_row
 
 
 logger = structlog.get_logger(__name__)
@@ -192,28 +193,9 @@ def get_blocked_list_keyboard(
 
     # Пагинация
     if total_pages > 1:
-        nav_row = []
-        if page > 1:
-            nav_row.append(
-                InlineKeyboardButton(
-                    text='⬅️',
-                    callback_data=f'{BlockedUsersCallback.VIEW_LIST_PAGE.value}{page - 1}',
-                )
-            )
-        nav_row.append(
-            InlineKeyboardButton(
-                text=f'{page}/{total_pages}',
-                callback_data='noop',
-            )
+        buttons.append(
+            build_page_nav_row(page, total_pages, BlockedUsersCallback.VIEW_LIST_PAGE.value, current_callback='noop')
         )
-        if page < total_pages:
-            nav_row.append(
-                InlineKeyboardButton(
-                    text='➡️',
-                    callback_data=f'{BlockedUsersCallback.VIEW_LIST_PAGE.value}{page + 1}',
-                )
-            )
-        buttons.append(nav_row)
 
     # Действия
     if has_blocked:

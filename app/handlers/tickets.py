@@ -27,6 +27,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.utils.background import spawn_background_task
 from app.utils.formatters import format_username_link
 from app.utils.miniapp_buttons import build_admin_ticket_cabinet_button
+from app.utils.pagination import build_page_nav_row
 from app.utils.photo_message import edit_or_answer_photo, safe_edit_or_resend
 from app.utils.ticket_media import get_ticket_media, ticket_media_chunks
 from app.utils.ticket_text import (
@@ -665,16 +666,7 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             logger.debug('Ignored error in view_ticket', exc_info=True)
     # Пагинация
     if total_pages > 1:
-        nav_row = []
-        if page > 1:
-            nav_row.append(
-                types.InlineKeyboardButton(text='⬅️', callback_data=f'ticket_view_page_{ticket_id}_{page - 1}')
-            )
-        nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='noop'))
-        if page < total_pages:
-            nav_row.append(
-                types.InlineKeyboardButton(text='➡️', callback_data=f'ticket_view_page_{ticket_id}_{page + 1}')
-            )
+        nav_row = build_page_nav_row(page, total_pages, f'ticket_view_page_{ticket_id}_', current_callback='noop')
         if getattr(keyboard, 'inline_keyboard', None) is not None:
             # Пагинация — после действий, прямо над «Назад»
             keyboard.inline_keyboard.insert(max(0, len(keyboard.inline_keyboard) - 1), nav_row)

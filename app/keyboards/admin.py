@@ -3,6 +3,7 @@ import re
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.localization.texts import get_texts
+from app.utils.pagination import build_page_nav_row
 
 
 def _t(texts, key: str, default: str) -> str:
@@ -522,17 +523,7 @@ def get_admin_pagination_keyboard(
     keyboard = []
 
     if total_pages > 1:
-        row = []
-
-        if current_page > 1:
-            row.append(InlineKeyboardButton(text='⬅️', callback_data=f'{callback_prefix}_page_{current_page - 1}'))
-
-        row.append(InlineKeyboardButton(text=f'{current_page}/{total_pages}', callback_data='current_page'))
-
-        if current_page < total_pages:
-            row.append(InlineKeyboardButton(text='➡️', callback_data=f'{callback_prefix}_page_{current_page + 1}'))
-
-        keyboard.append(row)
+        keyboard.append(build_page_nav_row(current_page, total_pages, f'{callback_prefix}_page_'))
 
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
 
