@@ -175,19 +175,10 @@ class _PanelSpy:
             staticmethod(lambda panel_user_ids: self.marked.extend(panel_user_ids)),
         )
 
-        def _record(label):
-            async def recorder(*args, **kwargs):
-                self.order.append(label)
-
-            return recorder
-
         async def fake_decrement(_db, subscription):
             self.decremented.append(subscription.id)
             self.order.append('decrement')
 
-        monkeypatch.setattr(
-            'app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', _record('platega')
-        )
         monkeypatch.setattr(deletion, 'decrement_subscription_server_counts', fake_decrement)
 
 

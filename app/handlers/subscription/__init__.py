@@ -2,9 +2,6 @@
 
 from .autopay import (
     handle_autopay_menu,
-    handle_sbp_recurring_cancel,
-    handle_sbp_recurring_enable,
-    handle_sbp_recurring_menu,
     handle_subscription_cancel,
     set_autopay_days,
     set_autopay_period,
@@ -152,9 +149,6 @@ __all__ = [
     'handle_reset_devices',
     'handle_reset_traffic',
     'handle_return_to_gift_cart',
-    'handle_sbp_recurring_cancel',
-    'handle_sbp_recurring_enable',
-    'handle_sbp_recurring_menu',
     'handle_single_device_reset',
     'handle_specific_app_guide',
     'handle_subscription_cancel',

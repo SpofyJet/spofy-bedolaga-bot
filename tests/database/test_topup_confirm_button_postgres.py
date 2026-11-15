@@ -56,7 +56,6 @@ async def _renewal_checkout(postgres_database, monkeypatch, *, balance: int):
         'ADMIN_NOTIFICATIONS_ENABLED': False,
     }.items():
         monkeypatch.setattr(settings, name, value)
-    monkeypatch.setattr(type(settings), 'is_platega_recurrent_enabled', lambda self: False)
     monkeypatch.setattr(telegram, 'SubscriptionService', _PanelStub)
     monkeypatch.setattr(telegram, 'should_create_panel_account', AsyncMock(return_value=False))
     monkeypatch.setattr(telegram, 'AdminNotificationService', _AdminNotifyStub)

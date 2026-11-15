@@ -427,29 +427,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # Platega sends both one-off payment callbacks and recurring СБП-subscription
-            # callbacks (charge + status-change) to this same endpoint. Subscription
-            # payloads carry paymentMethod 6, a subscriptionId, or a SUBSCRIPTION_-prefixed
-            # status — matched case-insensitively, because the live charge callback
-            # arrives in camelCase while the spec examples are PascalCase.
-            from app.services.platega_recurrent import is_subscription_callback
-
-            is_subscription = is_subscription_callback(payload)
-
             try:
-                if is_subscription:
-                    # process_platega_subscription_callback self-handles errors/logging
-                    # and always returns None — it is NOT a success flag like the other
-                    # handlers, so the response must not be gated on its return value.
-                    # Per spec, subscription callbacks always get HTTP 200 unless
-                    # dispatch itself raises (caught below → 400, Platega retries).
-                    await _process_payment_service_callback(
-                        payment_service,
-                        payload,
-                        'process_platega_subscription_callback',
-                    )
-                    return JSONResponse({'status': 'ok'})
-
                 success = await _process_payment_service_callback(
                     payment_service,
                     payload,

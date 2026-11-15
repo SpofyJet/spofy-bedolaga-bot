@@ -1133,13 +1133,6 @@ async def reset_subscription_with_panel(db, user: User, subscription: Subscripti
     """
     from app.database.crud.subscription import reset_subscription
 
-    # Подписка обнуляется «как будто не оформляли» — СБП-автопродление Platega
-    # обязано умереть вместе с ней, иначе следующий push-коллбек продлит и
-    # заново включит только что обнулённую подписку (и банк продолжит списывать).
-    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
-
-    await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-
     # Fallback на user.remnawave_id: панель адресуется через человека.
     panel_user_id = subscription.remnawave_id or user.remnawave_id
 

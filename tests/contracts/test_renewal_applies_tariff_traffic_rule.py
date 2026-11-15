@@ -127,13 +127,3 @@ def test_known_exceptions_still_exist():
     offenders = set(collect_offenders())
     stale = sorted(set(KNOWN_WITHOUT_RULE) - offenders)
     assert not stale, 'Исключения больше не двигают дату мимо правила — уберите их из списка:\n  ' + '\n  '.join(stale)
-
-
-def test_platega_renewal_goes_through_crud_extend():
-    """Spofy: чардж Platega продлевает CRUD-функцией extend_subscription (тариф записи,
-    конверсия триала, починка грейса и правило трафика — внутри неё), а не методом модели."""
-    path = APP / 'services/payment/platega.py'
-    tree = ast.parse(path.read_text(encoding='utf-8'))
-    nodes = [node for key, node in _iter_functions(tree, path) if 'process_platega_subscription_callback' in key]
-    assert nodes
-    assert all(not _moves_end_date_forward(node) and _applies_rule(node) for node in nodes)

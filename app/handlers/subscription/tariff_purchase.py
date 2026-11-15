@@ -444,54 +444,18 @@ def get_tariff_confirm_keyboard(
     tariff_id: int,
     period: int,
     language: str,
-    show_sbp: bool = True,
-    sbp_price_kopeks: int | None = None,
     trim_row: list[InlineKeyboardButton] | None = None,
 ) -> InlineKeyboardMarkup:
-    """Создает клавиатуру подтверждения покупки тарифа.
-
-    show_sbp=False — у юзера активная скидка: рядом на экране цена со
-    скидкой, а подписка Platega спишет полную (одна фиксированная сумма на
-    все списания, первое — сразу при привязке). Кнопку автооплаты прячем,
-    чтобы не обещать цену, которую подписка повторить не может.
-    """
+    """Создает клавиатуру подтверждения покупки тарифа."""
     texts = get_texts(language)
-    # Автооплата — ПЕРВАЯ кнопка (рекуррент по умолчанию): первое списание
-    # Platega = подтверждение привязки в банке, дальше автосписания по каденсу
-    # тарифа. Оплата с баланса остаётся разовой альтернативой рядом ниже.
-    # Период уезжает в callback: каденс и сумма привязки = выбранный период.
-    buttons = []
-    if show_sbp and settings.is_platega_recurrent_enabled() and _sbp_period_supported(period):
-        # Цена на кнопке — всегда ПОЛНАЯ (без скидок): подписка Platega спишет
-        # базовую цену периода, поэтому при активной скидке кнопка скрыта.
-        if sbp_price_kopeks:
-            sbp_label = texts.t('SBP_PURCHASE_BUTTON_PRICED', '⚡ Оплатить {price} — дальше каждые {period}').format(
-                price=format_price_kopeks(sbp_price_kopeks), period=format_period(period)
-            )
-        else:
-            sbp_label = texts.t('SBP_PURCHASE_BUTTON', '⚡ Оплатить с автопродлением (СБП)')
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=sbp_label,
-                    callback_data=f'tariff_sbp:{tariff_id}:{period}',
-                )
-            ]
-        )
-    # Разовая оплата с баланса: рядом с автооплатой подписываем явно
-    one_time_label = (
-        texts.t('TARIFF_PURCHASE_ONE_TIME_BUTTON', '💳 Разово — только этот период')
-        if buttons
-        else texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку')
-    )
-    buttons.append(
+    buttons = [
         [
             InlineKeyboardButton(
-                text=one_time_label,
+                text=texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку'),
                 callback_data=f'tariff_confirm:{tariff_id}:{period}',
             )
         ],
-    )
+    ]
     if trim_row:
         buttons.append(trim_row)
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'tariff_select:{tariff_id}')])
@@ -515,7 +479,6 @@ def get_tariff_insufficient_balance_keyboard(
     period: int,
     language: str,
     missing_kopeks: int = 0,
-    show_sbp: bool = True,
     trim_row: list[InlineKeyboardButton] | None = None,
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру при недостаточном балансе.
@@ -523,16 +486,9 @@ def get_tariff_insufficient_balance_keyboard(
     Способы оплаты показываем сразу, предзаполненные ровно недостающей суммой. С автопокупкой
     (AUTO_PURCHASE_AFTER_TOPUP_ENABLED) подписка оформится сама, без неё — по кнопке
     «Продолжить оформление» в сообщении о зачислении.
-
-    СБП-оформление показываем и здесь: привязке баланс не нужен (первое списание
-    Platega = подтверждение в банке), а без кнопки на этом экране фича была
-    недостижима для пользователей без денег на балансе.
     """
     texts = get_texts(language)
     back_button = InlineKeyboardButton(text=texts.BACK, callback_data=f'tariff_select:{tariff_id}')
-    # Скидка на экране (цена «не хватает» посчитана со скидкой) — СБП не
-    # показываем: подписка спишет полную сумму, а не ту, что видит юзер.
-    sbp_rows = _sbp_purchase_rows(tariff_id, texts, period_days=period) if show_sbp else []
 
     trim_rows = [trim_row] if trim_row else []
     # Способы оплаты на недостающую сумму — сразу, и без автопокупки: корзина сохранена, после зачисления
@@ -548,12 +504,11 @@ def get_tariff_insufficient_balance_keyboard(
             if row and all((button.callback_data or '').startswith('topup_amount|') for button in row)
         ]
         if payment_rows:
-            return InlineKeyboardMarkup(inline_keyboard=[*trim_rows, *sbp_rows, *payment_rows, [back_button]])
+            return InlineKeyboardMarkup(inline_keyboard=[*trim_rows, *payment_rows, [back_button]])
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
             *trim_rows,
-            *sbp_rows,
             [
                 InlineKeyboardButton(
                     text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup', style='success'
@@ -570,7 +525,6 @@ def get_tariff_extend_insufficient_balance_keyboard(
     period: int,
     language: str,
     missing_kopeks: int = 0,
-    sbp_rows: list[list[InlineKeyboardButton]] | None = None,
 ) -> InlineKeyboardMarkup:
     """Клавиатура «Недостаточно средств» при продлении тарифа.
 
@@ -586,15 +540,9 @@ def get_tariff_extend_insufficient_balance_keyboard(
     экране возврата после пополнения упирается в «Выберите подписку» и ничего
     не перерисовывает (FSM к тому моменту мог быть очищен, а активная подписка
     там не закрепляется). Идиома та же, что в monitoring_service.
-
-    SBP-строки НОВОЙ покупки (``tariff_sbp``) не
-    добавляем: их обработчики оформляют новую подписку, а не продление.
-    Наши ряды привязки продления (``_sbp_renew_recurring_rows``) вызывающий
-    передаёт явно через ``sbp_rows``.
     """
     texts = get_texts(language)
     back_button = InlineKeyboardButton(text=texts.BACK, callback_data='subscription_extend')
-    sbp_rows = sbp_rows or []
 
     # Способы оплаты на недостающую сумму — сразу, и без автопокупки: корзина сохранена, после зачисления
     # первая кнопка — «Продолжить оформление».
@@ -609,11 +557,10 @@ def get_tariff_extend_insufficient_balance_keyboard(
             if row and all((button.callback_data or '').startswith('topup_amount|') for button in row)
         ]
         if payment_rows:
-            return InlineKeyboardMarkup(inline_keyboard=[*sbp_rows, *payment_rows, [back_button]])
+            return InlineKeyboardMarkup(inline_keyboard=[*payment_rows, [back_button]])
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            *sbp_rows,
             [
                 InlineKeyboardButton(
                     text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup', style='success'
@@ -622,89 +569,6 @@ def get_tariff_extend_insufficient_balance_keyboard(
             [back_button],
         ]
     )
-
-
-def _sbp_period_supported(period_days: int, is_daily: bool = False) -> bool:
-    """Выразим ли период каденсом подписки Platega (interval × intervalCount).
-
-    Нет — кнопку СБП-оформления для периода показывать нельзя: привязка
-    создалась бы с искажённым каденсом и ценой. Ошибка -> прячем кнопку
-    (fail-closed): лучше разовая оплата, чем битая привязка.
-    """
-    try:
-        from app.services.platega_recurrent import resolve_platega_cadence
-
-        return resolve_platega_cadence(period_days, is_daily) is not None
-    except Exception:
-        return False
-
-
-def _sbp_purchase_rows(tariff_id: int, texts, period_days: int | None = None) -> list[list[InlineKeyboardButton]]:
-    """Ряды оформления привязкой провайдера — те же, что на confirm-экранах."""
-    rows: list[list[InlineKeyboardButton]] = []
-    if settings.is_platega_recurrent_enabled() and (period_days is None or _sbp_period_supported(period_days)):
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оплатить с автопродлением (СБП)'),
-                    callback_data=(
-                        f'tariff_sbp:{tariff_id}:{period_days}' if period_days else f'tariff_sbp:{tariff_id}'
-                    ),
-                    style='success',
-                )
-            ]
-        )
-    return rows
-
-
-async def _append_sbp_recurring_offer(db, subscription, tariff, texts, rows: list) -> list:
-    """Ряд «⚡ Включить автопродление (СБП)» для success-экранов покупки.
-
-    Показываем только когда это уместно: фича включена, у подписки есть
-    несуточный тариф, подписка не триальная и живой привязки Platega ещё нет.
-    Любая ошибка -> экран успеха рендерится как раньше: оффер не должен
-    ломать основной флоу.
-    """
-    try:
-        if not settings.is_platega_recurrent_enabled():
-            return rows
-        if not subscription:
-            return rows
-        if getattr(subscription, 'is_trial', None) is not False:
-            return rows
-        if not getattr(subscription, 'tariff_id', None):
-            return rows
-        if tariff is None or getattr(tariff, 'is_daily', False):
-            return rows
-        # Не показываем оффер, если каденс невыразим в Platega (например,
-        # «вечный» тариф на 2222 дня): клик завершился бы ошибкой.
-        from app.services.autopay_period import resolve_autopay_period_candidate
-        from app.services.platega_recurrent import resolve_platega_cadence
-
-        _offer_period = (
-            resolve_autopay_period_candidate(getattr(subscription, 'autopay_period_days', None), tariff)
-            or resolve_autopay_period_candidate(settings.DEFAULT_AUTOPAY_PERIOD_DAYS, tariff)
-            or (tariff.get_shortest_period() if tariff else None)
-            or 30
-        )
-        if resolve_platega_cadence(_offer_period, getattr(tariff, 'is_daily', False)) is None:
-            return rows
-        from app.database.crud.platega_subscription import get_active_platega_subscription_by_subscription
-
-        if await get_active_platega_subscription_by_subscription(db, subscription.id):
-            return rows
-    except Exception:
-        return rows
-    offer_row = [
-        InlineKeyboardButton(
-            text=texts.t('SBP_RECURRING_OFFER_BUTTON', '⚡ Включить автопродление (СБП)'),
-            callback_data=f'sbp_recurring_enable_for:{subscription.id}',
-            style='success',
-        )
-    ]
-    if not rows:
-        return [offer_row]
-    return [*rows[:-1], offer_row, rows[-1]]
 
 
 def format_tariff_info_for_user(
@@ -741,53 +605,32 @@ def format_tariff_info_for_user(
 def get_daily_tariff_confirm_keyboard(
     tariff_id: int,
     language: str,
-    show_sbp: bool = True,
     back_callback: str = 'menu_buy',
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру подтверждения покупки суточного тарифа."""
     texts = get_texts(language)
-    # Автооплата первой — см. get_tariff_confirm_keyboard.
-    # show_sbp=False — на экране цена со скидкой, подписка спишет полную.
-    buttons = []
-    if show_sbp and settings.is_platega_recurrent_enabled():
-        buttons.append(
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оплатить с автопродлением (СБП)'),
-                    callback_data=f'tariff_sbp:{tariff_id}',
-                    style='success',
+                    text=texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку'),
+                    callback_data=f'daily_tariff_confirm:{tariff_id}',
                 )
-            ]
-        )
-    one_time_label = (
-        texts.t('TARIFF_PURCHASE_ONE_TIME_BUTTON', '💳 Разово — только этот период')
-        if buttons
-        else texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку')
+            ],
+            [InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)],
+        ]
     )
-    buttons.append(
-        [
-            InlineKeyboardButton(
-                text=one_time_label,
-                callback_data=f'daily_tariff_confirm:{tariff_id}',
-            )
-        ],
-    )
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_daily_tariff_insufficient_balance_keyboard(
     tariff_id: int,
     language: str,
-    show_sbp: bool = True,
     back_callback: str = 'menu_buy',
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру при недостаточном балансе для суточного тарифа."""
     texts = get_texts(language)
-    sbp_rows = _sbp_purchase_rows(tariff_id, texts) if show_sbp else []
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            *sbp_rows,
             [
                 InlineKeyboardButton(
                     text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup', style='success'
@@ -1231,7 +1074,7 @@ async def _proceed_with_selected_tariff(
                     balance=format_price_kopeks(user_balance),
                 ),
                 reply_markup=get_daily_tariff_confirm_keyboard(
-                    tariff_id, db_user.language, show_sbp=daily_discount <= 0, back_callback=back_callback
+                    tariff_id, db_user.language, back_callback=back_callback
                 ),
                 parse_mode='HTML',
             )
@@ -1279,7 +1122,7 @@ async def _proceed_with_selected_tariff(
                     '\n\n🛒 <i>Корзина сохранена. После пополнения вернитесь к оформлению — всё останется как есть.</i>',
                 ),
                 reply_markup=get_daily_tariff_insufficient_balance_keyboard(
-                    tariff_id, db_user.language, show_sbp=daily_discount <= 0, back_callback=back_callback
+                    tariff_id, db_user.language, back_callback=back_callback
                 ),
                 parse_mode='HTML',
             )
@@ -1888,8 +1731,6 @@ async def select_tariff_period(
             tariff_id,
             period,
             db_user.language,
-            show_sbp=total_discount <= 0,
-            sbp_price_kopeks=original_price,
             trim_row=trim_row,
         ),
         tariff=tariff,
@@ -1932,8 +1773,6 @@ async def select_tariff_period(
             )
             + _price_breakdown_note(texts, tariff, shown_device_limit, result)
             + trim_note,
-            # Скидка на экране («Итого: 216 ₽») — кнопку автооплаты прячем:
-            # подписка Platega спишет полную цену, а не скидочную.
             reply_markup=confirm_keyboard,
             parse_mode='HTML',
         )
@@ -1988,7 +1827,6 @@ async def select_tariff_period(
                 period,
                 db_user.language,
                 missing_kopeks=missing,
-                show_sbp=total_discount <= 0,
                 trim_row=trim_row,
             ),
             parse_mode='HTML',
@@ -2332,22 +2170,16 @@ async def confirm_daily_tariff_purchase(
             price=format_price_kopeks(final_daily_price),
         ),
         reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=await _append_sbp_recurring_offer(
-                db,
-                subscription,
-                tariff,
-                texts,
+            inline_keyboard=[
+                [build_connect_button(texts, subscription)],
                 [
-                    [build_connect_button(texts, subscription)],
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
-                            callback_data='menu_subscription',
-                        )
-                    ],
-                    [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+                    InlineKeyboardButton(
+                        text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                        callback_data='menu_subscription',
+                    )
                 ],
-            ),
+                [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+            ],
         ),
         parse_mode='HTML',
     )
@@ -2449,74 +2281,19 @@ def get_tariff_extend_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-async def _sbp_renew_recurring_rows(
-    db, subscription, tariff, period, texts, price_kopeks
-) -> list[list[InlineKeyboardButton]]:
-    """Ряд «⚡ Оплатить N — дальше каждые P» для продления существующей подписки.
-
-    Первое списание Platega = подтверждение привязки в банке (= оплата этого
-    продления), дальше — автосписания по каденсу. Любая ошибка -> без ряда:
-    экран продления рендерится как раньше (fail-closed, как оффер успеха).
-    """
-    try:
-        if not settings.is_platega_recurrent_enabled():
-            return []
-        if not subscription or getattr(subscription, 'is_trial', None) is not False:
-            return []
-        if not getattr(subscription, 'tariff_id', None):
-            return []
-        if tariff is None or getattr(tariff, 'is_daily', False):
-            return []
-        if not _sbp_period_supported(period, getattr(tariff, 'is_daily', False)):
-            return []
-        from app.database.crud.platega_subscription import get_active_platega_subscription_by_subscription
-
-        if await get_active_platega_subscription_by_subscription(db, subscription.id):
-            return []
-    except Exception:
-        return []
-    if price_kopeks:
-        label = texts.t('SBP_PURCHASE_BUTTON_PRICED', '⚡ Оплатить {price} — дальше каждые {period}').format(
-            price=format_price_kopeks(price_kopeks), period=format_period(period)
-        )
-    else:
-        label = texts.t('SBP_RECURRING_OFFER_BUTTON', '⚡ Включить автопродление (СБП)')
-    return [[InlineKeyboardButton(text=label, callback_data=f'sbp_recurring_enable_for:{subscription.id}')]]
-
-
-async def get_tariff_extend_confirm_keyboard(
+def get_tariff_extend_confirm_keyboard(
     subscription_id: int,
     tariff_id: int,
     period: int,
     language: str,
-    db=None,
-    subscription=None,
-    tariff=None,
-    sbp_price_kopeks: int | None = None,
-    show_sbp: bool = True,
 ) -> InlineKeyboardMarkup:
-    """Создает клавиатуру подтверждения продления по тарифу.
-
-    СБП-автопродление — первой кнопкой (рекуррент по умолчанию): первое
-    списание оплачивает это продление, дальше — автосписания по каденсу.
-    Прячем при скидке на экране (подписка Platega спишет полную цену) и при
-    живой привязке.
-    """
+    """Создает клавиатуру подтверждения продления по тарифу."""
     texts = get_texts(language)
-    sbp_rows: list[list[InlineKeyboardButton]] = []
-    if show_sbp and db is not None and subscription is not None:
-        sbp_rows = await _sbp_renew_recurring_rows(db, subscription, tariff, period, texts, sbp_price_kopeks)
-    one_time_label = (
-        texts.t('TARIFF_PURCHASE_ONE_TIME_BUTTON', '💳 Разово — только этот период')
-        if sbp_rows
-        else texts.t('TARIFF_RENEW_CONFIRM_BUTTON', '✅ Подтвердить продление')
-    )
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            *sbp_rows,
             [
                 InlineKeyboardButton(
-                    text=one_time_label,
+                    text=texts.t('TARIFF_RENEW_CONFIRM_BUTTON', '✅ Подтвердить продление'),
                     callback_data=f'tariff_ext_confirm:{subscription_id}:{tariff_id}:{period}',
                 )
             ],
@@ -2743,16 +2520,11 @@ async def select_tariff_extend_period(
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - final_price),
             ),
-            reply_markup=await get_tariff_extend_confirm_keyboard(
+            reply_markup=get_tariff_extend_confirm_keyboard(
                 subscription.id,
                 tariff_id,
                 period,
                 db_user.language,
-                db=db,
-                subscription=subscription,
-                tariff=tariff,
-                sbp_price_kopeks=original_price,
-                show_sbp=total_discount <= 0,
             ),
             parse_mode='HTML',
         )
@@ -2777,14 +2549,6 @@ async def select_tariff_extend_period(
             'discount_percent': discount_percent,
         }
         await user_cart_service.save_user_cart(db_user.id, cart_data)
-
-        # Привязке баланс не нужен: вход в СБП-автопродление даём и отсюда
-        # (первое списание = оплата этого продления). Скидка на экране -> прячем.
-        _sbp_ext_rows = (
-            await _sbp_renew_recurring_rows(db, subscription, tariff, period, texts, original_price)
-            if total_discount <= 0
-            else []
-        )
 
         await callback.message.edit_text(
             texts.t(
@@ -2812,7 +2576,6 @@ async def select_tariff_extend_period(
                 period,
                 db_user.language,
                 missing_kopeks=missing,
-                sbp_rows=_sbp_ext_rows,
             ),
             parse_mode='HTML',
         )
@@ -3075,22 +2838,16 @@ async def confirm_tariff_extend(
                 price=format_price_kopeks(final_price),
             ),
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=await _append_sbp_recurring_offer(
-                    db,
-                    subscription,
-                    tariff,
-                    texts,
+                inline_keyboard=[
                     [
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', '📱 Подключить устройство'),
-                                callback_data='subscription_connect',
-                                style='success',
-                            )
-                        ],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+                        InlineKeyboardButton(
+                            text=texts.t('CONNECT_BUTTON', '📱 Подключить устройство'),
+                            callback_data='subscription_connect',
+                            style='success',
+                        )
                     ],
-                ),
+                    [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+                ],
             ),
             parse_mode='HTML',
         )
@@ -3742,12 +3499,6 @@ async def confirm_tariff_switch(
         await callback.answer(texts.t('NO_SUBSCRIPTION_ERROR', '❌ У вас нет активной подписки'), show_alert=True)
         return
 
-    # Запоминаем старый тариф: после переключения снимаем привязки
-    # автопродления СТАРОГО тарифа (СБП) — иначе следующее списание по
-    # старой привязке оттянет тариф обратно (логика смены тарифа при списании).
-    _sw_old_tariff_id = getattr(subscription, 'tariff_id', None)
-    _sw_recurring_note = ''
-
     from sqlalchemy.orm import selectinload
 
     from app.database.models import Subscription
@@ -3897,23 +3648,6 @@ async def confirm_tariff_switch(
             payment_method=PaymentMethod.BALANCE,
         )
 
-        # Привязки автопродления старого тарифа больше не соответствуют
-        # подписке: следующее списание по ним оттянуло бы тариф обратно и
-        # списало старую сумму. Отменяем best-effort (сбой не блокирует уже
-        # совершённое переключение) и честно говорим об этом на success-экране —
-        # там же лежит кнопка подключения автопродления к новому тарифу.
-        if _sw_old_tariff_id is not None and _sw_old_tariff_id != tariff.id:
-            try:
-                from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
-
-                await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-            except Exception as cancel_error:  # pragma: no cover - defensive
-                logger.warning('Не удалось отменить СБП-привязку при смене тарифа', error=str(cancel_error))
-            _sw_recurring_note = texts.t(
-                'TARIFF_SWITCH_RECURRING_NOTE',
-                '\n\n⚠️ Автопродление по старому тарифу отменено — подключите заново кнопкой ниже.',
-            )
-
         # Обновляем пользователя в Remnawave
         try:
             subscription_service = SubscriptionService()
@@ -4012,25 +3746,18 @@ async def confirm_tariff_switch(
                 devices=tariff.device_limit,
                 price=format_price_kopeks(final_price),
                 time_info=time_info,
-            )
-            + _sw_recurring_note,
+            ),
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=await _append_sbp_recurring_offer(
-                    db,
-                    subscription,
-                    tariff,
-                    texts,
+                inline_keyboard=[
                     [
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', '📱 Подключить устройство'),
-                                callback_data='subscription_connect',
-                                style='success',
-                            )
-                        ],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+                        InlineKeyboardButton(
+                            text=texts.t('CONNECT_BUTTON', '📱 Подключить устройство'),
+                            callback_data='subscription_connect',
+                            style='success',
+                        )
                     ],
-                ),
+                    [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+                ],
             ),
             parse_mode='HTML',
         )
@@ -4108,11 +3835,6 @@ async def confirm_daily_tariff_switch(
     if not subscription:
         await callback.answer(texts.t('NO_SUBSCRIPTION_ERROR', '❌ У вас нет активной подписки'), show_alert=True)
         return
-
-    # Запоминаем старый тариф: после переключения снимаем привязки
-    # автопродления СТАРОГО тарифа (см. выше про оттягивание при списании).
-    _sw_old_tariff_id = getattr(subscription, 'tariff_id', None)
-    _sw_recurring_note = ''
 
     # Проверяем разрешение на смену в данном направлении
     if subscription.tariff_id and subscription.tariff_id != tariff_id:
@@ -4215,20 +3937,6 @@ async def confirm_daily_tariff_switch(
         await db.commit()
         await db.refresh(subscription)
 
-        # См. выше: привязки автопродления старого тарифа отменяем, иначе их
-        # следующее списание оттянет подписку обратно на старый тариф.
-        if _sw_old_tariff_id is not None and _sw_old_tariff_id != tariff.id:
-            try:
-                from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
-
-                await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-            except Exception as cancel_error:  # pragma: no cover - defensive
-                logger.warning('Не удалось отменить СБП-привязку при смене на суточный тариф', error=str(cancel_error))
-            _sw_recurring_note = texts.t(
-                'TARIFF_SWITCH_RECURRING_NOTE',
-                '\n\n⚠️ Автопродление по старому тарифу отменено — подключите заново в разделе «Автоплатёж».',
-            )
-
         # Обновляем пользователя в Remnawave (сброс трафика по админ-настройке)
         try:
             subscription_service = SubscriptionService()
@@ -4326,25 +4034,18 @@ async def confirm_daily_tariff_switch(
                 traffic=traffic,
                 devices=tariff.device_limit,
                 price=format_price_kopeks(final_daily_price),
-            )
-            + _sw_recurring_note,
+            ),
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=await _append_sbp_recurring_offer(
-                    db,
-                    subscription,
-                    tariff,
-                    texts,
+                inline_keyboard=[
                     [
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', '📱 Подключить устройство'),
-                                callback_data='subscription_connect',
-                                style='success',
-                            )
-                        ],
-                        [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+                        InlineKeyboardButton(
+                            text=texts.t('CONNECT_BUTTON', '📱 Подключить устройство'),
+                            callback_data='subscription_connect',
+                            style='success',
+                        )
                     ],
-                ),
+                    [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+                ],
             ),
             parse_mode='HTML',
         )
@@ -5614,7 +5315,6 @@ async def _show_restored_tariff_cart(
     tariff_id = tariff.id
     period = saved.period
     total_price = saved.total_price
-    original_price = saved.original_price
     discount_amount = saved.discount_amount
     discount_percent = saved.discount_percent
     custom_traffic_gb = saved.custom_traffic_gb
@@ -5644,9 +5344,7 @@ async def _show_restored_tariff_cart(
                     balance=format_price_kopeks(user_balance),
                     missing=format_price_kopeks(missing),
                 ),
-                reply_markup=get_daily_tariff_insufficient_balance_keyboard(
-                    tariff_id, db_user.language, show_sbp=cart_data.get('discount_percent', 0) <= 0
-                ),
+                reply_markup=get_daily_tariff_insufficient_balance_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
             )
         elif cart_mode == 'extend':
@@ -5699,7 +5397,6 @@ async def _show_restored_tariff_cart(
                     period,
                     db_user.language,
                     missing_kopeks=missing,
-                    show_sbp=cart_data.get('discount_percent', 0) <= 0,
                 ),
                 parse_mode='HTML',
             )
@@ -5729,7 +5426,7 @@ async def _show_restored_tariff_cart(
                 balance=format_price_kopeks(user_balance),
                 after=format_price_kopeks(user_balance - daily_price),
             ),
-            reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language, show_sbp=discount_percent <= 0),
+            reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language),
             parse_mode='HTML',
         )
     elif cart_mode == 'extend':
@@ -5786,13 +5483,7 @@ async def _show_restored_tariff_cart(
         )
     else:  # tariff_purchase
         period = int(cart_data.get('period_days', 30))
-        confirm_keyboard = get_tariff_confirm_keyboard(
-            tariff_id,
-            period,
-            db_user.language,
-            show_sbp=discount_percent <= 0,
-            sbp_price_kopeks=original_price if discount_percent > 0 else total_price,
-        )
+        confirm_keyboard = get_tariff_confirm_keyboard(tariff_id, period, db_user.language)
         if custom_traffic_gb is not None or str(period) not in (tariff.period_prices or {}):
             confirm_keyboard.inline_keyboard[0][0].callback_data = f'custom_confirm:{tariff_id}'
         confirm_keyboard.inline_keyboard[0][0].callback_data += f':{saved.checkout_token}'
@@ -5914,97 +5605,6 @@ async def confirm_saved_cart_after_topup(
         _cart_confirms_in_flight.discard(user_id)
 
 
-async def purchase_tariff_with_sbp(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-    """Оформление подписки на тариф через СБП-автопродление Platega.
-
-    Кнопка на экране подтверждения покупки — альтернатива оплате с баланса.
-    Первое списание = подтверждение привязки в банке; для нового тарифа
-    создаётся EXPIRED-заготовка, которую активирует первый чардж (см.
-    ``purchase_tariff_with_sbp_recurring``). Выбранный период игнорируется:
-    списания идут по каденс-правилу тарифа.
-    """
-    texts = get_texts(db_user.language)
-    _parts = callback.data.split(':')
-    tariff_id = int(_parts[1])
-    # Выбранный на экране период приходит третьим сегментом
-    # (tariff_sbp:<id>:<period>); кнопки старого формата без периода —
-    # fallback на каденс-цепочку внутри сервиса.
-    period_days = int(_parts[2]) if len(_parts) > 2 else None
-
-    tariff = await get_tariff_by_id(db, tariff_id)
-    if not tariff or not tariff.is_active:
-        await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
-        return
-
-    # n2: предупреждение о смене движка автопродления на целевой подписке
-    # (та же резолюция, что в сервисе): активный баланс-автоплатёж будут
-    # отключены при создании СБП-привязки. Ошибка предупреждения не должна
-    # ломать покупку.
-    try:
-        from app.services.recurrent_amount import get_active_recurrent_engines, recurrent_engines_warning
-
-        _target_sub = await get_subscription_by_user_id(db, db_user.id)
-        if _target_sub is not None:
-            _engines = await get_active_recurrent_engines(db, _target_sub)
-            _warning = recurrent_engines_warning(texts, _engines, enabling='platega')
-            if _warning:
-                await callback.answer(_warning, show_alert=True)
-    except Exception:
-        logger.warning('Ignored error in purchase_tariff_with_sbp', exc_info=True)
-
-    from app.services.payment.platega import purchase_tariff_with_sbp_recurring
-
-    try:
-        result = await purchase_tariff_with_sbp_recurring(db, user=db_user, tariff=tariff, period_days=period_days)
-    except ValueError as error:
-        await callback.answer(str(error), show_alert=True)
-        return
-    except RuntimeError:
-        await callback.answer(
-            texts.t(
-                'SBP_RECURRING_ENABLE_ERROR', '❌ Не удалось подключить автопродление через СБП. Попробуйте позже.'
-            ),
-            show_alert=True,
-        )
-        return
-
-    redirect_url = result.get('redirect_url')
-    text = texts.t(
-        'SBP_RECURRING_ENABLE_SUCCESS',
-        '⚡ <b>Автопродление через СБП</b>\n\nПодтвердите подключение в банковском приложении по кнопке ниже.\nПосле подтверждения автопродление станет активным.',
-    )
-    # Сумма и шаг списания — ДО формы банка (первое списание сразу при привязке).
-    text += texts.t(
-        'SBP_RECURRING_PRICE_LINE',
-        '\n\n💰 <b>{amount}</b> каждые {days} дн. — первое списание сразу при подтверждении.',
-    ).format(
-        amount=f'{(result.get("amount_kopeks") or 0) // 100} ₽',
-        days=result.get('charge_days') or 30,
-    )
-    text += '\n\n' + texts.t(
-        'SBP_PURCHASE_PENDING_NOTE',
-        'ℹ️ Подписка активируется после подтверждения и первого списания.',
-    )
-
-    buttons = []
-    if redirect_url:
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('SBP_RECURRING_CONFIRM_BUTTON', '🏦 Подтвердить в банке'), url=redirect_url
-                )
-            ]
-        )
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
-
-    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
-    await callback.answer()
-
-
 def register_tariff_purchase_handlers(dp: Dispatcher):
     """Регистрирует обработчики покупки по тарифам."""
     # Список тарифов (для режима tariffs)
@@ -6021,9 +5621,6 @@ def register_tariff_purchase_handlers(dp: Dispatcher):
 
     # Подтверждение покупки
     dp.callback_query.register(confirm_tariff_purchase, F.data.startswith('tariff_confirm:'))
-
-    # Оформление через СБП-автопродление Platega (альтернатива балансу)
-    dp.callback_query.register(purchase_tariff_with_sbp, F.data.startswith('tariff_sbp:'))
 
     # Подтверждение покупки суточного тарифа
     dp.callback_query.register(confirm_daily_tariff_purchase, F.data.startswith('daily_tariff_confirm:'))

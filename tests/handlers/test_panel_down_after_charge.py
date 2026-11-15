@@ -112,10 +112,9 @@ def cart_service(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _spofy_mode(monkeypatch):
-    """Как на проде: один тариф на человека, автопокупки нет, СБП-автопродление выключено."""
+    """Как на проде: один тариф на человека, автопокупки нет."""
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
     monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', False)
-    monkeypatch.setattr(type(settings), 'is_platega_recurrent_enabled', lambda self: False)
     monkeypatch.setattr(remnawave_retry_queue, 'enqueue', lambda **kwargs: None)
     offer_module._recent_offers.clear()
     telegram._cart_confirms_in_flight.clear()

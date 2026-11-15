@@ -32,8 +32,7 @@ NEW_PANEL_ID = 777
 
 
 def _quiet_side_effects(monkeypatch, api: AsyncMock) -> None:
-    """Автоплатежи и счётчики серверов живут в своих таблицах и к сценарию не относятся."""
-    monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', AsyncMock())
+    """Счётчики серверов живут в своих таблицах и к сценарию не относятся."""
     monkeypatch.setattr(deletion, 'decrement_subscription_server_counts', AsyncMock())
     monkeypatch.setattr(
         'app.services.remnawave_webhook_service.RemnaWaveWebhookService.mark_intentional_panel_deletion',

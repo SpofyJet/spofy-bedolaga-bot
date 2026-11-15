@@ -159,12 +159,6 @@ class PaymentMethod(Enum):
     PAY2328 = 'pay2328'
     WATA = 'wata'
     PLATEGA = 'platega'
-    # СБП-автопродление Platega. В базу НЕ пишется: сами списания хранятся
-    # обычными транзакциями с методом `platega`, а это значение служит ключом
-    # отображения и маршрутизации в админке платежей. Без отдельного ключа
-    # детали открывались бы роутом /platega/{id} и грузили бы строку
-    # platega_payments с тем же номером — чужой платёж.
-    PLATEGA_RECURRENT = 'platega_recurrent'
     MANUAL = 'manual'
     BALANCE = 'balance'
 
@@ -466,6 +460,8 @@ class PlategaPayment(Base):
 
 
 class PlategaSubscription(Base):
+    # СБП-автопродления Platega больше нет; таблица осталась с историей привязок,
+    # а модель держит её схему и связи (удаление пользователя и подписки идёт через них).
     __tablename__ = 'platega_subscriptions'
 
     id = Column(Integer, primary_key=True, index=True)

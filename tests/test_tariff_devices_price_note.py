@@ -61,12 +61,12 @@ def test_period_keyboard_keeps_base_prices_without_extra_devices():
 def test_confirm_and_insufficient_keyboards_offer_the_trim_button():
     row = tp._trim_devices_row(get_texts('ru'), _tariff(), 365, 180000)
     for kb in (
-        tp.get_tariff_confirm_keyboard(3, 365, 'ru', show_sbp=False, trim_row=row),
-        tp.get_tariff_insufficient_balance_keyboard(3, 365, 'ru', missing_kopeks=0, show_sbp=False, trim_row=row),
+        tp.get_tariff_confirm_keyboard(3, 365, 'ru', trim_row=row),
+        tp.get_tariff_insufficient_balance_keyboard(3, 365, 'ru', missing_kopeks=0, trim_row=row),
     ):
         buttons = [b for r in kb.inline_keyboard for b in r]
         assert any(b.callback_data == 'tariff_trim:3:365' and '1' in b.text and '800' in b.text for b in buttons)
-    plain = tp.get_tariff_confirm_keyboard(3, 365, 'ru', show_sbp=False)
+    plain = tp.get_tariff_confirm_keyboard(3, 365, 'ru')
     assert not any((b.callback_data or '').startswith('tariff_trim') for r in plain.inline_keyboard for b in r)
 
 

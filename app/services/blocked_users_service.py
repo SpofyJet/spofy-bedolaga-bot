@@ -315,16 +315,6 @@ class BlockedUsersService:
 
             user_display = user.telegram_id or user.email or f'#{user.id}'
 
-            # Best-effort: stop Platega SBP autopay for every subscription of
-            # this user before anything is deleted — the platega_subscriptions
-            # record CASCADE-deletes with its subscription below, so cancelling
-            # afterwards would find nothing to cancel on Platega's side and the
-            # user keeps getting charged for a deleted account.
-            from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
-
-            for sub in getattr(user, 'subscriptions', None) or []:
-                await cancel_platega_recurring_for_subscription_safe(db, sub.id)
-
             # Удаляем связанные записи (порядок важен из-за foreign keys)
 
             await db.execute(delete(CryptoBotPayment).where(CryptoBotPayment.user_id == user.id))

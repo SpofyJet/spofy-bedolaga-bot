@@ -148,10 +148,6 @@ async def delete_subscription_record(
     ``deleted_by`` попадает в лог — по нему видно, кто инициировал:
     сам владелец из кабинета или администратор из карточки.
     """
-    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
-
-    await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-
     # A concurrent delete can have finished while we waited for the guard.
     # The request's identity-map copy is not proof that the row still exists.
     subscription = await db.get(Subscription, subscription.id, populate_existing=True)

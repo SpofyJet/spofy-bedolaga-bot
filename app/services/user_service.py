@@ -449,15 +449,6 @@ class UserService:
 
             # Collect all panel user ids to process
             subs = user.subscriptions or []
-            # Best-effort: stop Platega SBP autopay for every subscription of
-            # this user before the row disappears — the platega_subscriptions
-            # record CASCADE-deletes with its subscription, so cancelling
-            # after the delete would find nothing to cancel on Platega's side
-            # and the user keeps getting charged for a deleted account.
-            from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
-
-            for sub in subs:
-                await cancel_platega_recurring_for_subscription_safe(db, sub.id)
 
             panel_user_ids = [user.remnawave_id] if user.remnawave_id else []
 

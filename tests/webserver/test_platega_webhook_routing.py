@@ -58,67 +58,15 @@ def reset_settings(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _install_recorder(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    """Patch _process_payment_service_callback with a recorder.
-
-    Mirrors the TRAP the implementation must handle: the subscription method
-    name resolves to a recorder call that returns None (matching the real
-    process_platega_subscription_callback's None return), while the legacy
-    one-off method name returns True — so a routing bug (falling through to
-    the "success" gate for the subscription branch) would show up as a
-    non-200 response instead of just a wrong recorded method name.
-    """
+    """Patch _process_payment_service_callback with a recorder of called method names."""
     recorded: list[str] = []
 
     async def rec(ps, payload, method_name):
         recorded.append(method_name)
-        return None if method_name == 'process_platega_subscription_callback' else True
+        return True
 
     monkeypatch.setattr(payments_module, '_process_payment_service_callback', rec)
     return recorded
-
-
-@pytest.mark.anyio
-async def test_platega_subscription_payload_routes_and_always_returns_200(monkeypatch: pytest.MonkeyPatch) -> None:
-    recorded = _install_recorder(monkeypatch)
-
-    router = create_payment_router(DummyBot(), SimpleNamespace())
-    assert router is not None
-
-    route = _get_route(router, settings.PLATEGA_WEBHOOK_PATH)
-    body = json.dumps({'PaymentMethod': 6, 'SubscriptionId': 'ps-1', 'Status': 'CONFIRMED', 'Id': 'c1'}).encode('utf-8')
-    request = _build_request(
-        settings.PLATEGA_WEBHOOK_PATH,
-        body=body,
-        headers={'X-MerchantId': 'm', 'X-Secret': 's', 'Content-Type': 'application/json'},
-    )
-
-    response = await route.endpoint(request)
-
-    assert response.status_code == 200
-    assert recorded == ['process_platega_subscription_callback']
-
-
-@pytest.mark.anyio
-async def test_platega_subscription_status_prefix_routes_to_subscription_handler(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    recorded = _install_recorder(monkeypatch)
-
-    router = create_payment_router(DummyBot(), SimpleNamespace())
-    assert router is not None
-
-    route = _get_route(router, settings.PLATEGA_WEBHOOK_PATH)
-    body = json.dumps({'Status': 'SUBSCRIPTION_CANCELLED', 'SubscriptionId': 'ps-2'}).encode('utf-8')
-    request = _build_request(
-        settings.PLATEGA_WEBHOOK_PATH,
-        body=body,
-        headers={'X-MerchantId': 'm', 'X-Secret': 's', 'Content-Type': 'application/json'},
-    )
-
-    response = await route.endpoint(request)
-
-    assert response.status_code == 200
-    assert recorded == ['process_platega_subscription_callback']
 
 
 @pytest.mark.anyio
@@ -164,47 +112,9 @@ async def test_platega_wrong_secret_rejected_before_dispatch(monkeypatch: pytest
 
 
 @pytest.mark.anyio
-async def test_platega_camel_case_charge_routes_to_subscription_handler(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Форма из продового лога: списание по подписке в camelCase.
-
-    Раньше не совпадало ни с одним условием маршрутизации и уходило в
-    обработчик разовых платежей — тот не находил платёж (под рекуррентное
-    списание записи в payments нет) и отвечал 400, а Platega показывала
-    «Callback delivery failed» и автопродление не работало.
-    """
-    recorded = _install_recorder(monkeypatch)
-
-    router = create_payment_router(DummyBot(), SimpleNamespace())
-    assert router is not None
-
-    route = _get_route(router, settings.PLATEGA_WEBHOOK_PATH)
-    body = json.dumps(
-        {
-            'id': 'f11d8822-3b12-4afa-a49b-202be11d5600',
-            'status': 'CONFIRMED',
-            'paymentMethod': 6,
-            'subscriptionId': 'ps-1',
-        }
-    ).encode('utf-8')
-    request = _build_request(
-        settings.PLATEGA_WEBHOOK_PATH,
-        body=body,
-        headers={'X-MerchantId': 'm', 'X-Secret': 's', 'Content-Type': 'application/json'},
-    )
-
-    response = await route.endpoint(request)
-
-    assert response.status_code == 200
-    assert recorded == ['process_platega_subscription_callback']
-
-
-@pytest.mark.anyio
 async def test_platega_camel_case_one_off_still_uses_legacy_handler(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Обратная сторона: обычное пополнение не должно уехать в подписки."""
     recorded = _install_recorder(monkeypatch)
 
     router = create_payment_router(DummyBot(), SimpleNamespace())

@@ -21,7 +21,7 @@ def _method(value: str | None) -> PaymentMethod | None:
     from app.services.guest_purchase_service import _resolve_payment_method
 
     method = _resolve_payment_method(value)
-    if method in {PaymentMethod.BALANCE, PaymentMethod.MANUAL, PaymentMethod.PLATEGA_RECURRENT}:
+    if method in {PaymentMethod.BALANCE, PaymentMethod.MANUAL}:
         return None
     return method
 
@@ -125,32 +125,21 @@ async def fetch_landing_payments(
 async def exclude_landing_duplicates(db: AsyncSession, records: list[PendingPayment]) -> list[PendingPayment]:
     """Match by purchase token/provider, never by amount, user or numeric row id."""
     tokens = set()
-    charge_ids = set()
     for record in records:
         token = _purchase_token(record)
         if token is not None:
             tokens.add(token)
-        if record.method == PaymentMethod.PLATEGA_RECURRENT:
-            charge_ids.add(record.identifier)
-    if not tokens and not charge_ids:
+    if not tokens:
         return records
-    stmt = select(GuestPurchase.token, GuestPurchase.payment_method, GuestPurchase.payment_id).where(
+    stmt = select(GuestPurchase.token, GuestPurchase.payment_method).where(
         GuestPurchase.source == 'landing',
         GuestPurchase.paid_at.is_not(None),
         GuestPurchase.amount_kopeks > 0,
-        or_(GuestPurchase.token.in_(tokens), GuestPurchase.payment_id.in_(charge_ids)),
+        GuestPurchase.token.in_(tokens),
     )
     purchases = (await db.execute(stmt)).all()
     token_methods = {(p.token, _method(p.payment_method)) for p in purchases if _method(p.payment_method)}
-    platega_ids = {p.payment_id for p in purchases if _method(p.payment_method) == PaymentMethod.PLATEGA}
-    kept = []
-    for record in records:
-        if (_purchase_token(record), record.method) in token_methods:
-            continue
-        if record.method == PaymentMethod.PLATEGA_RECURRENT and record.identifier in platega_ids:
-            continue
-        kept.append(record)
-    return kept
+    return [record for record in records if (_purchase_token(record), record.method) not in token_methods]
 
 
 def _purchase_token(record: PendingPayment) -> str | None:

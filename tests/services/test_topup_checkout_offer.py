@@ -79,10 +79,9 @@ def cart_service(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _spofy_mode(monkeypatch):
-    """Как на проде: один тариф на человека, автопокупки нет, СБП-автопродление выключено."""
+    """Как на проде: один тариф на человека, автопокупки нет."""
     monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', False)
     monkeypatch.setattr(settings, 'MAIN_MENU_MODE', 'default')
-    monkeypatch.setattr(type(settings), 'is_platega_recurrent_enabled', lambda self: False)
     offer_module._recent_offers.clear()
     yield
     offer_module._recent_offers.clear()
@@ -538,18 +537,6 @@ async def test_disabled_tariff_is_not_offered_and_cart_is_left_for_the_screen(mo
 
         assert await resolve_topup_checkout_offer(_user()) is None
         assert await cart_service.get_user_cart(USER_ID) is not None
-
-
-@pytest.mark.asyncio
-async def test_sbp_autorenewal_choice_keeps_the_checkout_screen(monkeypatch, cart_service):
-    """С включённым СБП-автопродлением на экране оформления есть выбор способа — его не прячем."""
-    monkeypatch.setattr(type(settings), 'is_platega_recurrent_enabled', lambda self: True)
-    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
-        await _seed(db, balance=PRICE_180)
-        _use_session(monkeypatch, db)
-        await cart_service.save_user_cart(USER_ID, _extend_cart())
-
-        assert await resolve_topup_checkout_offer(_user()) is None
 
 
 @pytest.mark.asyncio

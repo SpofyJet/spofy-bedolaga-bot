@@ -652,11 +652,6 @@ BROADCAST_BUTTONS = {
         'text_key': 'ADMIN_BROADCAST_BUTTON_SUPPORT',
         'callback': 'menu_support',
     },
-    'sbp_recurring': {
-        'default_text': '⚡ Автопродление через СБП',
-        'text_key': 'ADMIN_BROADCAST_BUTTON_SBP_RECURRING',
-        'callback': 'sbp_recurring_enable',
-    },
     'home': {
         'default_text': '🏠 На главную',
         'text_key': 'ADMIN_BROADCAST_BUTTON_HOME',
@@ -665,8 +660,6 @@ BROADCAST_BUTTONS = {
 }
 
 BROADCAST_BUTTON_ROWS: tuple[tuple[str, ...], ...] = (
-    # n7: CTA СБП-автопродления — первой строкой над остальными кнопками.
-    ('sbp_recurring',),
     ('balance', 'referrals'),
     ('promocode', 'connect'),
     ('subscription', 'support'),

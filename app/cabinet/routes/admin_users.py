@@ -356,17 +356,6 @@ async def _build_subscription_info_async(db: AsyncSession, subscription: Subscri
     info.purchased_traffic_gb = getattr(subscription, 'purchased_traffic_gb', 0) or 0
     info.traffic_purchases = traffic_purchase_items
 
-    # Platega SBP auto-renewal status — admin-only, needs a DB query, so it
-    # lives here rather than in the sync builder. Gated to avoid a needless
-    # query when the feature is off.
-    if settings.is_platega_recurrent_enabled():
-        from app.database.crud import platega_subscription as sub_crud
-
-        record = await sub_crud.get_active_platega_subscription_by_subscription(db, subscription.id)
-        if record:
-            info.sbp_recurring_status = record.status
-            info.sbp_recurring_id = record.id
-
     return info
 
 
@@ -1398,15 +1387,6 @@ async def update_user_subscription(
                 detail='tariff_id parameter is required',
             )
 
-        # Смена тарифа делает СБП-привязку Platega несогласованной: она продолжила
-        # бы списывать СТАРУЮ сумму со СТАРЫМ каденсом. Отменяем привязку — юзер
-        # переподключит СБП-автопродление под новый тариф (нужна новая
-        # банковская авторизация, молча пересоздать нельзя).
-        if request.tariff_id != subscription.tariff_id:
-            from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
-
-            await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-
         tariff = await get_tariff_by_id(db, request.tariff_id)
         if not tariff:
             raise HTTPException(
@@ -1519,13 +1499,6 @@ async def update_user_subscription(
         await db.commit()
         await db.refresh(subscription)
 
-        if request.autopay_enabled:
-            # Взаимоисключение движков продления: включение balance-autopay
-            # отменяет активное СБП-автопродление Platega (иначе двойное списание).
-            from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
-
-            await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-
         state = 'enabled' if request.autopay_enabled else 'disabled'
         logger.info('Admin autopay for user', admin_id=admin.id, state=state, user_id=user_id)
 
@@ -1536,13 +1509,6 @@ async def update_user_subscription(
         )
 
     if request.action == 'cancel':
-        # Подписку убивают — СБП-автопродление Platega обязано умереть вместе с
-        # ней, иначе следующий коллбек продлит и воскресит её, а банк продолжит
-        # списывать.
-        from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
-
-        await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-
         subscription.status = SubscriptionStatus.EXPIRED.value
         subscription.end_date = datetime.now(UTC)
         # For daily tariffs: mark as paused to prevent auto-resume by DailySubscriptionService
@@ -1574,12 +1540,8 @@ async def update_user_subscription(
             # legacy user panel id, and preserve the selected row for an exact
             # retry when panel deactivation fails.
             from app.database.crud.subscription import reset_subscription
-            from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
             from app.services.subscription_service import SubscriptionService
 
-            # Обе привязки, как в reset_subscription_with_panel: иначе живой рекуррент
-            # спишет деньги и воскресит только что сброшенную подписку.
-            await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
             panel_user_id = subscription.remnawave_id
             panel_disabled = False
             if panel_user_id:
@@ -1774,39 +1736,6 @@ async def update_user_subscription(
         status_code=status.HTTP_400_BAD_REQUEST,
         detail=f'Unknown action: {request.action}',
     )
-
-
-@router.post('/{user_id}/subscriptions/{sub_id}/cancel-sbp-recurring')
-async def cancel_user_sbp_recurring(
-    user_id: int,
-    sub_id: int,
-    admin: User = Depends(require_permission('users:subscription')),
-    db: AsyncSession = Depends(get_cabinet_db),
-):
-    """Admin best-effort cancel of a user's active Platega SBP auto-renewal.
-
-    Verifies ``sub_id`` belongs to ``user_id`` (IDOR guard, same as the
-    devices/traffic endpoints) before delegating to the same best-effort
-    helper the reset/delete subscription flows already use (Task 11);
-    idempotent — calling it with no active record is a no-op.
-    """
-    from app.database.crud.subscription import get_subscription_by_id_for_user
-
-    subscription = await get_subscription_by_id_for_user(db, sub_id, user_id)
-    if not subscription:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
-
-    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
-
-    await cancel_platega_recurring_for_subscription_safe(db, sub_id)
-    logger.info(
-        'Admin cancelled SBP auto-renewal for subscription',
-        admin_id=admin.id,
-        user_id=user_id,
-        subscription_id=sub_id,
-    )
-
-    return {'status': 'cancelled'}
 
 
 @router.delete('/{user_id}/subscriptions/{sub_id}')

@@ -45,11 +45,7 @@ from app.utils.timezone import format_local_datetime, to_local_datetime
 
 from .autopay import (
     handle_autopay_menu,
-    handle_sbp_recurring_cancel,
-    handle_sbp_recurring_cancel_confirm,
-    handle_sbp_recurring_enable,
-    handle_sbp_recurring_enable_for,
-    handle_sbp_recurring_menu,
+    handle_sbp_recurring_unavailable,
     handle_subscription_cancel,
     set_autopay_days,
     set_autopay_period,
@@ -350,23 +346,12 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     # n4: строка автопродления для платных подписок (на триале недоступно)
     autopay_line = ''
     if not subscription.is_trial and actual_status in ('paid_active', 'limited'):
-        try:
-            from app.services.recurrent_amount import get_active_recurrent_engines
-
-            engines = await get_active_recurrent_engines(db, subscription)
-            engine_names = {
-                'platega': texts.t('RECURRENT_ENGINE_SBP', 'СБП'),
-                'balance': texts.t('RECURRENT_ENGINE_BALANCE', 'с баланса'),
-            }
-            active_engines = [engine_names[e] for e in ('platega', 'balance') if e in engines]
-            if active_engines:
-                autopay_line = '\n' + texts.t(
-                    'SUBSCRIPTION_AUTOPAY_ON', '💳 Автопродление: включено ({engine})'
-                ).format(engine=', '.join(active_engines))
-            else:
-                autopay_line = '\n' + texts.t('SUBSCRIPTION_AUTOPAY_OFF', '💳 Автопродление: выключено')
-        except Exception as e:
-            logger.warning('Не удалось определить статус автопродления', error=e)
+        if getattr(subscription, 'autopay_enabled', False):
+            autopay_line = '\n' + texts.t('SUBSCRIPTION_AUTOPAY_ON', '💳 Автопродление: включено ({engine})').format(
+                engine=texts.t('RECURRENT_ENGINE_BALANCE', 'с баланса')
+            )
+        else:
+            autopay_line = '\n' + texts.t('SUBSCRIPTION_AUTOPAY_OFF', '💳 Автопродление: выключено')
 
     # Определяем, суточный ли тариф для выбора шаблона
     is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
@@ -1561,15 +1546,9 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(show_autopay_period, F.data == 'autopay_set_period')
 
-    dp.callback_query.register(handle_sbp_recurring_menu, F.data == 'sbp_recurring_menu')
-
-    dp.callback_query.register(handle_sbp_recurring_enable, F.data == 'sbp_recurring_enable')
-
-    dp.callback_query.register(handle_sbp_recurring_enable_for, F.data.startswith('sbp_recurring_enable_for:'))
-
-    dp.callback_query.register(handle_sbp_recurring_cancel, F.data == 'sbp_recurring_cancel')
-
-    dp.callback_query.register(handle_sbp_recurring_cancel_confirm, F.data == 'sbp_recurring_cancel_confirm')
+    # Кнопки СБП-автопродления остались в старых сообщениях и рассылках.
+    dp.callback_query.register(handle_sbp_recurring_unavailable, F.data.startswith('sbp_recurring'))
+    dp.callback_query.register(handle_sbp_recurring_unavailable, F.data.startswith('tariff_sbp:'))
     dp.callback_query.register(handle_subscription_cancel, F.data == 'subscription_cancel')
     dp.callback_query.register(set_autopay_days, F.data.startswith('autopay_days_'))
     dp.callback_query.register(set_autopay_period, F.data.startswith('autopay_period_'))

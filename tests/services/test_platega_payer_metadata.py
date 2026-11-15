@@ -2,8 +2,8 @@
 
 docs.platega.io: для части категорий магазинов оба поля обязательны; «отсутствие
 metadata.userId при наличии требования отключает антифрод-защиту и может привести
-к отключению магазина». v4.11 не передавала metadata ни в разовом платеже, ни в
-СБП-подписке, ни на лендинге.
+к отключению магазина». v4.11 не передавала metadata ни в разовом платеже, ни на
+лендинге.
 """
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ from __future__ import annotations
 import hashlib
 import types
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -112,33 +111,6 @@ async def test_payment_without_user_and_payer_is_still_filled(monkeypatch) -> No
 
     assert payer.user_id.startswith('guest-')
     assert payer.user_name
-
-
-@pytest.mark.asyncio
-async def test_sbp_subscription_carries_the_payer(monkeypatch) -> None:
-    subscription = types.SimpleNamespace(id=1, autopay_enabled=True, autopay_period_days=30, device_limit=None)
-    tariff = types.SimpleNamespace(
-        id=5,
-        is_daily=False,
-        name='Стандарт',
-        get_available_periods=lambda: [30],
-        get_shortest_period=lambda: 30,
-        get_purchasable_price_for_period=lambda _days: 19_900,
-    )
-    create_subscription = AsyncMock(return_value={'transactionId': 'tx-9', 'redirect': 'https://pay/9'})
-
-    class Svc(platega_mixin.PlategaPaymentMixin):
-        def __init__(self) -> None:
-            self.platega_service = types.SimpleNamespace(create_subscription=create_subscription)
-
-    async with memory_session(monkeypatch, TABLES) as db:
-        db.add(User(id=777, telegram_id=9001, first_name='Анна', language='ru', status='active'))
-        await db.commit()
-
-        await Svc().create_platega_sbp_subscription(db, user_id=777, subscription=subscription, tariff=tariff)
-
-    payer = create_subscription.await_args.kwargs['payer']
-    assert payer.platega_metadata() == {'userId': '9001', 'userName': 'Анна', 'user_email': '9001@telegram.org'}
 
 
 @pytest.mark.asyncio

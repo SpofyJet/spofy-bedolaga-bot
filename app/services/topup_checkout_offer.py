@@ -19,7 +19,6 @@ from typing import Any
 import structlog
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from app.config import settings
 from app.database.crud.user import get_user_by_id
 from app.database.database import AsyncSessionLocal
 from app.localization.texts import get_texts
@@ -89,8 +88,7 @@ async def resolve_topup_checkout_offer(user: Any) -> TopupCheckoutOffer | None:
     уже не те) означает прежний путь через экран.
     """
     user_id = getattr(user, 'id', None)
-    # Включённое СБП-автопродление добавляет на экран оформления выбор способа — его не прячем.
-    if not user_id or settings.is_platega_recurrent_enabled():
+    if not user_id:
         return None
 
     cart = await user_cart_service.get_user_cart(user_id)
