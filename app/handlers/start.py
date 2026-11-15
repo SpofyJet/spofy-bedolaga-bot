@@ -2919,20 +2919,6 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
     logger.info('✅ Регистрация завершена для пользователя', telegram_id=user.telegram_id)
 
 
-def _insert_random_message(base_text: str, random_message: str, action_prompt: str) -> str:
-    if not random_message:
-        return base_text
-
-    prompt = action_prompt or ''
-    if prompt and prompt in base_text:
-        parts = base_text.split(prompt, 1)
-        if len(parts) == 2:
-            return f'{parts[0]}\n{random_message}\n\n{prompt}{parts[1]}'
-        return base_text.replace(prompt, f'\n{random_message}\n\n{prompt}', 1)
-
-    return f'{base_text}\n\n{random_message}'
-
-
 def get_referral_code_keyboard(language: str):
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
