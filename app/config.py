@@ -576,9 +576,6 @@ class Settings(BaseSettings):
     # for a 150 ₽ top-up, credited only 149.50 ₽ back — a built-in
     # rounding loss visible on every payment).
     TELEGRAM_STARS_RATE_RUB: float = 1.0
-    # Кнопка «Каждые 30 дней» при оплате Stars: Telegram сам повторяет списание звёзд раз в месяц, каждое
-    # списание приходит как обычный платёж и зачисляется на баланс. Выключено, пока не проверен тестовый платёж.
-    TELEGRAM_STARS_SUBSCRIPTION_ENABLED: bool = False
     TELEGRAM_STARS_DISPLAY_NAME: str = 'Telegram Stars'
 
     # Telegram Login Widget (cabinet auth page)

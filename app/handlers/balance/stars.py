@@ -16,8 +16,6 @@ from app.utils.decorators import error_handler
 
 logger = structlog.get_logger(__name__)
 
-STARS_SUBSCRIPTION_PERIOD_SECONDS = 2592000  # 30 дней: единственный период, который принимает Telegram
-
 
 @error_handler
 async def start_stars_payment(callback: types.CallbackQuery, db_user: User, state: FSMContext):
@@ -101,26 +99,6 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
         )
 
         buttons = [[types.InlineKeyboardButton(text='Оплатить', url=invoice_link, style='success')]]
-        recurring_note = ''
-        if settings.TELEGRAM_STARS_SUBSCRIPTION_ENABLED:
-            recurring_link = await payment_service.create_stars_invoice(
-                amount_kopeks=amount_kopeks,
-                description=f'Пополнение баланса на {texts.format_price(amount_kopeks)} каждые 30 дней',
-                payload=f'balance_{db_user.id}_{amount_kopeks}',
-                subscription_period=STARS_SUBSCRIPTION_PERIOD_SECONDS,
-            )
-            buttons.append(
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.t('STARS_RECURRING_BUTTON', '🔁 Каждые 30 дней'), url=recurring_link
-                    )
-                ]
-            )
-            recurring_note = texts.t(
-                'STARS_RECURRING_NOTE',
-                '\n\n🔁 «Каждые 30 дней»: Telegram повторяет списание сам, баланс пополняется автоматически. '
-                'Отменить можно в Telegram: Настройки → Звёзды → Подписки.',
-            )
         buttons.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')])
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -145,7 +123,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
             f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
             f'⭐ К оплате: {stars_amount} звезд\n'
             f'📊 Курс: {stars_rate}₽ за звезду\n\n'
-            f'Нажмите кнопку ниже для оплаты:' + recurring_note,
+            f'Нажмите кнопку ниже для оплаты:',
             reply_markup=keyboard,
             parse_mode='HTML',
         )

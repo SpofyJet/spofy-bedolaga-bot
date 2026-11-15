@@ -1,4 +1,4 @@
-"""«Скопировать» реферальную ссылку одним нажатием, подписка за Stars раз в 30 дней."""
+"""«Скопировать» реферальную ссылку одним нажатием, счёт Stars — разовый."""
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -21,23 +21,17 @@ def test_referral_screen_has_no_copy_button():
     assert not any(button.copy_text for row in kb.inline_keyboard for button in row)
 
 
-# ---------------- Stars: подписка ----------------
+# ---------------- Stars: разовый счёт ----------------
 
 
-async def test_stars_invoice_with_a_period_asks_telegram_for_a_recurring_charge():
+async def test_stars_invoice_is_a_one_time_charge():
     from app.services.payment.stars import TelegramStarsMixin
 
     service = TelegramStarsMixin()
     service.bot = MagicMock(create_invoice_link=AsyncMock(return_value='https://t.me/$abc'))
     service.stars_service = object()
-    await service.create_stars_invoice(15900, 'Пополнение', payload='balance_1_15900', subscription_period=2592000)
-    assert service.bot.create_invoice_link.await_args.kwargs['subscription_period'] == 2592000
     await service.create_stars_invoice(15900, 'Пополнение', payload='balance_1_15900')
-    assert 'subscription_period' not in service.bot.create_invoice_link.await_args.kwargs  # обычный платёж как раньше
-
-
-def test_stars_subscription_is_off_by_default():
-    assert settings.TELEGRAM_STARS_SUBSCRIPTION_ENABLED is False
+    assert 'subscription_period' not in service.bot.create_invoice_link.await_args.kwargs
 
 
 def test_subscription_screen_has_no_copy_link_button():

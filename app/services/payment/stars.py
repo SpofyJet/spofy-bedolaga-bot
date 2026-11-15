@@ -35,7 +35,6 @@ class TelegramStarsMixin:
         payload: str | None = None,
         *,
         stars_amount: int | None = None,
-        subscription_period: int | None = None,
     ) -> str:
         """Создаёт invoice в Telegram Stars, автоматически рассчитывая количество звёзд."""
         if not self.bot or not getattr(self, 'stars_service', None):
@@ -58,8 +57,6 @@ class TelegramStarsMixin:
                 provider_token='',
                 currency='XTR',
                 prices=[LabeledPrice(label='Пополнение', amount=stars_amount)],
-                # 2592000 с = 30 дней: Telegram сам повторяет списание раз в период
-                **({'subscription_period': subscription_period} if subscription_period else {}),
             )
 
             logger.info(
