@@ -120,7 +120,7 @@ async def test_topup_hook_notifies_before_auto_purchase(monkeypatch: pytest.Monk
         order.append('daily')
         return False
 
-    async def fake_extend(db, user, bot=None):
+    async def fake_extend(db, user, bot=None, chosen_cart=None):
         order.append('extend')
         return False
 

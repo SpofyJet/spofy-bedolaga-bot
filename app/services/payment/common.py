@@ -351,19 +351,20 @@ async def send_cart_notification_after_topup(
 
     from app.services.subscription_auto_purchase_service import (
         auto_purchase_saved_cart_after_topup,
+        renewal_cart_period_days,
         try_auto_extend_expired_after_topup,
         try_resume_disabled_daily_after_topup,
     )
 
     cart_data = await user_cart_service.get_user_cart(user.id)
     subscription_carts = []
-    fresh_cart_intent = bool(cart_data and await user_cart_service.has_topup_intent(user.id, cart_data))
-    if not fresh_cart_intent:
+    fresh_carts = [cart_data] if cart_data and await user_cart_service.has_topup_intent(user.id, cart_data) else []
+    if not fresh_carts:
         subscription_carts = await user_cart_service.get_all_subscription_carts(user.id) or []
         for candidate in subscription_carts:
             if await user_cart_service.has_topup_intent(user.id, candidate):
-                fresh_cart_intent = True
-                break
+                fresh_carts.append(candidate)
+    fresh_cart_intent = bool(fresh_carts)
     has_cart = bool(cart_data or subscription_carts)
 
     # A fresh explicit checkout owns this top-up. A stale cart must not disable
@@ -378,6 +379,31 @@ async def send_cart_notification_after_topup(
                 'Ошибка авто-возобновления суточной подписки после пополнения',
                 user_id=user.id,
                 error=daily_error,
+                exc_info=True,
+            )
+
+    # Истёкшая подписка с включённым автоплатежом. Раньше любая сохранённая корзина отменяла
+    # автопродление: человек выбирал срок, пополнял — и деньги лежали на балансе, подписка нет.
+    # Теперь корзина мешает только тогда, когда деньги внесены под другую покупку (подарок,
+    # другой тариф, устройства, страница подписки). Свежая корзина продления того же тарифа
+    # задаёт срок и потолок цены; без свежей корзины — как без корзины, самый короткий срок.
+    renewal_cart = None
+    if fresh_cart_intent:
+        renewal_carts = [cart for cart in fresh_carts if renewal_cart_period_days(cart) is not None]
+        renewal_cart = renewal_carts[0] if len(renewal_carts) == len(fresh_carts) == 1 else None
+    if not fresh_cart_intent or renewal_cart is not None:
+        try:
+            auto_extended = await try_auto_extend_expired_after_topup(db, user, bot=bot, chosen_cart=renewal_cart)
+            if auto_extended:
+                if renewal_cart is not None:
+                    # Срок из корзины оформлен: её «Подтвердить» и напоминание больше не нужны.
+                    await user_cart_service.delete_processed_cart(user.id, renewal_cart)
+                return False
+        except Exception as extend_error:
+            logger.error(
+                'Ошибка автопродления истёкшей подписки после пополнения',
+                user_id=user.id,
+                error=extend_error,
                 exc_info=True,
             )
 
@@ -406,20 +432,6 @@ async def send_cart_notification_after_topup(
                 auto_error=auto_error,
                 exc_info=True,
             )
-        return False
-
-    # Try to auto-extend expired subscription only when there is no saved cart.
-    try:
-        auto_extended = await try_auto_extend_expired_after_topup(db, user, bot=bot)
-        if auto_extended:
-            return False
-    except Exception as extend_error:
-        logger.error(
-            'Ошибка автопродления истёкшей подписки после пополнения',
-            user_id=user.id,
-            error=extend_error,
-            exc_info=True,
-        )
 
     return False
 

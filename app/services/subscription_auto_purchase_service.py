@@ -2155,15 +2155,42 @@ async def _auto_add_traffic(
     return True
 
 
+def renewal_cart_period_days(cart_data: dict | None) -> int | None:
+    """Срок из корзины, если корзина — продление того же тарифа по прайсу; иначе None.
+
+    Человек, у которого включён автоплатёж и истекла подписка, выбрал срок и пошёл пополнять.
+    Такая корзина не должна отменять автопродление (раньше отменяла), но и срок, который
+    человек выбрал, терять нельзя. Подходят только корзины, которые и так оформляются одним
+    нажатием «Подтвердить» (продление или покупка тарифа на срок из прайса, без своего трафика,
+    не со страницы подписки — её оплату исполняет spofy_subpage_service по своей цене).
+    """
+    if not cart_data:
+        return None
+    if (cart_data.get('cart_mode') or cart_data.get('mode')) not in ('extend', 'tariff_purchase'):
+        return None
+    if cart_data.get('source') == 'spofy_subpage' or cart_data.get('custom_traffic_gb') is not None:
+        return None
+    period_days = _safe_int(cart_data.get('period_days'))
+    if period_days <= 0 or not _safe_int(cart_data.get('tariff_id')) or _safe_int(cart_data.get('total_price')) <= 0:
+        return None
+    return period_days
+
+
 async def try_auto_extend_expired_after_topup(
     db: AsyncSession,
     user: User,
     *,
     bot: Bot | None = None,
+    chosen_cart: dict | None = None,
 ) -> bool:
-    """Renew an opted-in expired subscription; release billing locks on abort."""
+    """Renew an opted-in expired subscription; release billing locks on abort.
+
+    ``chosen_cart`` — свежая корзина продления, ради которой человек пополнил баланс: продлеваем
+    на выбранный в ней срок и не дороже цены, которую он в ней видел. Корзина не того тарифа,
+    не той подписки или дороже — ничего не списываем (деньги ждут его «Подтвердить»).
+    """
     try:
-        return await _try_auto_extend_expired_after_topup(db, user, bot=bot)
+        return await _try_auto_extend_expired_after_topup(db, user, bot=bot, chosen_cart=chosen_cart)
     except BaseException:
         # Cancellation is not Exception. An interrupted request must not leave
         # a partial debit or locks in the caller's still-open session.
@@ -2176,6 +2203,7 @@ async def _try_auto_extend_expired_after_topup(
     user: User,
     *,
     bot: Bot | None = None,
+    chosen_cart: dict | None = None,
 ) -> bool:
     """Try to auto-extend an expired subscription after balance top-up.
 
@@ -2269,6 +2297,28 @@ async def _try_auto_extend_expired_after_topup(
     else:
         period_days = 30
 
+    # Корзина, ради которой пополнили: продлеваем на её срок и не дороже её цены.
+    max_price_kopeks: int | None = None
+    if chosen_cart is not None:
+        chosen_period = renewal_cart_period_days(chosen_cart)
+        cart_sub_id = _safe_int(chosen_cart.get('subscription_id'))
+        if (
+            chosen_period is None
+            or tariff is None
+            or _safe_int(chosen_cart.get('tariff_id')) != tariff.id
+            or (cart_sub_id and cart_sub_id != subscription.id)
+            or tariff.get_price_for_period(chosen_period) is None
+        ):
+            logger.info(
+                '🔄 Автопродление expired: пропуск — корзина пополнения не про продление этой подписки',
+                format_user_id=_format_user_id(user),
+                subscription_id=subscription.id,
+            )
+            await db.commit()
+            return False
+        period_days = chosen_period
+        max_price_kopeks = _safe_int(chosen_cart.get('total_price'))
+
     # Calculate renewal price via PricingEngine
     subscription_service = SubscriptionService()
     try:
@@ -2303,6 +2353,17 @@ async def _try_auto_extend_expired_after_topup(
             '❌ Автопродление expired: некорректная стоимость',
             format_user_id=_format_user_id(user),
             renewal_cost=renewal_cost,
+        )
+        await db.commit()
+        return False
+
+    if max_price_kopeks is not None and renewal_cost > max_price_kopeks:
+        # Человек согласился на цену из корзины; дороже — только через его «Подтвердить».
+        logger.info(
+            '🔄 Автопродление expired: пропуск — продление дороже цены из корзины',
+            format_user_id=_format_user_id(user),
+            renewal_cost=renewal_cost,
+            cart_price=max_price_kopeks,
         )
         await db.commit()
         return False
