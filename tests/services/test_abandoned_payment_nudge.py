@@ -492,17 +492,26 @@ async def test_abandoned_topup_wave2_skips_user_who_paid_afterwards(monkeypatch)
     sent.assert_not_awaited()
 
 
-async def test_abandoned_cart_wave2_sends_a_day_after_wave1(monkeypatch):
+def test_cart_wave2_is_due_while_the_cart_still_lives():
+    """Корзина живёт CART_TTL_SECONDS. Раньше вторая волна ждала 24 часа и не уходила ни разу."""
+    from app.config import settings
+
+    check_every = 30 * 60  # вторые волны проверяются раз в 30 минут
+    due_at = funnel.ABANDONED_CART_MIN_AGE_SECONDS + funnel.ABANDONED_CART_2_DELAY_HOURS * 3600 + check_every
+    assert due_at < settings.CART_TTL_SECONDS
+
+
+async def test_abandoned_cart_wave2_sends_while_cart_is_alive(monkeypatch):
     async with _session(monkeypatch) as db:
         db.add(_user(balance_kopeks=100000))
         await db.commit()
         extended = []
-        # корзине 25 часов — волна 1 ушла 25 часов назад
-        _cart_service(monkeypatch, [(1, _cart(), 25 * 3600)], extended)
+        # корзине 20,5 часа (до конца её жизни ещё 3,5 часа) — волна 1 ушла 20,25 часа назад
+        _cart_service(monkeypatch, [(1, _cart(), int(20.5 * 3600))], extended)
         service, sent = _service(monkeypatch)
 
         # событие волны 1 записываем в базу — как в проде
-        db.add(_event(1, funnel.EVENT_ABANDONED_CART, 25))
+        db.add(_event(1, funnel.EVENT_ABANDONED_CART, 20.25))
         await db.commit()
 
         assert await service.process_abandoned_carts_wave2(db) == 1

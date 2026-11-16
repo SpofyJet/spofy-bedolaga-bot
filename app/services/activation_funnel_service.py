@@ -102,13 +102,15 @@ ABANDONED_TOPUP_2_DELAY_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_2_
 # Если у человека действует скидка предложения и кончается раньше, продлеваем её до этого срока.
 ABANDONED_TOPUP_PRICE_LOCK_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_TOPUP_PRICE_LOCK_MINUTES', 20))
 
-# Брошенная покупка подписки: корзина в Redis живёт сутки; напоминаем через 15 минут, второй раз — через сутки.
+# Брошенная покупка подписки: корзина в Redis живёт сутки; напоминаем через 15 минут, второй раз — через 20 часов.
+# Вторая волна раньше ждала 24 часа и не уходила ни разу: к этому времени корзины уже нет
+# (CART_TTL_SECONDS = сутки). 20 часов оставляют ей ~4 часа жизни корзины при проверке раз в 30 минут.
 EVENT_ABANDONED_CART = 'funnel_abandoned_cart'
 EVENT_ABANDONED_CART_2 = 'funnel_abandoned_cart_2'
 ABANDONED_CART_MIN_AGE_SECONDS = int(getattr(settings, 'FUNNEL_ABANDONED_CART_MIN_AGE_MINUTES', 15)) * 60
 ABANDONED_CART_LOCK_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_CART_LOCK_MINUTES', 20))
 ABANDONED_CART_RESEND_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_CART_RESEND_HOURS', 24))
-ABANDONED_CART_2_DELAY_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_CART_2_DELAY_HOURS', 24))
+ABANDONED_CART_2_DELAY_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_CART_2_DELAY_HOURS', 20))
 
 # После покупки приглашаем позвать друга (дни за каждого подключившегося).
 EVENT_REFERRAL_PROMPT = 'funnel_referral_prompt'
@@ -1005,10 +1007,10 @@ class ActivationFunnelService:
         return sent_count
 
     async def process_abandoned_carts_wave2(self, db: AsyncSession) -> int:
-        """Вторая волна по брошенной корзине: через сутки после первого напоминания.
+        """Вторая волна по брошенной корзине: через 20 часов после первого напоминания.
 
-        Корзина живёт сутки (CART_TTL_SECONDS), так что к моменту второй волны она ещё
-        на месте — человек может закончить покупку в один шаг. Первую волну не дублируем.
+        Корзина живёт сутки (CART_TTL_SECONDS), поэтому вторая волна обязана прийти раньше —
+        пока корзина на месте и человек может закончить покупку в один шаг. Первую волну не дублируем.
         """
         if not _funnel_enabled() or not self._send:
             return 0
