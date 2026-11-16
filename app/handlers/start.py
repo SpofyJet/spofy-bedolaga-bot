@@ -35,7 +35,6 @@ from app.handlers.subscription_deeplinks import (
 from app.handlers.ultima_deeplink import is_ultima_deeplink, link_source, open_ultima_offer
 from app.keyboards.inline import (
     get_back_keyboard,
-    get_main_menu_keyboard_async,
     get_post_registration_keyboard,
     get_privacy_policy_keyboard,
     get_rules_keyboard,
@@ -57,7 +56,6 @@ from app.services.gift_claim_service import (
     claim_gift_for_user,
 )
 from app.services.guest_purchase_service import GiftLifetimeHolderError
-from app.services.main_menu_button_service import MainMenuButtonService
 from app.services.phantom_service import claim_phantom, merge_phantom_into_user
 from app.services.pinned_message_service import (
     deliver_pinned_message_to_user,
@@ -79,7 +77,6 @@ from app.services.registration_access_service import (
 )
 from app.services.registration_invite_service import RegistrationInviteConflict, RegistrationInviteService
 from app.services.subscription_service import SubscriptionService
-from app.services.support_settings_service import SupportSettingsService
 from app.services.web_auth_service import (
     WEB_AUTH_TOKEN_MIN_LENGTH,
     get_web_auth_request_context,
@@ -747,16 +744,16 @@ async def _merge_phantom_into_active_user(
     logger.info('Phantom user merged and soft-deleted', phantom_id=phantom.id, active_user_id=active_user.id)
 
 
-def _calculate_subscription_flags(subscription):
-    if not subscription:
-        return False, False
+async def _main_menu_keyboard(user, db: AsyncSession):
+    """Главное меню после /start и регистрации — то же, что по «Назад в меню».
 
-    actual_status = getattr(subscription, 'actual_status', None)
-    # 'limited' subscriptions are still active (traffic exhausted, but subscription not expired)
-    has_active_subscription = actual_status in {'active', 'trial', 'limited'}
-    subscription_is_active = bool(getattr(subscription, 'is_active', False)) or actual_status == 'limited'
+    Раньше здесь было шесть своих копий сборки: без кнопки сохранённой корзины, с флагами
+    по первой подписке вместо всех и (в одной копии) с кнопками конструктора даже в текстовом
+    режиме меню. Источник теперь один — ``build_main_menu_keyboard`` из handlers/menu.py.
+    """
+    from app.handlers.menu import build_main_menu_keyboard
 
-    return has_active_subscription, subscription_is_active
+    return await build_main_menu_keyboard(user, db)
 
 
 async def _send_pinned_message(
@@ -1518,44 +1515,12 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             # Refresh user to pick up newly created subscriptions
             await db.refresh(user, attribute_names=['subscriptions'])
 
-        user_subs_for_flags = getattr(user, 'subscriptions', None) or []
-        first_sub_for_flags = next(
-            (s for s in user_subs_for_flags if s.is_active), user_subs_for_flags[0] if user_subs_for_flags else None
-        )
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(first_sub_for_flags)
-
         pinned_message = await get_active_pinned_message(db)
 
         if pinned_message and pinned_message.send_before_menu:
             await _send_pinned_message(message.bot, db, user, pinned_message)
 
-        is_admin = settings.is_admin(user.telegram_id)
-        is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
-
-        custom_buttons = []
-        if not settings.is_text_main_menu_mode():
-            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-                db,
-                is_admin=is_admin,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-            )
-
-        user_subs = getattr(user, 'subscriptions', None) or []
-        first_sub = next((s for s in user_subs if s.is_active), user_subs[0] if user_subs else None)
-        keyboard = await get_main_menu_keyboard_async(
-            db=db,
-            user=user,
-            language=user.language,
-            is_admin=is_admin,
-            has_had_paid_subscription=user.has_had_paid_subscription,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-            balance_kopeks=user.balance_kopeks,
-            subscription=first_sub,
-            is_moderator=is_moderator,
-            custom_buttons=custom_buttons,
-        )
+        keyboard = await _main_menu_keyboard(user, db)
         if not await try_answer_rich_main_menu(message, user, texts, db, keyboard):
             menu_text = await get_main_menu_text(user, texts, db)
             await answer_menu_with_media(message, menu_text, keyboard, db)
@@ -2180,39 +2145,9 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
 
         await db.refresh(existing_user, ['subscriptions'])
 
-        existing_user_subs = existing_user.subscriptions or []
-        first_existing_sub = next(
-            (s for s in existing_user_subs if s.is_active), existing_user_subs[0] if existing_user_subs else None
-        )
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(first_existing_sub)
-
-        is_admin = settings.is_admin(existing_user.telegram_id)
-        is_moderator = (not is_admin) and SupportSettingsService.is_moderator(existing_user.telegram_id)
-
-        custom_buttons = []
-        if not settings.is_text_main_menu_mode():
-            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-                db,
-                is_admin=is_admin,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-            )
-
         pinned_message = await get_active_pinned_message(db)
         try:
-            keyboard = await get_main_menu_keyboard_async(
-                db=db,
-                user=existing_user,
-                language=existing_user.language,
-                is_admin=is_admin,
-                has_had_paid_subscription=existing_user.has_had_paid_subscription,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-                balance_kopeks=existing_user.balance_kopeks,
-                subscription=first_existing_sub,
-                is_moderator=is_moderator,
-                custom_buttons=custom_buttons,
-            )
+            keyboard = await _main_menu_keyboard(existing_user, db)
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, existing_user, pinned_message)
             if not await try_answer_rich_main_menu(callback.message, existing_user, texts, db, keyboard):
@@ -2467,36 +2402,8 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             telegram_id=user.telegram_id,
         )
 
-        user_subs_menu = getattr(user, 'subscriptions', None) or []
-        first_sub_menu = next((s for s in user_subs_menu if s.is_active), user_subs_menu[0] if user_subs_menu else None)
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(first_sub_menu)
-
-        is_admin = settings.is_admin(user.telegram_id)
-        is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
-
-        custom_buttons = []
-        if not settings.is_text_main_menu_mode():
-            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-                db,
-                is_admin=is_admin,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-            )
-
         try:
-            keyboard = await get_main_menu_keyboard_async(
-                db=db,
-                user=user,
-                language=user.language,
-                is_admin=is_admin,
-                has_had_paid_subscription=user.has_had_paid_subscription,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-                balance_kopeks=user.balance_kopeks,
-                subscription=first_sub_menu,
-                is_moderator=is_moderator,
-                custom_buttons=custom_buttons,
-            )
+            keyboard = await _main_menu_keyboard(user, db)
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
             if not await try_answer_rich_main_menu(callback.message, user, texts, db, keyboard):
@@ -2537,39 +2444,9 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
 
         await db.refresh(existing_user, ['subscriptions'])
 
-        existing_user_subs = existing_user.subscriptions or []
-        first_existing_sub = next(
-            (s for s in existing_user_subs if s.is_active), existing_user_subs[0] if existing_user_subs else None
-        )
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(first_existing_sub)
-
-        is_admin = settings.is_admin(existing_user.telegram_id)
-        is_moderator = (not is_admin) and SupportSettingsService.is_moderator(existing_user.telegram_id)
-
-        custom_buttons = []
-        if not settings.is_text_main_menu_mode():
-            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-                db,
-                is_admin=is_admin,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-            )
-
         pinned_message = await get_active_pinned_message(db)
         try:
-            keyboard = await get_main_menu_keyboard_async(
-                db=db,
-                user=existing_user,
-                language=existing_user.language,
-                is_admin=is_admin,
-                has_had_paid_subscription=existing_user.has_had_paid_subscription,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-                balance_kopeks=existing_user.balance_kopeks,
-                subscription=first_existing_sub,
-                is_moderator=is_moderator,
-                custom_buttons=custom_buttons,
-            )
+            keyboard = await _main_menu_keyboard(existing_user, db)
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, existing_user, pinned_message)
             if not await try_answer_rich_main_menu(message, existing_user, texts, db, keyboard):
@@ -2869,36 +2746,8 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             telegram_id=user.telegram_id,
         )
 
-        user_subs_menu = getattr(user, 'subscriptions', None) or []
-        first_sub_menu = next((s for s in user_subs_menu if s.is_active), user_subs_menu[0] if user_subs_menu else None)
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(first_sub_menu)
-
-        is_admin = settings.is_admin(user.telegram_id)
-        is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
-
-        custom_buttons = []
-        if not settings.is_text_main_menu_mode():
-            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-                db,
-                is_admin=is_admin,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-            )
-
         try:
-            keyboard = await get_main_menu_keyboard_async(
-                db=db,
-                user=user,
-                language=user.language,
-                is_admin=is_admin,
-                has_had_paid_subscription=user.has_had_paid_subscription,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-                balance_kopeks=user.balance_kopeks,
-                subscription=first_sub_menu,
-                is_moderator=is_moderator,
-                custom_buttons=custom_buttons,
-            )
+            keyboard = await _main_menu_keyboard(user, db)
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, user, pinned_message)
             if not await try_answer_rich_main_menu(message, user, texts, db, keyboard):
@@ -3111,32 +2960,7 @@ async def required_sub_channel_check(
             logger.info('🗑️ CHANNEL CHECK: Redis payload удален после успешной проверки подписки')
 
         if user and user.status != UserStatus.DELETED.value:
-            # Uses primary subscription (multi-tariff compatible via property)
-            has_active_subscription, subscription_is_active = _calculate_subscription_flags(user.subscription)
-
-            is_admin = settings.is_admin(user.telegram_id)
-            is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
-
-            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-                db,
-                is_admin=is_admin,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-            )
-
-            keyboard = await get_main_menu_keyboard_async(
-                db=db,
-                user=user,
-                language=user.language,
-                is_admin=is_admin,
-                has_had_paid_subscription=user.has_had_paid_subscription,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-                balance_kopeks=user.balance_kopeks,
-                subscription=user.subscription,  # Uses primary subscription (multi-tariff compatible via property)
-                is_moderator=is_moderator,
-                custom_buttons=custom_buttons,
-            )
+            keyboard = await _main_menu_keyboard(user, db)
 
             pinned_message = await get_active_pinned_message(db)
             if pinned_message and pinned_message.send_before_menu:
