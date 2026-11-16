@@ -801,6 +801,27 @@ class ActivationFunnelService:
             logger.info('🪝 Брошенная оплата: отправлено напоминаний', count=sent_count)
         return sent_count
 
+    @staticmethod
+    async def _bought_since(db: AsyncSession, user_id: int, since: datetime) -> bool:
+        """Была ли у человека оплата подписки (покупка, продление, смена тарифа, докупка) после ``since``.
+
+        Корзина в боте не знает о покупке в кабинете, на странице подписки или автопродлением —
+        и остаётся в Redis. Напоминание «К оплате: N ₽» такому человеку — ложное.
+        """
+        from app.database.models import Transaction, TransactionType
+
+        result = await db.execute(
+            select(
+                exists().where(
+                    Transaction.user_id == user_id,
+                    Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                    Transaction.is_completed.is_(True),
+                    Transaction.created_at >= since,
+                )
+            )
+        )
+        return bool(result.scalar())
+
     async def process_abandoned_carts(self, db: AsyncSession) -> int:
         """Брошенная покупка подписки: корзина простояла 15 минут, человек не оплатил и не вернулся.
 
@@ -853,6 +874,9 @@ class ActivationFunnelService:
                 )
             )
             if recent.scalar():
+                continue
+            # Возраст корзины считается по TTL с точностью до секунды — берём секунду запаса.
+            if await self._bought_since(db, user.id, now - timedelta(seconds=age_seconds + 1)):
                 continue
 
             if not user.telegram_id:
@@ -1053,6 +1077,8 @@ class ActivationFunnelService:
                 else:
                     wave2_sent = True
             if wave2_sent or wave1_at is None or wave1_at > now - timedelta(hours=ABANDONED_CART_2_DELAY_HOURS):
+                continue
+            if await self._bought_since(db, user.id, now - timedelta(seconds=age_seconds + 1)):
                 continue
 
             texts = get_texts(user.language)

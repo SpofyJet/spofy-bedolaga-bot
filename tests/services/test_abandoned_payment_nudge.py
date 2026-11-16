@@ -259,6 +259,58 @@ async def test_abandoned_cart_gets_one_message_and_is_extended(monkeypatch):
     assert callbacks[0].startswith('topup_amount|')  # недостающее можно оплатить сразу
 
 
+def _subscription_payment(uid, minutes_ago, description='Продление подписки на 30 дней (⭐️ Стандартный)'):
+    return Transaction(
+        user_id=uid,
+        type=TransactionType.SUBSCRIPTION_PAYMENT.value,
+        amount_kopeks=-15900,
+        description=description,
+        is_completed=True,
+        created_at=NOW - timedelta(minutes=minutes_ago),
+    )
+
+
+async def test_cart_reminder_skips_who_already_bought_after_the_cart(monkeypatch):
+    """Корзина в боте, а купил в кабинете через 10 минут: «К оплате: N ₽» ему не пишем."""
+    async with _session(monkeypatch) as db:
+        db.add_all([_user(balance_kopeks=0), _subscription_payment(1, minutes_ago=6)])
+        await db.commit()
+        _cart_service(monkeypatch, [(1, _cart(), 1000)])  # корзине 16 минут
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_carts(db) == 0
+    sent.assert_not_awaited()
+
+
+async def test_cart_reminder_still_goes_if_the_purchase_was_before_the_cart(monkeypatch):
+    """Купил месяц, через полчаса собрал новую корзину и бросил — напоминание о ней нужно."""
+    async with _session(monkeypatch) as db:
+        db.add_all([_user(balance_kopeks=0), _subscription_payment(1, minutes_ago=50)])
+        await db.commit()
+        _cart_service(monkeypatch, [(1, _cart(), 1000)])
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_carts(db) == 1
+    sent.assert_awaited_once()
+
+
+async def test_cart_wave2_skips_who_already_bought_after_the_cart(monkeypatch):
+    async with _session(monkeypatch) as db:
+        db.add_all(
+            [
+                _user(balance_kopeks=0),
+                _event(1, funnel.EVENT_ABANDONED_CART, 20.25),
+                _subscription_payment(1, minutes_ago=3 * 60, description='Автопродление подписки на 30 дней'),
+            ]
+        )
+        await db.commit()
+        _cart_service(monkeypatch, [(1, _cart(), int(20.5 * 3600))])
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_carts_wave2(db) == 0
+    sent.assert_not_awaited()
+
+
 async def test_fresh_cart_is_left_alone(monkeypatch):
     async with _session(monkeypatch) as db:
         db.add(_user())
