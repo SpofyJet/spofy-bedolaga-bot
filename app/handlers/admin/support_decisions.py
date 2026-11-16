@@ -1,16 +1,3 @@
-"""Кнопки «Да / Нет» под вопросами автоответчика поддержки в админ-группе.
-
-Автоответчик поддержки — внешний скрипт на сервере: он сам отвечает клиентам в
-обращениях, а когда клиенту нужно действие в аккаунте (отвязать устройство,
-начислить, продлить), присылает в тему обращений вопрос «Делать или нет?» с
-двумя кнопками. Нажатие администратора записывается строкой в файл решений;
-скрипт читает файл и выполняет действие или отказывает клиенту. Сам бот по
-нажатию в аккаунтах ничего не меняет.
-
-Нажатия из групп отбрасывает ChatTypeFilterMiddleware; эти он передаёт сюда
-напрямую, минуя остальные middleware (как ответы на карточки обращений).
-"""
-
 from __future__ import annotations
 
 import json
@@ -42,7 +29,6 @@ def _admin_chat_id() -> int | None:
 
 
 def parse_decision(data: str | None) -> tuple[int, str] | None:
-    """``supd:<номер вопроса>:<y|n>`` → (номер, решение)."""
     parts = (data or '').split(':')
     if len(parts) != 3 or parts[0] != CALLBACK_PREFIX or not parts[1].isdigit() or parts[2] not in _LABELS:
         return None
@@ -50,7 +36,6 @@ def parse_decision(data: str | None) -> tuple[int, str] | None:
 
 
 def is_support_decision(callback: types.CallbackQuery) -> bool:
-    """Кнопка решения под вопросом автоответчика в админ-чате."""
     if parse_decision(callback.data) is None:
         return False
     chat_id = _admin_chat_id()
@@ -87,7 +72,6 @@ async def handle_support_decision(callback: types.CallbackQuery) -> None:
     label = _LABELS[decision]
     note = f'{label} — {user.first_name or "администратор"}' + (' · выполняю' if decision == 'y' else '')
     try:
-        # Вопрос отправлен простым текстом: без parse_mode, иначе «<» в нём сломает разбор.
         await callback.message.edit_text(f'{callback.message.text or ""}\n\n{note}', reply_markup=None, parse_mode=None)
     except TelegramBadRequest as error:
         logger.warning('Не удалось обновить сообщение с вопросом поддержки', ask_id=ask_id, error=str(error))
