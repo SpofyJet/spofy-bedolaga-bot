@@ -1615,7 +1615,7 @@
   Классы: `WebAPIServer` (3 методов)
   Функции: нет
 - `app/webserver/telegram.py` — Python-модуль
-  Классы: `TelegramWebhookProcessorError`, `TelegramWebhookProcessorNotRunningError`, `TelegramWebhookOverloadedError`, `TelegramWebhookProcessor` (6 методов)
+  Классы: `TelegramWebhookProcessorError`, `TelegramWebhookProcessorNotRunningError`, `TelegramWebhookOverloadedError`, `TelegramWebhookProcessor` (8 методов)
   Функции: `create_telegram_router`
 - `app/webserver/unified_app.py` — Python-модуль
   Классы: нет
@@ -4342,7 +4342,7 @@
   Функции: `test_scoped_db_commits_on_success`, `test_scoped_db_rolls_back_and_reraises`
 - `tests/webserver/test_telegram.py` — Python-модуль
   Классы: нет
-  Функции: `reset_webhook_settings`, `test_webhook_without_secret` — Без WEBHOOK_SECRET_TOKEN вебхук не принимает апдейты (иначе подделка от любого user_id)., `test_webhook_with_secret`, `test_webhook_secret_mismatch`, `test_webhook_invalid_payload`, `test_webhook_invalid_content_type`, `test_webhook_uses_processor`, `test_webhook_processor_overloaded`, `test_webhook_processor_not_running`, `test_webhook_path_normalization`, `test_health_endpoint`
+  Функции: `reset_webhook_settings`, `test_webhook_without_secret` — Без WEBHOOK_SECRET_TOKEN вебхук не принимает апдейты (иначе подделка от любого user_id)., `test_webhook_with_secret`, `test_webhook_secret_mismatch`, `test_webhook_invalid_payload`, `test_webhook_invalid_content_type`, `test_webhook_uses_processor`, `test_webhook_processor_overloaded`, `test_webhook_processor_not_running`, `test_webhook_path_normalization`, `test_health_endpoint`, `test_processor_measures_wait_and_handle` — Очередь меряет ожидание и обработку: медленный update — отдельной строкой, сводка — раз в период, без id людей.
 - `tests/webserver/test_unified_app.py` — Python-модуль
   Классы: нет
   Функции: `test_unified_app_health_reports_features`, `test_unified_app_health_path_without_admin`, `test_unified_app_docs_disabled`, `test_unified_app_docs_enabled_with_alias`
