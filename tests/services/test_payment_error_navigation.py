@@ -76,7 +76,10 @@ async def test_platega_creation_failure_without_alternatives_has_navigation(monk
     monkeypatch.setattr(
         module,
         'PaymentService',
-        lambda bot: SimpleNamespace(create_platega_payment=AsyncMock(return_value=None)),
+        lambda bot: SimpleNamespace(
+            find_reusable_platega_payment=AsyncMock(return_value=None),
+            create_platega_payment=AsyncMock(return_value=None),
+        ),
     )
     monkeypatch.setattr('app.utils.payment_fallback.fallback_methods_keyboard', lambda *a, **kw: None)
     user = SimpleNamespace(id=1, language='ru', telegram_id=1001, restriction_topup=False)

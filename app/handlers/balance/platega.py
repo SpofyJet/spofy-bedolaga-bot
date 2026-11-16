@@ -346,9 +346,18 @@ async def process_platega_payment_amount(
         await state.set_state(BalanceStates.waiting_for_amount)
         return
 
+    payment_result = None
     try:
         payment_service = PaymentService(message.bot)
-        payment_result = await payment_service.create_platega_payment(
+        # Повторное нажатие с той же суммой и тем же способом — прежняя живая ссылка, а не новый платёж.
+        try:
+            payment_result = await payment_service.find_reusable_platega_payment(
+                db, user_id=db_user.id, amount_kopeks=amount_kopeks, payment_method_code=method_code
+            )
+        except Exception as error:  # поиск не должен мешать созданию нового платежа
+            logger.warning('Platega: поиск прежнего платежа не удался', error=error)
+            await db.rollback()
+        payment_result = payment_result or await payment_service.create_platega_payment(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,

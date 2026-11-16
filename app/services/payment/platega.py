@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from importlib import import_module
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -32,6 +33,83 @@ class PlategaPaymentMixin:
     _SUCCESS_STATUSES = {'CONFIRMED'}
     _FAILED_STATUSES = {'FAILED', 'CANCELED', 'EXPIRED'}
     _PENDING_STATUSES = {'PENDING', 'INPROGRESS'}
+
+    # Повторное нажатие «Карта / СБП» с той же суммой отдаёт недавнюю ещё не оплаченную ссылку
+    # вместо нового платежа у провайдера (раньше — новый платёж на каждое нажатие, иногда люди
+    # оплачивали обе ссылки). Окно короче, чем напоминание о брошенной оплате (10-я минута):
+    # кто вернулся по напоминанию «попробуйте ещё раз», получает новую ссылку, как и раньше.
+    PLATEGA_REUSE_WINDOW = timedelta(minutes=10)
+    # Ссылка должна прожить ещё хотя бы столько, чтобы успеть оплатить (Platega даёт 30 минут).
+    PLATEGA_REUSE_MIN_TTL = timedelta(minutes=10)
+
+    async def find_reusable_platega_payment(
+        self,
+        db: AsyncSession,
+        *,
+        user_id: int,
+        amount_kopeks: int,
+        payment_method_code: int,
+    ) -> dict[str, Any] | None:
+        """Недавний платёж этого человека из бота на ту же сумму тем же способом — если он ещё жив.
+
+        Живость проверяется у провайдера (тот же запрос, что у кнопки «Проверить статус»): только
+        статус PENDING/INPROGRESS. Нет ответа, оплачен, отменён, истекает — None, и вызывающий
+        создаёт новый платёж, как раньше. Зачисление по найденному платежу идёт прежним путём:
+        вебхук и автопроверка находят его по transaction_id/correlation_id.
+        """
+        from app.database.models import PlategaPayment
+
+        now = datetime.now(UTC)
+        candidate = await db.scalar(
+            select(PlategaPayment)
+            .where(
+                PlategaPayment.user_id == user_id,
+                PlategaPayment.amount_kopeks == amount_kopeks,
+                PlategaPayment.payment_method_code == payment_method_code,
+                PlategaPayment.status.in_(self._PENDING_STATUSES),
+                PlategaPayment.is_paid.is_not(True),
+                PlategaPayment.transaction_id.is_(None),
+                PlategaPayment.redirect_url.is_not(None),
+                PlategaPayment.platega_transaction_id.is_not(None),
+                PlategaPayment.created_at >= now - self.PLATEGA_REUSE_WINDOW,
+                PlategaPayment.expires_at >= now + self.PLATEGA_REUSE_MIN_TTL,
+                # Только платежи пополнения из бота: у кабинета свои адреса возврата.
+                PlategaPayment.return_url.is_not_distinct_from(settings.get_platega_return_url()),
+                PlategaPayment.failed_url.is_not_distinct_from(settings.get_platega_failed_url()),
+            )
+            .order_by(PlategaPayment.created_at.desc())
+            .limit(1)
+        )
+        if candidate is None or (candidate.metadata_json or {}).get('purchase_token'):
+            return None
+
+        try:
+            checked = await self.get_platega_payment_status(db, candidate.id)
+        except Exception as error:  # сеть, провайдер — новый платёж, как раньше
+            logger.warning('Platega: не удалось проверить прежний платёж', payment_id=candidate.id, error=error)
+            return None
+        remote = (checked or {}).get('remote')
+        remote_status = str((remote or {}).get('status') or '').upper()
+        payment = (checked or {}).get('payment')
+        if not remote or remote_status not in self._PENDING_STATUSES or payment is None or payment.is_paid:
+            return None
+
+        logger.info(
+            'Platega: повторное нажатие — отдаём прежнюю ссылку',
+            payment_id=payment.id,
+            user_id=user_id,
+            payment_method_code=payment_method_code,
+        )
+        return {
+            'local_payment_id': payment.id,
+            'transaction_id': payment.platega_transaction_id,
+            'redirect_url': payment.redirect_url,
+            'status': payment.status,
+            'expires_at': payment.expires_at,
+            'correlation_id': payment.correlation_id,
+            'payload': payment.payload,
+            'reused': True,
+        }
 
     async def create_platega_payment(
         self,
