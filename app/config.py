@@ -949,6 +949,12 @@ class Settings(BaseSettings):
     # Необязательный mailto-вариант в List-Unsubscribe для клиентов без HTTP one-click.
     EMAIL_UNSUBSCRIBE_MAILTO: str = ''
 
+    # Копия Telegram-рассылки письмом тем, у кого нет Telegram (вошли в кабинет по почте).
+    BROADCAST_EMAIL_MIRROR_ENABLED: bool = True
+    # Писем-копий за сутки UTC на все рассылки вместе: у обычного SMTP (Gmail) предел
+    # ~500 писем в сутки, и превышение блокирует на сутки и коды входа в кабинет.
+    BROADCAST_EMAIL_MIRROR_DAILY_LIMIT: int = 300
+
     # SOCKS5 proxy for routing bot traffic to Telegram API
     # Format: socks5://user:password@host:port or socks5://host:port
     PROXY_URL: str | None = None

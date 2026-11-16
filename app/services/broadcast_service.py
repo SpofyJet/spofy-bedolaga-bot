@@ -203,6 +203,23 @@ class BroadcastService:
             self._tasks[broadcast_id] = _BroadcastTask(task=task, cancel_event=cancel_event)
             task.add_done_callback(lambda _: self._tasks.pop(broadcast_id, None))
 
+        self._start_email_mirror(broadcast_id, config, resume=resume)
+
+    @staticmethod
+    def _start_email_mirror(broadcast_id: int, config: BroadcastConfig, *, resume: bool) -> None:
+        """Тем, у кого нет Telegram, та же рассылка уходит письмом — отдельной фоновой
+        задачей, счётчики и статус Telegram-рассылки она не трогает."""
+        from app.services.broadcast_email_mirror import broadcast_email_mirror, should_mirror
+
+        if not should_mirror(config, resume=resume) or not broadcast_email_mirror.enabled():
+            return
+        from app.utils.background import spawn_background_task
+
+        spawn_background_task(
+            broadcast_email_mirror.start_from_config(broadcast_id, config),
+            name=f'broadcast-email-mirror-start-{broadcast_id}',
+        )
+
     async def request_stop(self, broadcast_id: int) -> bool:
         async with self._lock:
             task_entry = self._tasks.get(broadcast_id)

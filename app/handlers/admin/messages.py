@@ -765,6 +765,10 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
     # Фильтруем None (email-only пользователи)
     recipient_telegram_ids: list[int] = [user.telegram_id for user in users_orm if user.telegram_id is not None]
     total_users_count = len(users_orm)
+    # Кому рассылка не дойдёт в Telegram — им копия письмом (считаем до commit, пока ORM-объекты живы)
+    from app.services.broadcast_email_mirror import broadcast_email_mirror, pick_mirror_user_ids
+
+    mirror_user_ids = pick_mirror_user_ids(users_orm) if broadcast_email_mirror.enabled() else []
 
     # Создаём запись истории рассылки
     broadcast_history = BroadcastHistory(
@@ -787,6 +791,22 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
 
     # Сохраняем ID - это единственное что нам нужно после коммита
     broadcast_id: int = broadcast_history.id
+
+    # Тем, у кого нет Telegram (вошли в кабинет по почте), та же рассылка уходит
+    # письмом — отдельной фоновой задачей со своим суточным пределом.
+    mirror_count = 0
+    if mirror_user_ids:
+        try:
+            mirror_count = await broadcast_email_mirror.start(
+                broadcast_id,
+                user_ids=mirror_user_ids,
+                message_text=message_text,
+                media_type=media_type if has_media else None,
+                media_file_id=media_file_id if has_media else None,
+                has_callback_buttons=bool(selected_buttons),
+            )
+        except Exception:
+            logger.exception('Копия рассылки письмом не запущена', broadcast_id=broadcast_id)
 
     # =========================================================================
     # С этого момента НЕ используем db сессию и ORM-объекты!
@@ -1031,12 +1051,14 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
     success_rate = round(sent_count / total_users_count * 100, 1) if total_users_count else 0
     media_info = f'\n🖼️ <b>Медиафайл:</b> {media_type}' if has_media else ''
     blocked_line = f'• Заблокировали бота: {blocked_count}\n' if blocked_count else ''
+    mirror_line = f'• Письмом (без Telegram): {mirror_count}\n' if mirror_count else ''
 
     result_text = (
         f'✅ <b>Рассылка завершена!</b>\n\n'
         f'📊 <b>Результат:</b>\n'
         f'• Отправлено: {sent_count}\n'
         f'{blocked_line}'
+        f'{mirror_line}'
         f'• Не доставлено: {failed_count}\n'
         f'• Всего пользователей: {total_users_count}\n'
         f'• Успешность: {success_rate}%{media_info}\n\n'

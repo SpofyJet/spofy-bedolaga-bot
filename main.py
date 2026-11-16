@@ -388,6 +388,13 @@ async def main():
 
         email_broadcast_service.set_email_service(email_service)
 
+        # Копии Telegram-рассылок письмом: очередь, которую оборвал перезапуск, продолжается (в фоне)
+        from app.services.broadcast_email_mirror import broadcast_email_mirror
+
+        broadcast_email_mirror.set_bot(bot)
+        broadcast_email_mirror.set_email_service(email_service)
+        spawn_background_task(broadcast_email_mirror.resume_pending(), name='broadcast-email-mirror-resume')
+
         from app.services.admin_notification_service import AdminNotificationService
 
         async with timeline.stage(
