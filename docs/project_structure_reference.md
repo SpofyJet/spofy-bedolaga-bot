@@ -966,8 +966,11 @@
 - `app/services/broadcast_audience.py` — Python-модуль
   Классы: нет
   Функции: `validate_audience` — Reject forged field/value combinations and unknown tariff or promo group IDs., `audience_predicate` — Combine rows strictly from top to bottom, including mixed AND/OR rows., `audience_user_query` — One user row per recipient, independent of subscription count., `select_audience_users` — Return the same ordered, unique people for preview and delivery., `preview_audience_users` — Count exactly while keeping only one page of users in memory.
+- `app/services/broadcast_email_mirror.py` — Python-модуль
+  Классы: `MirrorJob` (1 методов), `DailyCounter` (4 методов), `BroadcastEmailMirror` (20 методов)
+  Функции: `telegram_html_to_email_html` — HTML сообщения Telegram → фрагмент HTML письма., `subject_from_telegram_text` — Тема письма: первая непустая строка без тегов, не длиннее 90 символов., `build_email_body` — Тело письма: текст и кнопки-ссылки., `pick_mirror_user_ids` — Из тех же адресатов, что у Telegram-рассылки, — те, кому она не дойдёт:, `fetch_mirror_user_ids` — Адресаты копии для рассылки по target/audience (без загрузки адресов в память)., `should_mirror` — Персональные отправки (промопредложения) и продолжение после перезапуска не копируются.
 - `app/services/broadcast_service.py` — Python-модуль
-  Классы: `BroadcastMediaConfig`, `BroadcastConfig`, `EmailBroadcastConfig`, `BroadcastService` (18 методов), `EmailBroadcastService` (15 методов)
+  Классы: `BroadcastMediaConfig`, `BroadcastConfig`, `EmailBroadcastConfig`, `BroadcastService` (19 методов), `EmailBroadcastService` (15 методов)
   Функции: `parse_email_scoped_target` — Email-таргет с идентификатором: ``promo_group_{id}`` или ``user_{id}``.
 - `app/services/bypass_downgrade.py` — Python-модуль
   Классы: нет
@@ -3563,6 +3566,9 @@
 - `tests/services/test_broadcast_bad_request_logging.py` — Python-модуль
   Классы: нет
   Функции: `test_bad_request_is_logged_once_per_cause_with_telegram_text`, `test_each_distinct_cause_gets_its_own_error_entry`, `test_blocked_users_are_still_counted_quietly` — «chat not found» — это не сбой рассылки, а ушедший пользователь: без error.
+- `tests/services/test_broadcast_email_mirror.py` — Python-модуль
+  Классы: нет
+  Функции: `test_tg_emoji_becomes_its_fallback_and_spoiler_plain_text`, `test_allowed_tags_kept_rest_stripped_and_escaped`, `test_unclosed_tags_are_closed`, `test_subject_is_first_non_empty_line_without_tags`, `test_subject_is_cut_to_90_chars_and_has_fallback`, `test_callback_buttons_become_one_cabinet_link_url_buttons_stay`, `test_no_cabinet_link_without_configured_cabinet`, `test_callback_custom_button_alone_gives_cabinet_link`, `test_only_users_without_telegram_and_with_verified_email`, `test_category_unsubscribe_is_respected`, `test_should_mirror_skips_resume_and_personal_sends`, `test_start_broadcast_starts_mirror_for_regular_broadcast`, `test_start_broadcast_skips_mirror`, `test_start_broadcast_respects_switch`, `test_broadcast_with_email_channel_is_not_mirrored`, `test_start_from_config_checks_channel_before_selecting`, `test_mirror_sends_to_all_and_cleans_up`, `test_daily_limit_waits_for_next_day_and_keeps_queue_in_file`, `test_daily_limit_is_shared_between_broadcasts`, `test_queue_resumes_from_file_after_restart`, `test_photo_is_attached`, `test_photo_download_failure_sends_without_it`, `test_failure_streak_returns_people_to_queue`, `test_wait_lasts_until_next_utc_day`
 - `tests/services/test_broadcast_email_render.py` — Python-модуль
   Классы: нет
   Функции: `test_fragment_gets_branded_layout_with_recipient_and_unsubscribe`, `test_custom_layout_applies_to_broadcasts_too`, `test_full_document_is_sent_as_is_with_unsubscribe_placeholder`, `test_system_broadcast_has_no_unsubscribe_link`, `test_email_render_endpoint_matches_delivery`
