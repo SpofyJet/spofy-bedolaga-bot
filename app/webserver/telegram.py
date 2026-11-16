@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import re
+import time
 from typing import Any
 
 import structlog
@@ -14,6 +16,37 @@ from app.config import settings
 
 
 logger = structlog.get_logger(__name__)
+
+# Замер ожидания: сколько update стоял в очереди и сколько шла обработка. Раз в STATS_PERIOD — одна строка сводки,
+# отдельной строкой — каждый update, который ждал или обрабатывался дольше порога. Идентификаторы людей не пишутся.
+STATS_PERIOD_SECONDS = 300.0
+SLOW_WAIT_SECONDS = 2.0
+SLOW_HANDLE_SECONDS = 5.0
+_KIND_CUT = re.compile(r'[:\d]')
+
+
+def _update_kind(update: Any) -> str:
+    """Вид update для журнала: начало callback_data до первой цифры или двоеточия, имя команды; без текста и id."""
+    try:
+        callback = getattr(update, 'callback_query', None)
+        if callback is not None:
+            return 'callback:' + _KIND_CUT.split(callback.data or '', maxsplit=1)[0][:40]
+        message = getattr(update, 'message', None)
+        if message is not None:
+            text = message.text or ''
+            if text.startswith('/'):
+                return 'command:' + text.split()[0].split('@')[0][:20]
+            return 'message'
+        return str(getattr(update, 'event_type', 'other'))
+    except Exception:  # pragma: no cover - замер не должен мешать обработке
+        return 'other'
+
+
+def _percentile(values: list[float], share: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    return ordered[min(len(ordered) - 1, int(len(ordered) * share))]
 
 
 class TelegramWebhookProcessorError(RuntimeError):
@@ -49,7 +82,9 @@ class TelegramWebhookProcessor:
         self._worker_count = max(0, worker_count)
         self._enqueue_timeout = max(0.0, enqueue_timeout)
         self._shutdown_timeout = max(1.0, shutdown_timeout)
-        self._queue: asyncio.Queue[Update | object] = asyncio.Queue(maxsize=self._queue_maxsize)
+        self._queue: asyncio.Queue[tuple[Update, float] | object] = asyncio.Queue(maxsize=self._queue_maxsize)
+        self._busy = 0
+        self._reset_stats()
         self._workers: list[asyncio.Task[None]] = []
         self._running = False
         self._stop_sentinel: object = object()
@@ -58,6 +93,45 @@ class TelegramWebhookProcessor:
     @property
     def is_running(self) -> bool:
         return self._running
+
+    def _reset_stats(self) -> None:
+        self._stats_started = time.monotonic()
+        self._waits: list[float] = []
+        self._handles: list[float] = []
+        self._busy_max = 0
+        self._queue_max = 0
+
+    def _record(self, update: Any, wait: float, handle: float) -> None:
+        try:
+            self._waits.append(wait)
+            self._handles.append(handle)
+            if wait >= SLOW_WAIT_SECONDS or handle >= SLOW_HANDLE_SECONDS:
+                logger.warning(
+                    'Медленный Telegram update',
+                    kind=_update_kind(update),
+                    wait_ms=round(wait * 1000),
+                    handle_ms=round(handle * 1000),
+                    queue=self._queue.qsize(),
+                    busy=self._busy,
+                )
+            if time.monotonic() - self._stats_started >= STATS_PERIOD_SECONDS:
+                logger.info(
+                    'Очередь Telegram webhook: сводка',
+                    updates=len(self._waits),
+                    wait_p50_ms=round(_percentile(self._waits, 0.5) * 1000),
+                    wait_p95_ms=round(_percentile(self._waits, 0.95) * 1000),
+                    wait_max_ms=round(max(self._waits) * 1000),
+                    waited_over_1s=sum(1 for value in self._waits if value >= 1.0),
+                    handle_p50_ms=round(_percentile(self._handles, 0.5) * 1000),
+                    handle_p95_ms=round(_percentile(self._handles, 0.95) * 1000),
+                    handle_max_ms=round(max(self._handles) * 1000),
+                    busy_max=self._busy_max,
+                    queue_max=self._queue_max,
+                    workers=self._worker_count,
+                )
+                self._reset_stats()
+        except Exception:  # pragma: no cover - замер не должен мешать обработке
+            self._reset_stats()
 
     async def start(self) -> None:
         async with self._lifecycle_lock:
@@ -130,10 +204,12 @@ class TelegramWebhookProcessor:
             raise TelegramWebhookProcessorNotRunningError
 
         try:
+            item = (update, time.monotonic())
             if self._enqueue_timeout <= 0:
-                self._queue.put_nowait(update)
+                self._queue.put_nowait(item)
             else:
-                await asyncio.wait_for(self._queue.put(update), timeout=self._enqueue_timeout)
+                await asyncio.wait_for(self._queue.put(item), timeout=self._enqueue_timeout)
+            self._queue_max = max(self._queue_max, self._queue.qsize())
         except asyncio.QueueFull as error:  # pragma: no cover - защитный сценарий
             raise TelegramWebhookOverloadedError from error
         except TimeoutError as error:
@@ -152,7 +228,10 @@ class TelegramWebhookProcessor:
                     self._queue.task_done()
                     break
 
-                update = item
+                update, enqueued_at = item  # type: ignore[misc]
+                started_at = time.monotonic()
+                self._busy += 1
+                self._busy_max = max(self._busy_max, self._busy)
                 try:
                     await self._dispatcher.feed_update(self._bot, update)  # type: ignore[arg-type]
                 except asyncio.CancelledError:  # pragma: no cover - остановка приложения
@@ -161,6 +240,8 @@ class TelegramWebhookProcessor:
                 except Exception as error:  # pragma: no cover - логируем сбой обработчика
                     logger.exception('Ошибка обработки Telegram update в worker', worker_id=worker_id, error=error)
                 finally:
+                    self._busy -= 1
+                    self._record(update, started_at - enqueued_at, time.monotonic() - started_at)
                     self._queue.task_done()
         finally:
             logger.debug('Worker завершён', worker_id=worker_id)

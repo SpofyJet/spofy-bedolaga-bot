@@ -332,3 +332,65 @@ async def test_health_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     assert payload['webhook_configured'] is True
     assert payload['queue_maxsize'] == 42
     assert payload['workers'] == 2
+
+
+@pytest.mark.anyio
+async def test_processor_measures_wait_and_handle(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Очередь меряет ожидание и обработку: медленный update — отдельной строкой, сводка — раз в период, без id людей."""
+    import asyncio
+
+    from aiogram.types import Update
+
+    from app.webserver import telegram as telegram_module
+
+    events: list[tuple[str, str, dict[str, Any]]] = []
+
+    class _Log:
+        def __getattr__(self, level: str):
+            return lambda message, **fields: events.append((level, message, fields))
+
+    monkeypatch.setattr(telegram_module, 'logger', _Log())
+    monkeypatch.setattr(telegram_module, 'SLOW_HANDLE_SECONDS', 0.01)
+    monkeypatch.setattr(telegram_module, 'STATS_PERIOD_SECONDS', 0.0)
+
+    handled: list[int] = []
+
+    async def feed_update(bot: Any, update: Update) -> None:
+        await asyncio.sleep(0.02)
+        handled.append(update.update_id)
+
+    dispatcher = AsyncMock()
+    dispatcher.feed_update = feed_update
+    processor = TelegramWebhookProcessor(
+        bot=AsyncMock(),
+        dispatcher=dispatcher,
+        queue_maxsize=8,
+        worker_count=1,
+        enqueue_timeout=0.0,
+        shutdown_timeout=1.0,
+    )
+    await processor.start()
+    for update_id, data in ((1, 'tariff_extend:31468:2:60'), (2, 'reset_device_1_1')):
+        await processor.enqueue(
+            Update.model_validate(
+                {
+                    'update_id': update_id,
+                    'callback_query': {
+                        'id': str(update_id),
+                        'from': {'id': 4242, 'is_bot': False, 'first_name': 'T'},
+                        'chat_instance': 'x',
+                        'data': data,
+                    },
+                }
+            )
+        )
+    await processor.stop()
+
+    assert handled == [1, 2]
+    slow = [fields for level, message, fields in events if message == 'Медленный Telegram update']
+    assert [fields['kind'] for fields in slow] == ['callback:tariff_extend', 'callback:reset_device_']
+    assert slow[1]['wait_ms'] >= 15  # второй ждал, пока единственный воркер занят первым
+    summary = [fields for level, message, fields in events if message == 'Очередь Telegram webhook: сводка']
+    assert summary and summary[0]['workers'] == 1 and summary[0]['busy_max'] == 1
+    assert '4242' not in repr(events) and '31468' not in repr(events)
+    assert processor._busy == 0
