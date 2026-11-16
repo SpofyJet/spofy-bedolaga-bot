@@ -43,7 +43,6 @@ logger = structlog.get_logger(__name__)
 
 
 class TicketStates(StatesGroup):
-    waiting_for_title = State()
     waiting_for_message = State()
     waiting_for_reply = State()
 
@@ -51,7 +50,6 @@ class TicketStates(StatesGroup):
 async def show_ticket_priority_selection(
     callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession
 ):
-    """Начать создание тикета без выбора приоритета: сразу просим заголовок"""
     texts = get_texts(db_user.language)
 
     # Глобальный блок и наличие активного тикета
@@ -78,7 +76,9 @@ async def show_ticket_priority_selection(
         )
         return
 
-    prompt_text = texts.t('TICKET_TITLE_INPUT', 'Введите тему обращения:')
+    prompt_text = texts.t(
+        'TICKET_MESSAGE_INPUT', 'Опишите проблему (до {limit} символов) или отправьте фото с подписью:'
+    ).format(limit=TICKET_MESSAGE_MAX_LENGTH)
     cancel_kb = get_ticket_cancel_keyboard(db_user.language)
     prompt_msg = callback.message
     try:
@@ -92,69 +92,8 @@ async def show_ticket_priority_selection(
         prompt_msg = await callback.message.answer(prompt_text, reply_markup=cancel_kb)
     # Запоминаем исходное сообщение бота, чтобы далее редактировать его, а не слать новые
     await state.update_data(prompt_chat_id=prompt_msg.chat.id, prompt_message_id=prompt_msg.message_id)
-    await state.set_state(TicketStates.waiting_for_title)
-    await callback.answer()
-
-
-async def handle_ticket_title_input(message: types.Message, state: FSMContext, db_user: User, db: AsyncSession):
-    # Проверяем, что пользователь в правильном состоянии
-    current_state = await state.get_state()
-    if current_state != TicketStates.waiting_for_title:
-        return
-
-    """Обработать ввод заголовка тикета"""
-    if not message.text:
-        spawn_background_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-        return
-    title = message.text.strip()
-
-    data_prompt = await state.get_data()
-    prompt_chat_id = data_prompt.get('prompt_chat_id')
-    prompt_message_id = data_prompt.get('prompt_message_id')
-    # Удалим сообщение пользователя через 2 секунды, чтобы не засорять чат
-    spawn_background_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
-    if len(title) < 5:
-        texts = get_texts(db_user.language)
-        text_val = texts.t(
-            'TICKET_TITLE_TOO_SHORT', 'Заголовок должен содержать минимум 5 символов. Попробуйте еще раз:'
-        )
-        await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
-        return
-
-    if len(title) > 255:
-        texts = get_texts(db_user.language)
-        text_val = texts.t(
-            'TICKET_TITLE_TOO_LONG', 'Заголовок слишком длинный. Максимум 255 символов. Попробуйте еще раз:'
-        )
-        await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
-        return
-
-    # Глобальный блок
-    from app.database.crud.ticket import TicketCRUD
-
-    blocked_until = await TicketCRUD.is_user_globally_blocked(db, db_user.id)
-    if blocked_until:
-        texts = get_texts(db_user.language)
-        if blocked_until.year > 9999 - 1:
-            await message.answer(texts.t('USER_BLOCKED_FOREVER', 'Вы заблокированы для обращений в поддержку.'))
-        else:
-            await message.answer(
-                texts.t('USER_BLOCKED_UNTIL', 'Вы заблокированы до {time}').format(
-                    time=format_local_datetime(blocked_until, '%d.%m.%Y %H:%M')
-                )
-            )
-        await state.clear()
-        return
-
-    await state.update_data(title=title)
-
-    texts = get_texts(db_user.language)
-    text_val = texts.t(
-        'TICKET_MESSAGE_INPUT', 'Опишите проблему (до {limit} символов) или отправьте фото с подписью:'
-    ).format(limit=TICKET_MESSAGE_MAX_LENGTH)
-    await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
-
     await state.set_state(TicketStates.waiting_for_message)
+    await callback.answer()
 
 
 # Пачки сообщений в состояниях ввода обращения/ответа. Альбом из нескольких фото приходит отдельными апдейтами
@@ -169,6 +108,7 @@ TICKET_SPLIT_TEXT_MIN_LENGTH = 3000
 # Склеенный текст хранится несколькими сообщениями обращения по
 # TICKET_MESSAGE_MAX_LENGTH; общий потолок защищает от простыней.
 TICKET_INPUT_MAX_LENGTH = TICKET_MESSAGE_MAX_LENGTH * 4
+TICKET_TITLE_LENGTH = 60
 
 
 class _TicketInputBatch:
@@ -270,6 +210,13 @@ def _ticket_media_fields(content: _TicketInputContent) -> dict:
     return fields
 
 
+def _ticket_title(text: str, texts) -> str:
+    line = next((part.strip() for part in text.splitlines() if part.strip()), '')
+    if not line:
+        return texts.t('TICKET_TITLE_ATTACHMENT', 'Вложение без текста')
+    return line if len(line) <= TICKET_TITLE_LENGTH else line[: TICKET_TITLE_LENGTH - 1].rstrip() + '…'
+
+
 def _ticket_text_chunks(text: str, limit: int) -> list[str]:
     """Режет текст на сообщения обращения по limit символов, ничего не теряя."""
     if len(text) <= limit:
@@ -363,7 +310,7 @@ async def _create_ticket_from_batch(batch: _TicketInputBatch, state: FSMContext,
         return
     chunks = _ticket_text_chunks(message_text, TICKET_MESSAGE_MAX_LENGTH)
 
-    title = data_prompt.get('title')
+    title = _ticket_title(message_text, texts)
     priority = 'normal'
 
     try:
@@ -1279,8 +1226,6 @@ def register_handlers(dp: Dispatcher):
 
     # Создание тикета (теперь без приоритета)
     dp.callback_query.register(show_ticket_priority_selection, F.data == 'create_ticket')
-
-    dp.message.register(handle_ticket_title_input, TicketStates.waiting_for_title)
 
     dp.message.register(handle_ticket_message_input, TicketStates.waiting_for_message)
 

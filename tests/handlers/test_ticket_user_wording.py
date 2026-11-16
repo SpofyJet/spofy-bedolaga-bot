@@ -29,14 +29,14 @@ async def test_creation_confirmation_uses_locale(monkeypatch, language, expected
         await db.commit()
         state = SimpleNamespace(
             get_state=AsyncMock(return_value=tickets.TicketStates.waiting_for_message),
-            get_data=AsyncMock(return_value={'title': 'Не работает <VPN>'}),
+            get_data=AsyncMock(return_value={}),
             clear=AsyncMock(),
         )
         message = SimpleNamespace(
             chat=SimpleNamespace(id=1),
             message_id=1,
             text=None,
-            caption='Не подключается с утра',
+            caption='Не работает <VPN>',
             photo=[SimpleNamespace(file_id='masked_photo')] if language == 'ru' else [],
             video=None,
             media_group_id=None,

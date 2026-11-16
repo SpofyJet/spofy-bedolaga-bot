@@ -719,7 +719,7 @@
   Функции: `show_support_info`, `register_handlers`, `payment_support_command` — /paysupport — required of bots that sell for Telegram Stars (Bot Developer Terms 6.2.1)., `register_command_handlers`
 - `app/handlers/tickets.py` — Python-модуль
   Классы: `TicketStates`
-  Функции: `show_ticket_priority_selection` — Начать создание тикета без выбора приоритета: сразу просим заголовок, `handle_ticket_title_input`, `handle_ticket_message_input`, `show_my_tickets`, `show_my_tickets_closed`, `view_ticket` — Показать детали тикета с пагинацией, `send_ticket_attachments`, `user_delete_message`, `reply_to_ticket` — Начать ответ на тикет, `handle_ticket_reply`, `close_ticket` — Закрыть тикет, `cancel_ticket_creation` — Отменить создание тикета, `cancel_ticket_reply` — Отменить ответ на тикет, `close_ticket_notification` — Закрыть уведомление о тикете, `build_ticket_card_keyboard` — Клавиатура карточки тикета по роли получателя ('admin' / 'moderator' / 'group')., `build_ticket_card_text` — Карточка обращения для админ-чата., `notify_admins_about_new_ticket` — Уведомить админов о новом тикете, `notify_admins_about_ticket_reply` — Уведомить админов об ответе пользователя на тикет, `register_handlers` — Регистрация обработчиков тикетов
+  Функции: `show_ticket_priority_selection`, `handle_ticket_message_input`, `show_my_tickets`, `show_my_tickets_closed`, `view_ticket` — Показать детали тикета с пагинацией, `send_ticket_attachments`, `user_delete_message`, `reply_to_ticket` — Начать ответ на тикет, `handle_ticket_reply`, `close_ticket` — Закрыть тикет, `cancel_ticket_creation` — Отменить создание тикета, `cancel_ticket_reply` — Отменить ответ на тикет, `close_ticket_notification` — Закрыть уведомление о тикете, `build_ticket_card_keyboard` — Клавиатура карточки тикета по роли получателя ('admin' / 'moderator' / 'group')., `build_ticket_card_text` — Карточка обращения для админ-чата., `notify_admins_about_new_ticket` — Уведомить админов о новом тикете, `notify_admins_about_ticket_reply` — Уведомить админов об ответе пользователя на тикет, `register_handlers` — Регистрация обработчиков тикетов
 - `app/handlers/ultima_deeplink.py` — Python-модуль
   Классы: нет
   Функции: `is_ultima_deeplink`, `link_source` — ``ultima_ch1`` → ``ch1``; просто ``ultima`` → пустая строка., `open_ultima_offer` — Выдать (или показать действующее) предложение ULTIMA. False — предложения нет, пусть идёт обычный /start.
@@ -755,7 +755,7 @@
   Функции: `show_referral_statistics`, `show_pending_withdrawal_requests` — Показывает список ожидающих заявок на вывод., `view_withdrawal_request` — Показывает детали заявки на вывод., `approve_withdrawal_request` — Одобряет заявку на вывод., `reject_withdrawal_request` — Отклоняет заявку на вывод., `complete_withdrawal_request` — Отмечает заявку как выполненную (деньги переведены)., `register_handlers`
 - `app/handlers/admin/support_decisions.py` — Python-модуль
   Классы: нет
-  Функции: `parse_decision` — ``supd:<номер вопроса>:<y|n>`` → (номер, решение)., `is_support_decision` — Кнопка решения под вопросом автоответчика в админ-чате., `handle_support_decision`
+  Функции: `parse_decision`, `is_support_decision`, `handle_support_decision`
 - `app/handlers/admin/system_logs.py` — Python-модуль
   Классы: нет
   Функции: `show_system_logs`, `refresh_system_logs`, `download_system_logs`, `register_handlers`
@@ -3391,6 +3391,9 @@
 - `tests/handlers/test_ticket_notification_escaping.py` — Python-модуль
   Классы: нет
   Функции: `test_reply_preview_is_escaped`, `test_escaping_does_not_split_entities_on_the_cut` — Обрезка идёт до экранирования, поэтому `&quot;` не разрывается., `test_plain_reply_is_unchanged`
+- `tests/handlers/test_ticket_one_step.py` — Python-модуль
+  Классы: нет
+  Функции: `quiet`, `test_create_button_asks_for_the_question_at_once`, `test_first_message_becomes_the_ticket`, `test_photo_without_text_still_creates_a_ticket`, `test_title_is_the_first_line_cut_to_the_limit`, `test_title_step_is_gone`
 - `tests/handlers/test_ticket_reply_closed.py` — Python-модуль
   Классы: нет
   Функции: `test_closed_ticket_offers_new_ticket_instead_of_reply_input`, `test_reply_blocked_ticket_does_not_ask_for_text`, `test_open_ticket_still_asks_for_reply`, `test_foreign_ticket_is_not_found`
