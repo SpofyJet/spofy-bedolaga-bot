@@ -13,6 +13,9 @@ queries from those chats. Only private (DM) interactions are processed.
 на карточку обращения уходит пользователю, а /tickets показывает карточки
 обращений, ждущих ответа (app/handlers/admin/ticket_group_reply.py).
 
+И ещё одно — кнопки «Да / Нет» под вопросами автоответчика поддержки в том же
+чате (app/handlers/admin/support_decisions.py).
+
 Not registered on chat_member — channel_member.py needs ChatMemberUpdated
 events from groups/channels to track required channel subscriptions.
 Not registered on pre_checkout_query — no chat context, always private.
@@ -48,6 +51,16 @@ class ChatTypeFilterMiddleware(BaseMiddleware):
             chat = event.message.chat
 
         if chat is not None and chat.type != ChatType.PRIVATE:
+            if isinstance(event, CallbackQuery):
+                # «Да / Нет» под вопросом автоответчика поддержки — обрабатываем
+                # здесь же, как и ответы на карточки обращений.
+                from app.handlers.admin.support_decisions import (
+                    handle_support_decision,
+                    is_support_decision,
+                )
+
+                if is_support_decision(event):
+                    return await handle_support_decision(event)
             if isinstance(event, CallbackQuery) and is_group_safe_callback(event.data):
                 return await handler(event, data)
             if isinstance(event, Message):
