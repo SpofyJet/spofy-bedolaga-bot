@@ -753,6 +753,9 @@
 - `app/handlers/admin/referrals.py` — Python-модуль
   Классы: нет
   Функции: `show_referral_statistics`, `show_pending_withdrawal_requests` — Показывает список ожидающих заявок на вывод., `view_withdrawal_request` — Показывает детали заявки на вывод., `approve_withdrawal_request` — Одобряет заявку на вывод., `reject_withdrawal_request` — Отклоняет заявку на вывод., `complete_withdrawal_request` — Отмечает заявку как выполненную (деньги переведены)., `register_handlers`
+- `app/handlers/admin/support_decisions.py` — Python-модуль
+  Классы: нет
+  Функции: `parse_decision` — ``supd:<номер вопроса>:<y|n>`` → (номер, решение)., `is_support_decision` — Кнопка решения под вопросом автоответчика в админ-чате., `handle_support_decision`
 - `app/handlers/admin/system_logs.py` — Python-модуль
   Классы: нет
   Функции: `show_system_logs`, `refresh_system_logs`, `download_system_logs`, `register_handlers`
@@ -3355,6 +3358,9 @@
 - `tests/handlers/test_subscription_link_visibility.py` — Python-модуль
   Классы: нет
   Функции: `link_env`, `test_device_help_uses_display_link_and_existing_hide_policy`
+- `tests/handlers/test_support_decisions.py` — Python-модуль
+  Классы: нет
+  Функции: `test_parse_decision`, `test_only_admin_chat_buttons_are_recognised`, `test_not_recognised_without_admin_chat`, `test_admin_yes_is_recorded_and_buttons_removed`, `test_admin_no_is_recorded`, `test_stranger_cannot_decide`, `test_decision_is_kept_when_message_cannot_be_edited`, `test_write_failure_is_reported`, `test_middleware_routes_decision_from_admin_chat`, `test_middleware_drops_decision_from_foreign_group`
 - `tests/handlers/test_tariff_extend_subscription_id.py` — Python-модуль
   Классы: нет
   Функции: `test_confirm_keyboard_puts_subscription_id_first_period_last`, `test_extend_keyboard_embeds_subscription_id_before_tariff_and_period`
