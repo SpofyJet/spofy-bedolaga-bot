@@ -230,6 +230,15 @@ def telegram_blocked_cache_key(telegram_id: int) -> str:
     return f'tg_blocked:{telegram_id}'
 
 
+# «Автопродление не прошло» уже говорит, сколько нужно и что пополнить. Напоминание «истекает
+# через N дней» в те же сутки по той же подписке — второе сообщение о том же (приходили вместе).
+AUTOPAY_FAIL_NOTICE_TTL_SECONDS = 86400
+
+
+def autopay_fail_notice_key(subscription_id: int) -> str:
+    return f'autopay_fail_notice:{subscription_id}'
+
+
 class MonitoringService:
     def __init__(self, bot=None):
         self.is_running = False
@@ -640,8 +649,9 @@ class MonitoringService:
             return
 
         is_final = reason == 'final'
+        delivered = False
         if user.telegram_id and self.bot:
-            await self._send_autopay_failed_notification(
+            delivered = await self._send_autopay_failed_notification(
                 user, user.balance_kopeks, charge_amount, subscription=subscription, is_final=is_final
             )
         elif not user.telegram_id:
@@ -651,7 +661,9 @@ class MonitoringService:
                 reason_text = 'Ошибка списания средств'
             else:
                 reason_text = 'Недостаточно средств на балансе'
-            await notification_delivery_service.notify_autopay_failed(user=user, reason=reason_text)
+            delivered = await notification_delivery_service.notify_autopay_failed(user=user, reason=reason_text)
+        if delivered:
+            await self._set_mark(autopay_fail_notice_key(subscription.id), AUTOPAY_FAIL_NOTICE_TTL_SECONDS)
 
         apply_autopay_fail_notification(state, reason, now_ts)
         ttl_seconds = int(max(0.0, hours_left) * 3600) + 72 * 3600
@@ -1031,6 +1043,20 @@ class MonitoringService:
                     other_days=other_days,
                 )
                 return False
+
+        if subscription.autopay_enabled and await self._is_marked(autopay_fail_notice_key(subscription.id)):
+            # В эти сутки уже ушло «Автопродление не прошло» — там сумма и кнопка пополнения.
+            # Этот порог считаем закрытым, чтобы напоминание не догнало человека следующим циклом.
+            await record_notification(db, user.id, subscription.id, 'expiring', days)
+            already_sent.add((user.id, subscription.id, days))
+            processed.add(sub_key)
+            logger.info(
+                'Напоминание об истечении не шлём: в эти сутки ушло «Автопродление не прошло»',
+                user_id=user.id,
+                subscription_id=subscription.id,
+                days=days,
+            )
+            return False
 
         # Handle email-only users via notification delivery service
         if not user.telegram_id:
@@ -2715,7 +2741,8 @@ class MonitoringService:
         *,
         subscription: Subscription | None = None,
         is_final: bool = False,
-    ):
+    ) -> bool:
+        """True — сообщение ушло (или человек недоступен и писать ему некуда)."""
         try:
             texts = get_texts(user.language)
             if is_final:
@@ -2745,14 +2772,16 @@ class MonitoringService:
                 parse_mode='HTML',
                 reply_markup=keyboard,
             )
+            return True
 
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
-            if not await self._handle_unreachable_user(user, exc, 'уведомление о неудачном автоплатеже'):
-                logger.error(
-                    'Ошибка Telegram API при отправке уведомления о неудачном автоплатеже пользователю',
-                    telegram_id=user.telegram_id,
-                    exc=exc,
-                )
+            if await self._handle_unreachable_user(user, exc, 'уведомление о неудачном автоплатеже'):
+                return True
+            logger.error(
+                'Ошибка Telegram API при отправке уведомления о неудачном автоплатеже пользователю',
+                telegram_id=user.telegram_id,
+                exc=exc,
+            )
         except TelegramNetworkError as e:
             logger.warning(
                 'Таймаут отправки уведомления о неудачном автоплатеже пользователю', telegram_id=user.telegram_id, e=e
@@ -2761,6 +2790,7 @@ class MonitoringService:
             logger.error(
                 'Ошибка отправки уведомления о неудачном автоплатеже пользователю', telegram_id=user.telegram_id, e=e
             )
+        return False
 
     async def _retry_stuck_guest_purchases(self, db: AsyncSession):
         from app.services.guest_purchase_service import (
