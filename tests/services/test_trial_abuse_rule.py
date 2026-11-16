@@ -422,3 +422,17 @@ async def test_account_whose_trial_is_already_gone_gets_no_warning(monkeypatch):
     assert await svc.check_new_device(2, HWID) is True
     assert [call.args[1].id for call in svc._apply_action.await_args_list] == [2]
     svc._send_warning.assert_awaited_once_with(222)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(('trials_topic', 'expected'), [(94876, 94876), (None, 33)])
+async def test_admin_summary_goes_to_the_trials_topic(monkeypatch, trials_topic, expected):
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', -100123)
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', 33)
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_TRIALS_TOPIC_ID', trials_topic)
+    svc = TrialAbuseService()
+    svc.bot = SimpleNamespace(send_message=AsyncMock())
+
+    await svc._notify_admin('сводка')
+
+    assert svc.bot.send_message.await_args.kwargs['message_thread_id'] == expected

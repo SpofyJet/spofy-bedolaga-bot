@@ -831,13 +831,15 @@ class TrialAbuseService:
         if not self.bot:
             return
         chat_id = settings.ADMIN_NOTIFICATIONS_CHAT_ID
+        thread_id = settings.ADMIN_NOTIFICATIONS_TRIALS_TOPIC_ID or settings.ADMIN_NOTIFICATIONS_TOPIC_ID
         if not chat_id:
             excluded = self.get_excluded_telegram_ids()
             chat_id = next(iter(excluded), None)
+            thread_id = None
         if not chat_id:
             return
         try:
-            await self.bot.send_message(chat_id=chat_id, text=text, parse_mode='HTML')
+            await self.bot.send_message(chat_id=chat_id, text=text, parse_mode='HTML', message_thread_id=thread_id)
         except Exception as error:
             logger.warning(f'Антиабуз триалов: не удалось уведомить админа: {error}')
 
