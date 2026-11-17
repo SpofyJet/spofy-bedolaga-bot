@@ -6,8 +6,8 @@ readme = 'README.md'
 license = { text = 'MIT' }
 requires-python = '==3.14.*'
 dependencies = [
-    'aiogram==3.31.0',
-    'sqlalchemy==2.1.8',
+    'aiogram==3.32.0',
+    'sqlalchemy==2.1.9',
     'greenlet==3.5.6',
     'alembic==1.20.1',
     'asyncpg==0.32.0',
@@ -15,9 +15,9 @@ dependencies = [
     # Без [standard]: с FastAPI 0.142 он тянет OpenTelemetry, protobuf и httpx2,
     # которые боту не нужны. Из набора нужны только загрузки файлов (multipart),
     # EmailStr (email-validator) и uvicorn[standard] (uvloop, httptools).
-    'fastapi==0.162.4',
-    'python-multipart==0.0.33',
-    'email-validator==2.3.0',
+    'fastapi==0.163.1',
+    'python-multipart==0.0.34',
+    'email-validator==2.4.0',
     'redis==8.1.0',
     'pyyaml==6.0.3',
     'python-dateutil==4.0.0',
@@ -31,25 +31,25 @@ dependencies = [
     'rich==15.0.0',
     'aiohttp-socks==0.12.0',
     'httpx[socks]==0.28.1',
-    'pycryptodome==4.4.0',
+    'pycryptodome==4.5.0',
     'app-store-server-library[async]==3.1.2',
     'aiohttp==3.14.5',
     'aiofiles==25.1.0',
-    'pydantic==2.13.5',
-    'pydantic-settings==2.16.2',
+    'pydantic==2.14.3',
+    'pydantic-settings==2.16.3',
     'uvicorn[standard]==0.54.0',
     'uvloop==0.23.0',
     'starlette==1.10.0',
     'attrs==26.1.0',
     'pillow==13.0.0',
-    'nh3==0.3.7',
+    'nh3==0.3.8',
 ]
 
 [dependency-groups]
 dev = [
-    'ruff==0.17.3',
+    'ruff==0.17.5',
     'pytest==9.2.0',
-    'pytest-asyncio==1.4.1',
+    'pytest-asyncio==1.5.0',
     'pytest-cov==7.1.0',
 ]
 
@@ -320,6 +320,7 @@ docstring-code-line-length = 'dynamic'
 [tool.pytest.ini_options]
 testpaths = ['tests']
 addopts = '--strict-markers --strict-config'
+asyncio_default_fixture_loop_scope = 'fixture-scope'
 markers = [
     'asyncio: запуск асинхронного теста через встроенный цикл событий',
     'anyio: запуск асинхронного теста через встроенный цикл событий',
