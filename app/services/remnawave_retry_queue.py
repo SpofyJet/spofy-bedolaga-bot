@@ -10,6 +10,7 @@ exhausted or the process restarts. Other retry intents remain memory-only.
 from __future__ import annotations
 
 import asyncio
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -20,10 +21,12 @@ from sqlalchemy import select
 
 from app.database.database import AsyncSessionLocal
 from app.database.models import Subscription, User
+from app.services.panel_sync import PanelAccountOwnedByAnotherUser
 
 
 logger = structlog.get_logger(__name__)
 PAID_RESET_RECOVERY_BUDGET_SECONDS = 20
+PANEL_CONFLICT_RETRY_SECONDS = 3600
 
 
 @dataclass
@@ -46,6 +49,7 @@ class RemnaWaveRetryQueue:
         self._interval = interval_seconds
         self._task: asyncio.Task | None = None
         self._expiry_cursor = 0
+        self._parked: dict[int, float] = {}
 
     def is_processing(self, subscription_id: int) -> bool:
         return subscription_id in self._processing_subscription_ids
@@ -63,6 +67,7 @@ class RemnaWaveRetryQueue:
         reset_traffic: bool = False,
         reset_reason: str | None = None,
     ) -> None:
+        self._parked.pop(subscription_id, None)
         # Deduplicate by subscription_id
         for item in self._queue:
             if item.subscription_id == subscription_id:
@@ -112,7 +117,10 @@ class RemnaWaveRetryQueue:
                     rows = (await db.execute(query)).all()
             if rows:
                 self._expiry_cursor = rows[-1].id
+            now = time.monotonic()
             for subscription_id, user_id in rows:
+                if self._parked.get(subscription_id, 0) > now:
+                    continue
                 # create is an upsert through panel_sync: it reuses the current
                 # identity and also recovers a paid account never created yet.
                 self.enqueue(subscription_id, user_id, action='create')
@@ -172,6 +180,14 @@ class RemnaWaveRetryQueue:
                     # провал успехом и выбросил бы элемент из очереди после
                     # первого тика — подписка осталась бы без юзера в панели.
                     if result is None:
+                        if isinstance(getattr(service, 'panel_conflict', None), PanelAccountOwnedByAnotherUser):
+                            self._parked[item.subscription_id] = time.monotonic() + PANEL_CONFLICT_RETRY_SECONDS
+                            logger.warning(
+                                'Retry parked: panel account belongs to another bot user',
+                                subscription_id=item.subscription_id,
+                                retry_in_seconds=PANEL_CONFLICT_RETRY_SECONDS,
+                            )
+                            continue
                         self._requeue(item, f'{item.action}_remnawave_user returned None')
                         continue
 

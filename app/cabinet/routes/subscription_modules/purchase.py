@@ -1045,6 +1045,15 @@ async def purchase_tariff(
                 action='create' if _should_create else 'update',
             )
 
+        await db.refresh(user)
+        await db.refresh(subscription)
+        # refresh обнуляет загруженные связи, а ответ читает тариф подписки
+        # (суточность, цена дня, режим сброса трафика). Дочитывать его лениво
+        # в async-роуте нельзя: получится MissingGreenlet и HTTP 500 уже ПОСЛЕ
+        # списания и создания подписки — человек заплатил и увидел ошибку.
+        await db.refresh(subscription, ['tariff'])
+        await db.refresh(transaction)
+
         # Save cart for auto-renewal (not for daily tariffs - they have their own charging)
         if not is_daily_tariff:
             try:
@@ -1060,14 +1069,6 @@ async def purchase_tariff(
                 logger.info('Tariff cart saved for auto-renewal (cabinet) user', user_id=user.id)
             except Exception as e:
                 logger.error('Error saving tariff cart (cabinet)', error=e)
-
-        await db.refresh(user)
-        await db.refresh(subscription)
-        # refresh обнуляет загруженные связи, а ответ читает тариф подписки
-        # (суточность, цена дня, режим сброса трафика). Дочитывать его лениво
-        # в async-роуте нельзя: получится MissingGreenlet и HTTP 500 уже ПОСЛЕ
-        # списания и создания подписки — человек заплатил и увидел ошибку.
-        await db.refresh(subscription, ['tariff'])
 
         # Yandex.Metrika offline conversion — see /purchase endpoint for context (#558449).
         try:

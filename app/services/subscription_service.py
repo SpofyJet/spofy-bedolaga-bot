@@ -22,6 +22,7 @@ from app.external.remnawave_errors import coerce_panel_user_id
 # Правила поля стратегии живут в пакете синхронизации; имя оставлено здесь для
 # внешнего кода, который импортировал его из сервиса.
 from app.services.panel_sync import (
+    PanelAccountOwnedByAnotherUser,
     PanelIdentity,
     build_panel_payload,
     get_traffic_reset_strategy as get_traffic_reset_strategy,  # noqa: PLC0414
@@ -39,6 +40,8 @@ from app.utils.subscription_utils import (
 
 
 logger = structlog.get_logger(__name__)
+
+_reported_panel_conflicts: set[int | None] = set()
 
 
 async def reload_after_panel_failure(db: AsyncSession, *objects: Any) -> None:
@@ -78,6 +81,7 @@ class SubscriptionService:
         # Панель не ответила на запрос этого сервиса. Экран «Моя подписка» после первого сбоя
         # к панели больше не ходит: каждый следующий запрос — ещё до двух минут ожидания.
         self.panel_failed = False
+        self.panel_conflict: PanelAccountOwnedByAnotherUser | None = None
 
         self._refresh_configuration()
 
@@ -300,10 +304,26 @@ class SubscriptionService:
             await db.rollback()
             logger.error('Ошибка RemnaWave API', error=e)
             return None
+        except PanelAccountOwnedByAnotherUser as e:
+            await db.rollback()
+            self._note_panel_conflict(e)
+            return None
         except Exception as e:
             await db.rollback()
             logger.error('Ошибка создания RemnaWave пользователя', error=e)
             return None
+
+    def _note_panel_conflict(self, error: PanelAccountOwnedByAnotherUser) -> None:
+        self.panel_conflict = error
+        first = error.subscription_id not in _reported_panel_conflicts
+        _reported_panel_conflicts.add(error.subscription_id)
+        (logger.error if first else logger.warning)(
+            'Подписка не записана в панель: её аккаунт закреплён за другой записью бота, нужен разбор вручную',
+            subscription_id=error.subscription_id,
+            panel_user_id=error.panel_user_id,
+            owner_user_id=error.owner_user_id,
+            owner_subscription_id=error.owner_subscription_id,
+        )
 
     async def _panel_id_is_free_for(self, db: AsyncSession, subscription, panel_id: int | None) -> bool:
         return await panel_id_is_free_for(db, subscription, panel_id)
@@ -586,6 +606,10 @@ class SubscriptionService:
                     db, subscription, user=user, reset_traffic=reset_traffic, reset_reason=reset_reason
                 )
             logger.error('Ошибка RemnaWave API', error=e)
+            return None
+        except PanelAccountOwnedByAnotherUser as e:
+            await db.rollback()
+            self._note_panel_conflict(e)
             return None
         except Exception as e:
             await db.rollback()

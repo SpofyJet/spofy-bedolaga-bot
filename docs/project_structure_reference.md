@@ -1213,7 +1213,7 @@
   Классы: `SubscriptionRenewalError`, `SubscriptionRenewalChargeError`, `SubscriptionRenewalPricing` (2 методов), `SubscriptionRenewalResult`, `RenewalPaymentDescriptor`, `SubscriptionRenewalService` (1 методов)
   Функции: `build_renewal_period_id`, `decode_payment_payload`, `parse_payment_metadata`, `with_admin_notification_service`
 - `app/services/subscription_service.py` — Python-модуль
-  Классы: `SubscriptionReissueResult`, `SubscriptionService` (31 методов)
+  Классы: `SubscriptionReissueResult`, `SubscriptionService` (32 методов)
   Функции: `reload_after_panel_failure` — Перечитать объекты, которые откат сессии пометил протухшими., `reset_subscription_with_panel` — Обнулить подписку «как будто не оформляли» и снять доступ в панели RemnaWave,
 - `app/services/support_settings_service.py` — Python-модуль
   Классы: `SupportSettingsService` (17 методов)
@@ -3788,6 +3788,9 @@
 - `tests/services/test_paid_daily_reset_worker_budget.py` — Python-модуль
   Классы: нет
   Функции: `test_reset_recovery_wall_budget_preserves_expiry_queue_progress`
+- `tests/services/test_panel_conflict_reported_once.py` — Python-модуль
+  Классы: `Row`
+  Функции: `test_conflict_is_reported_as_an_error_only_once`, `test_queue_parks_a_conflicted_subscription_instead_of_retrying`, `test_queue_still_retries_an_ordinary_failure`, `test_recovery_scan_skips_a_parked_subscription_until_the_pause_ends`, `test_a_new_purchase_on_a_parked_subscription_is_retried_at_once`, `test_cabinet_purchase_reloads_objects_after_the_panel_sync_before_using_them`
 - `tests/services/test_panel_deletion_respects_delete_mode.py` — Python-модуль
   Классы: нет
   Функции: `test_panel_deletion_is_gated_or_explicitly_deliberate`, `test_deliberate_list_has_no_stale_entries` — Список исключений не должен пережить сами удаления.
