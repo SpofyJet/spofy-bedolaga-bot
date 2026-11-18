@@ -9,7 +9,7 @@ import structlog
 from fastapi import HTTPException, status
 
 from app.config import settings
-from app.services.bypass_downgrade import has_bypass_quota, is_suspension_effective
+from app.services.bypass_downgrade import has_bypass, has_bypass_quota, is_suspension_effective
 from app.utils.legacy_subscription import is_legacy_subscription
 from app.utils.lifetime import is_lifetime_end
 
@@ -222,6 +222,7 @@ def _subscription_to_response(
         is_limited=is_limited,
         bypass_suspended=is_suspension_effective(subscription),
         bypass_quota=has_bypass_quota(subscription),
+        bypass_included=has_bypass(subscription),
         traffic_purchases=traffic_purchases or [],
         is_daily=is_daily,
         is_daily_paused=is_daily_paused,

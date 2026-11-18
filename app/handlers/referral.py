@@ -547,10 +547,7 @@ def _invite_trial_block(texts) -> str:
     return block
 
 
-def _build_referral_share_url(bot_referral_link: str, texts) -> str:
-    """URL вида t.me/share/url — открывает нативный диалог пересылки в чаты."""
-    from urllib.parse import quote
-
+def build_referral_share_text(texts) -> str:
     # n14: бонус друга в тексте шеринга — из актуальных настроек
     share_bonus_block = ''
     # В многоуровневой схеме бонус задаёт уровень, а не легаси-ключ — не обещаем чужую сумму.
@@ -575,7 +572,14 @@ def _build_referral_share_url(bot_referral_link: str, texts) -> str:
     # добавляем то, что друг получит на самом деле: пробный период и дни за подключение.
     share_text += _invite_trial_block(texts)
     # The share dialog takes plain text: a <tg-emoji> tag would reach the friend as is.
-    share_text = strip_tg_emoji(share_text)
+    return strip_tg_emoji(share_text)
+
+
+def _build_referral_share_url(bot_referral_link: str, texts) -> str:
+    """URL вида t.me/share/url — открывает нативный диалог пересылки в чаты."""
+    from urllib.parse import quote
+
+    share_text = build_referral_share_text(texts)
     return f'https://t.me/share/url?url={quote(bot_referral_link, safe="")}&text={quote(share_text, safe="")}'
 
 

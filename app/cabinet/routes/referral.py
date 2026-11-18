@@ -40,6 +40,13 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix='/referral', tags=['Cabinet Referral'])
 
 
+def _share_text(language: str | None) -> str:
+    from app.handlers.referral import build_referral_share_text
+    from app.localization.texts import get_texts
+
+    return build_referral_share_text(get_texts(language))
+
+
 @router.get('', response_model=ReferralInfoResponse)
 async def get_referral_info(
     user: User = Depends(get_current_cabinet_user),
@@ -109,6 +116,7 @@ async def get_referral_info(
         referral_code=user.referral_code or '',
         referral_link=referral_link,
         bot_referral_link=bot_referral_link,
+        share_text=_share_text(user.language),
         total_referrals=total_referrals,
         active_referrals=active_referrals,
         total_earnings_kopeks=total_earnings,

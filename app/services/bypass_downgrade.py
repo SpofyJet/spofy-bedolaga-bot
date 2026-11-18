@@ -128,6 +128,13 @@ def has_bypass_quota(subscription) -> bool:
     )
 
 
+def has_bypass(subscription) -> bool:
+    squad = settings.BYPASS_SQUAD_UUID
+    if not squad:
+        return False
+    return squad in (getattr(subscription, 'connected_squads', None) or []) or is_suspension_effective(subscription)
+
+
 def tariff_has_bypass_quota(tariff) -> bool:
     """Лимит тарифа — квота на обходы (как has_bypass_quota у подписки, но по сквадам тарифа)."""
     squad = settings.BYPASS_SQUAD_UUID

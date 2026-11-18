@@ -11,6 +11,7 @@ class ReferralInfoResponse(BaseModel):
     referral_code: str
     referral_link: str
     bot_referral_link: str = ''
+    share_text: str = ''
     total_referrals: int
     active_referrals: int
     total_earnings_kopeks: int
