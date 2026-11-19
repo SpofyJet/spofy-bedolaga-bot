@@ -44,7 +44,7 @@ import structlog
 
 from app.database.models import SubscriptionStatus
 from app.services.bypass_downgrade import is_suspended_snapshot
-from app.utils.subscription_utils import coerce_panel_device_limit
+from app.utils.subscription_utils import active_wheel_bonus_devices, coerce_panel_device_limit
 from app.utils.timezone import panel_datetime_to_utc
 
 
@@ -279,6 +279,17 @@ def panel_date_behind_paid_renewal(
     return (end_date - snapshot.expire_at).total_seconds() > _DATE_TOLERANCE_SECONDS
 
 
+def _paid_device_limit(subscription, panel_limit: int, now: datetime) -> int | None:
+    current = subscription.device_limit
+    raw_bonus = getattr(subscription, 'wheel_bonus_devices', 0)
+    raw_bonus = raw_bonus if type(raw_bonus) is int and raw_bonus > 0 else 0
+    active_bonus = active_wheel_bonus_devices(subscription, now)
+    if current is not None and panel_limit in {current, current + raw_bonus, current + active_bonus}:
+        return None
+    paid = panel_limit - active_bonus
+    return paid if paid > 0 else panel_limit
+
+
 def project_onto_subscription(
     subscription,
     snapshot: PanelSnapshot,
@@ -412,13 +423,11 @@ def project_onto_subscription(
     ):
         subscription.traffic_limit_gb = snapshot.traffic_limit_gb
         changed.add('traffic_limit_gb')
-    if (
-        policy.takes_device_limit
-        and snapshot.device_limit is not None
-        and subscription.device_limit != snapshot.device_limit
-    ):
-        subscription.device_limit = snapshot.device_limit
-        changed.add('device_limit')
+    if policy.takes_device_limit and snapshot.device_limit is not None:
+        paid_limit = _paid_device_limit(subscription, snapshot.device_limit, moment)
+        if paid_limit is not None and subscription.device_limit != paid_limit:
+            subscription.device_limit = paid_limit
+            changed.add('device_limit')
 
     # Пустой список сквадов значит «панель ещё не знает», а не «отобрать все».
     if (

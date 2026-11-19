@@ -233,6 +233,38 @@ def test_limits_are_read_from_the_panel():
     assert subscription.device_limit == 10
 
 
+def test_wheel_devices_in_the_panel_do_not_become_paid():
+    subscription = _sub(wheel_bonus_devices=1, wheel_bonus_devices_until=NOW + timedelta(days=10))
+
+    project_onto_subscription(subscription, PanelSnapshot(status='ACTIVE', device_limit=4), now=NOW)
+
+    assert subscription.device_limit == 3
+
+
+def test_expired_wheel_devices_still_in_the_panel_do_not_become_paid():
+    subscription = _sub(wheel_bonus_devices=1, wheel_bonus_devices_until=NOW - timedelta(minutes=1))
+
+    project_onto_subscription(subscription, PanelSnapshot(status='ACTIVE', device_limit=4), now=NOW)
+
+    assert subscription.device_limit == 3
+
+
+def test_panel_without_the_wheel_devices_does_not_cut_the_paid_limit():
+    subscription = _sub(wheel_bonus_devices=1, wheel_bonus_devices_until=NOW + timedelta(days=10))
+
+    project_onto_subscription(subscription, PanelSnapshot(status='ACTIVE', device_limit=3), now=NOW)
+
+    assert subscription.device_limit == 3
+
+
+def test_admin_edit_in_the_panel_keeps_the_wheel_devices_on_top():
+    subscription = _sub(wheel_bonus_devices=1, wheel_bonus_devices_until=NOW + timedelta(days=10))
+
+    project_onto_subscription(subscription, PanelSnapshot(status='ACTIVE', device_limit=6), now=NOW)
+
+    assert subscription.device_limit == 5
+
+
 def test_missing_limits_in_the_answer_keep_the_bot_values():
     subscription = _sub()
 
