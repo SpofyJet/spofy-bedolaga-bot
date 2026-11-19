@@ -54,7 +54,8 @@ async def test_new_purchase_shows_device_step_with_smallest_last(monkeypatch):
     monkeypatch.setattr(tp, 'get_subscription_by_user_id', AsyncMock(return_value=None))
 
     async def price(t, period, device_limit=None, **kw):
-        return SimpleNamespace(final_total=31000 + (device_limit - 3) * 5900)
+        total = 31000 + (device_limit - 3) * 5900
+        return SimpleNamespace(final_total=total, original_total=total)
 
     monkeypatch.setattr('app.services.pricing_engine.pricing_engine.calculate_tariff_purchase_price', price)
     callback = SimpleNamespace(

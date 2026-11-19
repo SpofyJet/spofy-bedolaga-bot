@@ -147,6 +147,12 @@ def resolve_chosen_device_limit(tariff, subscription: Subscription | None, reque
     return chosen
 
 
+def device_offer_counts(current: int, max_devices: int) -> list[int]:
+    first = current + 2
+    picks = [first, (first + 10) // 2, 10] if first + 2 <= 10 else [first, first + 1, first + 3]
+    return sorted({n for n in picks if first <= n <= max_devices})
+
+
 def offers_device_choice(tariff, subscription: Subscription | None, period_days: int = 30) -> bool:
     return (
         period_days % 30 == 0

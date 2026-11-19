@@ -30,7 +30,7 @@ from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, Subscription, Tariff, Transaction, TransactionType, User
-from app.keyboards.inline import _get_device_declension, build_connect_button, device_offer_counts, smallest_last
+from app.keyboards.inline import _get_device_declension, build_connect_button, smallest_last
 from app.localization.texts import Texts, get_texts
 from app.middlewares.banner_variant import show_banner_state
 from app.services.admin_notification_service import AdminNotificationService
@@ -1654,17 +1654,16 @@ async def trim_tariff_devices(
     )
 
 
-async def _show_tariff_devices_step(callback, db_user, tariff, period, included, texts) -> None:
-    from app.services.pricing_engine import pricing_engine
+async def _show_tariff_devices_step(callback, db_user, tariff, period, subscription, texts) -> None:
+    from app.services.tariff_device_options import tariff_device_options
 
-    maximum = tariff.max_device_limit or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else 100)
     rows = []
-    for n in [included, *device_offer_counts(included, maximum)]:
+    for option in await tariff_device_options(tariff, subscription, period, db_user):
+        n = option['devices']
         label = f'{n} {_get_device_declension(n)}'
-        price = (
-            await pricing_engine.calculate_tariff_purchase_price(tariff, period, device_limit=n, user=db_user)
-        ).final_total
-        rows.append((f'{label} — {format_price_kopeks(price)}', label, f'tariff_dev:{tariff.id}:{period}:{n}'))
+        rows.append(
+            (f'{label} — {format_price_kopeks(option["price_kopeks"])}', label, f'tariff_dev:{tariff.id}:{period}:{n}')
+        )
     buttons = smallest_last(rows)
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'tariff_select:{tariff.id}')])
     await callback.message.edit_text(
@@ -1741,7 +1740,7 @@ async def select_tariff_period(
     elif picked is not None:
         device_limit = chosen_device_limit = resolve_chosen_device_limit(tariff, _existing_sub, picked)
     elif offers_device_choice(tariff, _existing_sub, period):
-        await _show_tariff_devices_step(callback, db_user, tariff, period, device_limit, texts)
+        await _show_tariff_devices_step(callback, db_user, tariff, period, _existing_sub, texts)
         return
 
     trim_note = ''

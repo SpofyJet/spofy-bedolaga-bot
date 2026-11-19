@@ -58,10 +58,12 @@ from app.services.spofy_subpage_service import (
     checkout_serializer,
     tag_current_cart_as_subpage,
 )
+from app.services.tariff_device_options import tariff_device_options
 from app.services.traffic_cycle_service import next_traffic_reset_at
 from app.services.user_cart_service import user_cart_service
 from app.utils.lifetime import for_period_ru, is_lifetime_end, is_lifetime_period
 from app.utils.pricing_utils import format_period_description
+from app.utils.subscription_utils import offers_device_choice, resolve_chosen_device_limit
 
 from ..dependencies import get_cabinet_db
 from ..schemas.balance import TopUpRequest
@@ -232,6 +234,7 @@ async def tariff_offers(db: AsyncSession, user: User, subscription: Subscription
                     'price_kopeks': price.final_total,
                     'original_price_kopeks': price.original_total if price.original_total > price.final_total else None,
                     'is_highlighted': tariff.highlight_period_days == period_days,
+                    'device_options': await tariff_device_options(tariff, subscription, period_days, user),
                 }
             )
         if periods:
@@ -301,7 +304,12 @@ async def save_renewal_cart(db: AsyncSession, user: User, subscription: Subscrip
 
 
 async def save_tariff_cart(
-    db: AsyncSession, user: User, subscription: Subscription, tariff_id: int, period_days: int
+    db: AsyncSession,
+    user: User,
+    subscription: Subscription,
+    tariff_id: int,
+    period_days: int,
+    devices: int | None = None,
 ) -> int:
     """Mirror of POST /subscription/purchase-tariff on insufficient funds (plain period tariffs)."""
 
@@ -319,6 +327,8 @@ async def save_tariff_cart(
     effective_device_limit = tariff.device_limit
     if same_tariff and (subscription.device_limit or 0) > (tariff.device_limit or 0):
         effective_device_limit = subscription.device_limit
+    if devices is not None and offers_device_choice(tariff, subscription, period_days):
+        effective_device_limit = device_limit = resolve_chosen_device_limit(tariff, subscription, devices)
 
     pricing = await pricing_engine.calculate_tariff_purchase_price(
         tariff, period_days, device_limit=device_limit, custom_traffic_gb=None, user=user
@@ -591,7 +601,7 @@ async def _checkout_payment(
     elif body.kind == 'tariff':
         if not body.tariff_id or not body.period_days:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, 'tariff_id and period_days are required')
-        price = await save_tariff_cart(db, user, subscription, body.tariff_id, body.period_days)
+        price = await save_tariff_cart(db, user, subscription, body.tariff_id, body.period_days, body.devices)
     elif body.kind == 'devices':
         if not body.devices:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, 'devices is required')

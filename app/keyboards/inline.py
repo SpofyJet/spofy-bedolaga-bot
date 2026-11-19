@@ -1524,12 +1524,6 @@ def smallest_last(rows: list[tuple[str, str, str]]) -> list[list[InlineKeyboardB
     return buttons
 
 
-def device_offer_counts(current: int, max_devices: int) -> list[int]:
-    first = current + 2
-    picks = [first, (first + 10) // 2, 10] if first + 2 <= 10 else [first, first + 1, first + 3]
-    return sorted({n for n in picks if first <= n <= max_devices})
-
-
 def _get_device_declension(count: int) -> str:
     if count % 10 == 1 and count % 100 != 11:
         return 'устройство'

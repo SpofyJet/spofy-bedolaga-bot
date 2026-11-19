@@ -204,6 +204,7 @@ class TariffPurchaseRequest(BaseModel):
     traffic_gb: int | None = Field(
         None, ge=0, le=100_000, description='Custom traffic in GB (for custom_traffic_enabled tariffs)'
     )
+    device_limit: int | None = Field(None, ge=1, le=100)
     # When the user is renewing an EXISTING subscription (multi-tariff
     # mode), the frontend passes the explicit subscription_id so the
     # backend can resolve the target row by ID instead of doing a

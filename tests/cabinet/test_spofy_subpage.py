@@ -234,6 +234,21 @@ async def test_tariff_cart_for_trial_user(monkeypatch):
     assert cart['return_to_cart'] is True and cart['device_limit'] == 3
 
 
+async def test_tariff_cart_keeps_the_chosen_devices(monkeypatch):
+    monkeypatch.setattr(bridge.settings, 'MAX_DEVICES_LIMIT', 0)
+    user, sub = _user(), _subscription(is_trial=True, tariff=None, device_limit=1)
+    tariff = _tariff(device_price_kopeks=5900, max_device_limit=None)
+    monkeypatch.setattr(bridge, 'get_tariff_by_id', AsyncMock(return_value=tariff))
+    pricing = AsyncMock(return_value=_pricing(31700))
+    monkeypatch.setattr(bridge.pricing_engine, 'calculate_tariff_purchase_price', pricing)
+    save = AsyncMock(return_value=True)
+    monkeypatch.setattr(bridge.user_cart_service, 'save_user_cart', save)
+
+    assert await bridge.save_tariff_cart(None, user, sub, 7, 30, 5) == 31700
+    assert pricing.await_args.kwargs['device_limit'] == 5
+    assert save.await_args.args[1]['device_limit'] == 5
+
+
 async def test_tariff_cart_refuses_daily(monkeypatch):
     monkeypatch.setattr(bridge, 'get_tariff_by_id', AsyncMock(return_value=_tariff(is_daily=True)))
     with pytest.raises(HTTPException):

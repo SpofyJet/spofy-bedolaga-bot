@@ -48,6 +48,7 @@ from app.services.subscription_purchase_service import (
     PurchaseValidationError,
 )
 from app.services.subscription_service import SubscriptionService
+from app.services.tariff_device_options import tariff_device_options
 from app.services.traffic_reset_policy import should_reset_traffic_on_tariff_purchase
 from app.services.user_cart_service import user_cart_service
 from app.utils.lifetime import for_period_ru
@@ -58,7 +59,11 @@ from app.utils.pricing_utils import (
     format_period_description,
 )
 from app.utils.promo_offer import get_user_active_promo_discount_percent
-from app.utils.subscription_utils import resolve_tariff_purchase_device_limit
+from app.utils.subscription_utils import (
+    offers_device_choice,
+    resolve_chosen_device_limit,
+    resolve_tariff_purchase_device_limit,
+)
 from app.utils.timezone import format_local_datetime
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
@@ -233,6 +238,14 @@ async def _build_tariff_response(
                 # обводит его рамкой, бот ставит подпись в кнопке.
                 'is_highlighted': tariff.highlight_period_days == period_days,
             }
+
+            if user is not None:
+                device_options = await tariff_device_options(tariff, subscription, period_days, user)
+                if device_options:
+                    period_data['device_options'] = [
+                        {**option, 'price_label': settings.format_price(option['price_kopeks'])}
+                        for option in device_options
+                    ]
 
             # Информация о доп. устройствах в цене
             if extra_devices_count > 0:
@@ -591,6 +604,8 @@ async def purchase_tariff(
         ):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Daily tariff is already active')
         effective_device_limit = resolve_tariff_purchase_device_limit(tariff, existing_subscription)
+        if request.device_limit is not None and offers_device_choice(tariff, existing_subscription, period_days):
+            effective_device_limit = resolve_chosen_device_limit(tariff, existing_subscription, request.device_limit)
         device_limit = effective_device_limit
 
         # Calculate price via PricingEngine (single source of truth)
@@ -915,7 +930,7 @@ async def purchase_tariff(
                         user_id=user.id,
                         duration_days=period_days,
                         traffic_limit_gb=traffic_limit_gb,
-                        device_limit=tariff.device_limit,
+                        device_limit=effective_device_limit,
                         connected_squads=squads,
                         tariff_id=tariff.id,
                         **({'commit': False} if is_daily_tariff else {}),
