@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -40,7 +41,7 @@ def test_postgres_18_with_new_volume_at_the_18_mount_point(name: str) -> None:
     service = compose['services']['postgres']
 
     # Spofy закрепляет образы по дайджесту: сравниваем тег без @sha256.
-    assert service['image'].split('@', 1)[0] == 'postgres:18-alpine'
+    assert re.fullmatch(r'postgres:18(\.\d+)?-alpine', service['image'].split('@', 1)[0])
     assert 'postgres18_data:/var/lib/postgresql' in service['volumes']
     assert not [v for v in service['volumes'] if v.endswith(':/var/lib/postgresql/data')], (
         'postgres:18 хранит данные в /var/lib/postgresql/18/docker — старый маунт оставит их вне тома'
