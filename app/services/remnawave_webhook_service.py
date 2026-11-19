@@ -146,10 +146,6 @@ _ADMIN_ERROR_EVENTS: dict[str, str] = {
     'errors.bandwidth_usage_threshold_reached_max_notifications': '⚠️ Достигнут лимит уведомлений о трафике',
 }
 
-_ADMIN_TORRENT_BLOCKER_EVENTS: dict[str, str] = {
-    'torrent_blocker.report': '🚫 Торрент-блокировщик: обнаружен торрент',
-}
-
 _ADMIN_NODE_CONNECTION_EVENTS = frozenset({'node.connection_lost', 'node.connection_restored'})
 
 
@@ -184,6 +180,10 @@ async def mark_self_revoke(subscription_id: int) -> None:
         await cache.set(self_revoke_key(subscription_id), '1', expire=300)
     except Exception:
         logger.debug('Ignored error in mark_self_revoke', exc_info=True)
+
+
+TORRENT_WARNING_LIMIT = 10
+TORRENT_WARNING_EVENT = 'torrent_warning'
 
 
 class RemnaWaveWebhookService:
@@ -273,7 +273,6 @@ class RemnaWaveWebhookService:
             **_ADMIN_SERVICE_EVENTS,
             **_ADMIN_CRM_EVENTS,
             **_ADMIN_ERROR_EVENTS,
-            **_ADMIN_TORRENT_BLOCKER_EVENTS,
         }
 
     def is_admin_event(self, event_name: str) -> bool:
@@ -556,25 +555,6 @@ class RemnaWaveWebhookService:
             sub_uuid = subpage.get('uuid', '')
             if sub_uuid:
                 lines.append(f'UUID: <code>{html.escape(str(sub_uuid))}</code>')
-
-        # Torrent blocker fields
-        if event_name == 'torrent_blocker.report':
-            node_data = data.get('node')
-            user_data = data.get('user')
-            if isinstance(node_data, dict):
-                node_name = html.escape(node_data.get('name') or '')
-                if node_name:
-                    lines.append(f'Нода: <code>{node_name}</code>')
-                node_addr = html.escape(node_data.get('address') or '')
-                if node_addr:
-                    lines.append(f'Адрес: <code>{node_addr}</code>')
-            if isinstance(user_data, dict):
-                username = html.escape(user_data.get('username') or '')
-                if username:
-                    lines.append(f'Пользователь: <code>{username}</code>')
-                user_status = html.escape(user_data.get('status') or '')
-                if user_status:
-                    lines.append(f'Статус: <code>{user_status}</code>')
 
         try:
             await self._admin_service.send_webhook_notification('\n'.join(lines))
@@ -2080,9 +2060,77 @@ class RemnaWaveWebhookService:
             await cache.set(warn_key, '1', expire=86400)
         except Exception:
             logger.debug('Ignored error in _handle_torrent_detected', exc_info=True)
+        count, first_at = await self._record_torrent_warning(db, user, subscription)
+        texts = get_texts(user.language)
+        shown = min(count, TORRENT_WARNING_LIMIT)
+        left = TORRENT_WARNING_LIMIT - shown
+        warnings = texts.get('TORRENT_WARNINGS_LEFT' if left else 'TORRENT_WARNINGS_LAST', '').format(
+            count=shown, limit=TORRENT_WARNING_LIMIT, left=left
+        )
         await self._notify_user(
             user,
             'WEBHOOK_TORRENT_DETECTED',
             reply_markup=self._get_subscription_keyboard(user),
+            format_kwargs={'tariff_label': '', 'warnings': warnings},
             subscription=subscription,
         )
+        if count == TORRENT_WARNING_LIMIT:
+            await self._notify_admins_torrent_limit(db, user, subscription, first_at)
+
+    async def _record_torrent_warning(
+        self, db: AsyncSession, user: User, subscription: Subscription | None
+    ) -> tuple[int, datetime | None]:
+        from sqlalchemy import func
+
+        from app.database.models import SubscriptionEvent
+
+        try:
+            db.add(
+                SubscriptionEvent(
+                    user_id=user.id,
+                    subscription_id=subscription.id if subscription else None,
+                    event_type=TORRENT_WARNING_EVENT,
+                    message='torrent warning',
+                    occurred_at=datetime.now(UTC),
+                )
+            )
+            await db.commit()
+            row = (
+                await db.execute(
+                    select(func.count(SubscriptionEvent.id), func.min(SubscriptionEvent.occurred_at)).where(
+                        SubscriptionEvent.user_id == user.id,
+                        SubscriptionEvent.event_type == TORRENT_WARNING_EVENT,
+                    )
+                )
+            ).one()
+            return int(row[0]), row[1]
+        except Exception:
+            logger.warning('Webhook: torrent warning was not recorded', user_id=user.id, exc_info=True)
+            try:
+                await db.rollback()
+            except Exception:
+                logger.debug('Ignored error in _record_torrent_warning', exc_info=True)
+            return 1, None
+
+    async def _notify_admins_torrent_limit(
+        self, db: AsyncSession, user: User, subscription: Subscription | None, first_at: datetime | None
+    ) -> None:
+        from app.database.models import Tariff
+
+        name = html.escape(user.full_name if hasattr(user, 'full_name') else (user.first_name or ''))
+        who = f'👤 {name} · ID <code>{user.telegram_id or user.id}</code>'
+        if user.username:
+            who += f' · @{html.escape(user.username)}'
+        lines = [f'🚫 <b>Торрент: {TORRENT_WARNING_LIMIT} предупреждений из {TORRENT_WARNING_LIMIT}</b>', '', who]
+        if subscription is not None:
+            tariff = await db.get(Tariff, subscription.tariff_id) if subscription.tariff_id else None
+            lines.append(f'📦 Подписка #{subscription.id}' + (f' · {html.escape(tariff.name)}' if tariff else ''))
+        if first_at is not None:
+            lines.append(f'Первое предупреждение: {first_at:%d.%m.%Y}')
+        lines += ['', 'Подписку бот сам не снимает — решение за вами.']
+        try:
+            await AdminNotificationService(self.bot).send_suspicious_traffic_notification(
+                '\n'.join(lines), self.bot, settings.SUSPICIOUS_NOTIFICATIONS_TOPIC_ID
+            )
+        except Exception:
+            logger.warning('Webhook: torrent limit notice was not sent', user_id=user.id, exc_info=True)

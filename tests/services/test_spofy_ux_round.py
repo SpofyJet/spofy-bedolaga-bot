@@ -150,6 +150,34 @@ async def test_torrent_warning_once_a_day(monkeypatch):
     assert svc._notify_user.await_count == 1
 
 
+async def test_torrent_warnings_count_to_ten_and_tell_the_owner_once(monkeypatch):
+    from app.database.models import Base, User
+    from app.services.admin_notification_service import AdminNotificationService
+    from tests.fixtures.sqlite_memory import memory_session
+
+    monkeypatch.setattr('app.utils.cache.cache.get', AsyncMock(return_value=None))
+    monkeypatch.setattr('app.utils.cache.cache.set', AsyncMock())
+    owner = AsyncMock(return_value=True)
+    monkeypatch.setattr(AdminNotificationService, 'send_suspicious_traffic_notification', owner)
+    svc = _service()
+
+    async with memory_session(monkeypatch, list(Base.metadata.sorted_tables)) as db:
+        user = User(id=1, telegram_id=11, first_name='Ivan', username='ivan', language='ru', status='active')
+        db.add(user)
+        await db.commit()
+        for _ in range(11):
+            await svc._handle_torrent_detected(db, user, None, {})
+
+    shown = [call.kwargs['format_kwargs']['warnings'] for call in svc._notify_user.await_args_list]
+    assert shown[0] == '⚠️ Предупреждение 1 из 10. Ещё 9 — и подписка будет снята.'
+    assert shown[8] == '⚠️ Предупреждение 9 из 10. Ещё 1 — и подписка будет снята.'
+    assert shown[9] == shown[10] == '⛔️ Предупреждение 10 из 10. Подписка будет снята.'
+    assert owner.await_count == 1
+    assert not svc.is_admin_event('torrent_blocker.report')
+    message = owner.await_args.args[0]
+    assert 'Торрент: 10 предупреждений из 10' in message and '@ivan' in message
+
+
 @pytest.mark.parametrize('age_hours', [0.1, 2, 23, 25])
 async def test_device_added_always_notifies_the_owner(age_hours):
     """Уведомление о новом устройстве приходит всегда, в том числе в первые сутки: это полезная
