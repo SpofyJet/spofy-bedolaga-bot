@@ -2064,7 +2064,7 @@ def get_add_traffic_keyboard_from_tariff(
             ]
         )
 
-    rows = []
+    buttons = []
 
     # Сортируем пакеты по размеру, исключаем пакеты с нулевой ценой
     sorted_packages = sorted(((gb, p) for gb, p in packages.items() if p > 0), key=lambda x: x[0])
@@ -2079,8 +2079,10 @@ def get_add_traffic_keyboard_from_tariff(
 
         period_text = ' /мес' if use_russian_fallback else ' /mo'
 
-        bare = f'📊 +{gb} ГБ трафика' if use_russian_fallback else f'📊 +{gb} GB traffic'
-        text = f'{bare} — {discounted_price // 100} ₽{period_text}'
+        if use_russian_fallback:
+            text = f'📊 +{gb} ГБ трафика - {discounted_price // 100} ₽{period_text}'
+        else:
+            text = f'📊 +{gb} GB traffic - {discounted_price // 100} ₽{period_text}'
 
         if discount_percent > 0 and discount_value > 0:
             if use_russian_fallback:
@@ -2088,9 +2090,8 @@ def get_add_traffic_keyboard_from_tariff(
             else:
                 text += f' (discount {discount_percent}%: -{discount_value // 100}₽)'
 
-        rows.append((text, bare, f'add_traffic_{gb}'))
+        buttons.append([InlineKeyboardButton(text=text, callback_data=f'add_traffic_{gb}')])
 
-    buttons = smallest_last(rows)
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -2146,24 +2147,50 @@ def get_change_devices_keyboard(
 
     min_devices = resolve_min_device_limit(tariff)
 
-    current_chargeable = max(0, current_devices - default_device_limit)
+    start_range = max(min_devices, min(current_devices - 3, max_devices - 6))
+    end_range = min(max_devices + 1, max(current_devices + 4, 7))
 
-    def price_for(devices_count: int) -> str:
-        chargeable_devices = max(0, devices_count - default_device_limit) - current_chargeable
-        if chargeable_devices <= 0:
-            return texts.t('DEVICES_FREE', 'бесплатно')
-        discounted_per_month, _ = apply_percentage_discount(
-            chargeable_devices * device_price_per_month, discount_percent
+    for devices_count in range(start_range, end_range):
+        if devices_count == current_devices:
+            emoji = '✅'
+            action_text = ' (сейчас)'
+            price_text = ''
+        elif devices_count > current_devices:
+            emoji = '➕'
+
+            current_chargeable = max(0, current_devices - default_device_limit)
+            new_chargeable = max(0, devices_count - default_device_limit)
+            chargeable_devices = new_chargeable - current_chargeable
+
+            if chargeable_devices > 0:
+                price_per_month = chargeable_devices * device_price_per_month
+                discounted_per_month, discount_per_month = apply_percentage_discount(
+                    price_per_month,
+                    discount_percent,
+                )
+                total_price = int(discounted_per_month * price_multiplier)
+                total_price = max(100, total_price)  # Минимум 1 рубль
+                # n6-П10: на кнопке — только итог; прорейт и скидка видны в тексте экрана
+                price_text = f' (+{texts.format_price(total_price)})'
+                action_text = ''
+            else:
+                price_text = ' (бесплатно)'
+                action_text = ''
+        else:
+            emoji = '➖'
+            # n6-П10: «без возврата» уже объяснено в тексте экрана — с кнопки убираем
+            action_text = ''
+            price_text = ''
+
+        button_text = f'{emoji} {devices_count} {_get_device_declension(devices_count)}{action_text}{price_text}'
+
+        buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'change_devices_{devices_count}')])
+
+    if current_devices < start_range or current_devices >= end_range:
+        current_button = f'✅ {current_devices} {_get_device_declension(current_devices)} (сейчас)'
+        buttons.insert(
+            0, [InlineKeyboardButton(text=current_button, callback_data=f'change_devices_{current_devices}')]
         )
-        return texts.format_price(max(100, int(discounted_per_month * price_multiplier)))
-
-    start = max(current_devices, min_devices - 1)
-    rows = [
-        (f'{n} {_get_device_declension(n)} — {price_for(n)}', f'{n} {_get_device_declension(n)}', f'change_devices_{n}')
-        for n in [start + 1, *device_offer_counts(start, max_devices)]
-        if n <= max_devices
-    ]
-    buttons.extend(smallest_last(rows))
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
 

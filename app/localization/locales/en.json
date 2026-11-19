@@ -362,7 +362,6 @@
   "DEVICES_MINIMUM_LIMIT": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Minimum number of devices: {limit}",
   "DEVICES_MIN_LIMIT_REACHED": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Minimum number of devices: {limit}",
   "DEVICES_NO_CHANGE": "<tg-emoji emoji-id='5879785854284599288'>ℹ️</tg-emoji> Device limit was not changed",
-  "DEVICES_FREE": "free",
   "DEVICES_NO_REFUND_SUFFIX": " (no refund)",
   "DEVICES_SELECTION_DISABLED": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Device selection is unavailable",
   "DEVICES_UNIT_SHORT": "dev.",

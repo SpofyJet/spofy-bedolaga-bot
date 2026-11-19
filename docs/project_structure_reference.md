@@ -3457,7 +3457,7 @@
   Функции: нет
 - `tests/keyboards/test_smallest_last.py` — Python-модуль
   Классы: нет
-  Функции: `test_devices_upsell_is_green_and_one_more_is_last_without_price`, `test_devices_above_ten_keep_three_green_steps`, `test_devices_respect_tariff_maximum`, `test_traffic_smallest_pack_goes_last_without_price`, `test_shortest_period_goes_last_without_price`, `test_single_period_stays_plain`, `test_renewal_shortest_period_goes_last`
+  Функции: `test_devices_after_purchase_show_every_step_with_its_price`, `test_devices_respect_tariff_maximum`, `test_traffic_top_up_lists_packs_in_order_with_prices`, `test_shortest_period_goes_last_without_price`, `test_single_period_stays_plain`, `test_renewal_shortest_period_goes_last`
 
 ### tests/live
 
@@ -4313,7 +4313,7 @@
   Функции: `test_oversized_logo_resized_into_writable_tempdir`, `test_small_logo_returned_unchanged`
 - `tests/utils/test_min_device_limit.py` — Python-модуль
   Классы: нет
-  Функции: `test_default_floor_is_tariff_device_limit`, `test_opt_in_restores_previous_behaviour` — Флаг возвращает прежний минимум 1 — для тех, кому нужно самоограничение., `test_without_usable_tariff_limit_floor_is_one` — Классический режим и битые значения не должны блокировать уменьшение., `test_no_tariff_at_all_floor_is_one`, `test_keyboard_hides_values_below_tariff_limit` — Кнопки с запрещёнными значениями не должны показываться вовсе., `test_keyboard_never_offers_reductions_even_when_opted_in`
+  Функции: `test_default_floor_is_tariff_device_limit`, `test_opt_in_restores_previous_behaviour` — Флаг возвращает прежний минимум 1 — для тех, кому нужно самоограничение., `test_without_usable_tariff_limit_floor_is_one` — Классический режим и битые значения не должны блокировать уменьшение., `test_no_tariff_at_all_floor_is_one`, `test_keyboard_hides_values_below_tariff_limit` — Кнопки с запрещёнными значениями не должны показываться вовсе., `test_keyboard_offers_lower_values_when_opted_in`
 - `tests/utils/test_notification_keyboards.py` — Python-модуль
   Классы: нет
   Функции: `test_keyboard_skips_missing_buttons`, `test_keyboard_without_buttons_is_none`, `test_admin_links_need_cabinet_url`, `test_admin_links_point_to_cabinet`, `test_admin_card_skips_missing_user`, `test_brand_in_footer`

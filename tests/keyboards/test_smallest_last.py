@@ -15,41 +15,26 @@ def _devices(monkeypatch, current, max_devices=None):
     return _rows(get_change_devices_keyboard(current_devices=current, language='ru', tariff=tariff))
 
 
-def test_devices_upsell_is_green_and_one_more_is_last_without_price(monkeypatch):
+def test_devices_after_purchase_show_every_step_with_its_price(monkeypatch):
+    monkeypatch.setattr(settings, 'ALLOW_DEVICES_BELOW_TARIFF_LIMIT', True)
     rows = _devices(monkeypatch, 3)
-    assert [cb for _, cb, _ in rows] == [
-        'change_devices_5',
-        'change_devices_7',
-        'change_devices_10',
-        'change_devices_4',
-    ]
-    assert [style for _, _, style in rows] == ['success', 'success', 'success', None]
-    assert rows[0][0] == '5 устройств — 118 ₽'
-    assert rows[-1][0] == '4 устройства'
-
-
-def test_devices_above_ten_keep_three_green_steps(monkeypatch):
-    rows = _devices(monkeypatch, 10)
-    assert [cb for _, cb, _ in rows] == [
-        'change_devices_12',
-        'change_devices_13',
-        'change_devices_15',
-        'change_devices_11',
-    ]
+    assert [cb for _, cb, _ in rows] == [f'change_devices_{n}' for n in range(1, 7)]
+    assert {style for _, _, style in rows} == {None}
+    assert rows[2][0] == '✅ 3 устройства (сейчас)'
+    assert '₽' in rows[3][0] and '₽' in rows[-1][0]
 
 
 def test_devices_respect_tariff_maximum(monkeypatch):
-    rows = _devices(monkeypatch, 3, max_devices=6)
-    assert [cb for _, cb, _ in rows] == ['change_devices_5', 'change_devices_4']
-    assert _devices(monkeypatch, 6, max_devices=6) == []
+    rows = _devices(monkeypatch, 3, max_devices=4)
+    assert rows[-1][1] == 'change_devices_4'
 
 
-def test_traffic_smallest_pack_goes_last_without_price():
+def test_traffic_top_up_lists_packs_in_order_with_prices():
     keyboard = get_add_traffic_keyboard_from_tariff('ru', {25: 9900, 50: 18900, 100: 34900})
-    assert _rows(keyboard) == [
-        ('📊 +50 ГБ трафика — 189 ₽ /мес', 'add_traffic_50', 'success'),
-        ('📊 +100 ГБ трафика — 349 ₽ /мес', 'add_traffic_100', 'success'),
-        ('📊 +25 ГБ трафика', 'add_traffic_25', None),
+    assert [(text, cb) for text, cb, _ in _rows(keyboard)] == [
+        ('📊 +25 ГБ трафика - 99 ₽ /мес', 'add_traffic_25'),
+        ('📊 +50 ГБ трафика - 189 ₽ /мес', 'add_traffic_50'),
+        ('📊 +100 ГБ трафика - 349 ₽ /мес', 'add_traffic_100'),
     ]
 
 
