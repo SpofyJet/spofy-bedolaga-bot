@@ -1297,7 +1297,7 @@ async def update_user_subscription(
                 detail='Days must be a positive integer',
             )
 
-        await extend_subscription(db, subscription, request.days)
+        await extend_subscription(db, subscription, request.days, new_term=False)
         await db.refresh(subscription)
 
         # Sync to Remnawave panel

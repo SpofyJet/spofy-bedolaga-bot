@@ -570,7 +570,7 @@ async def test_subscription_days_promo_keeps_trial_a_trial(monkeypatch):
     # The crux: the trial flag is NOT flipped -> stays gated out of auto-renewal.
     assert trial_sub.is_trial is True
     # The promo days are still applied to the (still-trial) subscription.
-    extend_mock.assert_awaited_once_with(mock_db_session, trial_sub, 14)
+    extend_mock.assert_awaited_once_with(mock_db_session, trial_sub, 14, new_term=False)
 
 
 async def _balance_promocode():

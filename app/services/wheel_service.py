@@ -596,10 +596,9 @@ class FortuneWheelService:
                     if subscription.status == SubscriptionStatus.EXPIRED.value:
                         subscription.status = SubscriptionStatus.ACTIVE.value
                     subscription.updated_at = now
-                    # Условия тарифа на новый срок: база тарифа + активные докупки.
                     from app.database.crud.subscription import reconcile_tariff_traffic_limit
 
-                    await reconcile_tariff_traffic_limit(db, subscription)
+                    await reconcile_tariff_traffic_limit(db, subscription, new_term=False)
                     logger.info('📅 Начислено дней подписки user_id', prize_value=prize.prize_value, user_id=user.id)
 
             else:

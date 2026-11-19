@@ -730,11 +730,19 @@ async def _lock_subscription_row(db: AsyncSession, subscription: Subscription) -
     await db.refresh(subscription, ['traffic_limit_gb', 'purchased_traffic_gb', 'traffic_reset_at'])
 
 
+def _term_base_limit(subscription: Subscription, tariff_base: int) -> int:
+    if tariff_base == 0:
+        return 0
+    current = max((subscription.traffic_limit_gb or 0) - (subscription.purchased_traffic_gb or 0), 0)
+    return max(current, tariff_base)
+
+
 async def _housekeep_expired_purchases(
     db: AsyncSession,
     subscription: Subscription,
     *,
     now: datetime,
+    new_term: bool = True,
 ) -> int:
     """Удаляет истёкшие TrafficPurchase и приводит инвариант к актуальному.
 
@@ -764,6 +772,8 @@ async def _housekeep_expired_purchases(
     if tariff_base is not None:
         # Тариф без лимита (0) — тоже условие тарифа: подписка безлимитная, даже если в ней остался чужой
         # лимит (грейс ставил «расход + 1 ГБ», правка админом). Докупки с безлимитом не складываются.
+        if not new_term:
+            tariff_base = _term_base_limit(subscription, tariff_base)
         purchased, _ = await _apply_base_limit_preserving_active_purchases(db, subscription, tariff_base, now=now)
         return purchased
 
@@ -854,7 +864,7 @@ async def _resolve_base_traffic_limit(db: AsyncSession, subscription: Subscripti
 
 
 async def reconcile_tariff_traffic_limit(
-    db: AsyncSession, subscription: Subscription, *, now: datetime | None = None
+    db: AsyncSession, subscription: Subscription, *, now: datetime | None = None, new_term: bool = True
 ) -> None:
     """Вернуть тарифную подписку к условиям тарифа: база тарифа + активные докупки.
 
@@ -866,7 +876,7 @@ async def reconcile_tariff_traffic_limit(
     """
     if subscription.tariff_id is None:
         return
-    await _housekeep_expired_purchases(db, subscription, now=now or datetime.now(UTC))
+    await _housekeep_expired_purchases(db, subscription, now=now or datetime.now(UTC), new_term=new_term)
 
 
 async def _apply_base_limit_preserving_active_purchases(
@@ -1007,7 +1017,7 @@ async def reconcile_subscription_traffic_limit(
     purchased_gb = sum(p.traffic_gb for p in active_packages) if active_packages else 0
     nearest_expiry = min((p.expires_at for p in active_packages), default=None)
 
-    base_limit = tariff.traffic_limit_gb or 0
+    base_limit = _term_base_limit(subscription, tariff.traffic_limit_gb or 0)
     if base_limit == 0:
         expected_total = 0
         expected_purchased = 0
@@ -1192,6 +1202,7 @@ async def extend_subscription(
     reset_used_traffic: bool | None = None,
     carry_value_both_ways: bool = False,
     commit: bool = True,
+    new_term: bool = True,
 ) -> Subscription:
     """Продлевает подписку на указанное количество дней.
 
@@ -1493,7 +1504,7 @@ async def extend_subscription(
     # Ошибки не глотаем: helper мог частично применить изменения, и тихий swallow
     # привёл бы к коммиту половинного состояния. Пробрасываем — caller откатит.
     if days > 0 and not _housekeeping_done:
-        await _housekeep_expired_purchases(db, subscription, now=current_time)
+        await _housekeep_expired_purchases(db, subscription, now=current_time, new_term=new_term)
 
     if days > 0:
         subscription.pending_panel_expire_at = subscription.end_date

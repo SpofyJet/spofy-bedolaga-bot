@@ -912,7 +912,7 @@ async def grant_reward_days(db: AsyncSession, user: User, days: int, tariff_id: 
             return DaysGrant(failure='no_subscription')
 
     if not created:
-        await extend_subscription(db, subscription, days)
+        await extend_subscription(db, subscription, days, new_term=False)
 
     # Всё, что нужно после похода в панель, снимаем ДО него: при ошибке панельный
     # вызов откатывает сессию, ORM-объекты протухают, и даже ``subscription.id``

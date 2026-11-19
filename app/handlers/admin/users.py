@@ -2005,7 +2005,7 @@ async def _extend_subscription_by_days(
             logger.error('Подписка не найдена для пользователя', user_id=user_id)
             return False
 
-        await extend_subscription(db, subscription, days, commit=False)
+        await extend_subscription(db, subscription, days, commit=False, new_term=False)
         now = datetime.now(UTC)
         if days < 0 and subscription.end_date <= now:
             subscription.status = SubscriptionStatus.EXPIRED.value

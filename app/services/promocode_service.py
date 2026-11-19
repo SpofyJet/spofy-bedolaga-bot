@@ -377,7 +377,7 @@ class PromoCodeService:
         squads = await get_effective_tariff_squad_uuids(db, tariff.allowed_squads)
 
         if existing is not None and existing.tariff_id == tariff.id and not existing.is_trial:
-            await extend_subscription(db, existing, days)
+            await extend_subscription(db, existing, days, new_term=False)
             await self._sync_granted_subscription(db, user, promocode, existing)
             return existing
 
@@ -388,7 +388,7 @@ class PromoCodeService:
             current = await get_tariff_by_id(db, existing.tariff_id) if existing.tariff_id else None
             alive_now = existing.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.LIMITED.value)
             if alive_now and current is not None and (current.tier_level or 0) > (tariff.tier_level or 0):
-                await extend_subscription(db, existing, days)
+                await extend_subscription(db, existing, days, new_term=False)
                 await self._sync_granted_subscription(db, user, promocode, existing)
                 return existing
 
@@ -552,7 +552,7 @@ class PromoCodeService:
             if tariff_grant is None:
                 # Только без привязанного тарифа: при тарифе продление уже
                 # сделала _grant_tariff_days, второй extend задвоил бы срок.
-                await extend_subscription(db, target_sub, promocode.subscription_days)
+                await extend_subscription(db, target_sub, promocode.subscription_days, new_term=False)
                 panel_result = await self.subscription_service.update_remnawave_user(db, target_sub)
                 await self._refresh_after_panel_call(db, user, promocode, target_sub, panel_result)
 
@@ -684,7 +684,7 @@ class PromoCodeService:
 
             if existing_same_tariff_sub:
                 # User already has this tariff — extend it
-                await extend_subscription(db, existing_same_tariff_sub, trial_days)
+                await extend_subscription(db, existing_same_tariff_sub, trial_days, new_term=False)
                 panel_result = await self.subscription_service.update_remnawave_user(db, existing_same_tariff_sub)
                 await self._refresh_after_panel_call(db, user, promocode, existing_same_tariff_sub, panel_result)
 
