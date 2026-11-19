@@ -436,3 +436,26 @@ async def test_admin_summary_goes_to_the_trials_topic(monkeypatch, trials_topic,
     await svc._notify_admin('сводка')
 
     assert svc.bot.send_message.await_args.kwargs['message_thread_id'] == expected
+
+
+def test_warning_text_splits_into_a_letter_title_and_body():
+    from app.services.trial_abuse_service import DEFAULT_WARNING_TEXT, split_warning_text
+
+    title, body = split_warning_text(DEFAULT_WARNING_TEXT)
+
+    assert title == 'Обнаружено злоупотребление бесплатным триалом'
+    assert body.startswith('С вашего устройства зарегистрировано несколько аккаунтов.')
+    assert body.endswith('напишите в поддержку.')
+
+
+async def test_account_without_telegram_is_warned_by_email(monkeypatch):
+    users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=0.01)]
+    svc = _realtime_service(monkeypatch, users, _index((10, [1], 111, False), (20, [2], None, False)))
+    monkeypatch.setattr(settings, 'TRIAL_ABUSE_NOTIFY', True)
+    svc._send_warning = AsyncMock(return_value=True)
+    svc._send_warning_email = AsyncMock(return_value=True)
+
+    assert await svc.check_new_device(2, HWID) is True
+
+    svc._send_warning.assert_awaited_once_with(111)
+    svc._send_warning_email.assert_awaited_once_with(20)

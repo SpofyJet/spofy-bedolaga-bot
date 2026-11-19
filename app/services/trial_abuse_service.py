@@ -34,6 +34,7 @@ Telegram» в группе.
 
 import asyncio
 import html
+import re
 from collections import defaultdict
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -62,6 +63,15 @@ DEFAULT_WARNING_TEXT = (
     'Если сервис вам нужен — оформите платную подписку, она недорогая. '
     'Если считаете, что это ошибка (например, устройством пользуются двое), напишите в поддержку.'
 )
+
+
+def split_warning_text(text: str) -> tuple[str, str]:
+    text = re.sub(r'^\W+', '', text.strip())
+    head, sep, rest = text.partition(': ')
+    if sep and rest and '\n' not in head and len(head) <= 80:
+        return head, rest[:1].upper() + rest[1:]
+    return text.split('\n', 1)[0][:80], text
+
 
 # Статусы подписок в БД бота, которые НЕ считаются реально взятым триалом/покупкой
 _DRAFT_SUBSCRIPTION_STATUSES = {'pending'}
@@ -284,8 +294,8 @@ class TrialAbuseService:
             for panel_id, reason in candidates.items():
                 panel_user = users_by_id[panel_id]
                 notified = False
-                if self.is_notify_enabled() and panel_user.telegram_id and self.bot:
-                    notified = await self._send_warning(panel_user.telegram_id)
+                if self.is_notify_enabled():
+                    notified = await self._warn(panel_user, bot_index)
                     stats['notified' if notified else 'notify_failed'] += 1
 
                 ok, detail = await self._apply_action(api, panel_user)
@@ -546,8 +556,8 @@ class TrialAbuseService:
                         if not await self._find_bot_trials(db, target):
                             continue  # живого триала уже нет (погашен раньше) — не предупреждаем и не наказываем
                     notified = False
-                    if self.is_notify_enabled() and target.telegram_id and self.bot:
-                        notified = await self._send_warning(target.telegram_id)
+                    if self.is_notify_enabled():
+                        notified = await self._warn(target, bot_index)
                     ok, detail = await self._apply_action(api, target)
                     label = f'{self._who(target, bot_index, html_link=True)} — {html.escape(reason)}'
                     plain = f'{self._who(target, bot_index)} — {reason} [панель id={target_id}]'
@@ -779,6 +789,49 @@ class TrialAbuseService:
             panel_user_id=panel_user.id,
             details={'action': detail, 'source': source, 'notified': notified},
         )
+
+    async def _warn(self, panel_user: RemnaWaveUser, bot_index: dict[str, Any]) -> bool:
+        if panel_user.telegram_id:
+            return await self._send_warning(panel_user.telegram_id)
+        record = self._bot_record(panel_user, bot_index) or {}
+        return await self._send_warning_email(record.get('bot_user_id'))
+
+    async def _send_warning_email(self, bot_user_id: int | None) -> bool:
+        from app.cabinet.services.email_service import email_service
+        from app.cabinet.services.email_templates import EmailNotificationTemplates
+        from app.cabinet.services.email_unsubscribe import build_unsubscribe_url
+
+        if bot_user_id is None or not email_service.is_configured():
+            return False
+        async with AsyncSessionLocal() as session:
+            user = await session.get(User, bot_user_id)
+        if user is None or not user.email or not user.email_verified or user.status != 'active':
+            return False
+        title, body = split_warning_text(self.get_warning_text())
+        button = re.sub(r'^\W+', '', get_texts().get('MENU_BUY_SUBSCRIPTION', 'Купить подписку'))
+        cabinet_url = (settings.CABINET_URL or '').rstrip('/')
+        unsubscribe_url = build_unsubscribe_url(user.id, user.email)
+        letter = EmailNotificationTemplates().render_simple_letter(
+            language='ru',
+            title=title,
+            body_html=html.escape(body).replace('\n', '<br>'),
+            button_url=f'{cabinet_url}/subscription/purchase' if cabinet_url else '',
+            button_text=button,
+            unsubscribe_url=unsubscribe_url,
+        )
+        try:
+            sent = await asyncio.to_thread(
+                email_service.send_email,
+                to_email=user.email,
+                subject=title,
+                body_html=letter,
+                body_text=None,
+                unsubscribe_url=unsubscribe_url or None,
+            )
+        except Exception as error:
+            logger.warning(f'Антиабуз триалов: не удалось отправить письмо user_id={bot_user_id}: {error}')
+            return False
+        return bool(sent)
 
     async def _send_warning(self, telegram_id: int) -> bool:
         if not self.bot:
