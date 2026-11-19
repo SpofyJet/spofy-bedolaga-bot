@@ -257,6 +257,14 @@ def test_panel_without_the_wheel_devices_does_not_cut_the_paid_limit():
     assert subscription.device_limit == 3
 
 
+def test_panel_behind_a_second_wheel_device_does_not_cut_the_paid_limit():
+    subscription = _sub(wheel_bonus_devices=2, wheel_bonus_devices_until=NOW + timedelta(days=10))
+
+    project_onto_subscription(subscription, PanelSnapshot(status='ACTIVE', device_limit=4), now=NOW)
+
+    assert subscription.device_limit == 3
+
+
 def test_admin_edit_in_the_panel_keeps_the_wheel_devices_on_top():
     subscription = _sub(wheel_bonus_devices=1, wheel_bonus_devices_until=NOW + timedelta(days=10))
 

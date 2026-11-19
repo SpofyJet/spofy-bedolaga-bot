@@ -284,7 +284,7 @@ def _paid_device_limit(subscription, panel_limit: int, now: datetime) -> int | N
     raw_bonus = getattr(subscription, 'wheel_bonus_devices', 0)
     raw_bonus = raw_bonus if type(raw_bonus) is int and raw_bonus > 0 else 0
     active_bonus = active_wheel_bonus_devices(subscription, now)
-    if current is not None and panel_limit in {current, current + raw_bonus, current + active_bonus}:
+    if current is not None and current <= panel_limit <= current + max(raw_bonus, active_bonus):
         return None
     paid = panel_limit - active_bonus
     return paid if paid > 0 else panel_limit

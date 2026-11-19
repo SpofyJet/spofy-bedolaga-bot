@@ -596,6 +596,7 @@ class FortuneWheelService:
                     if subscription.status == SubscriptionStatus.EXPIRED.value:
                         subscription.status = SubscriptionStatus.ACTIVE.value
                     subscription.updated_at = now
+                    # Условия тарифа на новый срок: база тарифа + активные докупки.
                     from app.database.crud.subscription import reconcile_tariff_traffic_limit
 
                     await reconcile_tariff_traffic_limit(db, subscription, new_term=False)
@@ -735,26 +736,34 @@ class FortuneWheelService:
                     Subscription.wheel_bonus_devices_until <= now,
                 )
             )
-            expired = list(result.scalars().all())
-            for subscription in expired:
-                subscription.wheel_bonus_devices = 0
-                subscription.wheel_bonus_devices_until = None
-            if not expired:
-                return 0
-            await db.commit()
+            ids = [subscription.id for subscription in result.scalars().all() if subscription.is_active]
             service = SubscriptionService()
-            for subscription in expired:
+            cleared = 0
+            for subscription_id in ids:
+                subscription = (
+                    await db.execute(select(Subscription).where(Subscription.id == subscription_id))
+                ).scalar_one_or_none()
+                if subscription is None or not subscription.is_active:
+                    continue
                 try:
-                    if subscription.is_active:
-                        await service.update_remnawave_user(db, subscription)
+                    pushed = await service.update_remnawave_user(db, subscription)
                 except Exception as error:
+                    pushed = None
                     logger.warning(
                         'Не удалось обновить лимит устройств после бонуса колеса',
-                        subscription_id=subscription.id,
+                        subscription_id=subscription_id,
                         error=str(error),
                     )
-            logger.info('📱 Сняты устройства колеса', count=len(expired))
-            return len(expired)
+                if pushed is None:
+                    await db.rollback()
+                    continue
+                subscription.wheel_bonus_devices = 0
+                subscription.wheel_bonus_devices_until = None
+                await db.commit()
+                cleared += 1
+            if cleared:
+                logger.info('📱 Сняты устройства колеса', count=cleared)
+            return cleared
 
     async def _generate_prize_promocode(
         self, db: AsyncSession, user: User, prize: WheelPrize, config: WheelConfig
