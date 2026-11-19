@@ -84,10 +84,70 @@ async def test_expired_webhook_first_still_notifies(monkeypatch):
     subscription = MagicMock()
     subscription.status = SubscriptionStatus.ACTIVE.value
     subscription.end_date = datetime.now(UTC) - timedelta(days=1)
+    subscription.is_trial = False
 
     await svc._handle_user_expired(db, _user(), subscription, {})
 
     assert svc._notify_user.await_args.args[1] == 'WEBHOOK_SUB_EXPIRED'
+
+
+async def test_expired_trial_gets_trial_text_and_buy_button(monkeypatch):
+    monkeypatch.setattr('app.services.remnawave_webhook_service.expire_subscription', AsyncMock())
+    monkeypatch.setattr('app.database.crud.transaction.get_last_subscription_payment_at', AsyncMock(return_value=None))
+    svc = _service()
+    db = MagicMock()
+    db.commit = AsyncMock()
+    subscription = MagicMock()
+    subscription.status = SubscriptionStatus.ACTIVE.value
+    subscription.end_date = datetime.now(UTC) - timedelta(days=1)
+    subscription.is_trial = True
+
+    await svc._handle_user_expired(db, _user(), subscription, {})
+
+    call = svc._notify_user.await_args
+    assert call.args[1] == 'TRIAL_EXPIRED_NOTICE'
+    assert call.kwargs['reply_markup'].inline_keyboard[0][0].callback_data == 'menu_buy'
+
+
+async def test_first_connected_after_trial_was_taken_away_stays_silent(monkeypatch):
+    svc = _service()
+    send = AsyncMock()
+    monkeypatch.setattr(
+        'app.services.notification_delivery_service.notification_delivery_service.send_notification', send
+    )
+    monkeypatch.setattr(settings, 'WEBHOOK_NOTIFY_USER_ENABLED', True)
+    monkeypatch.setattr(settings, 'WEBHOOK_NOTIFY_FIRST_CONNECTED', True)
+    monkeypatch.setattr('app.services.remnawave_webhook_service._record_event', AsyncMock())
+    monkeypatch.setattr('app.services.trial_quest_service.on_first_connected', AsyncMock(return_value=False))
+    subscription = SimpleNamespace(
+        id=5, is_trial=True, status=SubscriptionStatus.ACTIVE.value, end_date=datetime.now(UTC) - timedelta(seconds=30)
+    )
+    subscription.actual_status = 'expired'
+    user = SimpleNamespace(id=1, language='ru', telegram_id=77, has_had_paid_subscription=False)
+
+    await svc._handle_first_connected(MagicMock(), user, subscription, {})
+
+    send.assert_not_awaited()
+    svc._notify_user.assert_not_awaited()
+
+
+async def test_torrent_warning_once_a_day(monkeypatch):
+    store = {}
+
+    async def get(key):
+        return store.get(key)
+
+    async def set_(key, value, expire=None):
+        store[key] = value
+
+    monkeypatch.setattr('app.utils.cache.cache.get', get)
+    monkeypatch.setattr('app.utils.cache.cache.set', set_)
+    svc = _service()
+
+    for _ in range(3):
+        await svc._handle_torrent_detected(MagicMock(), _user(), None, {})
+
+    assert svc._notify_user.await_count == 1
 
 
 @pytest.mark.parametrize('age_hours', [0.1, 2, 23, 25])

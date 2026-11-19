@@ -57,6 +57,7 @@ logger = structlog.get_logger(__name__)
 # Mapping from locale text_key to NotificationType for unified delivery
 _TEXT_KEY_TO_NOTIFICATION_TYPE: dict[str, NotificationType] = {
     'WEBHOOK_SUB_EXPIRED': NotificationType.WEBHOOK_SUB_EXPIRED,
+    'TRIAL_EXPIRED_NOTICE': NotificationType.WEBHOOK_SUB_EXPIRED,
     'WEBHOOK_SUB_DISABLED': NotificationType.WEBHOOK_SUB_DISABLED,
     'WEBHOOK_SUB_ENABLED': NotificationType.WEBHOOK_SUB_ENABLED,
     'WEBHOOK_SUB_LIMITED': NotificationType.WEBHOOK_SUB_LIMITED,
@@ -78,6 +79,7 @@ _TEXT_KEY_TO_NOTIFICATION_TYPE: dict[str, NotificationType] = {
 # Mapping from locale text_key to the Settings toggle that controls it
 _TEXT_KEY_TO_SETTING: dict[str, str] = {
     'WEBHOOK_SUB_EXPIRED': 'WEBHOOK_NOTIFY_SUB_EXPIRED',
+    'TRIAL_EXPIRED_NOTICE': 'WEBHOOK_NOTIFY_SUB_EXPIRED',
     'WEBHOOK_SUB_DISABLED': 'WEBHOOK_NOTIFY_SUB_STATUS',
     'WEBHOOK_SUB_ENABLED': 'WEBHOOK_NOTIFY_SUB_STATUS',
     'WEBHOOK_SUB_LIMITED': 'WEBHOOK_NOTIFY_SUB_LIMITED',
@@ -1025,6 +1027,18 @@ class RemnaWaveWebhookService:
             ]
         )
 
+    def _get_buy_keyboard(self, user: User) -> InlineKeyboardMarkup:
+        texts = get_texts(user.language)
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    build_miniapp_or_callback_button(
+                        text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy', style='success'
+                    )
+                ],
+            ]
+        )
+
     def _get_subscription_keyboard(self, user: User) -> InlineKeyboardMarkup:
         texts = get_texts(user.language)
         button_text = texts.get('MY_SUBSCRIPTION_BUTTON', 'My subscription')
@@ -1209,10 +1223,11 @@ class RemnaWaveWebhookService:
 
         if already_expired:
             return
+        trial = bool(subscription.is_trial)
         await self._notify_user(
             user,
-            'WEBHOOK_SUB_EXPIRED',
-            reply_markup=self._get_renew_keyboard(user),
+            'TRIAL_EXPIRED_NOTICE' if trial else 'WEBHOOK_SUB_EXPIRED',
+            reply_markup=self._get_buy_keyboard(user) if trial else self._get_renew_keyboard(user),
             subscription=subscription,
         )
 
@@ -1796,6 +1811,8 @@ class RemnaWaveWebhookService:
             except Exception as error:
                 logger.warning('Награда за приглашённого друга не выдана', user_id=user.id, error=str(error))
 
+            if subscription.actual_status not in ('active', 'trial'):
+                return
             if not settings.WEBHOOK_NOTIFY_USER_ENABLED:
                 logger.debug('Webhook user notifications disabled globally, skipping first_connected', user_id=user.id)
                 return
@@ -2041,6 +2058,15 @@ class RemnaWaveWebhookService:
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         logger.info('Webhook: torrent detected for user', user_id=user.id)
+        from app.utils.cache import cache
+
+        warn_key = f'torrent_warn:{user.id}'
+        try:
+            if await cache.get(warn_key):
+                return
+            await cache.set(warn_key, '1', expire=86400)
+        except Exception:
+            logger.debug('Ignored error in _handle_torrent_detected', exc_info=True)
         await self._notify_user(
             user,
             'WEBHOOK_TORRENT_DETECTED',
