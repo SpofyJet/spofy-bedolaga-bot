@@ -110,6 +110,7 @@ EVENT_ABANDONED_CART_2 = 'funnel_abandoned_cart_2'
 ABANDONED_CART_MIN_AGE_SECONDS = int(getattr(settings, 'FUNNEL_ABANDONED_CART_MIN_AGE_MINUTES', 15)) * 60
 ABANDONED_CART_LOCK_MINUTES = int(getattr(settings, 'FUNNEL_ABANDONED_CART_LOCK_MINUTES', 20))
 ABANDONED_CART_RESEND_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_CART_RESEND_HOURS', 24))
+ABANDONED_CART_PURCHASE_GRACE_SECONDS = 15 * 60
 ABANDONED_CART_2_DELAY_HOURS = int(getattr(settings, 'FUNNEL_ABANDONED_CART_2_DELAY_HOURS', 20))
 
 # После покупки приглашаем позвать друга (дни за каждого подключившегося).
@@ -428,6 +429,7 @@ class ActivationFunnelService:
                     Subscription.is_trial == True,
                     Subscription.status == SubscriptionStatus.ACTIVE.value,
                     func.coalesce(Subscription.traffic_used_gb, 0.0) == 0.0,
+                    ~_event_sent_clause(EVENT_TRIAL_FIRST_CONNECTED),
                     Subscription.created_at <= activated_before,
                     Subscription.end_date > now,
                     User.status == UserStatus.ACTIVE.value,
@@ -876,7 +878,9 @@ class ActivationFunnelService:
             if recent.scalar():
                 continue
             # Возраст корзины считается по TTL с точностью до секунды — берём секунду запаса.
-            if await self._bought_since(db, user.id, now - timedelta(seconds=age_seconds + 1)):
+            if await self._bought_since(
+                db, user.id, now - timedelta(seconds=age_seconds + 1 + ABANDONED_CART_PURCHASE_GRACE_SECONDS)
+            ):
                 continue
 
             if not user.telegram_id:
@@ -1078,7 +1082,9 @@ class ActivationFunnelService:
                     wave2_sent = True
             if wave2_sent or wave1_at is None or wave1_at > now - timedelta(hours=ABANDONED_CART_2_DELAY_HOURS):
                 continue
-            if await self._bought_since(db, user.id, now - timedelta(seconds=age_seconds + 1)):
+            if await self._bought_since(
+                db, user.id, now - timedelta(seconds=age_seconds + 1 + ABANDONED_CART_PURCHASE_GRACE_SECONDS)
+            ):
                 continue
 
             texts = get_texts(user.language)
@@ -1266,6 +1272,7 @@ class ActivationFunnelService:
                     Subscription.is_trial == True,
                     Subscription.status == SubscriptionStatus.ACTIVE.value,
                     func.coalesce(Subscription.traffic_used_gb, 0.0) == 0.0,
+                    ~_event_sent_clause(EVENT_TRIAL_FIRST_CONNECTED),
                     Subscription.created_at <= activated_before,
                     Subscription.end_date > now,
                     User.status == UserStatus.ACTIVE.value,

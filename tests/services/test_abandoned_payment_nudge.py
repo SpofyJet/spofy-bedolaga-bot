@@ -294,6 +294,17 @@ async def test_cart_reminder_still_goes_if_the_purchase_was_before_the_cart(monk
     sent.assert_awaited_once()
 
 
+async def test_cart_saved_right_after_the_purchase_gets_no_reminder(monkeypatch):
+    async with _session(monkeypatch) as db:
+        db.add_all([_user(balance_kopeks=0), _subscription_payment(1, minutes_ago=20)])
+        await db.commit()
+        _cart_service(monkeypatch, [(1, _cart(), 1000)])
+        service, sent = _service(monkeypatch)
+
+        assert await service.process_abandoned_carts(db) == 0
+    sent.assert_not_awaited()
+
+
 async def test_cart_wave2_skips_who_already_bought_after_the_cart(monkeypatch):
     async with _session(monkeypatch) as db:
         db.add_all(
