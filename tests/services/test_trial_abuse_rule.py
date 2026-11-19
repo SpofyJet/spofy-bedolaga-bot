@@ -43,8 +43,8 @@ def _index(*records):
             'telegram_id': tg,
             'panel_ids': set(panel_ids),
             'shorts': set(),
-            'paid_ever': paid,
-            'paid_active': paid,
+            'paid_ever': bool(paid),
+            'paid_active': paid is True,
             'trial_count': 1,
         }
         index['records'][bot_user_id] = record
@@ -149,9 +149,17 @@ async def test_new_device_of_a_second_account_punishes_both_accounts(monkeypatch
     assert svc._punished == {1, 2}
 
 
-async def test_paid_first_account_keeps_its_access_and_only_the_newcomer_is_punished(monkeypatch):
+async def test_trial_on_a_device_with_a_running_paid_subscription_is_kept(monkeypatch):
+    users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=0.01)]
+    svc = _realtime_service(monkeypatch, users, _index((10, [1], 111, True), (20, [2], None, False)))
+
+    assert await svc.check_new_device(2, HWID) is False
+    svc._apply_action.assert_not_awaited()
+
+
+async def test_paid_first_account_that_has_lapsed_does_not_shield_the_newcomer(monkeypatch):
     users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=0.01, tg=222)]
-    svc = _realtime_service(monkeypatch, users, _index((10, [1], 111, True), (20, [2], 222, False)))
+    svc = _realtime_service(monkeypatch, users, _index((10, [1], 111, 'ever'), (20, [2], 222, False)))
 
     assert await svc.check_new_device(2, HWID) is True
     assert {call.args[1].id for call in svc._apply_action.await_args_list} == {2}
@@ -293,14 +301,15 @@ def test_group_targets_include_the_first_trial_account():
 
 def test_group_targets_leave_a_paid_first_account_alone_and_ignore_clean_groups():
     users = [_panel(1, days_ago=30, tg=111), _panel(2, days_ago=1, tg=222)]
-    assert set(_targets(users, _index((10, [1], 111, True), (20, [2], 222, False)))) == {2}
+    assert set(_targets(users, _index((10, [1], 111, 'ever'), (20, [2], 222, False)))) == {2}
+    assert _targets(users, _index((10, [1], 111, True), (20, [2], 222, False))) == {}
     paid_newcomer = _index((10, [1], 111, False), (20, [2], 222, True))
     assert _targets(users, paid_newcomer) == {}  # платный новичок — не нарушитель, первого трогать не за что
 
 
-def _many(n, paid_ids=()):
+def _many(n, paid_ids=(), paid=True):
     users = [_panel(i, days_ago=30 - i * 0.1, tg=1000 + i) for i in range(1, n + 1)]
-    records = [(i, [i], 1000 + i, i in paid_ids) for i in range(1, n + 1)]
+    records = [(i, [i], 1000 + i, paid if i in paid_ids else False) for i in range(1, n + 1)]
     return users, _index(*records)
 
 
@@ -322,7 +331,7 @@ def test_big_device_without_paid_accounts_is_still_a_farm():
 
 
 def test_small_group_with_paid_account_keeps_the_old_rule():
-    users, index = _many(3, paid_ids={1})  # группа меньше порога: правило прежнее
+    users, index = _many(3, paid_ids={1}, paid='ever')
     assert set(_targets(users, index)) == {2, 3}
 
 

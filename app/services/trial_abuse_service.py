@@ -380,6 +380,10 @@ class TrialAbuseService:
             if stats is not None:
                 stats['skipped_shared_device'] += 1
             return {}
+        if self._has_running_paid(uids, users_by_id, bot_index):
+            if stats is not None:
+                stats['skipped_paid_device'] += 1
+            return {}
         targets = self._abusers_in_hwid_group(hwid, uids, users_by_id, bot_index, now, stats)
         if not targets or not self.punish_whole_group():
             return targets
@@ -410,6 +414,16 @@ class TrialAbuseService:
             return False
         paid = sum(1 for member in members if self._account_verdict(member, bot_index, now) == 'paid')
         return paid / len(members) >= share
+
+    def _has_running_paid(
+        self, uids: set[int], users_by_id: dict[int, RemnaWaveUser], bot_index: dict[str, Any]
+    ) -> bool:
+        for uid in uids:
+            member = users_by_id.get(uid)
+            record = self._bot_record(member, bot_index) if member is not None else None
+            if record is not None and record['paid_active']:
+                return True
+        return False
 
     async def shares_device_with_other_person(self, panel_user_id: int) -> bool:
         """Есть ли у аккаунта устройство, на котором сидит другой человек. Для защиты наград «за друга».
