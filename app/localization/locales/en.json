@@ -1343,6 +1343,7 @@
   "TARIFF_SWITCH_WILL_SET_LIFETIME_LINE": "<tg-emoji emoji-id='5271934788037517525'>♾️</tg-emoji> Term: forever",
   "TARIFF_SWITCH_WILL_SET_LINE": "<tg-emoji emoji-id='5985616167740379273'>⏰</tg-emoji> Will be set to: {days} days",
   "TARIFF_TRAFFIC_TOPUP_DISABLED": "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Buying extra traffic is unavailable on your plan",
+  "TARIFF_DEVICES_STEP": "<tg-emoji emoji-id='5469951222972716119'>📱</tg-emoji> <b>Choose the number of devices</b>\n\n{name} · {period}\nEach phone, computer or TV takes one slot.",
   "TARIFF_TRIM_DEVICES_BUTTON": "📱 Only {devices} devices",
   "TEST_ACCESS_ACTIVATED_MESSAGE": "<tg-emoji emoji-id='5994502837327892086'>🎉</tg-emoji> Test servers are connected! Access is active until {expires_at}.",
   "TEST_ACCESS_ACTIVATED_POPUP": "<tg-emoji emoji-id='5776375003280838798'>✅</tg-emoji> Access granted!",

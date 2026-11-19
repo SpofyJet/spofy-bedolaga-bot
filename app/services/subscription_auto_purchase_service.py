@@ -65,7 +65,11 @@ from app.services.user_cart_service import user_cart_service
 from app.utils.lifetime import for_period_ru
 from app.utils.notification_keyboards import buy_button, keyboard, support_button, topup_button
 from app.utils.pricing_utils import format_period_description
-from app.utils.subscription_utils import resolve_tariff_cart_traffic, resolve_tariff_purchase_device_limit
+from app.utils.subscription_utils import (
+    resolve_chosen_device_limit,
+    resolve_tariff_cart_traffic,
+    resolve_tariff_purchase_device_limit,
+)
 from app.utils.timezone import format_local_datetime
 
 
@@ -901,7 +905,7 @@ async def _auto_purchase_tariff(
         return False
 
     # Calculate price via PricingEngine (single source of truth)
-    device_limit = resolve_tariff_purchase_device_limit(tariff, existing_subscription)
+    device_limit = resolve_chosen_device_limit(tariff, existing_subscription, cart_data.get('device_limit'))
 
     result = await pricing_engine.calculate_tariff_purchase_price(
         tariff,
@@ -995,7 +999,7 @@ async def _auto_purchase_tariff(
         if existing_subscription:
             # Продлеваем существующую подписку
             # Сохраняем докупленные устройства при продлении того же тарифа
-            effective_device_limit = resolve_tariff_purchase_device_limit(tariff, existing_subscription)
+            effective_device_limit = device_limit
             was_trial_conversion = bool(existing_subscription.is_trial)
             subscription = await extend_subscription(
                 db,
@@ -1018,7 +1022,7 @@ async def _auto_purchase_tariff(
                 user_id=user.id,
                 duration_days=period_days,
                 traffic_limit_gb=traffic_limit_gb,
-                device_limit=tariff.device_limit,
+                device_limit=device_limit,
                 connected_squads=squads,
                 tariff_id=tariff.id,
             )

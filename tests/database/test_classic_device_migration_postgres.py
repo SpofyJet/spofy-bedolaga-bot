@@ -26,6 +26,20 @@ from tests.fixtures.postgres_db import postgres_session
 pytestmark = pytest.mark.postgres
 
 
+async def pick_listed_devices(callback, user, db, state):
+    markup = callback.message.edit_text.await_args.kwargs['reply_markup']
+    step = [
+        b.callback_data
+        for row in markup.inline_keyboard
+        for b in row
+        if (b.callback_data or '').startswith('tariff_dev:')
+    ]
+    if step:
+        callback.data = step[-1]
+        callback.model_copy = lambda update: SimpleNamespace(**{**callback.__dict__, **update})
+        await telegram.select_tariff_devices(callback, user, db, state)
+
+
 class Panel(RemnaWaveAPI):
     def __init__(self, now):
         super().__init__(base_url='https://panel.example', api_key='test')
@@ -288,6 +302,7 @@ async def test_selected_classic_devices_are_priced_and_preserved(
             else:
                 callback.data = f'tariff_period:1:{days}'
                 await inspect.unwrap(telegram.select_tariff_period)(callback, user, db, state)
+                await pick_listed_devices(callback, user, db, state)
                 preview_state = await state.get_data()
                 assert preview_state['final_price'] == expected_price
                 callback.data = (

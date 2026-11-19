@@ -78,7 +78,7 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
         ),
     ).format(status=status, days=days, period=period_text)
 
-    keyboard = get_autopay_keyboard(db_user.language)
+    keyboard = get_autopay_keyboard(db_user.language, enabled=bool(subscription.autopay_enabled))
 
     await callback.message.edit_text(
         text,

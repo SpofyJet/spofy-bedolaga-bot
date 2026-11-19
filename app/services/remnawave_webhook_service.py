@@ -173,6 +173,19 @@ def _bot_sends_expiry_reminders(kind: str) -> bool:
         return False
 
 
+def self_revoke_key(subscription_id: int) -> str:
+    return f'self_revoke:{subscription_id}'
+
+
+async def mark_self_revoke(subscription_id: int) -> None:
+    from app.utils.cache import cache
+
+    try:
+        await cache.set(self_revoke_key(subscription_id), '1', expire=300)
+    except Exception:
+        logger.debug('Ignored error in mark_self_revoke', exc_info=True)
+
+
 class RemnaWaveWebhookService:
     """Processes incoming webhooks from RemnaWave backend."""
 
@@ -1661,6 +1674,13 @@ class RemnaWaveWebhookService:
             )
         await db.commit()
 
+        from app.utils.cache import cache
+
+        try:
+            if await cache.get(self_revoke_key(subscription.id)):
+                return
+        except Exception:
+            logger.debug('Ignored error in _handle_user_revoked', exc_info=True)
         await self._notify_user(
             user, 'WEBHOOK_SUB_REVOKED', reply_markup=self._get_connect_keyboard(user), subscription=subscription
         )
@@ -2046,13 +2066,6 @@ class RemnaWaveWebhookService:
     ) -> None:
         device_name = self._extract_device_name(data)
         logger.info('Webhook: device deleted for user', user_id=user.id, device_name=device_name or '(empty)')
-        await self._notify_user(
-            user,
-            'WEBHOOK_DEVICE_DELETED',
-            reply_markup=self._get_subscription_keyboard(user),
-            format_kwargs={'device': device_name or '—'},
-            subscription=subscription,
-        )
 
     async def _handle_torrent_detected(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict

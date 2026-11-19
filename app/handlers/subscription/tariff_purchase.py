@@ -30,7 +30,7 @@ from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, Subscription, Tariff, Transaction, TransactionType, User
-from app.keyboards.inline import build_connect_button, smallest_last
+from app.keyboards.inline import _get_device_declension, build_connect_button, device_offer_counts, smallest_last
 from app.localization.texts import Texts, get_texts
 from app.middlewares.banner_variant import show_banner_state
 from app.services.admin_notification_service import AdminNotificationService
@@ -49,6 +49,8 @@ from app.utils.pricing_utils import calculate_period_device_cost
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.subscription_time import local_days_until
 from app.utils.subscription_utils import (
+    offers_device_choice,
+    resolve_chosen_device_limit,
     resolve_tariff_cart_traffic,
     resolve_tariff_purchase_device_limit,
     resolve_tariff_renewal_device_limit,
@@ -305,8 +307,7 @@ def _price_breakdown_note(texts, tariff: Tariff, device_limit: int | None, resul
         return ''
     return texts.t(
         'TARIFF_PURCHASE_DEVICES_BREAKDOWN',
-        '\n\n📱 <i>В стоимость входят {extra} доп. устройств: {devices_price} '
-        '({devices} устройств при {included} в тарифе).</i>',
+        '\n\n📱 <i>В стоимость входят доп. места: {extra} — {devices_price} (всего {devices}, в тарифе {included}).</i>',
     ).format(
         extra=extra,
         devices_price=format_price_kopeks(devices_price),
@@ -785,6 +786,7 @@ async def _bind_tariff_purchase_keyboard(
     custom_traffic_gb=None,
     fixed=False,
     subscription=None,
+    device_limit=None,
 ):
     """Give each freshly displayed purchase intent its own durable identity."""
     from app.services.subscription_auto_purchase_service import _saved_tariff_checkout_external_id
@@ -799,6 +801,8 @@ async def _bind_tariff_purchase_keyboard(
         'custom_traffic_gb': custom_traffic_gb if tariff.can_purchase_custom_traffic() else None,
         'tariff_checkout_id': str(uuid4()),
     }
+    if device_limit is not None:
+        cart['device_limit'] = device_limit
     checkout = {'cart': dict(cart), 'identity': dict(cart), 'fresh_fixed': fixed}
     await state.update_data(
         restored_tariff_checkout=checkout,
@@ -1018,7 +1022,9 @@ async def _proceed_with_selected_tariff(
     # Признак нужен последующим перерисовкам в других хендлерах.
     # Флаг тримма сбрасываем: зашли на экран периода заново (выбор тарифа) —
     # прошлое намерение «оставить только N устройств» больше не актуально.
-    await state.update_data(tariff_selection_skipped=skip_selection, trim_devices_to_included=False)
+    await state.update_data(
+        tariff_selection_skipped=skip_selection, trim_devices_to_included=False, chosen_devices=None
+    )
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff or not tariff.is_active:
@@ -1640,8 +1646,57 @@ async def trim_tariff_devices(
         selected_tariff_id=tariff_id,
         selected_period=period,
         trim_devices_to_included=True,
+        chosen_devices=None,
     )
 
+    await select_tariff_period(
+        callback.model_copy(update={'data': f'tariff_period:{tariff_id}:{period}'}), db_user, db, state
+    )
+
+
+async def _show_tariff_devices_step(callback, db_user, tariff, period, included, texts) -> None:
+    from app.services.pricing_engine import pricing_engine
+
+    maximum = tariff.max_device_limit or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else 100)
+    rows = []
+    for n in [included, *device_offer_counts(included, maximum)]:
+        label = f'{n} {_get_device_declension(n)}'
+        price = (
+            await pricing_engine.calculate_tariff_purchase_price(tariff, period, device_limit=n, user=db_user)
+        ).final_total
+        rows.append((f'{label} — {format_price_kopeks(price)}', label, f'tariff_dev:{tariff.id}:{period}:{n}'))
+    buttons = smallest_last(rows)
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'tariff_select:{tariff.id}')])
+    await callback.message.edit_text(
+        texts.t(
+            'TARIFF_DEVICES_STEP',
+            '📱 <b>Выберите количество устройств</b>\n\n{name} · {period}\n'
+            'Каждый телефон, компьютер или телевизор занимает одно место.',
+        ).format(name=html.escape(tariff.name), period=format_period(period)),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+        parse_mode='HTML',
+    )
+    await callback.answer()
+
+
+@error_handler
+async def select_tariff_devices(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    texts = get_texts(db_user.language)
+    try:
+        _, tariff_id, period, devices = callback.data.split(':')
+        tariff_id, period, devices = int(tariff_id), int(period), int(devices)
+    except ValueError:
+        await callback.answer(texts.t('INVALID_REQUEST', 'Invalid request'), show_alert=True)
+        return
+    await state.update_data(
+        chosen_devices={'tariff_id': tariff_id, 'period': period, 'devices': devices},
+        trim_devices_to_included=False,
+    )
     await select_tariff_period(
         callback.model_copy(update={'data': f'tariff_period:{tariff_id}:{period}'}), db_user, db, state
     )
@@ -1677,8 +1732,17 @@ async def select_tariff_period(
     # (confirm_tariff_purchase по этому же флагу).
     _state_data = await state.get_data()
     trim_devices_to_included = bool(_state_data.get('trim_devices_to_included'))
+    chosen = _state_data.get('chosen_devices') or {}
+    picked = chosen.get('devices') if (chosen.get('tariff_id'), chosen.get('period')) == (tariff_id, period) else None
+    chosen_device_limit = None
     if trim_devices_to_included:
         device_limit = tariff.device_limit
+        chosen_device_limit = device_limit
+    elif picked is not None:
+        device_limit = chosen_device_limit = resolve_chosen_device_limit(tariff, _existing_sub, picked)
+    elif offers_device_choice(tariff, _existing_sub, period):
+        await _show_tariff_devices_step(callback, db_user, tariff, period, device_limit, texts)
+        return
 
     trim_note = ''
     if trim_devices_to_included:
@@ -1711,6 +1775,7 @@ async def select_tariff_period(
     trim_row = None
     if (
         _existing_sub
+        and picked is None
         and device_limit is not None
         and device_limit > (tariff.device_limit or 0)
         and result.devices_price > 0
@@ -1740,6 +1805,7 @@ async def select_tariff_period(
         state=state,
         fixed=True,
         subscription=_existing_sub,
+        device_limit=chosen_device_limit,
     )
     if user_balance >= final_price:
         # Показываем подтверждение
@@ -2289,6 +2355,7 @@ def get_tariff_extend_confirm_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('TARIFF_RENEW_CONFIRM_BUTTON', '✅ Подтвердить продление'),
                     callback_data=f'tariff_ext_confirm:{subscription_id}:{tariff_id}:{period}',
+                    style='success',
                 )
             ],
             [InlineKeyboardButton(text=texts.BACK, callback_data='subscription_extend')],
@@ -5292,7 +5359,11 @@ async def load_saved_tariff_cart(
 
     from app.services.pricing_engine import pricing_engine
 
-    effective_device_limit = resolve_tariff_purchase_device_limit(tariff, subscription)
+    effective_device_limit = (
+        resolve_chosen_device_limit(tariff, subscription, cart_data.get('device_limit'))
+        if cart_mode == 'tariff_purchase'
+        else resolve_tariff_purchase_device_limit(tariff, subscription)
+    )
     quote = await pricing_engine.calculate_tariff_purchase_price(
         tariff,
         period,
@@ -5691,6 +5762,7 @@ def register_tariff_purchase_handlers(dp: Dispatcher):
     dp.callback_query.register(select_tariff_period, F.data.startswith('tariff_period:'))
 
     dp.callback_query.register(trim_tariff_devices, F.data.startswith('tariff_trim:'))
+    dp.callback_query.register(select_tariff_devices, F.data.startswith('tariff_dev:'))
 
     # Подтверждение покупки
     dp.callback_query.register(confirm_tariff_purchase, F.data.startswith('tariff_confirm:'))

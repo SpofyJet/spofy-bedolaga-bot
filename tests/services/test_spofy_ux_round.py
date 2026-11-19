@@ -325,3 +325,40 @@ def test_all_slots_taken(monkeypatch, limit, connected, trial, expected):
     user = SimpleNamespace(subscription=SimpleNamespace(id=1, device_limit=limit, is_trial=trial))
 
     assert devices._all_device_slots_taken(user, None, connected) is expected
+
+
+async def test_device_deleted_is_silent():
+    svc = _service()
+
+    await svc._handle_device_deleted(MagicMock(), _user(), None, {'hwidUserDevice': {'deviceModel': 'iPhone'}})
+
+    svc._notify_user.assert_not_awaited()
+
+
+async def test_revoke_by_the_user_himself_is_not_announced_twice(monkeypatch):
+    from app.services.remnawave_webhook_service import mark_self_revoke
+
+    store = {}
+
+    async def get(key):
+        return store.get(key)
+
+    async def set_(key, value, expire=None):
+        store[key] = value
+
+    monkeypatch.setattr('app.utils.cache.cache.get', get)
+    monkeypatch.setattr('app.utils.cache.cache.set', set_)
+    svc = _service()
+    svc._get_connect_keyboard = MagicMock(return_value=None)
+    db = MagicMock()
+    db.commit = AsyncMock()
+
+    def sub(sid):
+        return SimpleNamespace(id=sid, subscription_url='', subscription_crypto_link=None)
+
+    await mark_self_revoke(1)
+    await svc._handle_user_revoked(db, _user(), sub(1), {})
+    svc._notify_user.assert_not_awaited()
+
+    await svc._handle_user_revoked(db, _user(), sub(2), {})
+    svc._notify_user.assert_awaited_once()

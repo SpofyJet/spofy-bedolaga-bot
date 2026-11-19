@@ -66,7 +66,9 @@ async def revoke_subscription(
                 headers={'Retry-After': str(remaining)},
             )
 
-    # Execute revoke
+    from app.services.remnawave_webhook_service import mark_self_revoke
+
+    await mark_self_revoke(subscription.id)
     sub_service = SubscriptionService()
     result = await sub_service.revoke_subscription(db, subscription)
 

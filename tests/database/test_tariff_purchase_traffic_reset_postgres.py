@@ -18,6 +18,20 @@ from tests.fixtures.postgres_db import postgres_session
 pytestmark = pytest.mark.postgres
 
 
+async def pick_listed_devices(callback, user, db, state):
+    markup = callback.message.edit_text.await_args.kwargs['reply_markup']
+    step = [
+        b.callback_data
+        for row in markup.inline_keyboard
+        for b in row
+        if (b.callback_data or '').startswith('tariff_dev:')
+    ]
+    if step:
+        callback.data = step[-1]
+        callback.model_copy = lambda update: SimpleNamespace(**{**callback.__dict__, **update})
+        await telegram.select_tariff_devices(callback, user, db, state)
+
+
 class PanelBoundary(BaseException):
     """Inspect persisted state before external panel I/O."""
 
@@ -91,6 +105,8 @@ async def test_tariff_purchase_uses_same_reset_decision_in_db_and_panel(
             callback.data = 'custom_days:1:0' if flow == 'custom' else 'tariff_period:1:30'
             preview = telegram.handle_custom_days_change if flow == 'custom' else telegram.select_tariff_period
             await preview(callback, user, db, state)
+            if flow == 'telegram':
+                await pick_listed_devices(callback, user, db, state)
             callback.data = next(
                 b.callback_data
                 for row in callback.message.edit_text.await_args.kwargs['reply_markup'].inline_keyboard

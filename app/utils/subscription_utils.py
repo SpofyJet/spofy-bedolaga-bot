@@ -135,6 +135,28 @@ def resolve_tariff_purchase_device_limit(tariff, subscription: Subscription | No
     return base if base is not None else 1
 
 
+def resolve_chosen_device_limit(tariff, subscription: Subscription | None, requested) -> int:
+    base = resolve_tariff_purchase_device_limit(tariff, subscription)
+    try:
+        chosen = int(requested)
+    except (TypeError, ValueError):
+        return base
+    maximum = tariff.max_device_limit or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
+    if not tariff.device_price_kopeks or chosen < (tariff.device_limit or 1) or (maximum and chosen > maximum):
+        return base
+    return chosen
+
+
+def offers_device_choice(tariff, subscription: Subscription | None, period_days: int = 30) -> bool:
+    return (
+        period_days % 30 == 0
+        and (tariff.device_price_kopeks or 0) > 0
+        and (tariff.device_limit or 0) > 0
+        and not tariff.is_daily
+        and (subscription is None or subscription.is_trial or subscription.tariff_id != tariff.id)
+    )
+
+
 def resolve_min_device_limit(tariff: object | None = None) -> int:
     """Нижняя граница, до которой пользователь может уменьшить лимит устройств.
 

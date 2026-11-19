@@ -183,7 +183,9 @@ async def confirm_subscription_revoke(
     # Answer callback BEFORE heavy operation
     await callback.answer()
 
-    # Execute revoke
+    from app.services.remnawave_webhook_service import mark_self_revoke
+
+    await mark_self_revoke(subscription.id)
     sub_service = SubscriptionService()
     result = await sub_service.revoke_subscription(db, subscription)
 

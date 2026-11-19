@@ -1875,17 +1875,21 @@ def get_confirmation_keyboard(
     )
 
 
-def get_autopay_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+def get_autopay_keyboard(language: str = DEFAULT_LANGUAGE, enabled: bool | None = None) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     back_cb = 'menu_subscription'
+    toggles = []
+    if enabled is not True:
+        toggles.append(
+            [InlineKeyboardButton(text=texts.t('ENABLE_BUTTON', '✅ Включить'), callback_data='autopay_enable')]
+        )
+    if enabled is not False:
+        toggles.append(
+            [InlineKeyboardButton(text=texts.t('DISABLE_BUTTON', '❌ Выключить'), callback_data='autopay_disable')]
+        )
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(text=texts.t('ENABLE_BUTTON', '✅ Включить'), callback_data='autopay_enable'),
-            ],
-            [
-                InlineKeyboardButton(text=texts.t('DISABLE_BUTTON', '❌ Выключить'), callback_data='autopay_disable'),
-            ],
+            *toggles,
             [
                 InlineKeyboardButton(
                     text=texts.t('AUTOPAY_SET_DAYS_BUTTON', '⚙️ Настроить дни'), callback_data='autopay_set_days'
