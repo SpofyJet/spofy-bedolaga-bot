@@ -84,7 +84,7 @@ def test_ci_workflow_runs_postgres_tests_for_real() -> None:
     assert job['services']['postgres']['image'].startswith('postgres:'), 'CI не поднимает PostgreSQL'
     # Весь набор обязан идти на той же версии, что у пользователей в docker-compose.yml;
     # остальные версии матрицы — задел под переход.
-    compose_version = re.search(r'image:\s*postgres:(\d+)', COMPOSE_PATH.read_text(encoding='utf-8')).group(1)
+    compose_version = re.search(r'image:\s*postgres:(\d+(?:\.\d+)?)', COMPOSE_PATH.read_text(encoding='utf-8')).group(1)
     full_suite_versions = {
         str(entry['postgres']) for entry in job['strategy']['matrix']['include'] if entry.get('full_suite')
     }
