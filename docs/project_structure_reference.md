@@ -854,7 +854,7 @@
   Функции: `is_group_safe_callback` — Можно ли обрабатывать это нажатие вне лички., `strip_group_unsafe_buttons` — Оставляет для группы только URL-кнопки и разрешённые callback'и.
 - `app/keyboards/inline.py` — Python-модуль
   Классы: нет
-  Функции: `get_main_menu_keyboard_async` — Асинхронная версия get_main_menu_keyboard с поддержкой конструктора меню., `get_rules_keyboard`, `get_privacy_policy_keyboard`, `get_channel_sub_keyboard` — Subscription keyboard for required channels., `get_post_registration_keyboard`, `get_language_selection_keyboard`, `build_connect_button` — «🔗 Подключиться» для только что оплаченной (активной) подписки — по CONNECT_BUTTON_MODE., `get_main_menu_keyboard`, `get_info_menu_keyboard`, `get_happ_download_button_row`, `get_happ_cryptolink_keyboard`, `get_happ_download_platform_keyboard`, `get_happ_download_link_keyboard`, `get_back_keyboard`, `get_support_menu_button` — Кнопка «Поддержка» (та же, что в «Инфо»); None, если раздел поддержки выключен., `payment_error_navigation_rows` — «Назад» и «Поддержка» под сообщением о сбое оплаты — чтобы экран не был тупиком., `get_payment_error_keyboard`, `get_insufficient_balance_keyboard`, `get_subscription_keyboard`, `get_insufficient_balance_keyboard_with_cart`, `get_balance_keyboard`, `get_payment_methods_keyboard`, `get_referral_keyboard`, `get_support_keyboard`, `get_stars_credited_to_balance_keyboard` — «Мой баланс» + «Поддержка» — после того как оплату Stars не удалось применить, `get_pagination_keyboard`, `get_confirmation_keyboard`, `get_autopay_keyboard`, `get_autopay_days_keyboard`, `get_autopay_period_keyboard` — Period picker for autopay. `current_period=None` means "use default"., `get_add_traffic_keyboard`, `get_add_traffic_keyboard_from_tariff` — Клавиатура для докупки трафика из настроек тарифа., `get_change_devices_keyboard`, `get_confirm_change_devices_keyboard`, `get_reset_traffic_confirm_keyboard`, `get_device_selection_keyboard`, `get_connection_guide_keyboard`, `get_app_selection_keyboard`, `get_specific_app_keyboard`, `get_devices_management_keyboard`, `get_updated_subscription_settings_keyboard`, `get_device_management_help_keyboard`, `get_ticket_cancel_keyboard`, `get_my_tickets_keyboard`, `get_ticket_view_keyboard`, `get_ticket_reply_cancel_keyboard`, `get_admin_tickets_keyboard`, `get_admin_ticket_view_keyboard`, `get_ticket_notification_keyboard` — Клавиатура для уведомления о тикете (личный или групповой админ-чат)., `get_admin_ticket_reply_cancel_keyboard`
+  Функции: `get_main_menu_keyboard_async` — Асинхронная версия get_main_menu_keyboard с поддержкой конструктора меню., `get_rules_keyboard`, `get_privacy_policy_keyboard`, `get_channel_sub_keyboard` — Subscription keyboard for required channels., `get_post_registration_keyboard`, `get_language_selection_keyboard`, `build_connect_button` — «🔗 Подключиться» для только что оплаченной (активной) подписки — по CONNECT_BUTTON_MODE., `get_main_menu_keyboard`, `get_info_menu_keyboard`, `get_happ_download_button_row`, `get_happ_cryptolink_keyboard`, `get_happ_download_platform_keyboard`, `get_happ_download_link_keyboard`, `get_back_keyboard`, `get_support_menu_button` — Кнопка «Поддержка» (та же, что в «Инфо»); None, если раздел поддержки выключен., `payment_error_navigation_rows` — «Назад» и «Поддержка» под сообщением о сбое оплаты — чтобы экран не был тупиком., `get_payment_error_keyboard`, `get_insufficient_balance_keyboard`, `get_subscription_keyboard`, `get_insufficient_balance_keyboard_with_cart`, `smallest_last`, `device_offer_counts`, `get_balance_keyboard`, `get_payment_methods_keyboard`, `get_referral_keyboard`, `get_support_keyboard`, `get_stars_credited_to_balance_keyboard` — «Мой баланс» + «Поддержка» — после того как оплату Stars не удалось применить, `get_pagination_keyboard`, `get_confirmation_keyboard`, `get_autopay_keyboard`, `get_autopay_days_keyboard`, `get_autopay_period_keyboard` — Period picker for autopay. `current_period=None` means "use default"., `get_add_traffic_keyboard`, `get_add_traffic_keyboard_from_tariff` — Клавиатура для докупки трафика из настроек тарифа., `get_change_devices_keyboard`, `get_confirm_change_devices_keyboard`, `get_reset_traffic_confirm_keyboard`, `get_device_selection_keyboard`, `get_connection_guide_keyboard`, `get_app_selection_keyboard`, `get_specific_app_keyboard`, `get_devices_management_keyboard`, `get_updated_subscription_settings_keyboard`, `get_device_management_help_keyboard`, `get_ticket_cancel_keyboard`, `get_my_tickets_keyboard`, `get_ticket_view_keyboard`, `get_ticket_reply_cancel_keyboard`, `get_admin_tickets_keyboard`, `get_admin_ticket_view_keyboard`, `get_ticket_notification_keyboard` — Клавиатура для уведомления о тикете (личный или групповой админ-чат)., `get_admin_ticket_reply_cancel_keyboard`
 - `app/keyboards/topup_amounts.py` — Python-модуль
   Классы: нет
   Функции: `resolve_config_method_id`, `format_quick_amount`, `get_topup_amount_keyboard`
@@ -2176,6 +2176,7 @@
 - `tests/fixtures/`
 - `tests/handlers/`
 - `tests/integration/`
+- `tests/keyboards/`
 - `tests/live/`
 - `tests/middlewares/`
 - `tests/migrations/`
@@ -3443,6 +3444,15 @@
   Классы: нет
   Функции: `test_promo_group_promocode_full_workflow` — Integration test: Full workflow of promo group promocode, `test_duplicate_promo_group_assignment_edge_case` — Edge case: User already has promo group from previous promocode, `test_missing_promo_group_graceful_failure` — Edge case: Promocode references deleted/non-existent promo group
 
+### tests/keyboards
+
+- `tests/keyboards/__init__.py` — Python-модуль
+  Классы: нет
+  Функции: нет
+- `tests/keyboards/test_smallest_last.py` — Python-модуль
+  Классы: нет
+  Функции: `test_devices_upsell_is_green_and_one_more_is_last_without_price`, `test_devices_above_ten_keep_three_green_steps`, `test_devices_respect_tariff_maximum`, `test_traffic_smallest_pack_goes_last_without_price`, `test_shortest_period_goes_last_without_price`, `test_single_period_stays_plain`, `test_renewal_shortest_period_goes_last`
+
 ### tests/live
 
 - `tests/live/__init__.py` — Python-модуль
@@ -4297,7 +4307,7 @@
   Функции: `test_oversized_logo_resized_into_writable_tempdir`, `test_small_logo_returned_unchanged`
 - `tests/utils/test_min_device_limit.py` — Python-модуль
   Классы: нет
-  Функции: `test_default_floor_is_tariff_device_limit`, `test_opt_in_restores_previous_behaviour` — Флаг возвращает прежний минимум 1 — для тех, кому нужно самоограничение., `test_without_usable_tariff_limit_floor_is_one` — Классический режим и битые значения не должны блокировать уменьшение., `test_no_tariff_at_all_floor_is_one`, `test_keyboard_hides_values_below_tariff_limit` — Кнопки с запрещёнными значениями не должны показываться вовсе., `test_keyboard_offers_lower_values_when_opted_in`
+  Функции: `test_default_floor_is_tariff_device_limit`, `test_opt_in_restores_previous_behaviour` — Флаг возвращает прежний минимум 1 — для тех, кому нужно самоограничение., `test_without_usable_tariff_limit_floor_is_one` — Классический режим и битые значения не должны блокировать уменьшение., `test_no_tariff_at_all_floor_is_one`, `test_keyboard_hides_values_below_tariff_limit` — Кнопки с запрещёнными значениями не должны показываться вовсе., `test_keyboard_never_offers_reductions_even_when_opted_in`
 - `tests/utils/test_notification_keyboards.py` — Python-модуль
   Классы: нет
   Функции: `test_keyboard_skips_missing_buttons`, `test_keyboard_without_buttons_is_none`, `test_admin_links_need_cabinet_url`, `test_admin_links_point_to_cabinet`, `test_admin_card_skips_missing_user`, `test_brand_in_footer`

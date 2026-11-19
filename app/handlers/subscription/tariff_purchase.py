@@ -30,7 +30,7 @@ from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, Subscription, Tariff, Transaction, TransactionType, User
-from app.keyboards.inline import build_connect_button
+from app.keyboards.inline import build_connect_button, smallest_last
 from app.localization.texts import Texts, get_texts
 from app.middlewares.banner_variant import show_banner_state
 from app.services.admin_notification_service import AdminNotificationService
@@ -363,7 +363,7 @@ def get_tariff_periods_keyboard(
     уже выше, и уходил без покупки.
     """
     texts = get_texts(language)
-    buttons = []
+    rows = []
 
     # Доплата появляется только когда у человека устройств реально больше,
     # чем в тарифе, И за них платят — без этого поведение как раньше.
@@ -396,8 +396,9 @@ def get_tariff_periods_keyboard(
         price_text = format_price_kopeks(price)  # Spofy: компактная цена периода (скидка в шапке)
 
         button_text = _period_button_text(tariff, period, price, price_text, prices, texts)
-        buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_period:{tariff.id}:{period}')])
+        rows.append((button_text, format_period(period), f'tariff_period:{tariff.id}:{period}'))
 
+    buttons = smallest_last(rows)
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -411,7 +412,7 @@ def get_tariff_periods_keyboard_with_traffic(
 ) -> InlineKeyboardMarkup:
     """Клавиатура выбора периода для тарифа с кастомным трафиком (переход к настройке трафика)."""
     texts = get_texts(language)
-    buttons = []
+    rows = []
 
     prices = tariff.period_prices or {}
     for period_str in sorted(prices.keys(), key=int):
@@ -431,10 +432,9 @@ def get_tariff_periods_keyboard_with_traffic(
 
         button_text = _period_button_text(tariff, period, price, price_text, prices, texts)
         # Используем другой callback для перехода к настройке трафика
-        buttons.append(
-            [InlineKeyboardButton(text=button_text, callback_data=f'tariff_period_traffic:{tariff.id}:{period}')]
-        )
+        rows.append((button_text, format_period(period), f'tariff_period_traffic:{tariff.id}:{period}'))
 
+    buttons = smallest_last(rows)
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -453,6 +453,7 @@ def get_tariff_confirm_keyboard(
             InlineKeyboardButton(
                 text=texts.t('TARIFF_PURCHASE_CONFIRM_BUTTON', '✅ Подтвердить покупку'),
                 callback_data=f'tariff_confirm:{tariff_id}:{period}',
+                style='success',
             )
         ],
     ]
@@ -462,12 +463,11 @@ def get_tariff_confirm_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def _trim_devices_row(texts, tariff: Tariff, period: int, price: int) -> list[InlineKeyboardButton]:
-    """Кнопка «оставить только устройства из тарифа»: цена периода без доплаты за дополнительные."""
+def _trim_devices_row(texts, tariff: Tariff, period: int) -> list[InlineKeyboardButton]:
     return [
         InlineKeyboardButton(
-            text=texts.t('TARIFF_TRIM_DEVICES_BUTTON', '📱 Только {devices} устр. — {price}').format(
-                devices=tariff.device_limit or 0, price=format_price_kopeks(price)
+            text=texts.t('TARIFF_TRIM_DEVICES_BUTTON', '📱 Только {devices} устр.').format(
+                devices=tariff.device_limit or 0
             ),
             callback_data=f'tariff_trim:{tariff.id}:{period}',
         )
@@ -1719,7 +1719,7 @@ async def select_tariff_period(
             tariff, period, device_limit=tariff.device_limit, user=db_user
         )
         if trimmed.final_total < final_price:
-            trim_row = _trim_devices_row(texts, tariff, period, trimmed.final_total)
+            trim_row = _trim_devices_row(texts, tariff, period)
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
@@ -2249,7 +2249,7 @@ def get_tariff_extend_keyboard(
     from app.services.pricing_engine import PricingEngine
 
     texts = get_texts(language)
-    buttons = []
+    rows = []
 
     promo_group = PricingEngine.resolve_promo_group(db_user) if db_user else None
 
@@ -2267,15 +2267,9 @@ def get_tariff_extend_keyboard(
         # subscription_id ОБЯЗАН быть первым сегментом: иначе резолвер по callback
         # принял бы хвостовой {period} за subscription_id (см. issue #3012 —
         # период совпадал с id чужой подписки и продлевалась не та подписка).
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=button_text,
-                    callback_data=f'tariff_extend:{subscription_id}:{tariff.id}:{period}',
-                )
-            ]
-        )
+        rows.append((button_text, format_period(period), f'tariff_extend:{subscription_id}:{tariff.id}:{period}'))
 
+    buttons = smallest_last(rows)
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -3006,7 +3000,7 @@ def get_tariff_switch_periods_keyboard(
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру выбора периода для переключения тарифа с учетом скидок по периодам."""
     texts = get_texts(language)
-    buttons = []
+    rows = []
 
     prices = tariff.period_prices or {}
     for period_str in sorted(prices.keys(), key=int):
@@ -3025,8 +3019,9 @@ def get_tariff_switch_periods_keyboard(
             price_text = format_price_kopeks(price)
 
         button_text = _period_button_text(tariff, period, price, price_text, prices, texts)
-        buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_sw_period:{tariff.id}:{period}')])
+        rows.append((button_text, format_period(period), f'tariff_sw_period:{tariff.id}:{period}'))
 
+    buttons = smallest_last(rows)
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_switch')])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
