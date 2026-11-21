@@ -19,7 +19,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 
-ARG VERSION="v5.0.0" # x-release-please-version
+ARG VERSION="v5.1.0" # x-release-please-version
 ARG BUILD_DATE
 ARG VCS_REF
 
