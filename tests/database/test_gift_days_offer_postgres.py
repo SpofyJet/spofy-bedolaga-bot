@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.database.crud.discount_offer import deactivate_expired_offers
 from app.database.models import Base, DiscountOffer, PromoOfferLog, Subscription, Transaction, User
 from app.services import gift_days_offer as gd
+from app.services.admin_notification_service import AdminNotificationService
 from app.services.subscription_service import SubscriptionService
 from tests.fixtures.postgres_db import postgres_session
 
@@ -258,3 +259,53 @@ async def test_grant_refuses_past_deadline(postgres_database):
     async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
         with pytest.raises(ValueError):
             await gd.grant(db, [1], expires_at=datetime.now(UTC) - timedelta(minutes=1))
+
+
+async def test_purchases_topic_gets_each_gift_once(postgres_database, panel, monkeypatch):
+    now = datetime.now(UTC)
+    calls = []
+    state = {'ok': False}
+
+    async def send(self, db, user, subscription, **kwargs):
+        calls.append(kwargs)
+        return state['ok']
+
+    monkeypatch.setattr(AdminNotificationService, 'is_enabled', property(lambda self: True))
+    monkeypatch.setattr(AdminNotificationService, 'send_gift_days_notification', send)
+    service = gd.GiftDaysService()
+    bot = Bot()
+    service.set_bot(bot)
+    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
+        offer = await _setup(db, now)
+        _pay(db, now, 'Покупка тарифа ⭐️ Стандартный на 180 дней', amount=-78900)
+        await db.commit()
+        await service.run_once(now, _sessions(db))
+        await db.refresh(offer)
+        assert len(calls) == 1 and not offer.extra_data['admin_notified'] and len(bot.sent) == 1
+        assert calls[0]['period_days'] == 180 and calls[0]['bonus_days'] == 90
+        state['ok'] = True
+        await service.run_once(now, _sessions(db))
+        await db.refresh(offer)
+        assert len(calls) == 2 and offer.extra_data['admin_notified'] and len(bot.sent) == 1
+        await service.run_once(now, _sessions(db))
+        assert len(calls) == 2
+
+
+async def test_purchases_topic_message_text(postgres_database, monkeypatch):
+    now = datetime.now(UTC)
+    sent = {}
+
+    async def capture(self, text, reply_markup=None, *, category=None, thread_id=None):
+        sent['text'], sent['category'] = text, category
+        return True
+
+    monkeypatch.setattr(AdminNotificationService, '_send_message', capture)
+    async with postgres_session(postgres_database, list(Base.metadata.sorted_tables)) as db:
+        await _setup(db, now)
+        user, sub = await db.get(User, 1), await db.get(Subscription, 10)
+        ok = await AdminNotificationService(Bot()).send_gift_days_notification(
+            db, user, sub, period_days=90, bonus_days=90, old_end=now, transaction_id=7
+        )
+    assert ok and sent['category'].value == 'purchases'
+    assert 'ПОДАРОК ПО АКЦИИ' in sent['text'] and 'Оплачено 90 дн. + <b>90 дн. в подарок</b>' in sent['text']
+    assert '#7' in sent['text']

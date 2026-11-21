@@ -772,6 +772,42 @@ class AdminNotificationService:
             logger.error('Ошибка отправки уведомления о покупке', error=e)
             return False
 
+    async def send_gift_days_notification(
+        self,
+        db: AsyncSession,
+        user: User,
+        subscription: Subscription,
+        *,
+        period_days: int,
+        bonus_days: int,
+        old_end: datetime,
+        transaction_id: int | None,
+    ) -> bool:
+        tariff_name = await self._get_tariff_name(db, subscription)
+        lines = [
+            '<b>🎁 ПОДАРОК ПО АКЦИИ</b>',
+            '',
+            f'👤 {self._get_user_display(user)} ({self._get_user_identifier_display(user)})',
+        ]
+        if user.username:
+            lines.append(f'📱 {format_username_link(user.username)}')
+        if tariff_name:
+            lines.append(f'🏷️ Тариф: <b>{tariff_name}</b>')
+        lines += [
+            '',
+            f'📅 Оплачено {period_days} дн. + <b>{bonus_days} дн. в подарок</b>',
+            (
+                f'📆 До {format_local_datetime(subscription.end_date, "%d.%m.%Y")}'
+                f' (без подарка до {format_local_datetime(old_end, "%d.%m.%Y")})'
+            ),
+        ]
+        if transaction_id:
+            lines.append(f'🆔 #{transaction_id}')
+        lines += ['', f'<i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M")}</i>']
+        return await self._send_message(
+            '\n'.join(lines), category=NotificationCategory.PURCHASES, reply_markup=admin_user_card_keyboard(user)
+        )
+
     async def send_version_update_notification(self, current_version: str, latest_version, total_updates: int) -> bool:
         """Отправляет уведомление о новых обновлениях."""
         if not self._is_enabled():

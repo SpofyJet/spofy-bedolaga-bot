@@ -262,7 +262,9 @@ class GiftDaysService:
         return [
             offer_id
             for offer_id, data in rows
-            if data and data.get('granted') and not (data.get('panel_synced') and data.get('notified'))
+            if data
+            and data.get('granted')
+            and not (data.get('panel_synced') and data.get('notified') and data.get('admin_notified'))
         ]
 
     @staticmethod
@@ -300,6 +302,7 @@ class GiftDaysService:
             'new_end': subscription.end_date.isoformat(),
             'panel_synced': False,
             'notified': False,
+            'admin_notified': False,
         }
         db.add(
             PromoOfferLog(
@@ -345,9 +348,32 @@ class GiftDaysService:
             elif subscription is not None and await self._notify(user, data['bonus_days'], subscription.end_date):
                 data['notified'] = True
                 notified = 1
+        if data.get('panel_synced') and not data.get('admin_notified') and subscription is not None:
+            data['admin_notified'] = await self._notify_admins(db, offer.user_id, subscription, data)
         offer.extra_data = data
         await db.commit()
         return panel, notified
+
+    async def _notify_admins(self, db, user_id: int, subscription, data: dict) -> bool:
+        from app.services.admin_notification_service import AdminNotificationService
+
+        if self._bot is None:
+            return True
+        service = AdminNotificationService(self._bot)
+        if not service.is_enabled:
+            return True
+        user = await db.get(User, user_id)
+        if user is None:
+            return True
+        return await service.send_gift_days_notification(
+            db,
+            user,
+            subscription,
+            period_days=int(data.get('period_days') or 0),
+            bonus_days=int(data.get('bonus_days') or BONUS_DAYS),
+            old_end=datetime.fromisoformat(data['old_end']),
+            transaction_id=data.get('transaction_id'),
+        )
 
     async def _notify(self, user: User, bonus_days: int, end_date: datetime) -> bool:
         texts = get_texts(user.language)
