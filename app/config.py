@@ -705,6 +705,7 @@ class Settings(BaseSettings):
     # Живое меню: фон перерисовывает последнее rich-меню пользователя, когда меняются
     # трафик (из панели), статус, лимит устройств или баланс. Раз в 15 мин, при нагрузке реже (до 360).
     MAIN_MENU_LIVE_ENABLED: bool = False
+    SUBSCRIPTION_WIDGET_ENABLED: bool = True
     # Пользовательские уведомления rich-сообщением. Действует только при
     # включённом rich-меню: иначе сервер про rich может не знать вовсе.
     USER_NOTIFICATIONS_RICH_ENABLED: bool = True

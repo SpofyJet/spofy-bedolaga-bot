@@ -392,6 +392,7 @@ class BotConfigurationService:
         'ENABLE_LOGO_MODE': 'INTERFACE_BRANDING',
         'LOGO_FILE': 'INTERFACE_BRANDING',
         'HIDE_SUBSCRIPTION_LINK': 'INTERFACE_SUBSCRIPTION',
+        'SUBSCRIPTION_WIDGET_ENABLED': 'INTERFACE_SUBSCRIPTION',
         'MAIN_MENU_MODE': 'INTERFACE',
         'MAIN_MENU_RICH_ENABLED': 'INTERFACE',
         'MAIN_MENU_RICH_EFFECT_ID': 'INTERFACE',
@@ -664,6 +665,18 @@ class BotConfigurationService:
             'example': '5',
             'warning': 'Подписки старше 30 дней после истечения не рассматриваются.',
             'dependencies': 'NOTIFICATION_EXPIRED_WAVE3_ENABLED',
+        },
+        'SUBSCRIPTION_WIDGET_ENABLED': {
+            'description': (
+                '«Моя подписка» карточкой-виджетом (Bot API 10.4), как карточка на главной кабинета: '
+                'состояние, срок, устройства, трафик, тариф, баланс. Цифры обновляются, когда человек видит карточку.'
+            ),
+            'format': 'Булево значение.',
+            'example': 'true',
+            'warning': (
+                'Старые приложения Telegram покажут «сообщение не поддерживается» и подпись под карточкой. '
+                'Если сервер не знает sendWidget, бот сам вернётся к обычному экрану до рестарта.'
+            ),
         },
         'MAIN_MENU_RICH_ENABLED': {
             'description': (

@@ -23,9 +23,16 @@ from app.keyboards.inline import (
 from app.localization.texts import Texts, get_texts
 from app.middlewares.banner_variant import show_banner_state
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.referral_balance import get_referral_balance
 from app.services.remnawave_service import RemnaWaveConfigurationError
 from app.services.subscription_auto_purchase_service import ADDON_CART_MODES
 from app.services.subscription_service import SubscriptionService
+from app.services.subscription_widget import (
+    card_data,
+    handle_subscription_widget_query,
+    try_send_subscription_widget,
+    widget_enabled,
+)
 from app.services.trial_activation_service import revert_trial_activation
 from app.services.user_cart_service import user_cart_service
 from app.utils.formatters import format_human_datetime
@@ -432,8 +439,9 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         device_limit=device_limit_display,
     )
 
+    extras: list[str] = []
     if show_devices and devices_list:
-        message += '\n\n' + texts.t(
+        block = texts.t(
             'SUBSCRIPTION_CONNECTED_DEVICES_TITLE',
             '<blockquote>📱 <b>Подключенные устройства:</b>\n',
         )
@@ -444,8 +452,8 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
             if len(device_info) > 35:
                 device_info = device_info[:32] + '...'
-            message += f'• {device_info}\n'
-        message += texts.t('SUBSCRIPTION_CONNECTED_DEVICES_FOOTER', '</blockquote>')
+            block += f'• {html.escape(device_info)}\n'
+        extras.append(block + texts.t('SUBSCRIPTION_CONNECTED_DEVICES_FOOTER', '</blockquote>'))
 
     # Отображаем докупленный трафик
     if subscription.traffic_limit_gb > 0:  # Только для лимитированных тарифов
@@ -464,7 +472,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         purchases = purchases_result.scalars().all()
 
         if purchases:
-            message += '\n\n' + texts.t(
+            block = texts.t(
                 'SUBSCRIPTION_PURCHASED_TRAFFIC_TITLE',
                 '<blockquote>📦 <b>Докупленный трафик:</b>\n',
             )
@@ -498,10 +506,10 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 else:
                     time_text = f'осталось {days_remaining} дней'
 
-                message += f'• {purchase.traffic_gb} ГБ — {time_text}\n'
-                message += f'  {bar} {progress_percent:.0f}% | до {expire_date}\n'
+                block += f'• {purchase.traffic_gb} ГБ — {time_text}\n'
+                block += f'  {bar} {progress_percent:.0f}% | до {expire_date}\n'
 
-            message += texts.t('SUBSCRIPTION_PURCHASED_TRAFFIC_FOOTER', '</blockquote>')
+            extras.append(block + texts.t('SUBSCRIPTION_PURCHASED_TRAFFIC_FOOTER', '</blockquote>'))
 
     subscription_link = get_display_subscription_link(subscription)
     hide_subscription_link = settings.should_hide_subscription_link()
@@ -514,26 +522,48 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         else:
             subscription_link_display = f'<code>{subscription_link}</code>'
 
-        message += '\n\n' + texts.t(
-            'SUBSCRIPTION_CONNECT_LINK_SECTION',
-            '🔗 <b>Ссылка для подключения:</b>\n{subscription_url}',
-        ).format(subscription_url=subscription_link_display)
-        message += '\n\n' + texts.t(
-            'SUBSCRIPTION_CONNECT_LINK_PROMPT',
-            '📱 Скопируйте ссылку и добавьте в ваше VPN приложение',
+        extras.append(
+            texts.t(
+                'SUBSCRIPTION_CONNECT_LINK_SECTION',
+                '🔗 <b>Ссылка для подключения:</b>\n{subscription_url}',
+            ).format(subscription_url=subscription_link_display)
+        )
+        extras.append(
+            texts.t(
+                'SUBSCRIPTION_CONNECT_LINK_PROMPT',
+                '📱 Скопируйте ссылку и добавьте в ваше VPN приложение',
+            )
         )
 
-    await callback.message.edit_text(
-        message,
-        reply_markup=get_subscription_keyboard(
-            db_user.language,
-            has_subscription=True,
-            is_trial=subscription.is_trial,
-            subscription=subscription,
-            gift_enabled=gift_enabled,
-        ),
-        parse_mode='HTML',
+    keyboard = get_subscription_keyboard(
+        db_user.language,
+        has_subscription=True,
+        is_trial=subscription.is_trial,
+        subscription=subscription,
+        gift_enabled=gift_enabled,
     )
+    if not is_daily_tariff and actual_status != 'unknown' and widget_enabled():
+        referral = await get_referral_balance(db, db_user)
+        widget = card_data(
+            db_user,
+            subscription,
+            tariff=tariff,
+            devices=devices_count if show_devices and devices_used_str not in ('', '—') else None,
+            from_friends_kopeks=referral.available_kopeks,
+            now=current_time,
+        )
+        if await try_send_subscription_widget(
+            callback,
+            language=db_user.language,
+            data=widget,
+            caption_parts=[autopay_line, *extras],
+            keyboard=keyboard,
+        ):
+            await callback.answer()
+            return
+
+    message += ''.join(f'\n\n{extra}' for extra in extras)
+    await callback.message.edit_text(message, reply_markup=keyboard, parse_mode='HTML')
     await callback.answer()
 
 
@@ -1483,6 +1513,7 @@ def register_handlers(dp: Dispatcher):
     update_traffic_prices()
 
     dp.callback_query.register(show_subscription_info, F.data == 'menu_subscription')
+    dp.widget_query.register(handle_subscription_widget_query)
 
     # Subscription revoke (reissue)
     from app.handlers.subscription.revoke import (

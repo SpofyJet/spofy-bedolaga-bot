@@ -1,0 +1,45 @@
+<style>#c{font:15px/1.35 system-ui,sans-serif;color:var(--tg-theme-text-color,#000);padding:14px 14px calc(4px + var(--tg-content-safe-area-inset-bottom,0px))}.h{display:flex;align-items:center;gap:12px;padding-bottom:14px}.h svg{width:44px;height:44px;flex:none}.t{font-size:20px;font-weight:700;line-height:1.15}.s,.n,.k,.x,.v i{color:var(--tg-theme-hint-color,#8e8e93)}.s{font-size:14px;margin-top:3px}.n{font-size:14px;padding-bottom:12px}.r{border-top:1px solid var(--sep);padding:11px 0}.k{font-size:13px;font-weight:500}.v{font-size:16px;font-weight:600;margin-top:2px}.v i{font-style:normal;font-size:14px;font-weight:500;margin-left:6px;white-space:nowrap}.v i.w{color:var(--warn)}.b{height:4px;border-radius:2px;background:var(--sep);margin-top:8px}.b b{display:block;height:4px;border-radius:2px;background:var(--acc)}.b b.w{background:var(--warn)}.x{font-size:13px;margin-top:6px}</style>
+<div id="c"></div>
+<script>
+var W=window.TelegramWidget,D={},A=-6e4,L=__L__,
+BODY='M822 4C843 -1 865 -1 886 4L1017 39C1028 42 1035 52 1035 63V178C1035 218 1016 255 984 279L868 363C860 369 848 369 840 363L724 279C692 255 673 218 673 178V63C673 52 680 42 691 39L822 4Z',
+HELM='M961 143C916 30 799 69 746 103C759 112 787 131 797 138C827 122 851 125 862 129C829 128 807 138 800 143L803 207L828 234L838 197L857 188L844 231L869 265L878 301L914 216L894 164L933 201C935 200 941 198 952 197C923 180 915 154 914 143L955 177C956 171 959 155 961 143Z',
+EM;
+try{EM=new RegExp('(?![©®™])\\p{Extended_Pictographic}|[\\u{1F1E6}-\\u{1F1FF}\\u{1F3FB}-\\u{1F3FF}\\u{E0020}-\\u{E007F}]|\\u{FE0E}|\\u{FE0F}|\\u{200D}|\\u{20E3}','gu')}catch(e){}
+function J(s){try{var o=JSON.parse(s);return o&&typeof o=='object'?o:null}catch(e){return null}}
+function E(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function F(k,o){var s=L[k];for(var x in o)s=s.split('{'+x+'}').join(o[x]);return s}
+function N(n,a){var i;if(a.length<3)i=n==1?0:1;else{var b=n%10,c=n%100;i=b==1&&c!=11?0:b>1&&b<5&&(c<12||c>14)?1:2}return a[i].replace('{n}',n)}
+function G(n){return String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g,' ')}
+function R(v,d){var s=v.toFixed(d);return d?s.replace(/\.?0+$/,'').replace('.',L.dp):s}
+function TR(g){if(Math.round(g)>=1000)return R(g/1000,1)+' '+L.u[2];if(g>=1)return R(g,g>=10?0:1)+' '+L.u[1];return R(g*1024,0)+' '+L.u[0]}
+function PR(u,l){var a=TR(u),b=TR(l),x=a.split(' ').pop();return{u:x==b.split(' ').pop()?a.slice(0,-x.length-1):a,l:b}}
+function DT(e,n){var m=L.m.split(' ')[e.getMonth()],y=e.getFullYear()!=n.getFullYear();return L.ru?e.getDate()+' '+m+(y?' '+e.getFullYear()+' г.':''):m+' '+e.getDate()+(y?', '+e.getFullYear():'')}
+function CD(e,n){var f=function(d){return new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime()};return Math.round((f(e)-f(n))/864e5)}
+function PN(s){if(!s||!EM)return s;var p=s.replace(EM,' ').replace(/\s+/g,' ').trim();return p||s.trim()}
+function RGBA(h,a){var m=/^#?([0-9a-f]{6})$/i.exec(h||'');var v=m?parseInt(m[1],16):9474192;return'rgba('+(v>>16)+','+(v>>8&255)+','+(v&255)+','+a+')'}
+function P(){var d=W&&W.colorScheme=='dark',h=W&&W.themeParams&&W.themeParams.hint_color;return{a:d?'#60a5fa':'#1e40af',w:d?'#fbbf24':'#92400e',o:d?'#4ade80':'#166534',f:d?'#f87171':'#991b1b',h:h||'#8e8e93',s:RGBA(h,.25)}}
+function SH(t,p){var v='<svg viewBox="663 -10 382 387">',B='<path d="'+BODY+'"',H='<path d="'+HELM+'"';if(t=='ok')return v+'<defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="'+p.o+'"/><stop offset="1" stop-color="#16a34a"/></linearGradient></defs>'+B+' fill="url(#g)"/>'+H+' fill="#fff"/></svg>';var l=t=='warn'?'#f59e0b':t=='off'?'#ef4444':p.h,m=t=='warn'?p.w:t=='off'?p.f:p.h;return v+B+' fill="'+l+'" fill-opacity=".12" stroke="'+l+'" stroke-opacity=".7" stroke-width="14"/>'+H+' fill="'+m+'" fill-opacity=".9"/></svg>'}
+function ROW(k,v,h,w,x){return'<div class="r"><div class="k">'+E(k)+'</div><div class="v">'+E(v)+(h?'<i'+(w?' class="w"':'')+'>'+E(h)+'</i>':'')+'</div>'+(x||'')+'</div>'}
+function draw(){var p=P(),n=new Date(),e=D.e?new Date(D.e*1e3):null,st=D.s||'n',tr=!!D.tr,lt=!!D.lt,li=!!D.li;
+if(st=='a'&&e&&e<=n&&!lt&&!li)st='x';
+var d=e?DT(e,n):'',un=e?CD(e,n):null,dl=e?Math.max(0,Math.ceil((e-n)/864e5)):null,dk=D.dc!=null,
+es=st=='a'&&!tr&&!lt&&!li&&dl!=null&&dl<=3,tnd=st=='a'&&tr&&!li&&D.dc===0,tone,ti,ca='',no='';
+if(st=='n'){tone='idle';ti=L.none}
+else if(st=='x'){tone='off';ti=L.off;if(tr){ca=d?F('te',{d:d}):'';no=L.ten}else{ca=d?F(un===null||un<=0?'pe':'pu',{d:d}):'';no=L.xn}}
+else if(li){tone='warn';ti=L.lim;ca=d?F(tr?'tu':'pu',{d:d}):''}
+else if(tr){tone='ok';if(tnd){ti=L.tr;ca=d?F('tn',{d:d}):''}else{ti=L.on;ca=d?F('tu',{d:d}):''}}
+else if(es){tone='warn';ti=un!==null&&un<=0?L.today:un===1?L.tom:F('ends',{l:N(un===null?dl:un,L.days)});ca=d?F('pu',{d:d}):'';no=L.rn}
+else{tone='ok';ti=L.on;ca=lt?L.forever:d&&dl!=null?F('ul',{d:d,l:N(dl,L.days)}):''}
+var a=st=='a',h='<div class="h">'+SH(tone,p)+'<div><div class="t">'+E(ti)+'</div>'+(ca?'<div class="s">'+E(ca)+'</div>':'')+'</div></div>'+(no?'<div class="n">'+E(no)+'</div>':'');
+if(a&&dk&&!tnd){var ul=!(D.dl>0),full=!ul&&D.dc>=D.dl;h+=ROW(L.dev,ul?D.dc:F('of',{u:D.dc,l:D.dl}),full?L.full:L.con,full)}
+if(a&&D.tl>0){var pc=Math.min(100,Math.max(0,(D.tu||0)/D.tl*100)),tw=D.bs||li||pc>=85,pr=PR(D.tu||0,D.tl);h+=ROW(D.bq?L.btrf:L.trf,F('of',pr),D.bs?L.boff:'',1,'<div class="b"><b'+(tw?' class="w"':'')+' style="width:'+pc.toFixed(1)+'%"></b></div>'+(D.bs?'<div class="x">'+E(L.bofh)+'</div>':''))}
+if(a&&D.bx)h+=ROW(L.byp,L.bm,'',0,'<div class="x">'+E(L.bh)+'</div>');
+if(a&&!tr&&!es)h+=ROW(L.sub,D.nt?L.nt:PN(D.n)||L.sub);
+if(D.b!=null)h+=ROW(L.bal,G(D.b)+' ₽',D.f>=1?F('ff',{a:G(D.f)}):'');
+document.getElementById('c').innerHTML='<div style="--acc:'+p.a+';--warn:'+p.w+';--sep:'+p.s+'">'+h+'</div>'}
+function load(){var o=J(W&&W.chatData);if(o)D=o}
+function ask(){var t=Date.now();if(!W||!W.request||t-A<6e4)return;A=t;try{W.request('r').then(function(r){var o=r&&J(r.result);if(o&&o.v==1){if(o.dc==null&&D.dc!=null)o.dc=D.dc;D=o;draw()}},function(){})}catch(e){}}
+load();draw();
+if(W){W.onEvent('themeChanged',draw);W.onEvent('chatDataChanged',function(){load();draw()});W.onEvent('activated',function(){draw();ask()});ask();if(W.ready)W.ready()}
+</script>

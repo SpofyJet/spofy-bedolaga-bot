@@ -1143,6 +1143,9 @@
 - `app/services/rbac_bootstrap_service.py` — Python-модуль
   Классы: `AdminEnvCheck` (2 методов)
   Функции: `normalize_admin_email` — Канонизация email для сравнения с ADMIN_EMAILS: NFKC + lower + strip., `is_user_admin_by_env` — Проверяет, является ли юзер админом по ENV-конфигу (ADMIN_IDS/ADMIN_EMAILS)., `is_protected_from_blocking` — An account named in ADMIN_IDS/ADMIN_EMAILS must never end up BLOCKED., `bootstrap_superadmins` — Ensure every user from ADMIN_IDS / ADMIN_EMAILS has the Superadmin role., `ensure_superadmin_role_on_login` — Idempotent Superadmin assign for ADMIN_IDS / ADMIN_EMAILS users at login time.
+- `app/services/referral_balance.py` — Python-модуль
+  Классы: `ReferralBalance`
+  Функции: `get_referral_balance`
 - `app/services/referral_reward_service.py` — Python-модуль
   Классы: `RewardEvent`, `LevelConfig` (3 методов), `RewardComponent` (1 методов), `ReferralRewardLevelService` (4 методов), `DaysGrant`, `GrantOutcome` (1 методов), `LevelView`, `TierProgress`
   Функции: `resolve_referrer_chain` — Цепочка пригласивших снизу вверх: [(1, прямой), (2, его пригласивший), ...]., `count_level_payments` — Сколько раз этот уровень уже платил за эту пару., `count_referrals` — Сколько рефералов у пользователя., `is_level_unlocked` — Открыт ли уровень для этого партнёра., `select_tier_config` — Ранг партнёра: единственный уровень, который к нему применяется., `resolve_reward_preference` — Что получатель предпочитает, когда правило платит и деньгами, и днями., `build_reward_components` — Что и кому причитается. Ничего не начисляет., `grant_reward_days` — Выдать дни подписки. Возвращает исход, а не бросает., `award_referral_rewards` — Посчитать и выдать награды всей цепочке. Возвращает фактически выданное., `build_level_views` — Ступени программы, уровень смотрящего и его личная ставка., `describe_reward_choice_sides` — Что человек получит, выбрав деньги, и что — выбрав дни., `describe_active_levels` — Человекочитаемое описание активных ступеней., `describe_referee_bonus` — Что получит сам приглашённый. ``None`` — ничего не настроено., `resolve_tier_progress` — Ранг партнёра и ближайшая недостигнутая ступень. ``None`` вне режима рангов., `format_tier_progress` — Прогресс по рангам двумя строками: где сейчас и сколько до следующего., `format_reward_total` — Выплаченное одной строкой: деньги, дни или и то и другое., `legacy_percent_for_import` — Процент для переносимого уровня и то, о чём нужно предупредить.
@@ -1215,6 +1218,11 @@
 - `app/services/subscription_service.py` — Python-модуль
   Классы: `SubscriptionReissueResult`, `SubscriptionService` (32 методов)
   Функции: `reload_after_panel_failure` — Перечитать объекты, которые откат сессии пометил протухшими., `reset_subscription_with_panel` — Обнулить подписку «как будто не оформляли» и снять доступ в панели RemnaWave,
+- `app/services/subscription_widget.html` — файл
+- `app/services/subscription_widget.json` — файл
+- `app/services/subscription_widget.py` — Python-модуль
+  Классы: нет
+  Функции: `widget_enabled`, `card_html`, `card_state`, `card_data`, `encode_card_data`, `try_send_subscription_widget`, `handle_subscription_widget_query`
 - `app/services/support_settings_service.py` — Python-модуль
   Классы: `SupportSettingsService` (17 методов)
   Функции: нет
@@ -2213,7 +2221,7 @@
   Функции: `test_classic_purchase_persists_expiry_balance_and_conversion`
 - `tests/test_compose_postgres_service.py` — Python-модуль
   Классы: нет
-  Функции: `test_postgres_18_with_new_volume_at_the_18_mount_point`, `test_guard_is_the_entrypoint_and_sees_the_old_volume_read_only`, `test_compose_files_agree_on_the_postgres_service`, `test_initdb_args_and_healthcheck_preserved`, `guard_env` — Окружение как в контейнере: PGDATA нового кластера, старый том, подставной entrypoint., `test_guard_starts_a_fresh_install`, `test_guard_refuses_empty_18_while_15_data_exists`, `test_guard_starts_after_migration_even_if_old_volume_remains`
+  Функции: `test_postgres_19_with_new_volume_at_the_new_mount_point`, `test_guard_is_the_entrypoint_and_sees_the_old_volumes_read_only`, `test_compose_files_agree_on_the_postgres_service`, `test_initdb_args_and_healthcheck_preserved`, `guard_env` — Окружение как в контейнере: PGDATA нового кластера, старые тома, подставной entrypoint., `test_guard_starts_a_fresh_install`, `test_guard_refuses_empty_19_while_15_data_exists`, `test_guard_refuses_empty_19_while_18_data_exists_and_names_the_newest`, `test_guard_starts_after_migration_even_if_old_volumes_remain`
 - `tests/test_config_languages.py` — Python-модуль
   Классы: нет
   Функции: `test_available_languages_default_is_russian_and_english`, `test_available_languages_normalizes_and_deduplicates`
@@ -4062,6 +4070,9 @@
 - `tests/services/test_subscription_service_sync.py` — Python-модуль
   Классы: нет
   Функции: `test_sync_picks_create_or_update_by_panel_id`, `test_missing_user_falls_to_create_which_reports_it` — Пользователя нет в базе: не падаем, create сам залогирует и вернёт None.
+- `tests/services/test_subscription_widget.py` — Python-модуль
+  Классы: нет
+  Функции: `test_card_html_fits_telegram_limits`, `test_unknown_language_gets_russian_card`, `test_active_paid_card`, `test_card_states`, `test_unknown_status_has_no_card`, `test_unknown_devices_are_left_out`, `test_trial_and_lifetime_never_say_bypass_missing`, `test_bypass_missing_needs_configured_squad`, `test_bypass_quota_flag`, `test_long_tariff_name_is_cut_to_fit`, `test_data_that_cannot_fit_raises`, `test_widget_is_sent_before_old_screen_is_deleted`, `test_empty_caption_is_not_sent`, `test_failed_send_keeps_old_screen`, `test_network_error_falls_back_without_disabling`, `test_server_without_widgets_turns_card_off_until_restart`, `test_failed_delete_still_counts_as_shown`, `test_only_private_chats`, `test_switched_off_or_no_data`, `test_caption_over_limit_keeps_classic_screen`, `test_query_answers_fresh_data`, `test_query_from_elsewhere_gets_empty_answer`, `test_query_when_switched_off`, `test_query_survives_database_failure`, `test_query_answer_error_is_swallowed`, `test_card_reads_like_cabinet`, `test_card_in_english_and_dark`, `test_broken_chat_data_shows_empty_card`, `test_tariff_name_html_is_escaped`
 - `tests/services/test_support_settings_in_db.py` — Python-модуль
   Классы: нет
   Функции: `isolated_settings`, `test_keys_are_bot_settings_in_the_support_category`, `test_getters_read_live_settings`, `test_ticket_notification_flags_respect_global_switches`, `test_support_info_text_per_language_with_locale_fallback`, `test_legacy_file_is_imported_once_and_never_overrides_the_db`, `test_broken_legacy_file_is_left_to_a_human`

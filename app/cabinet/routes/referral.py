@@ -17,9 +17,8 @@ from app.database.models import (
     Subscription,
     SubscriptionStatus,
     User,
-    WithdrawalRequest,
-    WithdrawalRequestStatus,
 )
+from app.services.referral_balance import get_referral_balance
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user, get_optional_cabinet_user
 from ..schemas.referral import (
@@ -71,42 +70,14 @@ async def get_referral_info(
     active_result = await db.execute(active_query)
     active_referrals = active_result.scalar() or 0
 
-    # Get total earnings.
-    #
-    # Дни считаются отдельной суммой и НЕ входят в расчёт доступного к выводу
-    # баланса ниже: дни нельзя вывести деньгами, и подмешать их в entitlement
-    # означало бы разрешить вывод сумм, которых пользователь не зарабатывал.
-    earnings_query = select(
-        func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
-        func.coalesce(func.sum(ReferralEarning.days_granted), 0),
-    ).where(ReferralEarning.user_id == user.id, not_referee_directed())
-    earnings_result = await db.execute(earnings_query)
-    total_earnings, total_earning_days = earnings_result.one()
+    balance = await get_referral_balance(db, user)
+    total_earnings = balance.earned_kopeks
+    withdrawn = balance.withdrawn_kopeks
+    available_balance = balance.available_kopeks
 
-    # Get user's commission percent
     commission_percent = user.referral_commission_percent
     if commission_percent is None:
         commission_percent = settings.REFERRAL_COMMISSION_PERCENT
-
-    # Get withdrawn amount (approved + completed withdrawal requests)
-    withdrawn_query = select(func.coalesce(func.sum(WithdrawalRequest.amount_kopeks), 0)).where(
-        WithdrawalRequest.user_id == user.id,
-        WithdrawalRequest.status.in_([WithdrawalRequestStatus.APPROVED.value, WithdrawalRequestStatus.COMPLETED.value]),
-    )
-    withdrawn_result = await db.execute(withdrawn_query)
-    withdrawn = withdrawn_result.scalar() or 0
-
-    # Get pending withdrawal amount
-    pending_query = select(func.coalesce(func.sum(WithdrawalRequest.amount_kopeks), 0)).where(
-        WithdrawalRequest.user_id == user.id,
-        WithdrawalRequest.status == WithdrawalRequestStatus.PENDING.value,
-    )
-    pending_result = await db.execute(pending_query)
-    pending = pending_result.scalar() or 0
-
-    # Доступный баланс: мин(кошелёк, заработано - выведено - в ожидании)
-    referral_entitlement = max(0, total_earnings - withdrawn - pending)
-    available_balance = min(user.balance_kopeks, referral_entitlement)
 
     # Build referral links
     referral_link = (settings.get_cabinet_referral_link(user.referral_code) or '') if user.referral_code else ''
@@ -121,7 +92,7 @@ async def get_referral_info(
         active_referrals=active_referrals,
         total_earnings_kopeks=total_earnings,
         total_earnings_rubles=total_earnings / 100,
-        total_earnings_days=int(total_earning_days or 0),
+        total_earnings_days=balance.earned_days,
         commission_percent=commission_percent,
         available_balance_kopeks=available_balance,
         available_balance_rubles=available_balance / 100,
