@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Перенос базы бота с PostgreSQL 15 на PostgreSQL 18 без потери данных.
+# Перенос базы бота со старого PostgreSQL (18 или 15) на PostgreSQL 19 без потери данных.
 #
 #   make pg-upgrade            (или: bash scripts/pg-upgrade.sh)
 #
@@ -8,12 +8,12 @@
 #   2. поднимает временный PostgreSQL старой версии на СТАРОМ томе, снимает
 #      полный дамп в backups/postgres-upgrade-<время>/ и проверяет, что он читается;
 #   3. считает строки во всех таблицах и значения всех последовательностей;
-#   4. поднимает временный PostgreSQL 18 на НОВОМ томе и восстанавливает дамп;
+#   4. поднимает временный PostgreSQL 19 на НОВОМ томе и восстанавливает дамп;
 #   5. сверяет строки и последовательности один в один — при любом расхождении
 #      новый том удаляется, а всё остаётся как было;
 #   6. запускает базу через docker compose, ещё раз сверяет данные и запускает бота.
 #
-# Старый том (postgres_data) не удаляется и не очищается: это откат одной
+# Старый том (postgres18_data или postgres_data) не удаляется и не очищается: это откат одной
 # командой. Удалить его можно вручную, когда убедитесь, что всё работает.
 # Скрипт можно запускать повторно: если перенос уже сделан, он ничего не меняет.
 #
@@ -23,12 +23,12 @@
 #   -h|--help  справка
 set -Eeuo pipefail
 
-TARGET_MAJOR=18
-TARGET_IMAGE="postgres:${TARGET_MAJOR}-alpine"
+TARGET_MAJOR=19
 DB_SERVICE=postgres
 APP_SERVICE=bot
-OLD_VOLUME_KEY=postgres_data
-NEW_VOLUME_KEY=postgres18_data
+NEW_VOLUME_KEY="postgres${TARGET_MAJOR}_data"
+# Тома прошлых версий, от новой к старой: переносится самая новая база.
+OLD_VOLUME_KEYS='postgres18_data postgres_data'
 READY_TIMEOUT=300
 
 ASSUME_YES=0
@@ -85,8 +85,11 @@ COMPOSE_CONFIG="$(docker compose config 2>/dev/null)" || die 'docker compose con
 PROJECT="$(printf '%s\n' "$COMPOSE_CONFIG" | sed -n 's/^name:[[:space:]]*//p' | head -n1 | tr -d "\"'")"
 [ -n "$PROJECT" ] || die 'Не удалось определить имя проекта docker compose.'
 
-printf '%s\n' "$COMPOSE_CONFIG" | grep -q "image: ${TARGET_IMAGE}" ||
-	die "В docker-compose.yml база не на ${TARGET_IMAGE}. Сначала обновите бота (git pull), потом запустите скрипт."
+# Образ ровно тот, что в compose: Spofy закрепляет его по дайджесту (postgres:19.0-alpine@sha256:…).
+TARGET_IMAGE="$(printf '%s\n' "$COMPOSE_CONFIG" |
+	sed -n "s/^[[:space:]]*image:[[:space:]]*\(postgres:${TARGET_MAJOR}[.-][^[:space:]]*\)[[:space:]]*$/\\1/p" | head -n1)"
+[ -n "$TARGET_IMAGE" ] ||
+	die "В docker-compose.yml база не на PostgreSQL ${TARGET_MAJOR}. Сначала обновите бота (git pull), потом запустите скрипт."
 
 # Том проекта по метке compose; если меток нет (том создан вручную) — по имени по умолчанию.
 volume_for() {
@@ -127,7 +130,7 @@ cleanup() {
 		else
 			printf '\n    Данные в старом томе не тронуты. Бот остановлен.\n' >&2
 			[ -n "$BACKUP_DIR" ] && printf '    Резервная копия (если успела сняться): %s\n' "$BACKUP_DIR" >&2
-			printf '    Вернуться на PostgreSQL 15 без переноса: откатите docker-compose.yml на прошлую\n' >&2
+			printf '    Вернуться на PostgreSQL %s без переноса: откатите docker-compose.yml на прошлую\n' "$OLD_MAJOR" >&2
 			printf '    версию бота и выполните «docker compose up -d».\n' >&2
 		fi
 	fi
@@ -140,15 +143,34 @@ log "Проект docker compose: ${PROJECT}"
 
 docker pull -q "$TARGET_IMAGE" >/dev/null || die "Не удалось скачать ${TARGET_IMAGE}."
 
-OLD_VOLUME="$(volume_for "$OLD_VOLUME_KEY")"
-if [ -z "$OLD_VOLUME" ]; then
-	info "Старого тома ${OLD_VOLUME_KEY} нет — переносить нечего (новая установка)."
-	exit 0
-fi
+# Версия кластера в томе и где он лежит: до PostgreSQL 18 — в корне тома
+# (монтировать в /var/lib/postgresql/data), с 18 — в <версия>/docker (монтировать в /var/lib/postgresql).
+legacy_cluster() {
+	in_target_image -v "$1:/old:ro" --entrypoint sh "$TARGET_IMAGE" -c '
+		for f in /old/*/docker/PG_VERSION; do
+			[ -s "$f" ] && { printf "%s /var/lib/postgresql\n" "$(cat "$f")"; exit 0; }
+		done
+		[ -s /old/PG_VERSION ] && printf "%s /var/lib/postgresql/data\n" "$(cat /old/PG_VERSION)"
+		exit 0' 2>/dev/null || true
+}
 
-OLD_MAJOR="$(in_target_image -v "${OLD_VOLUME}:/old:ro" --entrypoint cat "$TARGET_IMAGE" /old/PG_VERSION 2>/dev/null | tr -d '[:space:]' || true)"
-if [ -z "$OLD_MAJOR" ]; then
-	info "В томе ${OLD_VOLUME} нет базы — переносить нечего."
+OLD_VOLUME=''
+OLD_MAJOR=''
+OLD_MOUNT=''
+for key in $OLD_VOLUME_KEYS; do
+	volume="$(volume_for "$key")"
+	[ -n "$volume" ] || continue
+	major=''
+	mount=''
+	read -r major mount <<<"$(legacy_cluster "$volume")" || true
+	[ -n "$major" ] || continue
+	OLD_VOLUME="$volume"
+	OLD_MAJOR="$major"
+	OLD_MOUNT="$mount"
+	break
+done
+if [ -z "$OLD_VOLUME" ]; then
+	info "Базы прошлой версии нет ни в одном из томов (${OLD_VOLUME_KEYS}) — переносить нечего (новая установка)."
 	exit 0
 fi
 case "$OLD_MAJOR" in
@@ -163,7 +185,7 @@ if [ -n "$NEW_VOLUME" ]; then
 		info "Запустить бота: docker compose up -d"
 		exit 0
 	fi
-	# Docker копирует в новый том пустой каталог 18/docker из образа — это не данные.
+	# Docker копирует в новый том пустой каталог <версия>/docker из образа — это не данные.
 	if [ -n "$(in_target_image -v "${NEW_VOLUME}:/new:ro" --entrypoint sh "$TARGET_IMAGE" -c 'find /new -type f | head -n1')" ]; then
 		die "Том ${NEW_VOLUME} не пустой, но базы PostgreSQL ${TARGET_MAJOR} в нём нет. Разберитесь вручную: скрипт не перезаписывает данные."
 	fi
@@ -286,7 +308,7 @@ log "Поднимаю временный PostgreSQL ${OLD_MAJOR} на старо
 docker pull -q "postgres:${OLD_MAJOR}-alpine" >/dev/null || die "Не удалось скачать postgres:${OLD_MAJOR}-alpine."
 docker rm -f "$SRC" >/dev/null 2>&1 || true
 docker run -d --name "$SRC" --network none \
-	-v "${OLD_VOLUME}:/var/lib/postgresql/data" \
+	-v "${OLD_VOLUME}:${OLD_MOUNT}" \
 	-e POSTGRES_PASSWORD \
 	"postgres:${OLD_MAJOR}-alpine" >/dev/null
 wait_ready "$SRC" 0
@@ -334,7 +356,7 @@ done <<<"$DATABASES"
 docker stop -t 120 "$SRC" >/dev/null
 docker rm "$SRC" >/dev/null
 
-# ---------------------------------------------------------------- 3. восстановление в 18
+# ---------------------------------------------------------------- 3. восстановление в новую версию
 
 log "Поднимаю временный PostgreSQL ${TARGET_MAJOR} на новом томе"
 docker rm -f "$DST" >/dev/null 2>&1 || true

@@ -35,18 +35,18 @@ FAKE_DOCKER = r"""#!/usr/bin/env bash
 echo "$*" >> "$FAKE_DOCKER_LOG"
 case "$*" in
   'compose version') exit 0 ;;
-  'compose config') printf 'name: testproj\nservices:\n  postgres:\n    image: postgres:18-alpine\n'; exit 0 ;;
+  'compose config') printf 'name: testproj\nservices:\n  postgres:\n    image: postgres:19.0-alpine@sha256:0123\n'; exit 0 ;;
   'compose stop'*) exit 0 ;;
   'compose run'*)
     stty -icrnl </dev/tty 2>/dev/null || true
     printf 'POSTGRES_USER=postgres\nPOSTGRES_PASSWORD=secret\nPOSTGRES_DB=remnawave_bot\nPOSTGRES_INITDB_ARGS=\n'
     exit 0 ;;
   'pull'*) exit 0 ;;
-  'volume ls'*) case "$*" in *postgres18_data*) echo testproj_postgres18_data ;; *) echo testproj_postgres_data ;; esac; exit 0 ;;
+  'volume ls'*) case "$*" in *postgres19_data*) echo testproj_postgres19_data ;; *postgres18_data*) echo testproj_postgres18_data ;; *) echo testproj_postgres_data ;; esac; exit 0 ;;
   'volume inspect'*) exit 0 ;;
   'info'*) exit 0 ;;
   'ps'*) exit 0 ;;
-  *'--entrypoint cat'*) echo 15; exit 0 ;;
+  *'/old/*/docker/PG_VERSION'*) echo '18 /var/lib/postgresql'; exit 0 ;;
   *'test -s /new/'*) exit 1 ;;
   *'find /new'*) exit 0 ;;
   *'--entrypoint du'*) printf '2048\t/old\n'; exit 0 ;;

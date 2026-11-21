@@ -24,16 +24,16 @@ ARG BUILD_DATE
 ARG VCS_REF
 
 COPY --from=builder /app/.venv /app/.venv
-# /usr/lib/postgresql/18/bin — pg_dump и psql напрямую, минуя perl-обёртку pg_wrapper (см. ниже).
-ENV PATH="/app/.venv/bin:/usr/lib/postgresql/18/bin:$PATH"
+# /usr/lib/postgresql/19/bin — pg_dump и psql напрямую, минуя perl-обёртку pg_wrapper (см. ниже).
+ENV PATH="/app/.venv/bin:/usr/lib/postgresql/19/bin:$PATH"
 
 # База — плавающий тег python:3.15-slim, и между её пересборками Debian успевает
 # выпустить исправления системных пакетов (util-linux, zlib, PCRE2 в отчётах
 # Trivy). Ставим их на этапе сборки: иначе образ уезжает с дырами, которые в
 # апстриме уже закрыты, а сама база подтянется неизвестно когда.
 #
-# Клиент PostgreSQL той же major-версии, что сервер в compose (postgres:18), из
-# репозитория PGDG (в Debian trixie только 17-й, а pg_dump 17 базу 18 не снимает).
+# Клиент PostgreSQL той же major-версии, что сервер в compose (postgres:19), из
+# репозитория PGDG (в Debian trixie только 17-й, а pg_dump старше сервера базу не снимает).
 # С ним автобэкап снимает базу pg_dump-ом: все таблицы, схему и alembic_version,
 # согласованным снимком, отдельным процессом. Без клиента BackupService уходит в
 # ORM-выгрузку JSON: держит всю базу в памяти бота (3,4 ГБ из 7 на проде; 15.11.2026
@@ -47,7 +47,7 @@ RUN . /etc/os-release \
     && echo "deb [signed-by=/etc/apt/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
         > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends postgresql-client-18 \
+    && apt-get install -y --no-install-recommends postgresql-client-19 \
     && rm -rf /var/lib/apt/lists/*
 
 # Системные pip и setuptools базового образа приложению не нужны (зависимости в .venv), а Trivy

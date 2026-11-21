@@ -14,12 +14,12 @@ jobs:
     name: pytest (PostgreSQL ${{ matrix.postgres }})
     runs-on: ubuntu-latest
 
-    # 18.7 — тот же образ, что и в docker-compose.yml: на нём весь прогон.
+    # 19.0 — тот же образ, что и в docker-compose.yml: на нём весь прогон.
     strategy:
       fail-fast: false
       matrix:
         include:
-          - postgres: '18.7'
+          - postgres: '19.0'
             full_suite: true
 
     # Проверки блокировок строк, ограничений VARCHAR и TIMESTAMPTZ имеют смысл
