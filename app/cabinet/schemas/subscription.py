@@ -96,6 +96,7 @@ class RenewalOptionResponse(BaseModel):
     original_price_kopeks: int | None = None
     # Период, отмеченный оператором как самый выгодный.
     is_highlighted: bool = False
+    gift_days: int = 0
 
 
 class RenewalRequest(BaseModel):

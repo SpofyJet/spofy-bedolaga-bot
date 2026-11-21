@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import PaymentMethod, SubscriptionStatus, User
+from app.services.gift_days_offer import active_gift
 from app.services.pricing_engine import pricing_engine
 from app.services.subscription_renewal_service import (
     SubscriptionRenewalChargeError,
@@ -81,6 +82,7 @@ async def get_renewal_options(
     # Нулевая цена — не всегда поломка: у бесплатного тарифа она настроена
     # намеренно. Пропускаем период, только если цена не проставлена вовсе.
     renewal_tariff = subscription.tariff if subscription.tariff_id else None
+    gift = await active_gift(db, user.id)
 
     for period in periods:
         pricing = await pricing_engine.calculate_renewal_price(db, subscription, period, user=user)
@@ -104,6 +106,7 @@ async def get_renewal_options(
                 # Выделение живёт у тарифа. Когда периоды берутся не из тарифа
                 # (скрытый тариф, классический режим), выделять нечего.
                 is_highlighted=bool(highlighted_period is not None and highlighted_period == period),
+                gift_days=gift.days_for(period) if gift else 0,
             )
         )
 

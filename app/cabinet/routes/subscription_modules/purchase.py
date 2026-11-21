@@ -37,6 +37,7 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, Subscription, Tariff, Transaction, TransactionType, User
 from app.localization.texts import get_texts
 from app.services.bypass_downgrade import tariff_has_bypass_quota
+from app.services.gift_days_offer import active_gift, gift_payload
 from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
@@ -453,6 +454,7 @@ async def get_purchase_options(
             # Направления смены тарифа
             'tariff_switch_upgrade_enabled': settings.TARIFF_SWITCH_UPGRADE_ENABLED,
             'tariff_switch_downgrade_enabled': settings.TARIFF_SWITCH_DOWNGRADE_ENABLED,
+            'gift': gift_payload(await active_gift(db, user.id)),
         }
 
         # Classic mode - return periods

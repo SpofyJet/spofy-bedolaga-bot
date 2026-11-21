@@ -35,6 +35,7 @@ from app.localization.texts import Texts, get_texts
 from app.middlewares.banner_variant import show_banner_state
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.bypass_downgrade import tariff_has_bypass_quota
+from app.services.gift_days_offer import PeriodGift, active_gift, human_date, months_text
 from app.services.panel_sync import should_create_panel_account
 from app.services.subscription_service import SubscriptionService, reload_after_panel_failure
 from app.services.tariff_switch_policy import remaining_days_for_switch, should_reset_used_traffic
@@ -326,7 +327,31 @@ def _devices_included_note(texts, tariff: Tariff, device_limit: int | None) -> s
     ).format(devices=device_limit)
 
 
-def _period_button_text(tariff: Tariff, period: int, price: int, price_text: str, prices: dict, texts) -> str:
+def _period_with_gift(texts, period: int, gift: PeriodGift | None) -> str:
+    days = gift.days_for(period) if gift else 0
+    if not days:
+        return format_period(period)
+    return texts.t('GIFT_DAYS_PERIOD', '{period} + {gift} в подарок 🎁').format(
+        period=format_period(period), gift=months_text(days)
+    )
+
+
+def _gift_note(texts, gift: PeriodGift | None, language: str) -> str:
+    if not gift:
+        return ''
+    return texts.t(
+        'GIFT_DAYS_NOTE',
+        '\n\n🎁 <b>Ваш подарок до {date}:</b> при покупке от {min_months} ещё {gift} бесплатно.',
+    ).format(
+        date=human_date(gift.expires_at, language),
+        min_months=months_text(gift.min_days, short=True),
+        gift=months_text(gift.bonus_days),
+    )
+
+
+def _period_button_text(
+    tariff: Tariff, period: int, price: int, price_text: str, prices: dict, texts, gift_days: int = 0
+) -> str:
     """Единый текст кнопки периода: срок, цена, экономия к месячной цене и отметка выгодного периода.
 
     Экономия показывается только для длинных периодов (от 60 дней) и только
@@ -334,6 +359,10 @@ def _period_button_text(tariff: Tariff, period: int, price: int, price_text: str
     период оператор отмечает в тарифе — в инлайн-кнопке рамку не нарисовать,
     поэтому отметка идёт подписью в начале текста.
     """
+    if gift_days:
+        return texts.t('GIFT_DAYS_PERIOD_BUTTON', '🎁 {period} — {price} · +{gift} в подарок').format(
+            period=format_period(period), price=price_text, gift=months_text(gift_days, short=True)
+        )
     if period >= 60 and price > 0 and not is_lifetime_period(period):
         # «359 ₽ · 120 ₽/мес»: цена месяца понятнее процента. Месяцы — по календарю (365 дн. = 12),
         # рубли округляем вверх, чтобы не занижать.
@@ -354,6 +383,7 @@ def get_tariff_periods_keyboard(
     db_user: User | None = None,
     back_callback: str = 'menu_buy',
     device_limit: int | None = None,
+    gift: PeriodGift | None = None,
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру выбора периода для тарифа с учетом скидок по периодам.
 
@@ -396,7 +426,9 @@ def get_tariff_periods_keyboard(
 
         price_text = format_price_kopeks(price)  # Spofy: компактная цена периода (скидка в шапке)
 
-        button_text = _period_button_text(tariff, period, price, price_text, prices, texts)
+        button_text = _period_button_text(
+            tariff, period, price, price_text, prices, texts, gift.days_for(period) if gift else 0
+        )
         rows.append((button_text, format_period(period), f'tariff_period:{tariff.id}:{period}'))
 
     buttons = smallest_last(rows)
@@ -410,6 +442,7 @@ def get_tariff_periods_keyboard_with_traffic(
     language: str,
     db_user: User | None = None,
     back_callback: str = 'menu_buy',
+    gift: PeriodGift | None = None,
 ) -> InlineKeyboardMarkup:
     """Клавиатура выбора периода для тарифа с кастомным трафиком (переход к настройке трафика)."""
     texts = get_texts(language)
@@ -431,7 +464,9 @@ def get_tariff_periods_keyboard_with_traffic(
         else:
             price_text = format_price_kopeks(price)
 
-        button_text = _period_button_text(tariff, period, price, price_text, prices, texts)
+        button_text = _period_button_text(
+            tariff, period, price, price_text, prices, texts, gift.days_for(period) if gift else 0
+        )
         # Используем другой callback для перехода к настройке трафика
         rows.append((button_text, format_period(period), f'tariff_period_traffic:{tariff.id}:{period}'))
 
@@ -1193,6 +1228,7 @@ async def _proceed_with_selected_tariff(
                 parse_mode='HTML',
             )
         elif can_custom_traffic:
+            gift = await active_gift(db, db_user.id)
             # Только кастомный трафик - сначала выбираем период из period_prices
             # Показываем обычный выбор периода, трафик будет на следующем шаге
             await callback.message.edit_text(
@@ -1200,9 +1236,10 @@ async def _proceed_with_selected_tariff(
                 + texts.t(
                     'TARIFF_PURCHASE_TRAFFIC_SETUP_HINT',
                     '\n\n📊 <i>После выбора периода вы сможете настроить трафик</i>',
-                ),
+                )
+                + _gift_note(texts, gift, db_user.language),
                 reply_markup=get_tariff_periods_keyboard_with_traffic(
-                    tariff, db_user.language, db_user=db_user, back_callback=back_callback
+                    tariff, db_user.language, db_user=db_user, back_callback=back_callback, gift=gift
                 ),
                 parse_mode='HTML',
             )
@@ -1211,19 +1248,22 @@ async def _proceed_with_selected_tariff(
             # докупленными устройствами на кнопках — честные цены периода с
             # доплатой (device_limit), а не базовые цены тарифа.
             _existing_device_limit = None
+            gift = await active_gift(db, db_user.id)
             _period_sub = await get_subscription_by_user_id(db, db_user.id)
             if _period_sub and _period_sub.tariff_id == tariff.id:
                 _existing_device_limit = _period_sub.device_limit
 
             await callback.message.edit_text(
                 format_tariff_info_for_user(tariff, db_user.language)
-                + _devices_included_note(texts, tariff, _existing_device_limit),
+                + _devices_included_note(texts, tariff, _existing_device_limit)
+                + _gift_note(texts, gift, db_user.language),
                 reply_markup=get_tariff_periods_keyboard(
                     tariff,
                     db_user.language,
                     db_user=db_user,
                     back_callback=back_callback,
                     device_limit=_existing_device_limit,
+                    gift=gift,
                 ),
                 parse_mode='HTML',
             )
@@ -1711,6 +1751,7 @@ async def select_tariff_period(
     """Обрабатывает выбор периода для тарифа."""
     await state.update_data(restored_tariff_checkout=None)
     texts = get_texts(db_user.language)
+    gift = await active_gift(db, db_user.id)
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
     period = int(parts[2])
@@ -1830,7 +1871,7 @@ async def select_tariff_period(
                 name=html.escape(tariff.name),
                 traffic=traffic,
                 devices=shown_device_limit,
-                period=format_period(period),
+                period=_period_with_gift(texts, period, gift),
                 discount=discount_text,
                 total=format_price_kopeks(final_price),
                 balance=format_price_kopeks(user_balance),
@@ -1876,7 +1917,7 @@ async def select_tariff_period(
                 '⚠️ Не хватает: <b>{missing}</b>',
             ).format(
                 name=html.escape(tariff.name),
-                period=format_period(period),
+                period=_period_with_gift(texts, period, gift),
                 price=format_price_kopeks(final_price),
                 balance=format_price_kopeks(user_balance),
                 missing=format_price_kopeks(missing),
@@ -2309,6 +2350,7 @@ def get_tariff_extend_keyboard(
     db_user: User | None = None,
     subscription_device_limit: int | None = None,
     subscription_id: int | None = None,
+    gift: PeriodGift | None = None,
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру выбора периода для продления по тарифу с учетом скидок по периодам."""
     from app.services.pricing_engine import PricingEngine
@@ -2328,7 +2370,9 @@ def get_tariff_extend_keyboard(
         # Spofy: компактная цена периода — размер скидки показан в шапке экрана
         price_text = format_price_kopeks(price)
 
-        button_text = _period_button_text(tariff, period, price, price_text, prices, texts)
+        button_text = _period_button_text(
+            tariff, period, price, price_text, prices, texts, gift.days_for(period) if gift else 0
+        )
         # subscription_id ОБЯЗАН быть первым сегментом: иначе резолвер по callback
         # принял бы хвостовой {period} за subscription_id (см. issue #3012 —
         # период совпадал с id чужой подписки и продлевалась не та подписка).
@@ -2469,6 +2513,7 @@ async def show_tariff_extend(
         )
 
     actual_device_limit = subscription.device_limit or tariff.device_limit
+    gift = await active_gift(db, db_user.id)
 
     await callback.message.edit_text(
         texts.t(
@@ -2483,13 +2528,15 @@ async def show_tariff_extend(
             name=html.escape(tariff.name),
             traffic=traffic,
             devices=actual_device_limit,
-        ),
+        )
+        + _gift_note(texts, gift, db_user.language),
         reply_markup=get_tariff_extend_keyboard(
             tariff,
             db_user.language,
             db_user=db_user,
             subscription_device_limit=actual_device_limit,
             subscription_id=subscription.id,
+            gift=gift,
         ),
         parse_mode='HTML',
     )
@@ -2505,6 +2552,7 @@ async def select_tariff_extend_period(
 ):
     """Обрабатывает выбор периода для продления."""
     texts = get_texts(db_user.language)
+    gift = await active_gift(db, db_user.id)
     # tariff_extend:{sub_id}:{tariff_id}[:{period}]
     parts = callback.data.split(':')
     sub_id = int(parts[1])
@@ -2574,7 +2622,7 @@ async def select_tariff_extend_period(
                 name=html.escape(tariff.name),
                 traffic=traffic,
                 devices=actual_device_limit,
-                period=format_period(period),
+                period=_period_with_gift(texts, period, gift),
                 discount=discount_text,
                 total=format_price_kopeks(final_price),
                 balance=format_price_kopeks(user_balance),
@@ -2621,7 +2669,7 @@ async def select_tariff_extend_period(
                 '⚠️ Не хватает: <b>{missing}</b>',
             ).format(
                 name=html.escape(tariff.name),
-                period=format_period(period),
+                period=_period_with_gift(texts, period, gift),
                 price=format_price_kopeks(final_price),
                 balance=format_price_kopeks(user_balance),
                 missing=format_price_kopeks(missing),
@@ -5442,13 +5490,14 @@ async def return_to_saved_tariff_cart(
     """Восстанавливает сохраненную корзину тарифа после пополнения баланса."""
     saved = await _restore_saved_tariff_cart(callback, state, db_user, db, cart_data)
     if saved is not None:
-        await _show_restored_tariff_cart(callback, db_user, saved)
+        await _show_restored_tariff_cart(callback, db_user, saved, await active_gift(db, db_user.id))
 
 
 async def _show_restored_tariff_cart(
     callback: types.CallbackQuery,
     db_user: User,
     saved: SavedTariffCart,
+    gift: PeriodGift | None = None,
 ):
     """Экран оформления по восстановленной корзине: подтверждение или «всё ещё не хватает»."""
     texts = get_texts(db_user.language)
@@ -5503,7 +5552,7 @@ async def _show_restored_tariff_cart(
                     '⚠️ Не хватает: <b>{missing}</b>',
                 ).format(
                     name=html.escape(tariff.name),
-                    period=format_period(period),
+                    period=_period_with_gift(texts, period, gift),
                     price=format_price_kopeks(total_price),
                     balance=format_price_kopeks(user_balance),
                     missing=format_price_kopeks(missing),
@@ -5530,7 +5579,7 @@ async def _show_restored_tariff_cart(
                     '⚠️ Не хватает: <b>{missing}</b>',
                 ).format(
                     name=html.escape(tariff.name),
-                    period=format_period(period),
+                    period=_period_with_gift(texts, period, gift),
                     price=format_price_kopeks(total_price),
                     balance=format_price_kopeks(user_balance),
                     missing=format_price_kopeks(missing),
@@ -5600,7 +5649,7 @@ async def _show_restored_tariff_cart(
                 name=html.escape(tariff.name),
                 traffic=traffic,
                 devices=effective_device_limit,
-                period=format_period(period),
+                period=_period_with_gift(texts, period, gift),
                 discount=discount_text,
                 total=format_price_kopeks(total_price),
                 balance=format_price_kopeks(user_balance),
@@ -5653,7 +5702,7 @@ async def _show_restored_tariff_cart(
                 name=html.escape(tariff.name),
                 traffic=traffic,
                 devices=effective_device_limit,
-                period=format_period(period),
+                period=_period_with_gift(texts, period, gift),
                 discount=discount_text,
                 total=format_price_kopeks(total_price),
                 balance=format_price_kopeks(user_balance),
@@ -5739,7 +5788,7 @@ async def confirm_saved_cart_after_topup(
             or saved.total_price != price
             or (db_user.balance_kopeks or 0) != balance
         ):
-            await _show_restored_tariff_cart(callback, db_user, saved)
+            await _show_restored_tariff_cart(callback, db_user, saved, await active_gift(db, db_user.id))
             return
 
         confirm = confirm_tariff_extend if saved.cart_mode == 'extend' else confirm_tariff_purchase

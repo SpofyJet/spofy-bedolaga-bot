@@ -17,6 +17,7 @@ from app.database.crud.promo_group import get_auto_assign_promo_groups
 from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
 from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.database.models import DiscountOffer, User
+from app.services.gift_days_offer import EFFECT_TYPE as GIFT_EFFECT
 from app.services.promo_offer_service import promo_offer_service
 from app.utils.timezone import format_local_datetime
 
@@ -256,6 +257,12 @@ async def claim_promo_offer(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='Offer not found',
+        )
+
+    if offer.effect_type == GIFT_EFFECT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='This offer is applied automatically after purchase',
         )
 
     now = datetime.now(UTC)

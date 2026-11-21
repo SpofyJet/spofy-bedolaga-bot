@@ -23,6 +23,7 @@ from app.services.backup_service import backup_service
 from app.services.broadcast_service import broadcast_service
 from app.services.bypass_downgrade_service import bypass_downgrade_service
 from app.services.daily_subscription_service import daily_subscription_service
+from app.services.gift_days_offer import gift_days_service
 from app.services.log_rotation_service import log_rotation_service
 from app.services.maintenance_service import maintenance_service
 from app.services.monitoring_service import monitoring_service
@@ -363,6 +364,8 @@ async def main():
         bypass_downgrade_service.set_bot(bot)
         bypass_downgrade_service.start_task()
         traffic_cycle_service.start_task()
+        gift_days_service.set_bot(bot)
+        gift_days_service.start_task()
         daily_subscription_service.set_bot(bot)
         telegram_notifier.set_bot(bot)
 
@@ -912,6 +915,7 @@ async def main():
         trial_abuse_service.stop()
         bypass_downgrade_service.stop()
         traffic_cycle_service.stop()
+        gift_days_service.stop()
 
         if daily_subscription_task and not daily_subscription_task.done():
             logger.info('ℹ️ Остановка сервиса суточных подписок...')

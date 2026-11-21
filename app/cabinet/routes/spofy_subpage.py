@@ -49,6 +49,7 @@ from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
 from app.database.crud.user import get_user_by_id
 from app.database.models import Subscription, SubscriptionStatus, User, UserStatus
+from app.services.gift_days_offer import active_gift, gift_payload
 from app.services.pricing_engine import pricing_engine
 from app.services.spofy_subpage_context import subpage_return_context
 from app.services.spofy_subpage_service import (
@@ -498,6 +499,7 @@ async def _offer(short_uuid: str, db: AsyncSession) -> dict[str, Any]:
             for method in methods
         ],
         'min_topup_kopeks': MIN_TOPUP_KOPEKS,
+        'gift': gift_payload(await _soft(active_gift(db, user.id), None, 'gift')),
     }
 
 

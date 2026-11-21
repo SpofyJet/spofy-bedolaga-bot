@@ -14,6 +14,7 @@ from app.database.crud.discount_offer import (
 from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
 from app.database.models import User
 from app.localization.texts import get_texts
+from app.services.gift_days_offer import EFFECT_TYPE as GIFT_EFFECT
 from app.services.promo_offer_service import promo_offer_service
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.promo_offer import (
@@ -45,6 +46,12 @@ async def claim_discount_offer(
         await callback.answer(
             texts.get('DISCOUNT_CLAIM_NOT_FOUND', '❌ Предложение не найдено'),
             show_alert=True,
+        )
+        return
+
+    if offer.effect_type == GIFT_EFFECT:
+        await callback.answer(
+            texts.t('GIFT_DAYS_CLAIM_AUTO', '🎁 Подарок придёт сам сразу после покупки'), show_alert=True
         )
         return
 

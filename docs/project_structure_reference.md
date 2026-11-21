@@ -1014,6 +1014,9 @@
 - `app/services/gift_claim_service.py` — Python-модуль
   Классы: `GiftClaimError`, `GiftClaimNotFoundError`, `GiftClaimSelfActivationError`, `GiftClaimAlreadyOwnedError`, `GiftClaimNotActivatableError`
   Функции: `claim_gift_for_user` — Claim and activate a gift subscription for an authenticated user., `claim_bound_gift_for_user` — Activate an already bound gift subscription by purchase ID (directed callback).
+- `app/services/gift_days_offer.py` — Python-модуль
+  Классы: `PeriodGift` (1 методов), `GiftDaysService` (11 методов)
+  Функции: `purchased_days`, `human_date`, `months_text`, `gift_payload`, `active_gift`, `grant`
 - `app/services/gift_history_service.py` — Python-модуль
   Классы: `GiftHistoryItem` (3 методов)
   Функции: `format_safe_recipient` — Format a privacy-safe recipient representation for display., `list_sender_gifts` — Query paginated gift history purchased by the given buyer., `get_sender_gift` — Retrieve a single gift purchase owned by the buyer by its ID., `has_sender_gifts` — Check whether the buyer has any eligible gift history (lightweight check).
@@ -2956,6 +2959,9 @@
 - `tests/database/test_gift_cart_completion_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_committed_gift_cleanup_preserves_new_cart_and_single_debit`
+- `tests/database/test_gift_days_offer_postgres.py` — Python-модуль
+  Классы: `Bot` (2 методов)
+  Функции: `panel`, `test_three_months_purchase_gets_three_months_once`, `test_no_gift_for_short_lifetime_early_unsettled_or_free`, `test_purchase_after_offer_expired_gets_nothing`, `test_purchase_just_before_expiry_counts_after_cleanup`, `test_admin_deactivated_offer_is_not_granted`, `test_waits_while_subscription_is_still_trial`, `test_panel_failure_is_retried_and_message_waits_for_panel`, `test_blocked_user_is_not_retried_but_network_error_is`, `test_cabinet_user_without_telegram_gets_gift_silently`, `test_grant_refuses_past_deadline`
 - `tests/database/test_gift_requote_consent_postgres.py` — Python-модуль
   Классы: нет
   Функции: `test_gift_new_price_requires_consent_before_any_debit`
@@ -3722,6 +3728,9 @@
 - `tests/services/test_gift_confirmation_selection.py` — Python-модуль
   Классы: нет
   Функции: `test_confirmation_preserves_selection_changed_during_purchase`, `test_success_does_not_clear_selection_started_during_result_delivery`, `test_success_delivery_failure_keeps_checkout_for_idempotent_retry`
+- `tests/services/test_gift_days_offer.py` — Python-модуль
+  Классы: нет
+  Функции: `test_purchased_days_reads_every_purchase_format`, `test_gift_applies_from_three_months_and_never_to_lifetime`, `test_months_text`, `test_human_date_adds_year_only_when_it_differs`, `test_period_buttons_show_gift_only_on_eligible_periods`, `test_extend_buttons_show_gift`, `test_confirm_period_and_note`
 - `tests/services/test_gift_fsm_redis.py` — Python-модуль
   Классы: `MutationProbe` (6 методов)
   Функции: `test_new_selection_survives_at_fsm_write_boundary`, `test_conditional_fsm_update_supports_absent_keys_and_configured_ttl`, `test_conditional_fsm_redis_failure_does_not_fall_back_to_unconditional_clear`, `test_legacy_checkout_identity_creation_cannot_overwrite_new_selection`, `test_gift_resume_cannot_overwrite_selection_at_fsm_write`, `test_conditional_fsm_transition_sets_both_ttls_and_preserves_other_fields`, `test_invalid_fsm_transition_ttl_never_partially_changes_selection`, `test_bound_cancel_preserves_changes_at_atomic_fsm_write`, `test_period_selection_preserves_cart_permissions_and_atomic_fsm`, `test_navigation_rejects_selection_changed_at_redis_write`, `test_readonly_navigation_does_not_extend_fsm_ttl_or_cart_permission`
