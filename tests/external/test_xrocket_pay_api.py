@@ -124,7 +124,11 @@ def test_signature(monkeypatch):
 
 def test_webhook_events_map_to_legacy():
     paid = XRocketService.to_legacy_webhook(
-        {'id': '9', 'type': 'invoice', 'data': {'event': 'invoice_status_changed', 'invoice': {**INVOICE, 'status': 'paid'}}}
+        {
+            'id': '9',
+            'type': 'invoice',
+            'data': {'event': 'invoice_status_changed', 'invoice': {**INVOICE, 'status': 'paid'}},
+        }
     )
     assert paid['type'] == 'invoicePay'
     assert paid['data']['id'] == 'inv_1' and paid['data']['status'] == 'paid'
@@ -143,7 +147,11 @@ def test_webhook_events_map_to_legacy():
     assert pay['data']['status'] == 'paid' and pay['data']['paid'] == '2026-11-11T10:01:00Z'
 
     cancelled = XRocketService.to_legacy_webhook(
-        {'id': '11', 'type': 'invoice', 'data': {'event': 'invoice_status_changed', 'invoice': {**INVOICE, 'status': 'cancelled'}}}
+        {
+            'id': '11',
+            'type': 'invoice',
+            'data': {'event': 'invoice_status_changed', 'invoice': {**INVOICE, 'status': 'cancelled'}},
+        }
     )
     assert cancelled['data']['status'] == 'cancelled'
     assert json.dumps(cancelled)

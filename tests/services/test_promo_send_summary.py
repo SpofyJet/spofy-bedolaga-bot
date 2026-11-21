@@ -161,4 +161,3 @@ async def test_tariff_offer_is_sent_every_time_without_protections(monkeypatch):
 
     assert bot.send_message.await_count == 3
     assert stored.promo_offer_discount_percent == 37 and stored.promo_offer_discount_source.startswith('tariff:4|')
-

@@ -1,4 +1,4 @@
-FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS builder
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     uv sync --frozen --no-dev
 
-FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 
 ARG VERSION="v5.0.0" # x-release-please-version
 ARG BUILD_DATE
@@ -27,7 +27,7 @@ COPY --from=builder /app/.venv /app/.venv
 # /usr/lib/postgresql/18/bin — pg_dump и psql напрямую, минуя perl-обёртку pg_wrapper (см. ниже).
 ENV PATH="/app/.venv/bin:/usr/lib/postgresql/18/bin:$PATH"
 
-# База — плавающий тег python:3.14-slim, и между её пересборками Debian успевает
+# База — плавающий тег python:3.15-slim, и между её пересборками Debian успевает
 # выпустить исправления системных пакетов (util-linux, zlib, PCRE2 в отчётах
 # Trivy). Ставим их на этапе сборки: иначе образ уезжает с дырами, которые в
 # апстриме уже закрыты, а сама база подтянется неизвестно когда.

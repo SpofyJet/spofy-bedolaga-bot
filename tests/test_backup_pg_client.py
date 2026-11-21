@@ -44,8 +44,10 @@ def test_image_ships_pg_client_of_the_server_major() -> None:
     path_lines = [line for line in dockerfile.splitlines() if line.startswith('ENV PATH=')]
     assert path_lines and all(f'/usr/lib/postgresql/{major}/bin' in line for line in path_lines)
     assert 'COPY docker/postgres/pgdg-apt.asc' in dockerfile
-    assert (REPO_ROOT / 'docker' / 'postgres' / 'pgdg-apt.asc').read_text().startswith(
-        '-----BEGIN PGP PUBLIC KEY BLOCK-----'
+    assert (
+        (REPO_ROOT / 'docker' / 'postgres' / 'pgdg-apt.asc')
+        .read_text()
+        .startswith('-----BEGIN PGP PUBLIC KEY BLOCK-----')
     )
 
 
