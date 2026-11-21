@@ -1,5 +1,6 @@
 import json
 import math
+import time
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
@@ -31,11 +32,13 @@ CARD_HTML = {
 DATA_LIMIT = 1024
 REFRESH = 'r'
 
-_unavailable = False
+NOT_ALLOWED_RETRY = 3600
+
+_paused_until = 0.0
 
 
 def widget_enabled() -> bool:
-    return bool(settings.SUBSCRIPTION_WIDGET_ENABLED) and not _unavailable
+    return bool(settings.SUBSCRIPTION_WIDGET_ENABLED) and time.monotonic() >= _paused_until
 
 
 def card_html(language: str | None) -> str:
@@ -108,9 +111,13 @@ def encode_card_data(data: dict[str, Any]) -> str:
         data['n'] = raw[: max(0, len(raw) - overflow)].decode(errors='ignore').rstrip() or None
 
 
-def _unsupported(error: TelegramAPIError) -> bool:
+def _pause_for(error: TelegramAPIError) -> float:
     text = str(error).lower()
-    return isinstance(error, TelegramNotFound) or 'method not found' in text or 'unknown method' in text
+    if isinstance(error, TelegramNotFound) or 'method not found' in text or 'unknown method' in text:
+        return math.inf
+    if 'widget_not_allowed' in text:
+        return NOT_ALLOWED_RETRY
+    return 0.0
 
 
 async def try_send_subscription_widget(
@@ -121,7 +128,7 @@ async def try_send_subscription_widget(
     caption_parts: list[str],
     keyboard: InlineKeyboardMarkup,
 ) -> bool:
-    global _unavailable
+    global _paused_until
     message = callback.message
     chat = getattr(message, 'chat', None)
     if data is None or not widget_enabled() or chat is None or chat.type != 'private':
@@ -143,8 +150,9 @@ async def try_send_subscription_widget(
             allow_queries=True,
         )
     except TelegramAPIError as error:
-        if _unsupported(error):
-            _unavailable = True
+        pause = _pause_for(error)
+        if pause:
+            _paused_until = time.monotonic() + pause
         logger.warning('Карточка подписки не отправлена, показан обычный экран', error=str(error))
         return False
     with suppress(TelegramAPIError):

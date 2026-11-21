@@ -23,7 +23,7 @@ BYPASS = 'bypass-squad'
 def _defaults(monkeypatch):
     monkeypatch.setattr(settings, 'SUBSCRIPTION_WIDGET_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'BYPASS_SQUAD_UUID', BYPASS, raising=False)
-    monkeypatch.setattr(sw, '_unavailable', False)
+    monkeypatch.setattr(sw, '_paused_until', 0.0)
 
 
 def _sub(**over):
@@ -219,6 +219,22 @@ async def test_server_without_widgets_turns_card_off_until_restart(error):
     second = _callback()
     assert await _send(second) is False
     second.bot.send_widget.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_bot_not_allowed_retries_in_an_hour(monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(sw.time, 'monotonic', lambda: clock[0])
+    callback = _callback()
+    callback.bot.send_widget.side_effect = TelegramBadRequest(
+        method=SendWidget(chat_id=1, html='x'), message='Bad Request: INPUT_MEDIA_WIDGET_NOT_ALLOWED'
+    )
+    assert await _send(callback) is False
+    assert sw.widget_enabled() is False
+    clock[0] += sw.NOT_ALLOWED_RETRY - 1
+    assert sw.widget_enabled() is False
+    clock[0] += 1
+    assert sw.widget_enabled() is True
 
 
 @pytest.mark.asyncio
