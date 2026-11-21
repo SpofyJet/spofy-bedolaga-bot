@@ -653,6 +653,7 @@ class Settings(BaseSettings):
     PLATEGA_CURRENCY: str = 'RUB'
     PLATEGA_ACTIVE_METHODS: str = '2,11,12,13'
     PLATEGA_INLINE_METHODS: bool = True
+    MIN_TOPUP_KOPEKS: int = 5000
     PLATEGA_MIN_AMOUNT_KOPEKS: int = 10000
     PLATEGA_MAX_AMOUNT_KOPEKS: int = 100000000
     PLATEGA_WEBHOOK_PATH: str = '/platega-webhook'
@@ -1554,6 +1555,9 @@ class Settings(BaseSettings):
 
     def is_language_selection_enabled(self) -> bool:
         return bool(getattr(self, 'LANGUAGE_SELECTION_ENABLED', True))
+
+    def topup_min_kopeks(self, method_min_kopeks: int = 0) -> int:
+        return max(self.MIN_TOPUP_KOPEKS, method_min_kopeks or 0)
 
     def format_price(self, price_kopeks: int, round_kopeks: bool | None = None) -> str:
         """

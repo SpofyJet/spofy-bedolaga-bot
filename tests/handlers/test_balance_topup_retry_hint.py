@@ -22,11 +22,13 @@ def payment_environment(monkeypatch):
         get_balance_payment_description=lambda *_args, **_kwargs: 'Balance top-up',
         format_price=lambda amount: f'{amount / 100:.2f} ₽',
         get_support_contact_display_html=lambda: 'support',
+        MIN_TOPUP_KOPEKS=5000,
     )
+    settings.topup_min_kopeks = lambda method_min=0: max(settings.MIN_TOPUP_KOPEKS, method_min or 0)
     monkeypatch.setattr(balance_main, 'settings', settings)
     monkeypatch.setattr(wata, 'settings', settings)
 
-    invoice = {'payment_url': 'https://example.com/payment', 'local_payment_id': 42}
+    invoice = {'payment_url': 'https://example.com/payment', 'local_payment_id': 42, 'payment_link_id': 'link-42'}
     service = SimpleNamespace(create_wata_payment=AsyncMock(return_value=invoice))
     factory = MagicMock(return_value=service)
     monkeypatch.setattr(wata, 'PaymentService', factory)
@@ -74,7 +76,8 @@ async def test_nonfinite_amount_never_reaches_payment_provider(state, user, monk
 @pytest.mark.asyncio
 @pytest.mark.parametrize('method', ['wata'])
 async def test_rejected_purchase_topup_keeps_input_open_until_user_retries(payment_environment, state, user, method):
-    # A 100-ruble purchase with a 60-ruble balance prefills the missing 40 rubles.
+    # A 100-ruble purchase with a 60-ruble balance prefills the missing 40 rubles; this method takes 60 or more.
+    payment_environment.settings.WATA_MIN_AMOUNT_KOPEKS = 6000
     cart = {'tariff_id': 1, 'period_days': 30, 'total_price': 10000}
     await state.set_state('SubscriptionStates:cart_saved_for_topup')
     await state.set_data({'saved_cart': cart, 'total_price': 10000})
@@ -85,8 +88,8 @@ async def test_rejected_purchase_topup_keeps_input_open_until_user_retries(payme
 
     hint = message.answer.await_args.args[0]
     assert 'отправьте боту сообщение' in hint
-    assert 'не меньше 50 ₽' in hint
-    assert 'Например, отправьте: 50' in hint
+    assert 'не меньше 60 ₽' in hint
+    assert 'Например, отправьте: 60' in hint
     callback.answer.assert_awaited_once()
     payment_environment.factory.assert_not_called()
     assert await state.get_state() == BalanceStates.waiting_for_amount.state
@@ -102,12 +105,33 @@ async def test_rejected_purchase_topup_keeps_input_open_until_user_retries(payme
     assert await state.get_state() == BalanceStates.waiting_for_amount.state
     assert (await state.get_data())['saved_cart'] == cart
 
-    retry = _message('50')
+    retry = _message('60')
     await balance_main.process_topup_amount(retry, user, state)
 
     expected = payment_environment.service.create_wata_payment
     expected.assert_awaited_once()
+    assert expected.await_args.kwargs['amount_kopeks'] == 6000
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('missing', [1, 2900, 4999, 5000])
+async def test_missing_amount_below_minimum_is_paid_as_minimum(payment_environment, state, user, missing):
+    callback = SimpleNamespace(data=f'topup_amount|wata|{missing}', message=_message(), answer=AsyncMock())
+
+    await balance_main.handle_topup_amount_callback(callback, user, state)
+
+    expected = payment_environment.service.create_wata_payment
+    expected.assert_awaited_once()
     assert expected.await_args.kwargs['amount_kopeks'] == 5000
+
+
+@pytest.mark.asyncio
+async def test_missing_amount_above_minimum_is_paid_exactly(payment_environment, state, user):
+    callback = SimpleNamespace(data='topup_amount|wata|7321', message=_message(), answer=AsyncMock())
+
+    await balance_main.handle_topup_amount_callback(callback, user, state)
+
+    assert payment_environment.service.create_wata_payment.await_args.kwargs['amount_kopeks'] == 7321
 
 
 @pytest.mark.asyncio

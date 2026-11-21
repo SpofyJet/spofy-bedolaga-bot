@@ -91,7 +91,7 @@ async def _prompt_amount(
             )
         return
 
-    min_amount_label = _format_amount_label(settings.PLATEGA_MIN_AMOUNT_KOPEKS, method_code)
+    min_amount_label = _format_amount_label(settings.topup_min_kopeks(settings.PLATEGA_MIN_AMOUNT_KOPEKS), method_code)
     max_amount_kopeks = settings.PLATEGA_MAX_AMOUNT_KOPEKS
     max_amount_label = (
         _format_amount_label(max_amount_kopeks, method_code) if max_amount_kopeks and max_amount_kopeks > 0 else ''
@@ -326,10 +326,13 @@ async def process_platega_payment_amount(
         await state.set_state(BalanceStates.waiting_for_platega_method)
         return
 
-    if amount_kopeks < settings.PLATEGA_MIN_AMOUNT_KOPEKS:
+    if amount_kopeks < settings.topup_min_kopeks(settings.PLATEGA_MIN_AMOUNT_KOPEKS):
         await message.answer(
             format_topup_amount_retry(
-                db_user.language, settings.PLATEGA_MIN_AMOUNT_KOPEKS, settings.PLATEGA_MAX_AMOUNT_KOPEKS, too_low=True
+                db_user.language,
+                settings.topup_min_kopeks(settings.PLATEGA_MIN_AMOUNT_KOPEKS),
+                settings.PLATEGA_MAX_AMOUNT_KOPEKS,
+                too_low=True,
             ),
             reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
@@ -339,7 +342,10 @@ async def process_platega_payment_amount(
     if amount_kopeks > settings.PLATEGA_MAX_AMOUNT_KOPEKS:
         await message.answer(
             format_topup_amount_retry(
-                db_user.language, settings.PLATEGA_MIN_AMOUNT_KOPEKS, settings.PLATEGA_MAX_AMOUNT_KOPEKS, too_low=False
+                db_user.language,
+                settings.topup_min_kopeks(settings.PLATEGA_MIN_AMOUNT_KOPEKS),
+                settings.PLATEGA_MAX_AMOUNT_KOPEKS,
+                too_low=False,
             ),
             reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )

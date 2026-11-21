@@ -79,8 +79,8 @@ async def test_rejection_keeps_selection_and_shows_exact_enterable_range(
     assert await state.get_data() == selection
     message.answer.assert_awaited_once()
     text = message.answer.await_args.args[0]
-    minimum, maximum = ('100', '50000') if fixed_limits else ('50.55', '50.99')
-    assert minimum in text
+    minimum, maximum = (str(settings.MIN_TOPUP_KOPEKS // 100), '50000') if fixed_limits else ('50.55', '50.99')
+    assert (f'не меньше {minimum} ₽' if language == 'ru' else f'between {minimum} RUB') in text
     assert maximum in text
     assert 'Например, отправьте: 51' not in text  # No whole-ruble value fits 50.55..50.99.
     keyboard = message.answer.await_args.kwargs['reply_markup']

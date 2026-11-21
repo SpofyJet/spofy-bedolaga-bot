@@ -22,7 +22,7 @@ from app.localization.texts import get_texts
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
 from app.utils.timezone import format_local_datetime
-from app.utils.topup_retry import MAX_MANUAL_TOPUP_RUBLES, MIN_MANUAL_TOPUP_RUBLES, format_topup_amount_retry
+from app.utils.topup_retry import MAX_MANUAL_TOPUP_RUBLES, format_topup_amount_retry
 
 
 logger = structlog.get_logger(__name__)
@@ -369,19 +369,10 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
             await message.answer(texts.INVALID_AMOUNT, reply_markup=get_back_keyboard(db_user.language))
             return
 
-        if amount_rubles < MIN_MANUAL_TOPUP_RUBLES:
-            await message.answer(
-                format_topup_amount_retry(
-                    db_user.language, MIN_MANUAL_TOPUP_RUBLES * 100, MAX_MANUAL_TOPUP_RUBLES * 100, too_low=True
-                ),
-                reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
-            )
-            return
-
         if amount_rubles > MAX_MANUAL_TOPUP_RUBLES:
             await message.answer(
                 format_topup_amount_retry(
-                    db_user.language, MIN_MANUAL_TOPUP_RUBLES * 100, MAX_MANUAL_TOPUP_RUBLES * 100, too_low=False
+                    db_user.language, settings.topup_min_kopeks(), MAX_MANUAL_TOPUP_RUBLES * 100, too_low=False
                 ),
                 reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
             )
@@ -423,6 +414,7 @@ async def handle_topup_amount_callback(
     if amount_kopeks <= 0:
         await callback.answer('❌ Некорректная сумма', show_alert=True)
         return
+    amount_kopeks = settings.topup_min_kopeks(amount_kopeks)
 
     if method == 'platega':
         data = await state.get_data()

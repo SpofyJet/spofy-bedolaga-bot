@@ -66,7 +66,7 @@ async def start_pay2328_payment(
     message_lines = [
         '<b>Криптовалюта (2328.io)</b>',
         '\n',
-        'Выберите сумму или введите свою от 100 до 100,000 ₽:',
+        f'Выберите сумму или введите свою от {settings.topup_min_kopeks() // 100} до 100,000 ₽:',
         '',
         '⚡ Мгновенное зачисление',
         'Безопасная оплата',
@@ -126,16 +126,16 @@ async def process_pay2328_payment_amount(
 
     amount_rubles = amount_kopeks / 100
 
-    if amount_rubles < 100:
+    if amount_kopeks < settings.topup_min_kopeks():
         await message.answer(
-            format_topup_amount_retry(db_user.language, 10000, 10000000, too_low=True),
+            format_topup_amount_retry(db_user.language, settings.topup_min_kopeks(), 10000000, too_low=True),
             reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
     if amount_rubles > 100000:
         await message.answer(
-            format_topup_amount_retry(db_user.language, 10000, 10000000, too_low=False),
+            format_topup_amount_retry(db_user.language, settings.topup_min_kopeks(), 10000000, too_low=False),
             reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return

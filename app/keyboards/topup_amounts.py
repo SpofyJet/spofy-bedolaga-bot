@@ -2,6 +2,7 @@ import structlog
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.payment_method_config_service import (
@@ -36,7 +37,7 @@ async def _load_quick_amounts(db: AsyncSession, method: str, min_amount_kopeks: 
     if not config:
         return []
     method_def = _get_method_defaults().get(method_id, {})
-    min_amount = (
+    min_amount = settings.topup_min_kopeks(
         config.min_amount_kopeks if config.min_amount_kopeks is not None else method_def.get('default_min', 1000)
     )
     if min_amount_kopeks is not None:

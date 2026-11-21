@@ -131,11 +131,11 @@ class PlategaPaymentMixin:
             logger.error('Platega сервис не инициализирован')
             return None
 
-        if amount_kopeks < settings.PLATEGA_MIN_AMOUNT_KOPEKS:
+        if amount_kopeks < settings.topup_min_kopeks(settings.PLATEGA_MIN_AMOUNT_KOPEKS):
             logger.warning(
                 'Сумма Platega меньше минимальной: <',
                 amount_kopeks=amount_kopeks,
-                PLATEGA_MIN_AMOUNT_KOPEKS=settings.PLATEGA_MIN_AMOUNT_KOPEKS,
+                PLATEGA_MIN_AMOUNT_KOPEKS=settings.topup_min_kopeks(settings.PLATEGA_MIN_AMOUNT_KOPEKS),
             )
             return None
 

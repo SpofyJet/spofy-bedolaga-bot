@@ -1,9 +1,9 @@
 """Actionable, exact RUB input limits for rejected Telegram top-ups."""
 
+from app.config import settings
 from app.localization.texts import get_texts
 
 
-MIN_MANUAL_TOPUP_RUBLES = 1
 MAX_MANUAL_TOPUP_RUBLES = 50000
 
 
@@ -14,7 +14,7 @@ def _rubles(kopeks: int) -> str:
 
 def format_topup_amount_retry(language: str, minimum: int, maximum: int, *, too_low: bool) -> str:
     texts = get_texts(language)
-    lower = max(minimum, MIN_MANUAL_TOPUP_RUBLES * 100)
+    lower = settings.topup_min_kopeks(minimum)
     upper = min(maximum, MAX_MANUAL_TOPUP_RUBLES * 100)
     values = {'minimum': _rubles(lower), 'maximum': _rubles(upper)}
     if lower > upper:

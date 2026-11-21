@@ -50,7 +50,7 @@ async def start_xrocket_payment(callback: types.CallbackQuery, db_user: User, st
 
     message_text = (
         f'<b>Криптовалюта (xRocket)</b>\n\n'
-        f'Выберите сумму или введите свою от 100 до 100,000 ₽:\n\n'
+        f'Выберите сумму или введите свою от {settings.topup_min_kopeks() // 100} до 100,000 ₽:\n\n'
         f'💰 Доступные активы: {assets_text}\n'
         f'⚡ Мгновенное зачисление на баланс\n'
         f'Безопасная оплата через xRocket\n\n'
@@ -102,8 +102,11 @@ async def process_xrocket_payment_amount(
 
     amount_rubles = amount_kopeks / 100
 
-    if amount_rubles < 100:
-        await message.answer('Минимальная сумма пополнения: 100 ₽', reply_markup=get_back_keyboard(db_user.language))
+    if amount_kopeks < settings.topup_min_kopeks():
+        await message.answer(
+            f'Минимальная сумма пополнения: {settings.topup_min_kopeks() // 100} ₽',
+            reply_markup=get_back_keyboard(db_user.language),
+        )
         return
 
     if amount_rubles > 100000:

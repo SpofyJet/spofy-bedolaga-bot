@@ -108,11 +108,11 @@ class WataPaymentMixin:
             logger.error('WATA service is not initialised')
             return None
 
-        if amount_kopeks < settings.WATA_MIN_AMOUNT_KOPEKS:
+        if amount_kopeks < settings.topup_min_kopeks(settings.WATA_MIN_AMOUNT_KOPEKS):
             logger.warning(
                 'Сумма WATA меньше минимальной: <',
                 amount_kopeks=amount_kopeks,
-                WATA_MIN_AMOUNT_KOPEKS=settings.WATA_MIN_AMOUNT_KOPEKS,
+                WATA_MIN_AMOUNT_KOPEKS=settings.topup_min_kopeks(settings.WATA_MIN_AMOUNT_KOPEKS),
             )
             return None
 

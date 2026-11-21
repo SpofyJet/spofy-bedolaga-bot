@@ -92,7 +92,7 @@
   Функции: `create_bot` — Create a Bot instance with SOCKS5 proxy and/or custom Telegram API server.
 - `app/cabinet/`
 - `app/config.py` — Python-модуль
-  Классы: `Settings` (182 методов)
+  Классы: `Settings` (183 методов)
   Функции: `transliterate_cyrillic` — Заменяет кириллические буквы латинскими, сохраняя регистр («Шмель» → «Shmel»)., `set_period_prices_from_db` — Устанавливает периоды/цены из БД., `refresh_period_prices` — Rebuild cached period price mapping., `refresh_classic_period_prices` — Rebuild CLASSIC_PERIOD_PRICES from current settings., `get_traffic_prices`, `refresh_traffic_prices`
 - `app/database/`
 - `app/external/`
@@ -3241,7 +3241,7 @@
   Функции: `test_stale_query_is_not_reported_as_topup_error` — Устаревший запрос по дороге — предупреждение декоратора, а не отчёт об ошибке., `test_provider_failure_is_reported_once_without_second_answer`, `test_unknown_method_is_reported_with_a_message`, `test_repeated_taps_are_acknowledged_while_provider_is_still_waiting`, `test_already_expired_tap_does_not_create_payment`, `test_answers_the_tap_before_calling_the_provider`, `test_invalid_amount_alerts_immediately`
 - `tests/handlers/test_balance_topup_retry_hint.py` — Python-модуль
   Классы: нет
-  Функции: `payment_environment`, `state`, `user`, `test_nonfinite_amount_never_reaches_payment_provider`, `test_rejected_purchase_topup_keeps_input_open_until_user_retries`, `test_minimum_hint_only_suggests_an_accepted_whole_ruble_amount`, `test_retry_at_exact_fractional_minimum_does_not_lose_a_kopeck`, `test_manual_amount_reaches_other_payment_routes_without_float_truncation`
+  Функции: `payment_environment`, `state`, `user`, `test_nonfinite_amount_never_reaches_payment_provider`, `test_rejected_purchase_topup_keeps_input_open_until_user_retries`, `test_missing_amount_below_minimum_is_paid_as_minimum`, `test_missing_amount_above_minimum_is_paid_exactly`, `test_minimum_hint_only_suggests_an_accepted_whole_ruble_amount`, `test_retry_at_exact_fractional_minimum_does_not_lose_a_kopeck`, `test_manual_amount_reaches_other_payment_routes_without_float_truncation`
 - `tests/handlers/test_broadcast_custom_buttons.py` — Python-модуль
   Классы: нет
   Функции: `test_keyboard_passes_icon_custom_emoji_id`, `test_schema_roundtrips_icon_custom_emoji_id`, `test_schema_defaults_to_none_and_rejects_garbage`

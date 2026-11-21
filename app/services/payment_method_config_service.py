@@ -434,7 +434,7 @@ async def get_enabled_methods_for_user(
         display_name = config.display_name or method_def.get('default_display_name', method_id)
 
         # Build min/max amounts (DB overrides env defaults)
-        min_amount = (
+        min_amount = settings.topup_min_kopeks(
             config.min_amount_kopeks if config.min_amount_kopeks is not None else method_def.get('default_min', 1000)
         )
         max_amount = (

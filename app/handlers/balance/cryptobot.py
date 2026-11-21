@@ -62,7 +62,7 @@ async def start_cryptobot_payment(callback: types.CallbackQuery, db_user: User, 
 
     message_text = (
         f'<b>Криптовалюта (CryptoBot)</b>\n\n'
-        f'Выберите сумму или введите свою от 100 до 100,000 ₽:\n\n'
+        f'Выберите сумму или введите свою от {settings.topup_min_kopeks() // 100} до 100,000 ₽:\n\n'
         f'💰 Доступные активы: {assets_text}\n'
         f'⚡ Мгновенное зачисление на баланс\n'
         f'Безопасная оплата через CryptoBot\n\n'
@@ -116,16 +116,16 @@ async def process_cryptobot_payment_amount(
 
     amount_rubles = amount_kopeks / 100
 
-    if amount_rubles < 100:
+    if amount_kopeks < settings.topup_min_kopeks():
         await message.answer(
-            format_topup_amount_retry(db_user.language, 10000, 10000000, too_low=True),
+            format_topup_amount_retry(db_user.language, settings.topup_min_kopeks(), 10000000, too_low=True),
             reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
     if amount_rubles > 100000:
         await message.answer(
-            format_topup_amount_retry(db_user.language, 10000, 10000000, too_low=False),
+            format_topup_amount_retry(db_user.language, settings.topup_min_kopeks(), 10000000, too_low=False),
             reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return

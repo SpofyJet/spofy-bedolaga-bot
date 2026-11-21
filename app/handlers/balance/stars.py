@@ -7,11 +7,13 @@ from aiogram.fsm.context import FSMContext
 from app.config import settings
 from app.database.models import User
 from app.external.telegram_stars import TelegramStarsService
+from app.keyboards.inline import get_back_keyboard
 from app.keyboards.topup_amounts import get_topup_amount_keyboard
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.topup_retry import format_topup_amount_retry
 
 
 logger = structlog.get_logger(__name__)
@@ -84,6 +86,13 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
 
     if not settings.TELEGRAM_STARS_ENABLED:
         await message.answer('⚠️ Оплата Stars временно недоступна')
+        return
+
+    if amount_kopeks < settings.topup_min_kopeks():
+        await message.answer(
+            format_topup_amount_retry(db_user.language, settings.topup_min_kopeks(), 10000000, too_low=True),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
+        )
         return
 
     try:

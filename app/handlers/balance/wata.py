@@ -59,7 +59,7 @@ async def start_wata_payment(
             'Оплата происходит через защищенную форму WATA.'
         ),
     ).format(
-        min_amount=settings.format_price(settings.WATA_MIN_AMOUNT_KOPEKS),
+        min_amount=settings.format_price(settings.topup_min_kopeks(settings.WATA_MIN_AMOUNT_KOPEKS)),
         max_amount=settings.format_price(settings.WATA_MAX_AMOUNT_KOPEKS),
     )
 
@@ -112,10 +112,13 @@ async def process_wata_payment_amount(
         await message.answer('❌ Оплата через WATA временно недоступна')
         return
 
-    if amount_kopeks < settings.WATA_MIN_AMOUNT_KOPEKS:
+    if amount_kopeks < settings.topup_min_kopeks(settings.WATA_MIN_AMOUNT_KOPEKS):
         await message.answer(
             format_topup_amount_retry(
-                db_user.language, settings.WATA_MIN_AMOUNT_KOPEKS, settings.WATA_MAX_AMOUNT_KOPEKS, too_low=True
+                db_user.language,
+                settings.topup_min_kopeks(settings.WATA_MIN_AMOUNT_KOPEKS),
+                settings.WATA_MAX_AMOUNT_KOPEKS,
+                too_low=True,
             ),
             reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
@@ -124,7 +127,10 @@ async def process_wata_payment_amount(
     if amount_kopeks > settings.WATA_MAX_AMOUNT_KOPEKS:
         await message.answer(
             format_topup_amount_retry(
-                db_user.language, settings.WATA_MIN_AMOUNT_KOPEKS, settings.WATA_MAX_AMOUNT_KOPEKS, too_low=False
+                db_user.language,
+                settings.topup_min_kopeks(settings.WATA_MIN_AMOUNT_KOPEKS),
+                settings.WATA_MAX_AMOUNT_KOPEKS,
+                too_low=False,
             ),
             reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )

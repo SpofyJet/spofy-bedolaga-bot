@@ -272,10 +272,10 @@ async def create_stars_invoice(
         )
 
     # Validate amount
-    if request.amount_kopeks < 100:
+    if request.amount_kopeks < settings.topup_min_kopeks():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Minimum amount is 1.00 RUB',
+            detail=f'Minimum amount is {settings.topup_min_kopeks() / 100:.2f} RUB',
         )
 
     if request.amount_kopeks > 1000000:
